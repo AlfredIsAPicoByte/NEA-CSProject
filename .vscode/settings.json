@@ -1,0 +1,8 @@
+{
+    "cmake.additionalKits": [
+        "Visual Studio Build Tools 2022 Release - x64",
+        "GCC x86_64-w64-mingw32 for MinGW"
+    ],
+  "cmake.configureOnOpen": true,
+  "cmake.buildDirectory": "${workspaceFolder}/build/${buildType}"
+}
