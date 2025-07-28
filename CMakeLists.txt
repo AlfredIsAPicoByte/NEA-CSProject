@@ -7,6 +7,7 @@ find_package(OpenGL REQUIRED)
 set(glfw3_DIR "C:/Libraries/vcpkg/packages/glfw3_x64-windows/share/glfw3")
 find_package(glfw3 REQUIRED)
 
-add_executable(main main.cpp)
+
+add_executable(main cpp_src/main.cpp)
 
 target_link_libraries(main PRIVATE OpenGL::GL glfw)

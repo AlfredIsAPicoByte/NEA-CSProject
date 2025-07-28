@@ -4,5 +4,6 @@
         "GCC x86_64-w64-mingw32 for MinGW"
     ],
   "cmake.configureOnOpen": true,
-  "cmake.buildDirectory": "${workspaceFolder}/build/${buildType}"
+  "cmake.buildDirectory": "${workspaceFolder}/build/${buildType}",
+  "cmake.sourceDirectory": "C:/Users/atang/Documents/GitHub/Programing_Projects/NEA-CSProject"
 }
