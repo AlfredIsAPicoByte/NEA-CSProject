@@ -32,6 +32,13 @@ class Vector:
 
         return Vector(self.data[i] * scalar for i in range(len(self.data)))
     
+    def __truediv__(self, scalar: int|float):
+        self.component_size += 1
+
+        if scalar == 0:
+            raise ValueError("Division by zero is not allowed")
+        return Vector(self.data[i] / scalar for i in range(len(self.data)))
+    
     def Dot(self, other):
         result = 0
         for i in range(len(self.data)):
@@ -136,6 +143,16 @@ class Matrix:
                 for i in range(self.rows)
             )
         raise NotImplementedError("Right multiplication with this type is not implemented")
+    
+    def __truediv__(self, scalar: int|float):
+        if isinstance(scalar, (int, float)):
+            if scalar == 0:
+                raise ValueError("Division by zero is not allowed")
+            return Matrix(
+                [self.data[i][j] / scalar for j in range(self.cols)]
+                for i in range(self.rows)
+            )
+        raise NotImplementedError("Matrix division with this type is not implemented")
 
     def Transpose(self):
         return Matrix(
@@ -217,6 +234,9 @@ class Matrix:
 class Ray:
     def __init__(self, origin: Vector, direction: Vector):
         self.origin = origin
+
+        if direction.Magnitude() == 0:
+            raise ValueError("Direction vector cannot be zero-length")
         self.direction = direction.Normalize()
 
     def PointAtParameter(self, t: float):
@@ -224,7 +244,6 @@ class Ray:
 
     def __repr__(self):
         return f"Ray(origin={self.origin}, direction={self.direction})"
-
 
 class Transform:
     def __init__(self, position: Vector, rotation: Vector, scale: Vector, parent=None):
@@ -437,6 +456,3 @@ class Transform:
             # Sheer in local space
             self.local_position = sheer_matrix * self.local_position
             self.local_rotation = sheer_matrix * self.local_rotation
-        
-
-    
