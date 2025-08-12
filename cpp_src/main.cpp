@@ -1,3 +1,6 @@
+#include<filesystem>
+namespace fs = std::filesystem;
+
 #include <iostream>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -7,9 +10,10 @@
 #include "VBO.h"
 #include "EBO.h"
 #include "shaderClass.h"
+#include "textureClass.h"
 
 // Create verticies for a triangle
-GLfloat vertices[] = {
+GLfloat triVerts[] = {
 	-0.5f, -0.5f * float(sqrt(3)) / 3, 0.0f,        1.0f, 1.0f, 1.0f,      0.0f, 0.0f,// Lower left corner
 	0.5f, -0.5f * float(sqrt(3)) / 3, 0.0f,         1.0f, 1.0f, 1.0f,      2.0f, 0.0f, // Lower right corner
 	0.0f, 0.5f * float(sqrt(3)) * 2 / 3, 0.0f,      1.0f, 1.0f, 1.0f,      1.0f, 2.0f, // Upper corner
@@ -18,12 +22,25 @@ GLfloat vertices[] = {
 	0.0f, -0.5f * float(sqrt(3)) / 3, 0.0f,         1.0f, 1.0f, 1.0f,      1.0f, 0.5f, // Inner down
 };
 
+GLfloat sqrVerts[] = {
+    -0.5f, -0.5f, 0.0f,     1.0f, 0.0f, 0.0f,       0.0f, 0.0f, // Bottom left corner
+    -0.5f, 0.5f, 0.0f,      0.0f, 1.0f, 0.0f,       0.0f, 1.0f, // Top left corner
+    0.5f, 0.5f, 0.0f,       0.0f, 0.0f, 1.0f,       1.0f, 1.0f, // Top right corner
+    0.5f, -0.5f, 0.0f,      1.0f, 1.0f, 1.0f,       1.0f, 0.0f, // Bottom right corner
+};
+
 // Create indices for the triangle
-GLuint indices[] = {
+GLuint triIndices[] = {
     0, 3, 5,
     3, 2, 4,
     5, 4, 1
 };
+
+GLuint sqrIndices[] = {
+    0, 1, 2, // Upper left triangle
+    0, 3, 2  // Lower right triangle
+};
+
 namespace fs = std::filesystem;
 
 int main() {
@@ -60,8 +77,13 @@ int main() {
     // Set the viewport to the size of the window
     glViewport(0, 0, width, height);
 
-    // Create a Shader Program
-    // Ensure the shader files exist in the expected directory
+    // Create a Shader Program from vertex and fragment shader files
+    // Ensure the shader files are in the correct directory
+    fs::path shaderDir = fs::current_path() / "shaders";
+    if (!fs::exists(shaderDir)) {
+        std::cerr << "Shader directory does not exist: " << shaderDir << std::endl;
+        return -1;
+    }
     const char* vertexShaderPath = "shaders/default.vert";
     const char* fragmentShaderPath = "shaders/default.frag";
     Shader shaderProgram(vertexShaderPath, fragmentShaderPath);
@@ -71,43 +93,31 @@ int main() {
 	VAO1.Bind();
 
 	// Generates Vertex Buffer Object and links it to vertices
-	VBO VBO1(vertices, sizeof(vertices));
+	VBO VBO1(sqrVerts, sizeof(sqrVerts));
 	// Generates Element Buffer Object and links it to indices
-	EBO EBO1(indices, sizeof(indices));
+	EBO EBO1(sqrIndices, sizeof(sqrIndices));
+
 
 	// Links VBO to VAO
+    // links position attribute (location = 0)
 	VAO1.LinkAtrib(VBO1, 0, 3, GL_FLOAT, 8 * sizeof(GLfloat), (void*)0);
+    // links color attribute (location = 1)
     VAO1.LinkAtrib(VBO1, 1, 3, GL_FLOAT, 8 * sizeof(GLfloat), (void*)(3 * sizeof(GLfloat)));
+    // links texture coordinate attribute (location = 2)
     VAO1.LinkAtrib(VBO1, 2, 2, GL_FLOAT, 8 * sizeof(GLfloat), (void*)(6 * sizeof(GLfloat)));
-	// Unbind all to prevent accidentally modifying them
+
+
+	// Unbind all buffers to prevent accidentally modifying them
 	VAO1.Unbind();
 	VBO1.Unbind();
 	EBO1.Unbind();
 
+    // Set the scale uniform location
     GLuint scaleID = glGetUniformLocation(shaderProgram.ID, "scale");
 
-    int widthImg, heightImg, channels;
-    unsigned char* data = stbi_load("textures/pop_cat.jpg", &widthImg, &heightImg, &channels, 0);
-
-    GLuint textureID;
-    glGenTextures(1, &textureID);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, textureID);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, widthImg, heightImg, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    stbi_image_free(data);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    GLuint tex0ID = glGetUniformLocation(shaderProgram.ID, "tex0");
-    shaderProgram.Activate();
-    glUniform1i(tex0ID, 0); // Set the texture unit to 0
+    const char* imagePath = "textures/pop_cat.jpg";
+    Texture popCat(imagePath, GL_TEXTURE_2D, GL_TEXTURE0, GL_RGB, GL_UNSIGNED_BYTE);
+    popCat.TexUnit(shaderProgram, "tex0", 0);
 
     while (!glfwWindowShouldClose(window)) {
         // Set a background color
@@ -117,12 +127,12 @@ int main() {
         
         shaderProgram.Activate();
 
-        glUniform1f(scaleID, 0.5f); // Set the scale uniform
-        glBindTexture(GL_TEXTURE_2D, textureID);
+        glUniform1f(scaleID, 1.0f); // Set the scale uniform
+        popCat.Bind(); // Bind the texture
+
+        VAO1.Bind(); // Bind the VAO
         
-        VAO1.Bind();
-        
-        glDrawElements(GL_TRIANGLES, 9, GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         glfwSwapBuffers(window);
 
         glfwPollEvents();
@@ -131,7 +141,7 @@ int main() {
 	VAO1.Delete();
 	VBO1.Delete();
 	EBO1.Delete();
-    glDeleteTextures(1, &textureID);
+    popCat.Delete();
     shaderProgram.Delete();
     glfwDestroyWindow(window);
     glfwTerminate();
