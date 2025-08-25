@@ -9,9 +9,7 @@ find_package(glad CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_path(STB_INCLUDE_DIRS "stb_image.h")
 
-add_executable(main cpp_src/main.cpp
-    # Add src files here
-    cpp_src/src
+add_executable(main cpp_src/main.cpp cpp_src/src
 )
 target_include_directories(main PRIVATE cpp_src/include)
 
