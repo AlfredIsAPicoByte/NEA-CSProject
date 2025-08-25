@@ -11,6 +11,7 @@ find_path(STB_INCLUDE_DIRS "stb_image.h")
 
 add_executable(main cpp_src/main.cpp
     # Add src files here
+    cpp_src/src
 )
 target_include_directories(main PRIVATE cpp_src/include)
 
