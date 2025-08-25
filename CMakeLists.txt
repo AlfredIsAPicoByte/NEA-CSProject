@@ -10,12 +10,7 @@ find_package(glm CONFIG REQUIRED)
 find_path(STB_INCLUDE_DIRS "stb_image.h")
 
 add_executable(main cpp_src/main.cpp
-    cpp_src/shaderClass.cpp
-    cpp_src/textureClass.cpp
-    cpp_src/VBO.cpp
-    cpp_src/VAO.cpp
-    cpp_src/EBO.cpp
-    cpp_src/stb_image.cpp
+    # Add src files here
 )
 target_include_directories(main PRIVATE cpp_src/include)
 
