@@ -9,11 +9,12 @@ class Color
 public:
     float r, g, b, a;
 
+    Color() : r(0), g(0), b(0), a(1) {}
     Color(float red, float green, float blue, float alpha = 1.0f);
     Color(std::string hex);
 
-    void set(float red, float green, float blue, float alpha = 1.0f);
-    void set(std::string hex);
+    void setRGB(float red, float green, float blue, float alpha = 1.0f);
+    void setHex(std::string hex);
 
     std::string toHex() const;
     void print() const;

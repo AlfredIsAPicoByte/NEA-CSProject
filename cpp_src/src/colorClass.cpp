@@ -9,10 +9,10 @@ Color::Color(float r, float g, float b, float a)
 }
 Color::Color(std::string hex)
 {
-    set(hex);
+    setHex(hex);
 }
 
-void Color::set(float r, float g, float b, float a)
+void Color::setRGB(float r, float g, float b, float a)
 {
     this->r = r;
     this->g = g;
@@ -20,7 +20,7 @@ void Color::set(float r, float g, float b, float a)
     this->a = a;
 }
 
-void Color::set(std::string hex)
+void Color::setHex(std::string hex)
 {
     if (hex.empty() || hex[0] != '#') return;
     hex = hex.substr(1);
