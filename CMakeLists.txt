@@ -21,8 +21,8 @@ target_link_libraries(main PRIVATE
 )
 target_include_directories(main PRIVATE ${STB_INCLUDE_DIRS})
 
-set(SHADER_DIR "${CMAKE_SOURCE_DIR}/cpp_src/shaders")
-set(TEXTURE_DIR "${CMAKE_SOURCE_DIR}/cpp_src/textures")
+set(SHADER_DIR "${CMAKE_SOURCE_DIR}/cpp_src/src/shaders")
+set(TEXTURE_DIR "${CMAKE_SOURCE_DIR}/cpp_src/src/textures")
 
 add_custom_command(TARGET main POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

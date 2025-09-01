@@ -21,8 +21,8 @@ std::string get_file_contents(const char* filename)
 Shader::Shader(const char* vertexFileName, const char* fragmentFileName)
 {
 	// Path to the Vertex and Fragment shader files
-	std::string vertexPath = std::string("shader/") + vertexFileName;
-	std::string fragmentPath = std::string("shader/") + fragmentFileName;
+	std::string vertexPath = std::string("src/shader/") + vertexFileName;
+	std::string fragmentPath = std::string("src/shader/") + fragmentFileName;
 
 	// Read vertexFile and fragmentFile and store the strings
 	std::string vertexCode = get_file_contents(vertexPath.c_str());

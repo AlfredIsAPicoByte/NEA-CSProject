@@ -10,7 +10,7 @@ Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum for
 	// Flips the image so it appears right side up
 	stbi_set_flip_vertically_on_load(true);
 	// Reads the image from a file and stores it in bytes
-    const char* imagePath = "textures/" + std::string(image);
+    const char* imagePath = "src/textures/" + std::string(image);
 	unsigned char* bytes = stbi_load(imagePath, &widthImg, &heightImg, &numColCh, 0);
 
 	// Generates an OpenGL texture object
