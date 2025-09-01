@@ -6,8 +6,7 @@ void Exit(GLFWwindow *window)
 }
 void WaitForEscape(GLFWwindow *window)
 {
-    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
+    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) Exit(window);
 }
 
 void InitGLFW()
@@ -24,7 +23,7 @@ void InitGLFW()
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // enable error logging
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);  
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);
 }
 void InitGLAD()
 {
@@ -43,18 +42,16 @@ GLFWwindow* createWindow(int width, int height, const char* title)
         glfwTerminate();
         return nullptr;
     }
-    // Introduce the window into the current context
-    glfwMakeContextCurrent(window);
+
+    // Specify the viewport of OpenGL in the Window
+    // In this case the viewport goes from x = 0, y = 0, to x = width, y = height
+    glViewport(0, 0, width, height);
 
     return window;
 }
 
 void SetupOpenGLDebug()
 {
-    // Specify the viewport of OpenGL in the Window
-    // In this case the viewport goes from x = 0, y = 0, to x = 800, y = 800
-    glViewport(0, 0, 800, 800);
-
     int flags; glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
     if (flags & GL_CONTEXT_FLAG_DEBUG_BIT)
     {
@@ -71,24 +68,12 @@ void SetupOpenGLDebug()
     }
 }
 
-void MainLoop(GLFWwindow* window, void (*renderFunction)(GLFWwindow* window), Color backgroundColor)
-{
-    while (!glfwWindowShouldClose(window))
-    {
-        // Take care of all GLFW events
-        WaitForEscape(window);
-        glfwPollEvents();
+void MainLoop(GLFWwindow* window, std::function<void(GLFWwindow*)> renderFunc) {
+    while (!glfwWindowShouldClose(window)) {
+        renderFunc(window);
 
-        // Specify the color of the background
-        glClearColor(backgroundColor.r, backgroundColor.g, backgroundColor.b, backgroundColor.a);
-        // Clean the back buffer and assign the new color to it
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        // Render function
-        renderFunction(window);
-
-        // Swap the back buffer with the front buffer
         glfwSwapBuffers(window);
+        glfwPollEvents();
     }
 }
 

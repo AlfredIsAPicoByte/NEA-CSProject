@@ -8,6 +8,7 @@
   "cmake.sourceDirectory": "C:/Users/atang/Documents/GitHub/Programing_Projects/NEA-CSProject",
   "C_Cpp.errorSquiggles": "disabled",
   "files.associations": {
-    "xstring": "cpp"
+    "xstring": "cpp",
+    "functional": "cpp"
   }
 }

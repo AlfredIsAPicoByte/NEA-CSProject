@@ -30,9 +30,13 @@ float Time::displayFPS(GLFWwindow* window)
     if (fpsTimer >= 1.0f)
     {
         float fps = frameCount / fpsTimer;
-        std::string title = "FPS: " + std::to_string(fps);
+        std::ostringstream ss;
+        ss << "FPS: " << fps;
+        std::string title = ss.str();
         glfwSetWindowTitle(window, title.c_str());
         frameCount = 0;
+        fpsTimer = 0.0f;
+        return fps;
         fpsTimer = 0.0f;
         return fps;
     }
