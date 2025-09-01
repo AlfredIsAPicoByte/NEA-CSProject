@@ -30,9 +30,9 @@ void Camera::Matrix(Shader& shader, const char* uniform)
 
 
 
-void Camera::Inputs(GLFWwindow* window, float deltaTime)
+void Camera::Inputs(GLFWwindow* window, Time& time)
 {
-    float speed = baseSpeed * deltaTime; // Movement speed
+    float speed = baseSpeed * time.deltaTime; // Movement speed
 
 	// Handles key inputs
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
@@ -61,11 +61,11 @@ void Camera::Inputs(GLFWwindow* window, float deltaTime)
 	}
 	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
 	{
-		speed = baseSpeed * sprintMultiplier * deltaTime;
+		speed = baseSpeed * sprintMultiplier * time.deltaTime;
 	}
 	else if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_RELEASE)
 	{
-		speed = baseSpeed * deltaTime;
+		speed = baseSpeed * time.deltaTime;
 	}
 
 

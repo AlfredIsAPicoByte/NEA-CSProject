@@ -10,7 +10,8 @@
 #include <glm/gtx/rotate_vector.hpp>
 #include <glm/gtx/vector_angle.hpp>
 
-#include"shaderClass.h"
+#include "shaderClass.h"
+#include "timeClass.h"
 
 class Camera
 {
@@ -45,6 +46,6 @@ public:
 	// Exports the camera matrix to a shader
 	void Matrix(Shader& shader, const char* uniform);
 	// Handles camera inputs
-	void Inputs(GLFWwindow* window, float deltaTime);
+	void Inputs(GLFWwindow* window, Time& time);
 };
 #endif
