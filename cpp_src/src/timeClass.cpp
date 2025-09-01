@@ -19,3 +19,23 @@ void Time::update()
         }
     }
 }
+
+float Time::displayFPS(GLFWwindow* window)
+{
+    static float fpsTimer = 0.0f;
+    static int frameCount = 0;
+    frameCount++;
+    fpsTimer += deltaTime;
+
+    if (fpsTimer >= 1.0f)
+    {
+        float fps = frameCount / fpsTimer;
+        std::string title = "FPS: " + std::to_string(fps);
+        glfwSetWindowTitle(window, title.c_str());
+        frameCount = 0;
+        fpsTimer = 0.0f;
+        return fps;
+    }
+    
+    return -1.0f; // Indicate that FPS was not updated this frame
+}

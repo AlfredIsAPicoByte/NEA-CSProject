@@ -15,5 +15,7 @@ public:
 
     // Call this once per frame (e.g., at the start of your main loop)
     void update();
+
+    float displayFPS(GLFWwindow* window);
 };
 
