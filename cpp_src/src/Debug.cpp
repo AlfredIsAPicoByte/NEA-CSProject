@@ -102,11 +102,4 @@ void EnableOpenGLDebugger()
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(glDebugOutput, nullptr);
-
-    // Example: only log errors of high severity
-    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_HIGH, 0, nullptr, GL_TRUE);
-
-    // Trigger a test error to validate
-    glEnable(GL_TEXTURE_2D); // invalid in core profile
-    glCheckError_(__FILE__, __LINE__);
 }
