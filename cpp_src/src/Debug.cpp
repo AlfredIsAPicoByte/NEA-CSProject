@@ -1,6 +1,6 @@
 #include "Debug.h"
 
-GLenum glCheckError_(const char *file, int line)
+GLenum glCheckError_(const char* file, int line)
 {
     GLenum errorCode;
     while ((errorCode = glGetError()) != GL_NO_ERROR)
@@ -16,7 +16,8 @@ GLenum glCheckError_(const char *file, int line)
             case GL_OUT_OF_MEMORY:                 error = "OUT_OF_MEMORY"; break;
             case GL_INVALID_FRAMEBUFFER_OPERATION: error = "INVALID_FRAMEBUFFER_OPERATION"; break;
         }
-        std::cout << error << " | " << file << " (" << line << ")" << std::endl;
+        std::cerr << "[OpenGL Error] " << error 
+                  << " | " << file << " (" << line << ")" << std::endl;
     }
     return errorCode;
 }
@@ -65,4 +66,47 @@ void APIENTRY glDebugOutput(GLenum source,
         case GL_DEBUG_SEVERITY_NOTIFICATION: std::cout << "Severity: notification"; break;
     } std::cout << std::endl;
     std::cout << std::endl;
+}
+
+void EnableOpenGLDebugger()
+{
+    if (!glGetStringi) {
+        std::cerr << "glGetStringi not available! Ensure GLAD was initialized properly." << std::endl;
+        return;
+    }
+
+    // Check for KHR_debug extension
+    bool hasKHRDebug = false;
+    GLint numExtensions = 0;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
+    for (GLint i = 0; i < numExtensions; ++i) {
+        const char* ext = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, i));
+        if (ext && std::string(ext) == "GL_KHR_debug") {
+            hasKHRDebug = true;
+            break;
+        }
+    }
+    if (!hasKHRDebug) {
+        std::cout << "GL_KHR_debug extension not available!" << std::endl;
+        return;
+    }
+
+    std::cout << "OpenGL version string: " << glGetString(GL_VERSION) << std::endl;
+
+    if (!glDebugMessageCallback) {
+        std::cerr << "glDebugMessageCallback not available (maybe GLAD not built with GL_KHR_debug)." << std::endl;
+        return;
+    }
+
+    std::cout << "Enabling OpenGL debug output..." << std::endl;
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(glDebugOutput, nullptr);
+
+    // Example: only log errors of high severity
+    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_HIGH, 0, nullptr, GL_TRUE);
+
+    // Trigger a test error to validate
+    glEnable(GL_TEXTURE_2D); // invalid in core profile
+    glCheckError_(__FILE__, __LINE__);
 }

@@ -9,9 +9,8 @@
 void Exit(GLFWwindow *window);
 void WaitForEscape(GLFWwindow *window);
 
-void InitGLFW();
-void InitGLAD();
+int InitGLFW();
+int InitGLAD();
 GLFWwindow* createWindow(int width, int height, const char* title);
-void SetupOpenGLDebug();
 void MainLoop(GLFWwindow* window, std::function<void(GLFWwindow*)> renderFunc);
 void CleanUp(GLFWwindow* window);
