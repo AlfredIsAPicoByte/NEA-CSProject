@@ -10,8 +10,8 @@ find_package(glm CONFIG REQUIRED)
 find_path(STB_INCLUDE_DIRS "stb_image.h")
 
 file(GLOB SRC_FILES cpp_src/src/*.cpp)
-
 add_executable(main cpp_src/main.cpp ${SRC_FILES})
+
 target_include_directories(main PRIVATE cpp_src/include)
 
 target_link_libraries(main PRIVATE
