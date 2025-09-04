@@ -13,6 +13,23 @@
 #include "shaderClass.h"
 #include "timeClass.h"
 
+enum MovementOption {
+	FIRST_PERSON,
+	PITCH_YAW,
+	ORBIT,
+};
+
+enum RotationOption {
+	FREE,
+	PITCH_CONSTRAINED,
+	PITCH_ROLL_CONSTRAINED,
+};
+
+enum CameraType {
+	PERSPECTIVE,
+	ORTHOGRAPHIC,
+};
+
 class Camera
 {
 public:
@@ -26,12 +43,13 @@ public:
 	bool firstClick = true;
 
 	// Stores the width and height of the window
-	int width;
-	int height;
+	int windowWidth;
+	int windowHeight;
+	float aspectRatio;
 
 	// Adjust the speed of the camera and it's sensitivity when looking around
-	float baseSpeed = 0.1f;
-    float sprintMultiplier = 4.0f;
+	float moveSpeed = 0.1f;
+    float speedMult = 4.0f;
 	float sensitivity = 100.0f;
 
     float fov = 45.0f;
