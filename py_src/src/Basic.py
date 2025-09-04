@@ -458,3 +458,76 @@ class Transform:
             # Sheer in local space
             self.local_position = sheer_matrix * self.local_position
             self.local_rotation = sheer_matrix * self.local_rotation
+
+class Ratio:
+    def __init__(self, denominator: float, numerator: float):
+        if denominator == 0:
+            raise ValueError("Denominator cannot be zero")
+        self.denominator = denominator
+        self.numerator = numerator
+    
+    def __add__(self, other):
+        if not isinstance(other, Ratio):
+            raise TypeError("Can only add Ratio to another Ratio")
+        new_numerator = self.numerator * other.denominator + other.numerator * self.denominator
+        new_denominator = self.denominator * other.denominator
+        return Ratio(new_denominator, new_numerator)
+    
+    def __sub__(self, other):
+        if not isinstance(other, Ratio):
+            raise TypeError("Can only subtract Ratio from another Ratio")
+        new_numerator = self.numerator * other.denominator - other.numerator * self.denominator
+        new_denominator = self.denominator * other.denominator
+        return Ratio(new_denominator, new_numerator)
+
+    def __mul__(self, other):
+        if not isinstance(other, Ratio):
+            raise TypeError("Can only multiply Ratio by another Ratio")
+        new_numerator = self.numerator * other.numerator
+        new_denominator = self.denominator * other.denominator
+        return Ratio(new_denominator, new_numerator)
+    
+    def __truediv__(self, other):
+        if not isinstance(other, Ratio):
+            raise TypeError("Can only divide Ratio by another Ratio")
+        if other.numerator == 0:
+            raise ValueError("Cannot divide by a Ratio with a numerator of zero")
+        new_numerator = self.numerator * other.denominator
+        new_denominator = self.denominator * other.numerator
+        return Ratio(new_denominator, new_numerator)
+    
+    def __repr__(self):
+        return f"Ratio({self.numerator}/{self.denominator})"
+    
+    def __float__(self):
+        return self.numerator / self.denominator
+    
+    def __neg__(self):
+        return Ratio(-self.denominator, -self.numerator)
+    
+    def __eq__(self, other):
+        if not isinstance(other, Ratio):
+            return False
+        return self.numerator * other.denominator == self.denominator * other.numerator
+    
+    def __lt__(self, other):
+        if not isinstance(other, Ratio):
+            return False
+        return self.numerator * other.denominator < self.denominator * other.numerator
+    def __le__(self, other):
+        if not isinstance(other, Ratio):
+            return False
+        return self.numerator * other.denominator <= self.denominator * other.numerator
+    def __gt__(self, other):
+        if not isinstance(other, Ratio):
+            return False
+        return self.numerator * other.denominator > self.denominator * other.numerator
+    def __ge__(self, other):
+        if not isinstance(other, Ratio):
+            return False
+        return self.numerator * other.denominator >= self.denominator * other.numerator
+    def __ne__(self, other):
+        if not isinstance(other, Ratio):
+            return True
+        return self.numerator * other.denominator != self.denominator * other.numerator
+    
