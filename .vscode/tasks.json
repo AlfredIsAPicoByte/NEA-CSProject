@@ -1,4 +1,17 @@
 {
   "version": "2.0.0",
-  "tasks": []
+  "tasks": [
+    {
+      "label": "C++: Build Debug",
+      "type": "shell",
+      "command": "cmake -S . -B build/debug -DCMAKE_BUILD_TYPE=Debug && cmake --build build/debug",
+      "group": "build"
+    },
+    {
+      "label": "C++: Build Release",
+      "type": "shell",
+      "command": "cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release && cmake --build build/release",
+      "group": "build"
+    }
+  ]
 }
