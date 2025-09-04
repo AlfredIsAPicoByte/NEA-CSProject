@@ -155,3 +155,4 @@ class Triangle(Shape):
 
     def __repr__(self):
         return f"Triangle(vertex1={self.vertex1}, vertex2={self.vertex2}, vertex3={self.vertex3})"
+
