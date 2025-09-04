@@ -3,8 +3,7 @@
 #include<GLFW/glfw3.h>
 
 #include "Engine.h"
-#include "Mesh.h"
-#include "colorClass.h"
+
 
 int main(){
     if (InitGLFW() != 0) return -1;
@@ -28,7 +27,12 @@ int main(){
 	    return -1;
 	}
 
+#if DEBUG_MODE
 	EnableOpenGLDebugger();
+	std::cout << "Debugger On!" << std::endl;
+#else
+    std::cout << "Debugger Off!" << std::endl;
+#endif
 
 	// Main render loop
 	MainLoop(window, [](GLFWwindow* window){

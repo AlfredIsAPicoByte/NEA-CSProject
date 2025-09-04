@@ -5,6 +5,9 @@
 #include <functional>
 
 #include "Debug.h"
+#include "Mesh.h"
+#include "colorClass.h"
+
 
 void Exit(GLFWwindow *window);
 void WaitForEscape(GLFWwindow *window);
