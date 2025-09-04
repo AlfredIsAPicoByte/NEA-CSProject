@@ -5,6 +5,9 @@ project(Raycaster)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Explicitly point to Python installation
+find_package(Python COMPONENTS Development REQUIRED)
+
 # ---- Find packages ----
 find_package(OpenGL REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
@@ -15,6 +18,8 @@ find_package(glm CONFIG REQUIRED)
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/include
 )
+
+include_directories(main PRIVATE ${STB_INCLUDE_DIRS} ${Python_INCLUDE_DIRS})
 
 # ---- Source files ----
 file(GLOB_RECURSE CPP_SRC_FILES
@@ -31,6 +36,7 @@ target_link_libraries(main PRIVATE
     glfw
     glad::glad
     glm::glm
+    ${Python_LIBRARIES}
 )
 
 # ---- stb_image ----

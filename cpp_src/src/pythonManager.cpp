@@ -1,19 +1,41 @@
-#include "pythonManger.h"
+#include "pythonManager.h"
 
-py::object PythonManager::loadModule (const std::string& moduleName) {
-    try {
-        return py::module_::import(moduleName.c_str());
-    } catch (const py::error_already_set& e) {
-        // Handle error (e.g., log it)
-        return py::none();
-    }
+PythonManager::PythonManager() {
+    Py_Initialize();
 }
 
-py::object PythonManager::callFunction(const py::object& module, const std::string& funcName, const std::vector<py::object>& args = {}) {
-    py::object func = module.attr(funcName.c_str());
-    if (args.empty()) {
-        return func();
-    } else {
-        return func(*args);
+PythonManager::~PythonManager() {
+    Py_Finalize();
+}
+
+PyObject* PythonManager::loadModule(const std::string& moduleName) {
+    PyObject* pName = PyUnicode_DecodeFSDefault(moduleName.c_str());
+    if (!pName) return nullptr;
+
+    PyObject* pModule = PyImport_Import(pName);
+    Py_XDECREF(pName);
+
+    return pModule; // nullptr if the module couldn't be loaded
+}
+
+PyObject* PythonManager::callFunction(PyObject* module, const std::string& funcName, const std::vector<PyObject*>& args) {
+    if (!module) return nullptr;
+
+    PyObject* pFunc = PyObject_GetAttrString(module, funcName.c_str());
+    if (!pFunc || !PyCallable_Check(pFunc)) {
+        Py_XDECREF(pFunc);
+        return nullptr; // Function not found or not callable
     }
+
+    PyObject* pArgs = PyTuple_New(args.size());
+    for (size_t i = 0; i < args.size(); ++i) {
+        Py_XINCREF(args[i]); // Increment reference count for each argument
+        PyTuple_SetItem(pArgs, i, args[i]); // Note: This steals a reference to args[i]
+    }
+
+    PyObject* pValue = PyObject_CallObject(pFunc, pArgs);
+    Py_XDECREF(pArgs);
+    Py_XDECREF(pFunc);
+
+    return pValue; // nullptr if the call failed
 }
