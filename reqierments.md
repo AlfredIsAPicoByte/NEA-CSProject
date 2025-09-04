@@ -35,8 +35,8 @@
 ## 🔷 Build Commands
 
 ```bash
-cmake -S . -B build\x64-windows
-cmake --build build\x64-windows
+cmake -S . -B Build
+cmake --build Build
 ```
 
 \* Ensure your glad loader and CMake configuration match the OpenGL version supported by your GPU

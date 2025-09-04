@@ -66,11 +66,6 @@ class SimpleMaterial:
         )
 
     def ReflectRay(self, ray: Ray, normal: Vector, origin: Vector):
-        if not isinstance(ray, Ray):
-            raise TypeError("Expected ray to be an instance of Ray")
-        if not isinstance(normal, Vector):
-            raise TypeError("Expected normal to be an instance of Vector")
-        
         reflected_direction = ray.direction - 2 * (ray.direction.Dot(normal)) * normal
 
         # Glossiness controls the spread of the random vector

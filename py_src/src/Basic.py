@@ -6,15 +6,17 @@ class Vector:
         self.component_size: int = 0
 
     def __add__(self, other):
+        if not (isinstance(other, Vector) or isinstance(other, (int, float))):
+            raise TypeError("Other must be a vector or in the form (x, y)")
+        if len(self.data) != len(other.data):
+            raise ValueError("Vectors must be of the same dimension")
+
         self.component_size += 1
 
         if isinstance(other, Vector):
             return Vector(self.data[i] + other.data[i] for i in range(len(self.data)))
         if isinstance(other, (int, float)):
             return Vector(self.data[i] + other for i in range(len(self.data)))
-        elif isinstance(other, Vector):
-            if len(self.data) != len(other.data):
-                raise ValueError("Vectors must be of the same dimension")
 
     def __sub__(self, other):
         self.component_size += 1

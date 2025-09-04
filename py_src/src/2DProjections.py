@@ -9,17 +9,26 @@ class Shape:
 
     def GetNormal(self, point: Vector) -> Vector:
         raise NotImplementedError("GetNormal method must be implemented in subclasses")
+
+    def GetTangent(self, point: Vector) -> Vector:
+        raise NotImplementedError("GetTangent method must be implemented in subclasses")
     
+    def Area(self) -> float:
+        raise NotImplementedError("Area method must be implemented in subclasses")
+
+    def Perimeter(self) -> float:
+        raise NotImplementedError("Perimeter method must be implemented in subclasses")
+
     def __repr__(self):
         return f"Shape()"
 
 class Circle(Shape):
-    def __init_(self, center: Vector, radius: float):
+    def __init__(self, center: Vector, radius: float):
         self.center = center
         self.radius = radius
     
-    def CheckPoint(self, point: Vector) -> bool:
-        return (point - self.center).Magnitude() <= self.radius
+    def CheckPoint(self, point: Vector, uncertainty: float = 0) -> bool:
+        return self.radius - uncertainty < (point - self.center).Magnitude() <= self.radius + uncertainty
     
     # Using the quadratic equation to find intersection with circles
     # P(t) = dt + s
@@ -73,9 +82,28 @@ class Circle(Shape):
         return ray.PointAtParameter(t)
 
     def GetNormal(self, point: Vector) -> Vector:
-        if not self.CheckPoint(point):
+        if not self.CheckPoint(point, 0.01):
             raise ValueError("Point is not on the circle")
         return (point - self.center).Normalize()
+
+    def GetTangent(self, point: Vector) -> Vector:
+        if not self.CheckPoint(point, 0.01):
+            raise ValueError("Point is not on the circle")
+        return (point - self.center).Normalize()
+
+    def Area(self) -> float:
+        from math import pi
+        return pi * self.radius ** 2
+
+    def Perimeter(self) -> float:
+        from math import pi
+        return 2 * pi * self.radius
+
+    def Diameter(self) -> float:
+        return 2 * self.radius
+
+    def Circumference(self) -> float:
+        return self.Perimeter()
 
     def __repr__(self):
         return f"Circle(center={self.center}, radius={self.radius})"
@@ -103,6 +131,27 @@ class Triangle(Shape):
         edge1 = self.vertex2 - self.vertex1
         edge2 = self.vertex3 - self.vertex1
         return edge1.Cross(edge2).Normalize()
+
+    def Area(self) -> float:
+        # Heron's formula
+        a = (self.vertex1 - self.vertex2).Magnitude()
+        b = (self.vertex2 - self.vertex3).Magnitude()
+        c = (self.vertex3 - self.vertex1).Magnitude()
+        s = (a + b + c) / 2
+        from math import sqrt
+        return sqrt(s * (s - a) * (s - b) * (s - c))
+
+    def Perimeter(self) -> float:
+        a = (self.vertex1 - self.vertex2).Magnitude()
+        b = (self.vertex2 - self.vertex3).Magnitude()
+        c = (self.vertex3 - self.vertex1).Magnitude()
+        return a + b + c
+
+    def SideLengths(self) -> tuple[float, float, float]:
+        a = (self.vertex1 - self.vertex2).Magnitude()
+        b = (self.vertex2 - self.vertex3).Magnitude()
+        c = (self.vertex3 - self.vertex1).Magnitude()
+        return (a, b, c)
 
     def __repr__(self):
         return f"Triangle(vertex1={self.vertex1}, vertex2={self.vertex2}, vertex3={self.vertex3})"
