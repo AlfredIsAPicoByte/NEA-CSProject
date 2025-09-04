@@ -32,7 +32,7 @@ int main(){
 
 	// Main render loop
 	MainLoop(window, [](GLFWwindow* window){
-		Color clearColor("#4c5155ff");
+		Color clearColor("#25394bff");
         glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

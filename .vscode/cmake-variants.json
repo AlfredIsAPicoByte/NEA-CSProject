@@ -6,21 +6,33 @@
         "short": "Debug",
         "buildType": "Debug",
         "settings": {
-          "exampleSetting": true
+          "debugging": true
+        },
+        "cacheVariables": {
+          "CMAKE_VERBOSE_MAKEFILE": "ON",
+          "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
         }
       },
       "release": {
         "short": "Release",
         "buildType": "Release",
         "settings": {
-          "exampleSetting": true
+          "debugging": false
+        },
+        "cacheVariables": {
+          "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
+          "CMAKE_VERBOSE_MAKEFILE": "OFF"
         }
       },
       "relwithdebinfo": {
         "short": "RelDeb",
         "buildType": "RelWithDebInfo",
         "settings": {
-          "exampleSetting": true
+          "debugging": true
+        },
+        "cacheVariables": {
+          "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
+          "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
         }
       }
     }
