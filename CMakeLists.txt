@@ -61,3 +61,11 @@ add_custom_command(TARGET main POST_BUILD
 set_target_properties(main PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
+
+# ---- Optional: Debugging definitions ----
+# You can define DEBUG_MODE based on your build type
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_definitions(DEBUG_MODE=1)
+else()
+    add_compile_definitions(DEBUG_MODE=0)
+endif()
