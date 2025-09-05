@@ -1,4 +1,4 @@
-from Basic import Vector, Matrix, Ray
+from src.Basic import Vector, Matrix, Ray
 
 class Shape:
     def CheckPoint(self, point: Vector) -> bool:

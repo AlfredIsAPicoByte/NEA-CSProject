@@ -1,8 +1,8 @@
-from Basic import Transfrom, Matrix, Ratio
+from src.Basic import Transform, Matrix, Ratio
 
 
 class Camera:
-    def __init__ (self, transform: Transfrom, fov: float, near: float, far: float, aspect: Ratio):
+    def __init__ (self, transform: Transform, fov: float, near: float, far: float, aspect: Ratio):
         self.transform = transform
         self.fov = fov
         self.near = near

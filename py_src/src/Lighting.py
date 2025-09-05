@@ -1,4 +1,4 @@
-from Basic import Vector, Ray
+from src.Basic import Vector, Ray
 import random
 
 class Color:
