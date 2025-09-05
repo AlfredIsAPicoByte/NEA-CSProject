@@ -1,4 +1,4 @@
-from math import cos, sin
+from math import cos, sin, acos
 
 class Vector:
     def __init__(self, *args: list[float]):
@@ -64,6 +64,14 @@ class Vector:
         if magnitude == 0:
             raise ValueError("Cannot normalize a zero vector")
         return Vector(x / magnitude for x in self.data)
+    
+    def AngleBetween(self, other):
+        dot_product = self.Dot(other)
+        magnitudes = self.Magnitude() * other.Magnitude()
+        if magnitudes == 0:
+            raise ValueError("Cannot calculate angle with a zero vector")
+        cos_angle = dot_product / magnitudes
+        return acos(max(-1, min(1, cos_angle)))
     
     def __getitem__(self, index):
         if isinstance(index, int):
