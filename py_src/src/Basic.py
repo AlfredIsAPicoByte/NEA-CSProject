@@ -72,7 +72,24 @@ class Vector:
             raise ValueError("Cannot calculate angle with a zero vector")
         cos_angle = dot_product / magnitudes
         return acos(max(-1, min(1, cos_angle)))
-    
+
+    def Rotate(self, axis, angle: float):
+        if len(self.data) != 3 or len(axis.data) != 3:
+            raise ValueError("Rotation is only defined for 3D vectors")
+        
+        # Normalize the axis
+        n = axis.Normalize()
+        
+        cos_angle = cos(angle)
+        sin_angle = sin(angle)
+        rotation_matrix = Matrix(
+            [cos_angle + n[0] * n[0] * (1 - cos_angle), n[0] * n[1] * (1 - cos_angle) - n[2] * sin_angle, n[0] * n[2] * (1 - cos_angle) + n[1] * sin_angle],
+            [n[1] * n[0] * (1 - cos_angle) + n[2] * sin_angle, cos_angle + n[1] * n[1] * (1 - cos_angle), n[1] * n[2] * (1 - cos_angle) - n[0] * sin_angle],
+            [n[2] * n[0] * (1 - cos_angle) - n[1] * sin_angle, n[2] * n[1] * (1 - cos_angle) + n[0] * sin_angle, cos_angle + n[2] * n[2] * (1 - cos_angle)]
+        )
+        
+        return rotation_matrix * self
+
     def __getitem__(self, index):
         if isinstance(index, int):
             return self.data[index]
