@@ -3,6 +3,11 @@ import random
 
 class Color:
     def __init__(self, r: float, g: float, b: float, alpha: float = 1.0):
+        """
+        Color values are clamped between 0.0 and 1.0
+        0.0 = no intensity, 1.0 = full intensity
+        Alpha is the opacity of the color, 0.0 = fully transparent, 1.0 = fully opaque
+        """
         self.r = clamp(r)
         self.g = clamp(g)
         self.b = clamp(b)
@@ -45,7 +50,10 @@ def clamp(value, min_value: float|int = 0.0, max_value: float|int = 1.0):
 
 class RayColor(Color, Ray):
     def __init__(self, origin: Vector, direction: Vector, color: Color):
-        Ray.__init__(self, origin, direction)
+        """
+        Combines a Ray and a Color into one object.
+        """
+        Ray.__init__(self, origin, direction.Normalize())
         Color.__init__(self, color.r, color.g, color.b, color.alpha)
 
     def __repr__(self):
@@ -53,6 +61,14 @@ class RayColor(Color, Ray):
 
 class SimpleMaterial:
     def __init__ (self, color: Color, roughness: float, glossiness: float):
+        """
+        A simple material that reflects light based on its color, roughness, and glossiness.
+        - color: The base color of the material.
+        - roughness: A value between 0.0 and 1.0 that determines
+            how rough the surface is. 0.0 = perfectly smooth, 1.0 = very rough.
+        - glossiness: A value between 0.0 and 1.0 that determines
+            how glossy the surface is. 0.0 = matte, 1.0 = perfectly glossy.
+        """
         self.color = color
         self.roughness = roughness
         self.glossiness = clamp(glossiness)
