@@ -1,67 +1,80 @@
-from pynput import keyboard, mouse
 from src.Basic import Ray, Vector
 from src.Camera import Camera
 
-class InputManager:
+class EventListener:
+    def __init__(self, **kwargs):
+        self.on_press = kwargs.get('on_press', lambda key: None)
+        self.on_release = kwargs.get('on_release', lambda key: None)
+        self.on_move = kwargs.get('on_move', lambda x, y: None)
+        self.on_click = kwargs.get('on_click', lambda x, y, button, pressed: None)
+        self.on_scroll = kwargs.get('on_scroll', lambda x, y, dx, dy: None)
+        self.running = False
+    
+    def start(self):
+        self.running = True
+    
+    def stop(self):
+        self.running = False
+
+class KeyboardManager:
     def __init__(self):
-        self.keys_pressed = set()
-        self.listener = keyboard.Listener(
-            on_press=self._on_press,
-            on_release=self._on_release
+        self.pressed_keys = set()
+        self.listener = EventListener(
+            on_press=self.press_key,
+            on_release=self.release_key
         )
-        self.listener.start()
 
-    def _on_press(self, key):
-        try:
-            self.keys_pressed.add(key.char)
-        except AttributeError:
-            self.keys_pressed.add(str(key))
+    def press_key(self, key):
+        self.pressed_keys.add(key)
 
-    def _on_release(self, key):
-        try:
-            self.keys_pressed.discard(key.char)
-        except AttributeError:
-            self.keys_pressed.discard(str(key))
+    def release_key(self, key):
+        self.pressed_keys.discard(key)
 
     def is_key_pressed(self, key):
-        return key in self.keys_pressed
-    
-    def clear(self):
-        self.keys_pressed.clear()
-    
-    def get_pressed_keys(self):
-        return list(self.keys_pressed)
-    
-    def set_mouse_position(self, x, y):
-        if self.can_mouse_move:
-            mouse.Controller().position = (x, y)
-    
-    def get_mouse_position(self):
-        return mouse.Controller().position
+        return key in self.pressed_keys
 
-    def get_mouse_delta(self, prev: tuple = None):
-        current_pos = mouse.Controller().position
+class MouseManager:
+    def __init__(self):
+        self.position = [0, 0]
+        self.pressed_buttons = set()
+        self.listener = EventListener(
+            on_move=self.move,
+            on_click=self.is_button_pressed
+        )
+        self.visible = True
 
-        if prev is None:
-            return (0, 0)
-        
-        return (current_pos[0] - prev[0], current_pos[1] - prev[1])
+    def move(self, x, y):
+        if self.can_move:
+            self.position = [x, y]
     
-    def is_mouse_button_pressed(self, button):
-        return mouse.Controller().pressed(button)
+    def delta_move(self, x, y):
+        if self.can_move:
+            self.position = [self.position[0] + x, self.position[1] + y]
+    
+    def get_delta(self, prev):
+        return (self.position[0] - prev[0], self.position[1] - prev[1])
+
+    def press_button(self, button):
+        self.pressed_buttons.add(button)
+
+    def release_button(self, button):
+        self.pressed_buttons.discard(button)
+
+    def is_button_pressed(self, button):
+        return button in self.pressed_buttons
     
     def hide_cursor(self):
-        mouse.Controller().visible = False
+        self.visible = False
 
     def show_cursor(self):
-        mouse.Controller().visible = True
+        self.visible = True
 
-    can_mouse_move = True
+    can_move = True
     def lock_cursor(self):
-        self.can_mouse_move = False
+        self.can_move = False
 
     def unlock_cursor(self):
-        self.can_mouse_move = True
+        self.can_move = True
 
     def ray_from_mouse(self, camera: Camera):
         mouse_x, mouse_y = self.get_mouse_position()
@@ -76,3 +89,18 @@ class InputManager:
         ray_world = Vector(ray_world.x, ray_world.y, ray_world.z).Normalize()
 
         return Ray(camera.position, ray_world)
+
+
+class InputManager:
+    def __init__(self):
+        self.mouse = MouseManager()
+        self.keyboard = KeyboardManager()
+    
+    def start_listening(self):
+        self.mouse.listener.start()
+        self.keyboard.listener.start()
+    
+    def stop_listening(self):
+        self.mouse.listener.stop()
+        self.keyboard.listener.stop()
+    
