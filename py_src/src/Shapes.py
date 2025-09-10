@@ -82,8 +82,13 @@ class Circle(Shape):
         c = s.Dot(s) - self.radius ** 2
         discriminant = b ** 2 - 4 * a * c
         
-        t = -b - (discriminant) / a
-        return ray.PointAtParameter(t)
+        if discriminant == 0:
+            t = -b - (discriminant ** 0.5) / a
+            return [ray.PointAtParameter(t)]
+        else:
+            t1 = (-b + (discriminant ** 0.5)) / (2 * a)
+            t2 = (-b - (discriminant ** 0.5)) / (2 * a)
+            return [ray.PointAtParameter(t) for t in sorted([t1, t2]) if t >= 0]
 
     def GetNormal(self, point: Vector) -> Vector:
         if not self.CheckPoint(point, 0.01):
