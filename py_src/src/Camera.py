@@ -50,7 +50,7 @@ class Camera:
         look_at(target: Transform): Orients the camera to look at a target transform.
         look_at_screen_coords(screen_x: float, screen_y: float, screen_width: float, screen_height: float): Orients the camera to look at a point in screen coordinates.
     """
-    def __init__ (self, transform: Transform, fov: float, near: float, far: float, width: float, height: float, type: CameraType = CameraType.PERSPECTIVE, mode: CameraMode = CameraMode.FIRST_PERSON, speed: float = 5.0, speed_multiplier: float = 2.0, sensitivity: float = 10.0):
+    def __init__ (self, transform: Transform, fov: float, near: float, far: float, width: int, height: int, type: CameraType = CameraType.PERSPECTIVE, mode: CameraMode = CameraMode.FIRST_PERSON, speed: float = 5.0, speed_multiplier: float = 2.0, sensitivity: float = 10.0, name: str = "Camera", id: int = 0):
         """
         Initializes the Camera with the given parameters.
         """
@@ -69,6 +69,9 @@ class Camera:
         self.speed = speed
         self.speed_multiplier = speed_multiplier
         self.sensitivity = sensitivity
+
+        self.name = name
+        self.id = id
 
     def get_view_matrix(self) -> Matrix:
         # The view matrix is typically the inverse of the camera's global transform
@@ -240,9 +243,10 @@ class Camera:
             self.firstClick = True
             input.show_cursor()
 
-    target: Transform = Transform()
+    target: Transform = Transform(Vector(0, 0, 0), Vector(0, 0, 0), Vector(1, 1, 1))
     def SelectOrbitTarget(self, target: Transform):
         self.target = target
+    
     def OrbitMovement(self, input: InputManager, delta_time: float):
         # Orbit movement: rotate camera around self.target based on mouse input, zoom with scroll
         if input.is_mouse_button_pressed('RIGHT'):
