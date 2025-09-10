@@ -44,32 +44,56 @@ class Vector:
         self.component_size += 1
 
         if isinstance(other, Vector):
-            return Vector(self.data[i] + other.data[i] for i in range(len(self.data)))
+            result = []
+            for i in range(len(self.data)):
+                result.append(self.data[i] + other.data[i])
+            return Vector(*result)
         if isinstance(other, (int, float)):
-            return Vector(self.data[i] + other for i in range(len(self.data)))
+            result = []
+            for i in self.data:
+                result.append(i + other)
+            return Vector(*result)
 
     def __sub__(self, other):
+        if not (isinstance(other, Vector) or isinstance(other, (int, float))):
+            raise TypeError("Other must be a vector or in the form (x, y)")
+        if len(self.data) != len(other.data):
+            raise ValueError("Vectors must be of the same dimension")
+        
         self.component_size += 1
 
         if isinstance(other, Vector):
-            return Vector(self.data[i] - other.data[i] for i in range(len(self.data)))
+            result = []
+            for i in range(len(self.data)):
+                result.append(self.data[i] - other.data[i])
+            return Vector(*result)
         if isinstance(other, (int, float)):
-            return Vector(self.data[i] - other for i in range(len(self.data)))
-        elif isinstance(other, Vector):
-            if len(self.data) != len(other.data):
-                raise ValueError("Vectors must be of the same dimension")
+            result = []
+            for i in self.data:
+                result.append(i - other)
+            return Vector(*result)
 
     def __mul__(self, scalar: int|float):
         self.component_size += 1
+        
+        result = []
 
-        return Vector(self.data[i] * scalar for i in range(len(self.data)))
+        for i in self.data:
+            result.append(i * scalar)
+
+        return Vector(*result)
     
     def __truediv__(self, scalar: int|float):
         self.component_size += 1
-
         if scalar == 0:
             raise ValueError("Division by zero is not allowed")
-        return Vector(self.data[i] / scalar for i in range(len(self.data)))
+        
+        result = []
+
+        for i in self.data:
+            result.append(i / scalar)
+
+        return Vector(*result)
     
     def Dot(self, other):
         """
@@ -80,7 +104,7 @@ class Vector:
         
         result = 0
         for i in range(len(self.data)):
-            result += self.data[i] * other.data[i]
+            result += float(self.data[i]) * float(other.data[i])
         return result
     
     def Cross(self, other):
@@ -101,7 +125,7 @@ class Vector:
         """
         Returns the magnitude (length) of the vector.
         """
-        return sum(x ** 2 for x in self.data) ** 0.5
+        return sum([x ** 2 for x in self.data]) ** 0.5
     
     def Normalize(self):
         """
@@ -112,7 +136,8 @@ class Vector:
         if magnitude == 0:
             raise ValueError("Cannot normalize a zero vector")
         
-        return Vector(x / magnitude for x in self.data)
+        normalized_vector = Vector(*self.data)
+        return normalized_vector / magnitude
     
     def AngleBetween(self, other):
         """
@@ -188,7 +213,7 @@ class Matrix:
         __truediv__(scalar): Divides this matrix by a scalar.
         __repr__(): Returns a string representation of the matrix.)
     """
-    def __init__(self, *args: list[list[float]]):
+    def __init__(self, name: str = "Matrix", id: int = 0, *args: list[list[float]]):
         """
         A matrix can be of any dimension, but most commonly used are 2x2, 3x3, and 4x4.
         Example usage:
@@ -379,7 +404,7 @@ class Ray:
         GetIntersection(other): Gets the intersection point with another ray (not implemented).
         __repr__(): Returns a string representation of the ray.
     """
-    def __init__(self, origin: Vector, direction: Vector):
+    def __init__(self, origin: Vector, direction: Vector, name: str = "Ray", id: int = 0):
         """
         A ray defined by an origin point and a direction vector.
         """
@@ -388,6 +413,8 @@ class Ray:
         if direction.Magnitude() == 0:
             raise ValueError("Direction vector cannot be zero-length")
         self.direction = direction.Normalize()
+        
+        self.name = name
 
     def PointAtParameter(self, t: float):
         """
@@ -491,7 +518,7 @@ class Transform2D:
     
     2D vectors only.
     """
-    def __init__(self, position: Vector, rotation: float, scale: Vector, parent=None):
+    def __init__(self, position: Vector, rotation: float, scale: Vector, parent=None, name: str = "Transform2D", id: int = 0):
         """
         Initializes a 2D transform with position, rotation, and scale.
         - position: The position of the object in world (Vector2)
@@ -507,6 +534,9 @@ class Transform2D:
         self.local_rotation = 0.0  # in radians
         self.local_scale = Vector(1, 1)
         self.parent = parent
+
+        self.name = name
+        self.id = id
 
         # Up and right directions (default for 2D: up +Y, right +X)
         self.update_directions()
