@@ -22,7 +22,7 @@ class Vector:
         __len__(): Returns the number of components in the vector.
         __repr__(): Returns a string representation of the vector.
     """
-    def __init__(self, *args: list[float]):
+    def __init__(self, id: int = 0, *args: list[float]):
         """
         A vector can be of any dimension, but most commonly used are 2D and 3D.
         Example usage:
@@ -34,6 +34,8 @@ class Vector:
         """
         self.data: list[float] = args
         self.component_size: int = 0
+
+        self.id = id
 
     def __add__(self, other):
         if not (isinstance(other, Vector) or isinstance(other, (int, float))):
@@ -797,7 +799,7 @@ class Transform:
     
     3D vectors only.
     """
-    def __init__(self, position: Vector, rotation: Vector, scale: Vector, parent=None):
+    def __init__(self, position: Vector, rotation: Vector, scale: Vector, parent=None, name: str = "Transform", id: int = 0):
         """
         Initializes a transform with position, rotation, and scale.
         - position: The position of the object in world
@@ -813,6 +815,9 @@ class Transform:
         self.local_rotation = Vector(0, 0, 0) # in radians
         self.local_scale = Vector(1, 1, 1)
         self.parent = parent
+
+        self.name = name
+        self.id = id
 
         # Forward, right, and up directions (default for 3D: +Z, +X, +Y)
         self.update_directions()
@@ -1074,7 +1079,7 @@ class Ratio:
     Represents a ratio (fraction) with a denominator and numerator.
     Supports basic arithmetic operations and comparisons.
     """
-    def __init__(self, denominator: float, numerator: float):
+    def __init__(self, denominator: float, numerator: float, id: int = 0):
         """
         Creates a ratio (fraction) with a denominator and numerator.
         """
@@ -1082,6 +1087,8 @@ class Ratio:
             raise ValueError("Denominator cannot be zero")
         self.denominator = denominator
         self.numerator = numerator
+
+        self.id = id
     
     def __add__(self, other):
         if not isinstance(other, Ratio):
