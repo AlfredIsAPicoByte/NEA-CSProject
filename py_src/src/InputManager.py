@@ -1,5 +1,4 @@
-from src.Basic import Ray, Vector
-from src.Camera import Camera
+from src.Basic import Ray, Vector, Matrix
 
 class EventListener:
     def __init__(self, **kwargs):
@@ -47,12 +46,15 @@ class MouseManager:
         if self.can_move:
             self.position = [x, y]
     
+    def get_position(self):
+        return tuple(self.position)
+
     def delta_move(self, x, y):
         if self.can_move:
-            self.position = [self.position[0] + x, self.position[1] + y]
+            self.move(self.position[0] + x, self.position[1] + y)
     
-    def get_delta(self, prev):
-        return (self.position[0] - prev[0], self.position[1] - prev[1])
+    def get_delta(self, x, y):
+        return (self.position[0] - x, self.position[1] - y)
 
     def press_button(self, button):
         self.pressed_buttons.add(button)
@@ -76,19 +78,22 @@ class MouseManager:
     def unlock_cursor(self):
         self.can_move = True
 
-    def ray_from_mouse(self, camera: Camera):
+    def ray_from_mouse(self, screen_width: int, screen_height: int, camera_position: Vector, projection_matrix: Matrix, view_matrix: Matrix):
+        if screen_width <= 0 or screen_height <= 0:
+            return None
+        
         mouse_x, mouse_y = self.get_mouse_position()
-        ndc_x = (2.0 * mouse_x) / camera.width - 1.0
-        ndc_y = 1.0 - (2.0 * mouse_y) / camera.height
+        ndc_x = (2.0 * mouse_x) / screen_width - 1.0
+        ndc_y = 1.0 - (2.0 * mouse_y) / screen_height
         ndc_z = 1.0
 
         ray_clip = Vector(ndc_x, ndc_y, -1.0, 1.0)
-        ray_eye = camera.get_projection_matrix().Inverse() * ray_clip
+        ray_eye = projection_matrix().Inverse() * ray_clip
         ray_eye = Vector(ray_eye.x, ray_eye.y, -1.0, 0.0)
-        ray_world = camera.get_view_matrix().Inverse() * ray_eye
+        ray_world = view_matrix().Inverse() * ray_eye
         ray_world = Vector(ray_world.x, ray_world.y, ray_world.z).Normalize()
 
-        return Ray(camera.position, ray_world)
+        return Ray(camera_position, ray_world)
 
 
 class InputManager:
