@@ -1,497 +1,398 @@
-from math import cos, sin
-
-class Vector:
-    def __init__(self, *args: list[float]):
-        self.data: list[float] = args
-        self.component_size: int = 0
-
-    def __add__(self, other):
-        if not (isinstance(other, Vector) or isinstance(other, (int, float))):
-            raise TypeError("Other must be a vector or in the form (x, y)")
-        if len(self.data) != len(other.data):
-            raise ValueError("Vectors must be of the same dimension")
-
-        self.component_size += 1
-
-        if isinstance(other, Vector):
-            return Vector(self.data[i] + other.data[i] for i in range(len(self.data)))
-        if isinstance(other, (int, float)):
-            return Vector(self.data[i] + other for i in range(len(self.data)))
-
-    def __sub__(self, other):
-        self.component_size += 1
-
-        if isinstance(other, Vector):
-            return Vector(self.data[i] - other.data[i] for i in range(len(self.data)))
-        if isinstance(other, (int, float)):
-            return Vector(self.data[i] - other for i in range(len(self.data)))
-        elif isinstance(other, Vector):
-            if len(self.data) != len(other.data):
-                raise ValueError("Vectors must be of the same dimension")
-
-    def __mul__(self, scalar: int|float):
-        self.component_size += 1
-
-        return Vector(self.data[i] * scalar for i in range(len(self.data)))
-    
-    def __truediv__(self, scalar: int|float):
-        self.component_size += 1
-
-        if scalar == 0:
-            raise ValueError("Division by zero is not allowed")
-        return Vector(self.data[i] / scalar for i in range(len(self.data)))
-    
-    def Dot(self, other):
-        result = 0
-        for i in range(len(self.data)):
-            result += self.data[i] * other.data[i]
-        return result
-    
-    def Cross(self, other):
-        if len(self.data) != 3 or len(other.data) != 3:
-            raise ValueError("Cross product is only defined for 3D vectors")
-        return Vector(
-            self.data[1] * other.data[2] - self.data[2] * other.data[1],
-            self.data[2] * other.data[0] - self.data[0] * other.data[2],
-            self.data[0] * other.data[1] - self.data[1] * other.data[0]
-        )
-
-    def Magnitude(self):
-        return sum(x ** 2 for x in self.data) ** 0.5
-    
-    def Normalize(self):
-        magnitude = self.Magnitude()
-        if magnitude == 0:
-            raise ValueError("Cannot normalize a zero vector")
-        return Vector(x / magnitude for x in self.data)
-    
-    def __getitem__(self, index):
-        if isinstance(index, int):
-            return self.data[index]
-        elif isinstance(index, slice):
-            return Vector(*self.data[index])
-        else:
-            raise TypeError("Index must be an integer or a slice")
-        
-    def __setitem__(self, index, value):
-        if isinstance(index, int):
-            self.data[index] = value
-        elif isinstance(index, slice):
-            if len(value) != len(self.data[index]):
-                raise ValueError("Value length must match the slice length")
-            self.data[index] = value
-        else:
-            raise TypeError("Index must be an integer or a slice")
-    
-    def __len__(self):
-        return len(self.data)
-
-    def __repr__(self):
-        result = ", ".join(str(x) for x in self.data)
-        return f"Vector({result})"
-
-class Matrix:
-    def __init__(self, *args: list[list[float]]):
-        self.data: list[list[float]] = args
-        self.rows: int = len(self.data)
-        self.cols: int = len(self.data[0]) if self.rows > 0 else 0
-
-    def __add__(self, other):
-        if isinstance(other, Matrix):
-            if self.rows != other.rows or self.cols != other.cols:
-                raise ValueError("Matrices must have the same dimensions for addition")
-            return Matrix(
-                [self.data[i][j] + other.data[i][j] for j in range(self.cols)]
-                for i in range(self.rows)
-            )
-        raise NotImplementedError("Matrix addition with this type is not implemented")
-    
-    def __sub__(self, other):
-        if isinstance(other, Matrix):
-            if self.rows != other.rows or self.cols != other.cols:
-                raise ValueError("Matrices must have the same dimensions for subtraction")
-            return Matrix(
-                [self.data[i][j] - other.data[i][j] for j in range(self.cols)]
-                for i in range(self.rows)
-            )
-        raise NotImplementedError("Matrix subtraction with this type is not implemented")
-    
-    def __mul__(self, other):
-        if isinstance(other, Matrix):
-            if self.cols != other.rows:
-                raise ValueError("Matrix multiplication requires compatible dimensions")
-            return Matrix(
-                [
-                    [sum(self.data[i][k] * other.data[k][j] for k in range(self.cols)) for j in range(other.cols)]
-                    for i in range(self.rows)
-                ]
-            )
-        elif isinstance(other, (int, float)):
-            return Matrix(self.data) * other
-        elif isinstance(other, Vector):
-            if self.cols != len(other):
-                raise ValueError("Matrix and vector dimensions do not match")
-            return Vector(
-                sum(self.data[i][j] * other[j] for j in range(self.cols))
-                for i in range(self.rows)
-            )
-        else:
-            raise NotImplementedError("Matrix multiplication with this type is not implemented")
-
-    def __rmul__(self, scalar: int|float):
-        if isinstance(scalar, (int, float)):
-            return Matrix(
-                [self.data[i][j] * scalar for j in range(self.cols)]
-                for i in range(self.rows)
-            )
-        raise NotImplementedError("Right multiplication with this type is not implemented")
-    
-    def __truediv__(self, scalar: int|float):
-        if isinstance(scalar, (int, float)):
-            if scalar == 0:
-                raise ValueError("Division by zero is not allowed")
-            return Matrix(
-                [self.data[i][j] / scalar for j in range(self.cols)]
-                for i in range(self.rows)
-            )
-        raise NotImplementedError("Matrix division with this type is not implemented")
-
-    def Transpose(self):
-        return Matrix(
-            [self.data[j][i] for j in range(self.rows)]
-            for i in range(self.cols)
-        )
-    
-    def Determinant(self):
-        if self.rows != self.cols:
-            raise ValueError("Determinant is only defined for square matrices")
-        if self.rows == 2:
-            return self.data[0][0] * self.data[1][1] - self.data[0][1] * self.data[1][0]
-        elif self.rows == 3:
-            return (
-                self.data[0][0] * (self.data[1][1] * self.data[2][2] - self.data[1][2] * self.data[2][1]) -
-                self.data[0][1] * (self.data[1][0] * self.data[2][2] - self.data[1][2] * self.data[2][0]) +
-                self.data[0][2] * (self.data[1][0] * self.data[2][1] - self.data[1][1] * self.data[2][0])
-            )
-        else:
-            raise NotImplementedError("Determinant calculation for matrices larger than 3x3 is not implemented")
-
-    def Inverse(self):
-        if self.rows != self.cols:
-            raise ValueError("Inverse is only defined for square matrices")
-        if self.rows == 2:
-            det = self.Determinant()
-            if det == 0:
-                raise ValueError("Matrix is singular and cannot be inverted")
-            return Matrix(
-                [self.data[1][1] / det, -self.data[0][1] / det],
-                [-self.data[1][0] / det, self.data[0][0] / det]
-            )
-        elif self.rows == 3:
-            # Implementing a simple method for 3x3 matrices
-            det = self.Determinant()
-            if det == 0:
-                raise ValueError("Matrix is singular and cannot be inverted")
-            inv_det = 1 / det
-            return Matrix(
-                [
-                    (self.data[1][1] * self.data[2][2] - self.data[1][2] * self.data[2][1]) * inv_det,
-                    (self.data[0][2] * self.data[2][1] - self.data[0][1] * self.data[2][2]) * inv_det,
-                    (self.data[0][1] * self.data[1][2] - self.data[0][2] * self.data[1][1]) * inv_det
-                ],
-                [
-                    (self.data[1][2] * self.data[2][0] - self.data[1][0] * self.data[2][2]) * inv_det,
-                    (self.data[0][0] * self.data[2][2] - self.data[0][2] * self.data[2][0]) * inv_det,
-                    (self.data[0][2] * self.data[1][0] - self.data[0][0] * self.data[1][2]) * inv_det
-                ],
-                [
-                    (self.data[1][0] * self.data[2][1] - self.data[1][1] * self.data[2][0]) * inv_det,
-                    (self.data[0][1] * self.data[2][0] - self.data[0][0] * self.data[2][1]) * inv_det,
-                    (self.data[0][0] * self.data[1][1] - self.data[0][1] * self.data[1][0]) * inv_det
-                ])
-    
-    def __getitem__(self, index):
-        if isinstance(index, int):
-            return self.data[index]
-        elif isinstance(index, slice):
-            return Matrix(*self.data[index])
-        else:
-            raise TypeError("Index must be an integer or a slice")
-    
-    def __setitem__(self, index, value):
-        if isinstance(index, int):
-            if len(value) != self.cols:
-                raise ValueError("Value length must match the number of columns")
-            self.data[index] = value
-        elif isinstance(index, slice):
-            if len(value) != len(self.data[index]):
-                raise ValueError("Value length must match the slice length")
-            self.data[index] = value
-        else:
-            raise TypeError("Index must be an integer or a slice")
-
-    def __repr__(self):
-        return f"Matrix({self.elements})"
+from math import cos, sin, acos
+import numpy as np
 
 class Ray:
-    def __init__(self, origin: Vector, direction: Vector):
-        self.origin = origin
-
-        if direction.Magnitude() == 0:
+    """
+    Represents a ray in N-dimensional space, defined by an origin point and a direction vector.
+    
+    Attributes:
+        origin (np.ndarray): The starting point of the ray.
+        direction (np.ndarray): The direction of the ray (should be normalized).
+    Methods:
+        PointAtParameter(t): Returns the point along the ray at parameter t.
+        CheckPointOnRay(point): Checks if a given point lies on the ray.
+        CheckPointInFront(point): Checks if a given point is in front of the ray's origin along its direction.
+        CheckPointBehind(point): Checks if a given point is behind the ray's origin opposite its direction.
+        Rotate(angle, axis): Rotates the ray's direction vector.
+        Translate(vector): Translates the ray's origin.
+        __repr__(): Returns a string representation of the ray.
+    """
+    def __init__(self, origin: np.ndarray, direction: np.ndarray, name: str = "Ray"):
+        """
+        A ray defined by an origin point and a direction vector.
+        """
+        if np.linalg.norm(direction) == 0:
             raise ValueError("Direction vector cannot be zero-length")
-        self.direction = direction.Normalize()
 
-    def PointAtParameter(self, t: float):
+        self.origin = origin
+        self.direction = direction / np.linalg.norm(direction)
+        self.name = name
+
+    def point_at(self, t: float):
+        """Returns the point along the ray at parameter t."""
         return self.origin + self.direction * t
+
+    def check_point_on_ray(self, point: np.ndarray):
+        """Checks if a given point lies on the ray."""
+        if point.shape != self.origin.shape:
+            raise ValueError("Point and ray origin must be of the same dimension")
+        
+        to_point = point - self.origin
+        if np.linalg.norm(to_point) == 0:
+            return True
+        
+        to_point_normalized = to_point / np.linalg.norm(to_point)
+        return np.allclose(to_point_normalized, self.direction)
+
+    def check_point_in_front(self, point: np.ndarray):
+        """Checks if a given point is in front of the ray's origin along its direction."""
+        if point.shape != self.origin.shape:
+            raise ValueError("Point and ray origin must be of the same dimension")
+        
+        to_point = point - self.origin
+        return np.dot(self.direction, to_point) > 0
+
+    def check_point_behind(self, point: np.ndarray):
+        """Checks if a given point is behind the ray's origin opposite its direction."""
+        if point.shape != self.origin.shape:
+            raise ValueError("Point and ray origin must be of the same dimension")
+        
+        to_point = point - self.origin
+        return np.dot(self.direction, to_point) < 0
+
+    def rotate(self, angle: float, axis: np.ndarray):
+        """
+        Rotates the ray's direction vector around the given axis by the specified angle (in radians).
+        Only works for 3D rays.
+        """
+        if self.direction.shape[0] != 3 or axis.shape[0] != 3:
+            raise ValueError("Rotate only supports 3D vectors")
+        
+        axis = axis / np.linalg.norm(axis)
+        cos_a = cos(angle)
+        sin_a = sin(angle)
+        ux, uy, uz = axis
+        
+        # Rodrigues' rotation formula
+        R = np.array([
+            [cos_a + ux**2 * (1 - cos_a), ux*uy*(1 - cos_a) - uz*sin_a, ux*uz*(1 - cos_a) + uy*sin_a],
+            [uy*ux*(1 - cos_a) + uz*sin_a, cos_a + uy**2 * (1 - cos_a), uy*uz*(1 - cos_a) - ux*sin_a],
+            [uz*ux*(1 - cos_a) - uy*sin_a, uz*uy*(1 - cos_a) + ux*sin_a, cos_a + uz**2 * (1 - cos_a)]
+        ])
+        
+        self.direction = R @ self.direction
+        self.direction /= np.linalg.norm(self.direction)
+
+    def translate(self, vector: np.ndarray):
+        """Translates the ray's origin by the given vector."""
+        if vector.shape != self.origin.shape:
+            raise ValueError("Translation vector must match the ray's origin dimension")
+        self.origin += vector
 
     def __repr__(self):
         return f"Ray(origin={self.origin}, direction={self.direction})"
 
-class Transform:
-    def __init__(self, position: Vector, rotation: Vector, scale: Vector, parent=None):
+class Transform2D:
+    """
+    Represents a 2D transformation with position, rotation, scale, and hierarchical parent support.
+    """
+    def __init__(self, position: np.ndarray, rotation: float, scale: np.ndarray, parent=None, name: str = "Transform2D"):
+        if position.shape != (2,) or scale.shape != (2,):
+            raise ValueError("position and scale must be 2D vectors")
+            
         self.position = position
-        self.rotation = rotation
+        self.rotation = rotation  # in radians
         self.scale = scale
-        self.local_position = Vector(0, 0, 0)
-        self.local_rotation = Vector(0, 0, 0)
-        self.local_scale = Vector(1, 1, 1)
+        self.local_position = np.zeros(2)
+        self.local_rotation = 0.0  # in radians
+        self.local_scale = np.ones(2)
         self.parent = parent
+        self.name = name
+
+        self.update_directions()
+
+    def update_directions(self):
+        """Updates the up and right vectors based on the current rotation."""
+        r = self.rotation
+        cos_r = cos(r)
+        sin_r = sin(r)
+        self.right = np.array([cos_r, sin_r])
+        self.up = np.array([-sin_r, cos_r])
 
     def get_local_matrix(self):
-        sx, sy, sz = self.local_scale[0], self.local_scale[1], self.local_scale[2]
-        tx, ty, tz = self.local_position[0], self.local_position[1], self.local_position[2]
-        rx, ry, rz = self.local_rotation[0], self.local_rotation[1], self.local_rotation[2]
-        # Rotation around X axis
-        rot_x = Matrix(
-            [1, 0, 0, 0],
-            [0, cos(rx), -sin(rx), 0],
-            [0, sin(rx), cos(rx), 0],
-            [0, 0, 0, 1]
-        )
-        # Rotation around Y axis
-        rot_y = Matrix(
-            [cos(ry), 0, sin(ry), 0],
-            [0, 1, 0, 0],
-            [-sin(ry), 0, cos(ry), 0],
-            [0, 0, 0, 1]
-        )
-        # Rotation around Z axis
-        rot_z = Matrix(
-            [cos(rz), -sin(rz), 0, 0],
-            [sin(rz), cos(rz), 0, 0],
-            [0, 0, 1, 0],
-            [0, 0, 0, 1]
-        )
-
-        # Scale matrix
-        scale = Matrix(
-            [sx, 0, 0, 0],
-            [0, sy, 0, 0],
-            [0, 0, sz, 0],
-            [0, 0, 0, 1]
-        )
-
-        # Translation matrix
-        translate = Matrix(
-            [1, 0, 0, tx],
-            [0, 1, 0, ty],
-            [0, 0, 1, tz],
-            [0, 0, 0, 1]
-        )
-
-        # Combine: T * Rz * Ry * Rx * S (order: scale, rotate x, rotate y, rotate z, translate)
-        # You may adjust the order as needed for your convention
-        return translate * rot_z * rot_y * rot_x * scale
+        """Returns the local transformation matrix (scale, rotate, translate)."""
+        tx, ty = self.local_position
+        sx, sy = self.local_scale
+        r = self.local_rotation
+        
+        return np.array([
+            [cos(r)*sx, -sin(r)*sy, tx],
+            [sin(r)*sx, cos(r)*sy, ty],
+            [0, 0, 1]
+        ])
 
     def get_global_matrix(self):
+        """Returns the global/world transformation matrix, including parent transforms."""
         local = self.get_local_matrix()
         if self.parent is not None:
-            parent_global = self.parent.get_global_matrix()
-            return parent_global * local
-        else:
-            return local
-
+            return self.parent.get_global_matrix() @ local
+        return local
+    
     def get_global_position(self):
+        """Returns the global/world position as a vector."""
         global_matrix = self.get_global_matrix()
-        return Vector(global_matrix[0][3], global_matrix[1][3], global_matrix[2][3])
-    
-    def get_global_rotation(self):
-        global_matrix = self.get_global_matrix()
-        return Vector(global_matrix[0][0], global_matrix[1][1], global_matrix[2][2])
-    
-    def get_global_scale(self):
-        global_matrix = self.get_global_matrix()
-        return Vector(global_matrix[0][0], global_matrix[1][1], global_matrix[2][2])
+        return global_matrix[:2, 2]
 
-    def Translate(self, vector: Vector, isWorld: bool = False):
+    def get_global_rotation(self):
+        """Returns the global/world rotation (in radians)."""
+        global_matrix = self.get_global_matrix()
+        return acos(global_matrix[0, 0] / np.sqrt(global_matrix[0, 0]**2 + global_matrix[0, 1]**2))
+
+    def get_global_scale(self):
+        """Returns the global/world scale as a vector."""
+        global_matrix = self.get_global_matrix()
+        sx = np.linalg.norm(global_matrix[:2, 0])
+        sy = np.linalg.norm(global_matrix[:2, 1])
+        return np.array([sx, sy])
+
+    def translate(self, vector: np.ndarray, isWorld: bool = False):
+        """Translates the object by the given vector in local or world space."""
         if isWorld:
-            # Translate in world space
             self.position += vector
         else:
-            # Translate in local space
             self.local_position += vector
+        self.update_directions()
     
-    def Translate(self, origin: Vector, map: Matrix, isWorld: bool = False):
-        transformed_vector = map * origin
-
+    def rotate(self, angle: float, isWorld: bool = False):
+        """Rotates the object by the given angle in local or world space."""
         if isWorld:
-            # Translate in world space
-            self.position += transformed_vector
+            self.rotation += angle
         else:
-            # Translate in local space
-            self.local_position += transformed_vector
-
-    def Rotate(self, direction: Vector, angle: float, isWorld: bool = False):
-        if direction.Magnitude() == 0:
-            raise ValueError("Cannot rotate around a zero-length vector")
-        
-        # Normalize the direction vector
-        n = direction.Normalize()
-        
-        cos_angle = cos(angle)
-        sin_angle = sin(angle)
-        rotation_matrix = Matrix(
-            [cos_angle + n[0] * n[0] * (1 - cos_angle), n[0] * n[1] * (1 - cos_angle) - n[2] * sin_angle, n[0] * n[2] * (1 - cos_angle) + n[1] * sin_angle],
-             [n[1] * n[0] * (1 - cos_angle) + n[2] * sin_angle, cos_angle + n[1] * n[1] * (1 - cos_angle), n[1] * n[2] * (1 - cos_angle) - n[0] * sin_angle],
-             [n[2] * n[0] * (1 - cos_angle) - n[1] * sin_angle, n[2] * n[1] * (1 - cos_angle) + n[0] * sin_angle, cos_angle + n[2] * n[2] * (1 - cos_angle)]
-        )
-        
-        if isWorld:
-            # Rotate in world space
-            self.rotation = rotation_matrix * self.rotation
-        else:
-            # Rotate in local space
-            self.local_rotation = rotation_matrix * self.local_rotation
+            self.local_rotation += angle
+        self.update_directions()
     
-    def Rotate(self, origin: Vector, map: Matrix, isWorld: bool = False):
-        transformed_vector = map * origin
-
+    def enlarge(self, vector: np.ndarray, isWorld: bool = False):
+        """Enlarges (scales) the object by the given vector in local or world space."""
         if isWorld:
-            # Rotalte in world space
-            self.rotation += transformed_vector
-        else:
-            # Rotatle in local space
-            self.local_rotation += transformed_vector
-
-    
-    def Enlarge(self, vector: Vector, isWorld: bool = False):
-        if isWorld:
-            # Enlarge in world space
             self.scale += vector
         else:
-            # Enlarge in local space
+            self.local_scale += vector
+        self.update_directions()
+
+    def reflect(self, axis: Ray, isWorld: bool = False):
+        """Reflects the object across the given axis in local or world space."""
+        if axis.direction.shape[0] != 2:
+            raise ValueError("Reflection axis must be a 2D vector")
+            
+        n = axis.direction
+        reflection_matrix = np.array([
+            [1 - 2 * n[0]**2, -2 * n[0] * n[1]],
+            [-2 * n[0] * n[1], 1 - 2 * n[1]**2]
+        ])
+        
+        if isWorld:
+            self.position = reflection_matrix @ self.position
+            self.rotation = acos(reflection_matrix[0, 0])
+        else:
+            self.local_position = reflection_matrix @ self.local_position
+            self.local_rotation = acos(reflection_matrix[0, 0])
+        self.update_directions()
+    
+    def __repr__(self):
+        return f"Transform2D(position={self.position}, rotation={self.rotation}, scale={self.scale})"
+
+class Transform:
+    """
+    Represents a 3D transformation with position, rotation, scale, and hierarchical parent support.
+    """
+    def __init__(self, position: np.ndarray, rotation: np.ndarray, scale: np.ndarray, parent=None, name: str = "Transform"):
+        if position.shape != (3,) or rotation.shape != (3,) or scale.shape != (3,):
+            raise ValueError("position, rotation, and scale must be 3D vectors")
+            
+        self.position = position
+        self.rotation = rotation  # in radians (Euler angles)
+        self.scale = scale
+        self.local_position = np.zeros(3)
+        self.local_rotation = np.zeros(3)  # in radians
+        self.local_scale = np.ones(3)
+        self.parent = parent
+        self.name = name
+
+        self.update_directions()
+
+    def update_directions(self):
+        """Updates the forward, right, and up vectors based on the current rotation."""
+        rx, ry, rz = self.rotation
+        cx, sx = cos(rx), sin(rx)
+        cy, sy = cos(ry), sin(ry)
+        cz, sz = cos(rz), sin(rz)
+        
+        # Combined rotation matrix (Z * Y * X)
+        R = np.array([
+            [cy*cz, cz*sx*sy - cx*sz, cx*cz*sy + sx*sz],
+            [cy*sz, cx*cz + sx*sy*sz, -cz*sx + cx*sy*sz],
+            [-sy, cy*sx, cx*cy]
+        ])
+        
+        self.forward = R @ np.array([0, 0, 1])
+        self.right = R @ np.array([1, 0, 0])
+        self.up = R @ np.array([0, 1, 0])
+
+    def get_local_matrix(self):
+        """Returns the local transformation matrix."""
+        tx, ty, tz = self.local_position
+        sx, sy, sz = self.local_scale
+        rx, ry, rz = self.local_rotation
+        
+        # Rotation matrices
+        rot_x = np.array([
+            [1, 0, 0],
+            [0, cos(rx), -sin(rx)],
+            [0, sin(rx), cos(rx)]
+        ])
+        rot_y = np.array([
+            [cos(ry), 0, sin(ry)],
+            [0, 1, 0],
+            [-sin(ry), 0, cos(ry)]
+        ])
+        rot_z = np.array([
+            [cos(rz), -sin(rz), 0],
+            [sin(rz), cos(rz), 0],
+            [0, 0, 1]
+        ])
+
+        # Scale and translation
+        scale = np.diag([sx, sy, sz])
+        translate = np.array([tx, ty, tz])
+
+        # Combine: T * Rz * Ry * Rx * S
+        return np.eye(4)
+        
+    def get_global_matrix(self):
+        """Returns the global transformation matrix."""
+        local = self.get_local_matrix()
+        if self.parent is not None:
+            return self.parent.get_global_matrix() @ local
+        return local
+    
+    def get_global_position(self):
+        """Returns the global position of the transform."""
+        global_matrix = self.get_global_matrix()
+        return global_matrix[:3, 3]
+
+    def get_global_rotation(self):
+        """Returns the global rotation (Euler angles) of the transform."""
+        global_matrix = self.get_global_matrix()
+        # This is a complex operation and depends on the specific matrix decomposition.
+        # A simplified version is not straightforward.
+        return np.array([acos(global_matrix[0,0]), acos(global_matrix[1,1]), acos(global_matrix[2,2])])
+
+    def get_global_scale(self):
+        """Returns the global scale of the transform."""
+        global_matrix = self.get_global_matrix()
+        return np.linalg.norm(global_matrix[:3, :3], axis=0)
+
+    def translate(self, vector: np.ndarray, isWorld: bool = False):
+        """Translates the transform in the specified space (world or local)."""
+        if isWorld:
+            self.position += vector
+        else:
+            self.local_position += vector
+    
+    def rotate(self, angle: float, axis: np.ndarray, isWorld: bool = False):
+        """Rotates the transform around a specified axis."""
+        if np.linalg.norm(axis) == 0:
+            raise ValueError("Cannot rotate around a zero-length vector")
+
+        axis = axis / np.linalg.norm(axis)
+        
+        # Rodrigues' rotation formula
+        cos_angle = cos(angle)
+        sin_angle = sin(angle)
+        cross_product_matrix = np.array([
+            [0, -axis[2], axis[1]],
+            [axis[2], 0, -axis[0]],
+            [-axis[1], axis[0], 0]
+        ])
+        rotation_matrix = np.eye(3) * cos_angle + cross_product_matrix * sin_angle + np.outer(axis, axis) * (1 - cos_angle)
+
+        if isWorld:
+            self.position = rotation_matrix @ self.position
+            self.rotation = rotation_matrix @ self.rotation
+        else:
+            self.local_position = rotation_matrix @ self.local_position
+            self.local_rotation = rotation_matrix @ self.local_rotation
+    
+    def enlarge(self, vector: np.ndarray, isWorld: bool = False):
+        """Enlarges the transform in the specified space (world or local)."""
+        if isWorld:
+            self.scale += vector
+        else:
             self.local_scale += vector
     
-    def Enlarge(self, origin: Vector, map: Matrix, isWorld: bool = False):
-        transformed_vector = map * origin
-        
-        if isWorld:
-            # Enlarge in world space
-            self.scale += transformed_vector
-        else:
-            # Enlarge in local space
-            self.local_scale += transformed_vector
-    
-    def Reflect(self, axis: Ray, isWorld: bool = False):
-        if axis.direction.Magnitude() == 0:
+    def reflect(self, axis: Ray, isWorld: bool = False):
+        """Reflects the transform across a specified axis."""
+        if np.linalg.norm(axis.direction) == 0:
             raise ValueError("Cannot reflect across a zero-length vector")
-        
-        # Normalize the axis direction vector
-        n = axis.direction.Normalize()
-        # Create the reflection matrix based on the normal vector
-        reflection_matrix = Matrix(
-            [1 - 2 * n[0] * n[0], -2 * n[0] * n[1], -2 * n[0] * n[2]],
-            [-2 * n[1] * n[0], 1 - 2 * n[1] * n[1], -2 * n[1] * n[2]],
-            [-2 * n[2] * n[0], -2 * n[2] * n[1], 1 - 2 * n[2] * n[2]]
-        )
+            
+        n = axis.direction / np.linalg.norm(axis.direction)
+        reflection_matrix = np.eye(3) - 2 * np.outer(n, n)
         
         if isWorld:
-            self.position = reflection_matrix * self.position
-            self.rotation = reflection_matrix * self.rotation
+            self.position = reflection_matrix @ self.position
+            self.rotation = reflection_matrix @ self.rotation
         else:
-            self.local_position = reflection_matrix * self.local_position
-            self.local_rotation = reflection_matrix * self.local_rotation
-    
-    def Reflect(self, origin: Vector, map: Matrix, isWorld: bool = False):
-        transformed_vector = map * origin
-        if transformed_vector.Magnitude() == 0:
-            raise ValueError("Cannot reflect across a zero-length vector")
-        
-        # Normalize the transformed vector
-        n = transformed_vector.Normalize()
+            self.local_position = reflection_matrix @ self.local_position
+            self.local_rotation = reflection_matrix @ self.local_rotation
 
-        # Calculate the reflection matrix
-        reflection_matrix = Matrix(
-            [1 - 2 * n[0] * n[0], -2 * n[0] * n[1], -2 * n[0] * n[2]],
-            [-2 * n[1] * n[0], 1 - 2 * n[1] * n[1], -2 * n[1] * n[2]],
-            [-2 * n[2] * n[0], -2 * n[2] * n[1], 1 - 2 * n[2] * n[2]]
-        )
-        
-        if isWorld:
-            self.position = reflection_matrix * self.position
-            self.rotation = reflection_matrix * self.rotation
-        else:
-            self.local_position = reflection_matrix * self.local_position
-            self.local_rotation = reflection_matrix * self.local_rotation
-    
-    def Sheer(self, origin: Vector, map: Matrix, isWorld: bool = False):
-        transformed_vector = map * origin
-        if transformed_vector.Magnitude() == 0:
-            raise ValueError("Cannot sheer across a zero-length vector")
-        
-        # Normalize the transformed vector
-        n = transformed_vector.Normalize()
-
-        # Create the sheer matrix
-        sheer_matrix = Matrix(
-            [1, n[0], n[1]],
-            [n[0], 1, n[2]],
-            [n[1], n[2], 1]
-        )
-        
-        # Apply the sheer to the position and rotation
-        if isWorld:
-            # Sheer in world space
-            self.position = sheer_matrix * self.position
-            self.rotation = sheer_matrix * self.rotation
-        else:
-            # Sheer in local space
-            self.local_position = sheer_matrix * self.local_position
-            self.local_rotation = sheer_matrix * self.local_rotation
+    def __repr__(self):
+        return f"Transform(position={self.position}, rotation={self.rotation}, scale={self.scale})"
 
 class Ratio:
+    """
+    Represents a ratio (fraction) with a denominator and numerator.
+    Supports basic arithmetic operations and comparisons.
+    """
     def __init__(self, denominator: float, numerator: float):
+        """
+        Creates a ratio (fraction) with a denominator and numerator.
+        """
         if denominator == 0:
             raise ValueError("Denominator cannot be zero")
+            
         self.denominator = denominator
         self.numerator = numerator
-    
+
     def __add__(self, other):
         if not isinstance(other, Ratio):
-            raise TypeError("Can only add Ratio to another Ratio")
+            return NotImplemented
+        
         new_numerator = self.numerator * other.denominator + other.numerator * self.denominator
         new_denominator = self.denominator * other.denominator
         return Ratio(new_denominator, new_numerator)
     
     def __sub__(self, other):
         if not isinstance(other, Ratio):
-            raise TypeError("Can only subtract Ratio from another Ratio")
+            return NotImplemented
+            
         new_numerator = self.numerator * other.denominator - other.numerator * self.denominator
         new_denominator = self.denominator * other.denominator
         return Ratio(new_denominator, new_numerator)
 
     def __mul__(self, other):
         if not isinstance(other, Ratio):
-            raise TypeError("Can only multiply Ratio by another Ratio")
+            return NotImplemented
+            
         new_numerator = self.numerator * other.numerator
         new_denominator = self.denominator * other.denominator
         return Ratio(new_denominator, new_numerator)
     
     def __truediv__(self, other):
         if not isinstance(other, Ratio):
-            raise TypeError("Can only divide Ratio by another Ratio")
+            return NotImplemented
         if other.numerator == 0:
             raise ValueError("Cannot divide by a Ratio with a numerator of zero")
+            
         new_numerator = self.numerator * other.denominator
         new_denominator = self.denominator * other.numerator
         return Ratio(new_denominator, new_numerator)
@@ -507,27 +408,30 @@ class Ratio:
     
     def __eq__(self, other):
         if not isinstance(other, Ratio):
-            return False
+            return NotImplemented
         return self.numerator * other.denominator == self.denominator * other.numerator
     
     def __lt__(self, other):
         if not isinstance(other, Ratio):
-            return False
+            return NotImplemented
         return self.numerator * other.denominator < self.denominator * other.numerator
+        
     def __le__(self, other):
         if not isinstance(other, Ratio):
-            return False
+            return NotImplemented
         return self.numerator * other.denominator <= self.denominator * other.numerator
+        
     def __gt__(self, other):
         if not isinstance(other, Ratio):
-            return False
+            return NotImplemented
         return self.numerator * other.denominator > self.denominator * other.numerator
+        
     def __ge__(self, other):
         if not isinstance(other, Ratio):
-            return False
+            return NotImplemented
         return self.numerator * other.denominator >= self.denominator * other.numerator
+        
     def __ne__(self, other):
         if not isinstance(other, Ratio):
-            return True
+            return NotImplemented
         return self.numerator * other.denominator != self.denominator * other.numerator
-    

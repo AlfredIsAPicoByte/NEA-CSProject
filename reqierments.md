@@ -14,10 +14,10 @@
 | Python       | 3.11.4   | https://python.org |
 | Pybind11     | 2.11.1   | pip install pybind11 |
 | GLFW         | 3.3.8    | built from source |
-| OpenGL       | 4.6\*    | via GPU drivers |
+| OpenGL       | 4.6+    | via GPU drivers |
 | glad         | 0.1.36+  | [glad.dav1d.de](https://glad.dav1d.de/) (generated for OpenGL 4.6 Core, with KHR_debug) |
 | glm          | 0.9.9+   | vcpkg or built from source |
-| stb_image    | latest   | header-only, included in project |
+| stb_image    | 0.3+   | header-only, included in project |
 
 ## 🔷 Environment Variables
 
