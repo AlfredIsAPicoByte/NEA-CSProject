@@ -1,119 +1,12 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[codz]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
+*.egg
 *.egg-info/
 .installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
 pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py.cover
-.hypothesis/
-.pytest_cache/
-cover/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-# .python-version
-
-# pipenv
-# Pipfile.lock
-
-# UV
-# uv.lock
-
-# poetry
-# poetry.lock
-# poetry.toml
-
-# pdm
-# pdm.lock
-# pdm.toml
-.pdm-python
-.pdm-build/
-
-# pixi
-# pixi.lock
-.pixi
-
-# PEP 582
-__pypackages__/
-
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath
-*.sage.py
-
-# Environments
 .env
 .envrc
 .venv
@@ -122,58 +15,12 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.Python
+build/
+dist/
+develop-eggs/
 
-# Spyder
-.spyderproject
-.spyproject
-
-# Rope
-.ropeproject
-
-# mkdocs
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre
-.pyre/
-
-# pytype
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# JetBrains IDEs
-#.idea/
-
-# Abstra
-.abstra/
-
-# Visual Studio Code
-#.vscode/
-
-# Ruff cache
-.ruff_cache/
-
-# PyPI config
-.pypirc
-
-# Cursor
-.cursorignore
-.cursorindexingignore
-
-# Marimo
-marimo/_static/
-marimo/_lsp/
-__marimo__/
-
-# ------------------ Additional C++, OpenGL, GLFW, Pybind11 ------------------
-
-# C++ build artifacts (common for Make, CMake, etc.)
+# C++
 *.o
 *.obj
 *.exe
@@ -186,21 +33,12 @@ __marimo__/
 CMakeFiles/
 CMakeCache.txt
 cmake-build-*/
-
-# OpenGL / GLFW / Pybind11 specific build files (if you generate any temporary files)
-# (Most of these are covered above, but explicitly include common build directories)
-
-# Example build directories for CMake or other build systems
-build/
-cmake-build-*/
-
-# Temporary files generated during compilation or linking
 *.tmp
 *.bak
 *.swp
 *.swo
 
-# IDE-specific files for C++ projects (if using CLion, Visual Studio, etc.)
+# Visual Studio / IDE
 *.vcxproj
 *.sln
 *.user
@@ -212,4 +50,6 @@ cmake-build-*/
 *.opensdf
 *.sdf
 
-# GLFW / OpenGL / Pybind11 specific
+# Compiled / build artifacts
+dist/
+build/
