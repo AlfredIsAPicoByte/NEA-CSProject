@@ -1,6 +1,9 @@
-from Basic import Vector, Matrix, Ray
+from src.Basic import Vector, Matrix, Ray
 
 class Shape:
+    def __init__(self, name: str = "Shape"):
+        self.name = name
+    
     def CheckPoint(self, point: Vector) -> bool:
         raise NotImplementedError("CheckPoint method must be implemented in subclasses")
 
@@ -23,7 +26,8 @@ class Shape:
         return f"Shape()"
 
 class Circle(Shape):
-    def __init__(self, center: Vector, radius: float):
+    def __init__(self, center: Vector, radius: float, name: str = "Circle"):
+        super().__init__(name)
         self.center = center
         self.radius = radius
     
@@ -78,8 +82,13 @@ class Circle(Shape):
         c = s.Dot(s) - self.radius ** 2
         discriminant = b ** 2 - 4 * a * c
         
-        t = -b - (discriminant) / a
-        return ray.PointAtParameter(t)
+        if discriminant == 0:
+            t = -b - (discriminant ** 0.5) / a
+            return [ray.PointAtParameter(t)]
+        else:
+            t1 = (-b + (discriminant ** 0.5)) / (2 * a)
+            t2 = (-b - (discriminant ** 0.5)) / (2 * a)
+            return [ray.PointAtParameter(t) for t in sorted([t1, t2]) if t >= 0]
 
     def GetNormal(self, point: Vector) -> Vector:
         if not self.CheckPoint(point, 0.01):
@@ -110,7 +119,8 @@ class Circle(Shape):
 
 
 class Triangle(Shape):
-    def __init__(self, vertex1: Vector, vertex2: Vector, vertex3: Vector):
+    def __init__(self, vertex1: Vector, vertex2: Vector, vertex3: Vector, name: str = "Triangle"):
+        super().__init__(name)
         self.vertex1 = vertex1
         self.vertex2 = vertex2
         self.vertex3 = vertex3
@@ -156,3 +166,25 @@ class Triangle(Shape):
     def __repr__(self):
         return f"Triangle(vertex1={self.vertex1}, vertex2={self.vertex2}, vertex3={self.vertex3})"
 
+class Polygon(Shape):
+    def __init__(self, vertices: list[Vector], name: str = "Polygon"):
+        super().__init__(name)
+        self.vertices = vertices
+    
+    def CheckPoint(self, point: Vector) -> bool:
+        pass
+
+    def CheckIntersection(self, ray: Ray) -> bool:
+        pass
+
+    def GetNormal(self, point: Vector) -> Vector:
+        pass
+
+    def Area(self) -> float:
+        pass
+
+    def Perimeter(self) -> float:
+        pass
+
+    def __repr__(self):
+        return f"Polygon(vertices={self.vertices})"
