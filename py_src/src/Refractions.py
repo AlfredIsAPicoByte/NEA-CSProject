@@ -15,12 +15,9 @@ def convert_speed_to_index(speed: float, speedOfLight: float = 3e8) -> float:
     """
     Convert the speed of light in a medium to its refractive index.
 
-    Parameters:
+    Attributes:
         speed (float): The speed of light in the medium in m/s.
         speedOfLight (float): The speed of light in vacuum in m/s. Default is 3e8 m/s.
-
-    Returns:
-        float: The refractive index of the medium.
     """
     return speedOfLight / speed
 
@@ -28,12 +25,9 @@ def convert_index_to_speed(refractiveIndex: float, speedOfLight: float = 3e8) ->
     """
     Convert the refractive index of a medium to the speed of light in that medium.
 
-    Parameters:
+    Attributes:
         refractiveIndex (float): The refractive index of the medium.
         speedOfLight (float): The speed of light in vacuum in m/s. Default is 3e8 m/s.
-
-    Returns:
-        float: The speed of light in the medium in m/s.
     """
     return speedOfLight / refractiveIndex
 
@@ -45,13 +39,10 @@ def calculate_angle_of_refraction(
     Calculate the refraction angle based on the law of refraction.
     The angle of refraction is greater than the angle of incidence when the refractive index of the initial medium is greater than the refractive index of the new medium.
 
-    Parameters:
+    Attributes:
         angleOfIncidence (float): The angle of incidence in degrees.
         refractiveIndexIncident (float): The refractive index of the first medium.
         refractiveIndex (float): The refractive index of the second medium.
-
-    Returns:
-        float: The angle of refraction in degrees.
     """
 
     angleOfIncidenceRad = math.radians(angleOfIncidence)
@@ -74,13 +65,10 @@ def calculate_angle_of_incidence(
     Calculate the refraction angle based on the law of refraction.
     The angle of refraction is greater than the angle of incidence when the refractive index of the initial medium is greater than the refractive index of the new medium.
 
-    Parameters:
+    Attributes:
         angleOfRefraction (float): The angle of refaction in degrees.
         refractiveIndexIncident (float): The refractive index of the first medium.
         refractiveIndex (float): The refractive index of the second medium.
-
-    Returns:
-        float: The angle of incidence in degrees.
     """
 
     angleOfRefractionRad = math.radians(angleOfRefraction)
@@ -102,13 +90,10 @@ def calculate_refractive_index(
     """
     Calculate the refractive index of the second medium based on the law of refraction.
 
-    Parameters:
+    Attributes:
         angleOfIncidence (float): The angle of incidence in degrees.
         angleOfRefraction (float): The angle of refraction in degrees.
         refractiveIndexIncident (float): The refractive index of the first medium.
-
-    Returns:
-        float: The refractive index of the second medium.
     """
 
     angleOfIncidenceRad = math.radians(angleOfIncidence)
@@ -125,13 +110,10 @@ def calculate_refractive_index_incident(
     """
     Calculate the refractive index of the first medium based on the law of refraction.
 
-    Parameters:
+    Attributes:
         angleOfIncidence (float): The angle of incidence in degrees.
         angleOfRefraction (float): The angle of refraction in degrees.
         refractiveIndex (float): The refractive index of the second medium.
-
-    Returns:
-        float: The refractive index of the first medium.
     """
 
     angleOfIncidenceRad = math.radians(angleOfIncidence)
@@ -141,27 +123,15 @@ def calculate_refractive_index_incident(
     
     return refractiveIndexIncident
 
-if __name__ == "__main__":
-    incident_angle = 20
-    refreacted_angle = 80
-    refractive_index = 1.333
-
-    refractive_index_incident = calculate_refractive_index_incident(incident_angle, refreacted_angle, refractive_index)
-    print(f"Refrectiv index of the first meduim is: {refractive_index_incident}")
-    print(f"Refrectiv index of the second meduim is: {refractive_index}")
-
 def calculate_critical_angle(
     refractiveIndexIncident: float,
     refractiveIndex: float):
     """
     Calculate the critical angle for total internal reflection.
 
-    Parameters:
+    Attributes:
         refractiveIndexIncident (float): The refractive index of the first medium.
         refractiveIndex (float): The refractive index of the second medium.
-
-    Returns:
-        float: The critical angle in degrees.
     """
     
     if refractiveIndexIncident <= refractiveIndex:

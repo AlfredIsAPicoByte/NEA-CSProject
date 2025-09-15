@@ -15,6 +15,22 @@ class EventListener:
     def stop(self):
         self.running = False
 
+    def qeue_event(self, event_type, *args):
+        if not self.running:
+            return
+        if event_type == 'press':
+            self.on_press(*args)
+        elif event_type == 'release':
+            self.on_release(*args)
+        elif event_type == 'move':
+            self.on_move(*args)
+        elif event_type == 'click':
+            self.on_click(*args)
+        elif event_type == 'scroll':
+            self.on_scroll(*args)
+        else:
+            raise ValueError(f"Unknown event type: {event_type}")
+
 class KeyboardManager:
     def __init__(self):
         self.pressed_keys = set()
