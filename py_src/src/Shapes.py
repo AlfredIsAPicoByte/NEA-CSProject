@@ -1,19 +1,20 @@
-from src.Basic import Vector, Matrix, Ray
+from src.Basic import Ray
+import numpy as np
 
 class Shape:
     def __init__(self, name: str = "Shape"):
         self.name = name
     
-    def CheckPoint(self, point: Vector) -> bool:
+    def CheckPoint(self, point: np.ndarray, uncertainty: float) -> bool:
         raise NotImplementedError("CheckPoint method must be implemented in subclasses")
 
     def CheckIntersection(self, ray: Ray) -> bool:
         raise NotImplementedError("CheckIntersection method must be implemented in subclasses")
 
-    def GetNormal(self, point: Vector) -> Vector:
+    def GetNormal(self, point: np.ndarray) -> np.ndarray:
         raise NotImplementedError("GetNormal method must be implemented in subclasses")
 
-    def GetTangent(self, point: Vector) -> Vector:
+    def GetTangent(self, point: np.ndarray) -> np.ndarray:
         raise NotImplementedError("GetTangent method must be implemented in subclasses")
     
     def Area(self) -> float:
@@ -26,13 +27,13 @@ class Shape:
         return f"Shape()"
 
 class Circle(Shape):
-    def __init__(self, center: Vector, radius: float, name: str = "Circle"):
+    def __init__(self, center: np.ndarray, radius: float, name: str = "Circle"):
         super().__init__(name)
         self.center = center
         self.radius = radius
     
-    def CheckPoint(self, point: Vector, uncertainty: float = 0) -> bool:
-        return self.radius - uncertainty < (point - self.center).Magnitude() <= self.radius + uncertainty
+    def CheckPoint(self, point: np.ndarray, uncertainty: float = 0) -> bool:
+        return self.radius - uncertainty < np.linalg.norm(point - self.center) <= self.radius + uncertainty
     
     # Using the quadratic equation to find intersection with circles
     # P(t) = dt + s
@@ -71,34 +72,34 @@ class Circle(Shape):
         else:
             return True
 
-    def GetIntersection(self, ray: Ray) -> list[Vector]:
+    def GetIntersection(self, ray: Ray) -> list[np.ndarray]:
         if not self.CheckIntersection(ray):
             return []
         
         d = ray.direction
         s = ray.origin - self.center
-        a = d.Dot(d)
+        a = np.dot(d, d)
         b = 2 * d.Dot(s)
         c = s.Dot(s) - self.radius ** 2
         discriminant = b ** 2 - 4 * a * c
         
         if discriminant == 0:
             t = -b - (discriminant ** 0.5) / a
-            return [ray.PointAtParameter(t)]
+            return np.ndarray([ray.PointAtParameter(t)])
         else:
             t1 = (-b + (discriminant ** 0.5)) / (2 * a)
             t2 = (-b - (discriminant ** 0.5)) / (2 * a)
-            return [ray.PointAtParameter(t) for t in sorted([t1, t2]) if t >= 0]
+            return np.ndarray([ray.PointAtParameter(t) for t in sorted([t1, t2]) if t >= 0])
 
-    def GetNormal(self, point: Vector) -> Vector:
+    def GetNormal(self, point: np.ndarray) -> np.ndarray:
         if not self.CheckPoint(point, 0.01):
             raise ValueError("Point is not on the circle")
-        return (point - self.center).Normalize()
+        return np.linalg.norm(point - self.center)
 
-    def GetTangent(self, point: Vector) -> Vector:
+    def GetTangent(self, point: np.ndarray) -> np.ndarray:
         if not self.CheckPoint(point, 0.01):
             raise ValueError("Point is not on the circle")
-        return (point - self.center).Normalize()
+        return np.linalg.norm(point - self.center)
 
     def Area(self) -> float:
         from math import pi
@@ -119,7 +120,7 @@ class Circle(Shape):
 
 
 class Triangle(Shape):
-    def __init__(self, vertex1: Vector, vertex2: Vector, vertex3: Vector, name: str = "Triangle"):
+    def __init__(self, vertex1: np.ndarray, vertex2: np.ndarray, vertex3: np.ndarray, name: str = "Triangle"):
         super().__init__(name)
         self.vertex1 = vertex1
         self.vertex2 = vertex2
@@ -129,55 +130,55 @@ class Triangle(Shape):
     # P(t) = O + Rt
     # D = -(Ax )
 
-    def CheckPoint(self, point: Vector) -> bool:
+    def CheckPoint(self, point: np.ndarray, uncertainty: float) -> bool:
         pass
 
     def CheckIntersection(self, ray: Ray) -> bool:
         pass
 
-    def GetNormal(self, point: Vector) -> Vector:
+    def GetNormal(self, point: np.ndarray) -> np.ndarray:
         if not self.CheckPoint(point):
             raise ValueError("Point is not on the triangle")
         edge1 = self.vertex2 - self.vertex1
         edge2 = self.vertex3 - self.vertex1
-        return edge1.Cross(edge2).Normalize()
+        return np.cross(edge1, edge2) / np.linalg.norm(np.cross(edge1, edge2))
 
     def Area(self) -> float:
         # Heron's formula
-        a = (self.vertex1 - self.vertex2).Magnitude()
-        b = (self.vertex2 - self.vertex3).Magnitude()
-        c = (self.vertex3 - self.vertex1).Magnitude()
-        s = (a + b + c) / 2
+        a = np.linalg.norm(self.vertex1 - self.vertex2)
+        b = np.linalg.norm(self.vertex2 - self.vertex3)
+        c = np.linalg.norm(self.vertex3 - self.vertex1)
+        s = np.linalg.norm(a + b + c) / 2
         from math import sqrt
         return sqrt(s * (s - a) * (s - b) * (s - c))
 
     def Perimeter(self) -> float:
-        a = (self.vertex1 - self.vertex2).Magnitude()
-        b = (self.vertex2 - self.vertex3).Magnitude()
-        c = (self.vertex3 - self.vertex1).Magnitude()
+        a = np.linalg.norm(self.vertex1 - self.vertex2)
+        b = np.linalg.norm(self.vertex2 - self.vertex3)
+        c = np.linalg.norm(self.vertex3 - self.vertex1)
         return a + b + c
 
     def SideLengths(self) -> tuple[float, float, float]:
-        a = (self.vertex1 - self.vertex2).Magnitude()
-        b = (self.vertex2 - self.vertex3).Magnitude()
-        c = (self.vertex3 - self.vertex1).Magnitude()
+        a = np.linalg.norm(self.vertex1 - self.vertex2)
+        b = np.linalg.norm(self.vertex2 - self.vertex3)
+        c = np.linalg.norm(self.vertex3 - self.vertex1)
         return (a, b, c)
 
     def __repr__(self):
         return f"Triangle(vertex1={self.vertex1}, vertex2={self.vertex2}, vertex3={self.vertex3})"
 
 class Polygon(Shape):
-    def __init__(self, vertices: list[Vector], name: str = "Polygon"):
+    def __init__(self, vertices: list[np.ndarray], name: str = "Polygon"):
         super().__init__(name)
         self.vertices = vertices
     
-    def CheckPoint(self, point: Vector) -> bool:
+    def CheckPoint(self, point: np.ndarray, uncertainty: float) -> bool:
         pass
 
     def CheckIntersection(self, ray: Ray) -> bool:
         pass
 
-    def GetNormal(self, point: Vector) -> Vector:
+    def GetNormal(self, point: np.ndarray) -> np.ndarray:
         pass
 
     def Area(self) -> float:
