@@ -4,7 +4,6 @@
 
 #include "Engine.h"
 
-
 int main(){
     if (InitGLFW() != 0) return -1;
 
@@ -36,8 +35,8 @@ int main(){
 
 	// Main render loop
 	MainLoop(window, [](GLFWwindow* window){
-		Color clearColor("#25394bff");
-        glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
+		Color bgClolor("#454749ff");
+        applyClearColor(bgClolor);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	    WaitForEscape(window);

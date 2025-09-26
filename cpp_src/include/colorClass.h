@@ -1,6 +1,7 @@
 #ifndef COLOR_CLASS_H
 #define COLOR_CLASS_H
 
+#include <glad/glad.h>
 #include <string>
 #include <iostream>
 
@@ -34,5 +35,9 @@ private:
         return (value < min) ? min : (value > max) ? max : value;
     }
 };
+
+void applyClearColor(const Color& c) {
+    glClearColor(c.r, c.g, c.b, c.a);
+}
 
 #endif // COLOR_CLASS_H
