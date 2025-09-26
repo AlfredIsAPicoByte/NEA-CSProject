@@ -1,7 +1,7 @@
 from src.Basic import *
 from src.Camera import *
 from src.Projections import *
-from src.Shapes import *
+from py_src.src.Gemometry import *
 
 if __name__ == "__main__":
     circle = Circle(Vector(0, 0, 0), 5)

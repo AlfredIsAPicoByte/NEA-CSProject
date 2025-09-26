@@ -17,11 +17,29 @@ class Shape:
     def GetTangent(self, point: np.ndarray) -> np.ndarray:
         raise NotImplementedError("GetTangent method must be implemented in subclasses")
     
-    def Area(self) -> float:
+    @property
+    def normals(self) -> list[np.ndarray]:
+        raise NotImplementedError("Normals property must be implemented in subclasses")
+    
+    @property
+    def tangents(self) -> list[np.ndarray]:
+        raise NotImplementedError("Tangents property must be implemented in subclasses")
+
+    @property
+    def area(self) -> float:
         raise NotImplementedError("Area method must be implemented in subclasses")
 
-    def Perimeter(self) -> float:
+    @property
+    def perimeter(self) -> float:
         raise NotImplementedError("Perimeter method must be implemented in subclasses")
+    
+    @property
+    def dimensions(self) -> int:
+        raise NotImplementedError("Dimensions property must be implemented in subclasses")
+    
+    @property
+    def volume(self) -> float:
+        raise NotImplementedError("Volume method must be implemented in subclasses")
 
     def __repr__(self):
         return f"Shape()"
@@ -101,19 +119,39 @@ class Circle(Shape):
             raise ValueError("Point is not on the circle")
         return np.linalg.norm(point - self.center)
 
-    def Area(self) -> float:
+    @property
+    def normals(self, resolution:int = 100) -> list[np.ndarray]:
+        return [np.array([np.cos(theta), np.sin(theta)]) for theta in np.linspace(0, 2 * np.pi, num=resolution, endpoint=False)]
+    
+    @property
+    def tangents(self, resolution:int = 100) -> list[np.ndarray]:
+        return [np.array([-np.sin(theta), np.cos(theta)]) for theta in np.linspace(0, 2 * np.pi, num=resolution, endpoint=False)]
+
+    @property
+    def area(self) -> float:
         from math import pi
         return pi * self.radius ** 2
 
-    def Perimeter(self) -> float:
+    @property
+    def perimeter(self) -> float:
         from math import pi
         return 2 * pi * self.radius
 
-    def Diameter(self) -> float:
+    @property
+    def diameter(self) -> float:
         return 2 * self.radius
 
-    def Circumference(self) -> float:
+    @property
+    def circumference(self) -> float:
         return self.Perimeter()
+    
+    @property
+    def dimensions(self) -> int:
+        return 2
+    
+    @property
+    def volume(self) -> float:
+        return 0.0
 
     def __repr__(self):
         return f"Circle(center={self.center}, radius={self.radius})"
@@ -143,7 +181,26 @@ class Triangle(Shape):
         edge2 = self.vertex3 - self.vertex1
         return np.cross(edge1, edge2) / np.linalg.norm(np.cross(edge1, edge2))
 
-    def Area(self) -> float:
+    def GetTangent(self, point: np.ndarray) -> np.ndarray:
+        if not self.CheckPoint(point):
+            raise ValueError("Point is not on the triangle")
+        edge1 = self.vertex2 - self.vertex1
+        return edge1 / np.linalg.norm(edge1)
+    
+    @property
+    def normals(self) -> list[np.ndarray]:
+        normal = self.GetNormal((self.vertex1 + self.vertex2 + self.vertex3) / 3)
+        return [normal]
+    
+    @property
+    def tangents(self) -> list[np.ndarray]:
+        edge1 = self.vertex2 - self.vertex1
+        edge2 = self.vertex3 - self.vertex2
+        edge3 = self.vertex1 - self.vertex3
+        return [edge / np.linalg.norm(edge) for edge in [edge1, edge2, edge3]]
+
+    @property
+    def area(self) -> float:
         # Heron's formula
         a = np.linalg.norm(self.vertex1 - self.vertex2)
         b = np.linalg.norm(self.vertex2 - self.vertex3)
@@ -152,17 +209,27 @@ class Triangle(Shape):
         from math import sqrt
         return sqrt(s * (s - a) * (s - b) * (s - c))
 
-    def Perimeter(self) -> float:
+    @property
+    def perimeter(self) -> float:
         a = np.linalg.norm(self.vertex1 - self.vertex2)
         b = np.linalg.norm(self.vertex2 - self.vertex3)
         c = np.linalg.norm(self.vertex3 - self.vertex1)
         return a + b + c
 
-    def SideLengths(self) -> tuple[float, float, float]:
+    @property
+    def side_lengths(self) -> tuple[float, float, float]:
         a = np.linalg.norm(self.vertex1 - self.vertex2)
         b = np.linalg.norm(self.vertex2 - self.vertex3)
         c = np.linalg.norm(self.vertex3 - self.vertex1)
         return (a, b, c)
+    
+    @property
+    def dimensions(self) -> int:
+        return 2
+    
+    @property
+    def volume(self) -> float:
+        return 0.0
 
     def __repr__(self):
         return f"Triangle(vertex1={self.vertex1}, vertex2={self.vertex2}, vertex3={self.vertex3})"
@@ -180,12 +247,33 @@ class Polygon(Shape):
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
         pass
-
-    def Area(self) -> float:
+    
+    def GetTangent(self, point: np.ndarray) -> np.ndarray:
         pass
 
-    def Perimeter(self) -> float:
+    @property
+    def normals(self) -> list[np.ndarray]:
         pass
+
+    @property
+    def tangents(self) -> list[np.ndarray]:
+        pass
+
+    @property
+    def area(self) -> list[np.ndarray]:
+        pass
+    
+    @property
+    def perimeter(self) -> list[np.ndarray]:
+        pass
+
+    @property
+    def dimensions(self) -> int:
+        return 2
+
+    @property
+    def volume(self) -> float:
+        return 0.0
 
     def __repr__(self):
         return f"Polygon(vertices={self.vertices})"

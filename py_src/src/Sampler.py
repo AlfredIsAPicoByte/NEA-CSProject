@@ -18,6 +18,10 @@ class SampleSettings:
     def __init__(self):
         pass
 
+class RenderMode(Enum):
+    RAYTRACING = 0
+    RASTERIZATION = 1
+
 class RenderSettings:
     width: int = 800
     height: int = 600
@@ -25,6 +29,7 @@ class RenderSettings:
     image_scale: float = 1.0
     background_color: Color = Color(0, 0, 0)
     ambient_light: Color = Color(0.1, 0.1, 0.1)
+    render_mode: RenderMode = RenderMode.RAYTRACING
 
     def __init__(self, width: int, height: int, rays_per_pixel: int):
         pass
@@ -82,3 +87,9 @@ class Sampler:
                 y = np.random.uniform(0, 1)
                 samples.append((x, y))
         return samples
+    
+    def GetSamples(self, range: int = 1, offset: int = 0) -> list[tuple[float, float]]:
+        return self.samples[offset:offset + range]
+    
+    def __repr__(self):
+        return f"Sampler(settings={self.sample_settings}, render_settings={self.render_settings}, samples={self.samples})"

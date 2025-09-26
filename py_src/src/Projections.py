@@ -1,4 +1,4 @@
-from src.Shapes import *
+from py_src.src.Gemometry import *
 from src.Camera import *
 from src.Basic import Ray
 import numpy as np
@@ -9,30 +9,50 @@ class Projection:
     def __init__(self, camera: Camera):
         self.camera = camera
 
-    def AddObject(self, obj: Shape|Ray):
+    def AddObject(self, obj):
         self.objects.append(obj)
-    
-    def Display(self):
-        pass
 
-    def Project(self, point: np.ndarray) -> np.ndarray:
-        pass
-
-    def DistanceEstimator(self, point: np.ndarray) -> float:
+    def NearestObject(self, point: np.ndarray) -> tuple[np.ndarray, object]:
         min_distance = float('inf')
+        closest_object = None
 
         for obj in self.objects:
             if isinstance(obj, Shape):
-                if obj.CheckPoint(point):
-                    distance = 0  # Compute actual distance to the shape if needed
-                    min_distance = min(min_distance, distance)
-                else:
-                    continue # Skip if point is not near the shape
+                distance = 0  # Compute actual distance to the shape if needed
+                min_distance = min(min_distance, distance)
+
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_object = obj
             elif isinstance(obj, Ray):
                 # Handle ray-specific distance estimation if needed
-                pass
+                position = point - obj.origin
+                direction = obj.direction
+
+                t = np.dot(position, direction) / np.dot(direction, direction)
+                if t < 0:
+                    distance = np.linalg.norm(position)
+                else:
+                    closest_point = obj.point_at(t)
+                    distance = np.linalg.norm(point - closest_point)
+                
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_object = obj
         
-        return min_distance
+        return [min_distance, closest_object]
+
+    @property    
+    def lights(self):
+        return [obj for obj in self.objects if isinstance(obj, "LightRay")]
+    
+    @property
+    def shapes(self):
+        return [obj for obj in self.objects if isinstance(obj, Shape)]
+    
+    @property
+    def meshes(self):
+        return [obj for obj in self.objects if isinstance(obj, "Mesh")]
 
     def __repr__(self):
         return f"Projection(camera={self.camera}, objects={self.objects})"
@@ -41,6 +61,6 @@ class OrthographicProjection(Projection):
     def __init__(self, camera: Camera):
         super().__init__(camera)
 
-    def Project(self, point: Vector) -> Vector:
-        # Orthographic projection simply drops the z-coordinate
-        return Vector(point.x, point.y, 0)
+    def NearestObject(self, point: np.ndarray) -> np.ndarray:
+        point, object = super().Project(point)
+        return np.ndarray([point.x, point.y, 0]), object
