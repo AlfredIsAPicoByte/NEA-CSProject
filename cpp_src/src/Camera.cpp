@@ -28,9 +28,25 @@ void Camera::Matrix(Shader& shader, const char* uniform)
 	glUniformMatrix4fv(glGetUniformLocation(shader.ID, uniform), 1, GL_FALSE, glm::value_ptr(cameraMatrix));
 }
 
+void Camera::Move(GLFWwindow* window, Time& time)
+{
+	switch (mode) {
+		case FIRST_PERSON:
+			FirstPersonMovement(window, time);
+			break;
+		case PLANE:
+			PlaneMovement(window, time);
+			break;
+		case ORBIT:
+			OrbitMovement(window, time);
+			break;
+		default:
+			// Unknown mode
+			break;
+	}
+}
 
-
-void Camera::Inputs(GLFWwindow* window, Time& time)
+void Camera::FirstPersonMovement(GLFWwindow* window, Time& time)
 {
     float speed = baseSpeed * time.deltaTime; // Movement speed
 
@@ -115,4 +131,123 @@ void Camera::Inputs(GLFWwindow* window, Time& time)
 		// Makes sure the next time the camera looks around it doesn't jump
 		firstClick = true;
 	}
+}
+
+void Camera::PlaneMovement(GLFWwindow* window, Time& time)
+{
+	float velocity = baseSpeed * time.deltaTime;
+	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+		velocity *= speedMultiplier;
+	}
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		Position += Orientation * velocity;
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		Position -= Orientation * velocity;
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		Position -= glm::normalize(glm::cross(Orientation, Up)) * velocity;
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		Position += glm::normalize(glm::cross(Orientation, Up)) * velocity;
+	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+		Position += Up * velocity;
+	if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+		Position -= Up * velocity;
+
+	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+		if (firstClick) {
+			glfwSetCursorPos(window, width / 2, height / 2);
+			firstClick = false;
+		}
+		double mouseX, mouseY;
+		glfwGetCursorPos(window, &mouseX, &mouseY);
+		float mouse_dx = (float)(mouseX - (width / 2));
+		float mouse_dy = (float)(mouseY - (height / 2));
+		float rot_x = (sensitivity * mouse_dx / width) * time.deltaTime;
+		float rot_y = (sensitivity * mouse_dy / height) * time.deltaTime;
+		if (abs(rot_y) > 89.0f) {
+			rot_y = 89.0f * (rot_y > 0 ? 1 : -1);
+		}
+		// Yaw rotation around up
+		Orientation = glm::rotate(Orientation, -glm::radians(rot_x), Up);
+		// Pitch rotation around right
+		glm::vec3 right = glm::normalize(glm::cross(Orientation, Up));
+		Orientation = glm::rotate(Orientation, -glm::radians(rot_y), right);
+		glfwSetCursorPos(window, width / 2, height / 2);
+	} else {
+		firstClick = true;
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+	}
+}
+
+void Camera::SelectOrbitTarget(const glm::vec3& target)
+{
+	orbitTarget = target;
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+	// yoffset > 0: scroll up, yoffset < 0: scroll down
+	if (yoffset > 0) {
+		// Zoom in
+		orbitDistance -= orbitZoomSpeed;
+	} else {
+		// Zoom out
+		orbitDistance += orbitZoomSpeed;
+	}
+}
+
+void Camera::OrbitMovement(GLFWwindow* window, Time& time)
+{
+	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+		if (firstClick) {
+			glfwSetCursorPos(window, width / 2, height / 2);
+			firstClick = false;
+		}
+
+		double mouseX, mouseY;
+		glfwGetCursorPos(window, &mouseX, &mouseY);
+
+		float mouse_dx = (float)(mouseX - (width / 2));
+		float mouse_dy = (float)(mouseY - (height / 2));
+
+		float orbit_speed = sensitivity * time.deltaTime;
+		
+		float yaw = orbit_speed * mouse_dx / width;
+
+		float pitch = orbit_speed * mouse_dy / height;
+		float max_pitch = glm::radians(89.0f);
+		float new_pitch = orbitPitch + pitch;
+
+		if (abs(new_pitch) > max_pitch) {
+			pitch = max_pitch * (new_pitch > 0 ? 1 : -1) - orbitPitch;
+		}
+
+		orbitPitch += pitch;
+		orbitYaw += yaw;
+		orbitDistance = glm::length(Position - orbitTarget);
+		
+		glfwSetScrollCallback(window, scroll_callback);
+		// Clamp radius
+		if (orbitDistance < orbitMinDistance) orbitDistance = orbitMinDistance;
+		if (orbitDistance > orbitMaxDistance) orbitDistance = orbitMaxDistance;
+
+		// Spherical coordinates
+		float x = orbitTarget.x + orbitDistance * cos(orbitPitch) * sin(orbitYaw);
+		float y = orbitTarget.y + orbitDistance * sin(orbitPitch);
+		float z = orbitTarget.z + orbitDistance * cos(orbitPitch) * cos(orbitYaw);
+
+		Position = glm::vec3(x, y, z);
+		LookAt(orbitTarget);
+		glfwSetCursorPos(window, width / 2, height / 2);
+	} else {
+		firstClick = true;
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+	}
+}
+
+void Camera::LookAt(const glm::vec3& target)
+{
+	Orientation = glm::normalize(target - Position);
 }
