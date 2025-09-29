@@ -62,6 +62,7 @@ class Color:
 def clamp(value, min_value: float|int = 0.0, max_value: float|int = 1.0):
     return max(min_value, min(value, max_value))
 
+
 class LightRay(Color, Ray):
     def __init__(self, origin: np.ndarray, direction: np.ndarray, color: Color, intensity: float = 1.0):
         Ray.__init__(self, origin, direction / np.linalg.norm(direction))
