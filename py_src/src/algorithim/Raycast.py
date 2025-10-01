@@ -57,7 +57,8 @@ class Raycaster:
     
     def RayCasting(self, ray: Ray, scene) -> Color:
         light = LightRay(ray.origin, ray.direction, Color(1, 1, 1), intensity=1.0)
-
+        attenuation = 0.1
+        
         for bounce in range(self.max_bounces):
             hit_info = self.Raycast(ray, scene, self.max_distance, self.epsilon, self.raycast_steps)
             if hit_info is None:
