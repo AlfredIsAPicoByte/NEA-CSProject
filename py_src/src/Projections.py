@@ -1,4 +1,4 @@
-from py_src.src.Gemometry import *
+from src.Gemometry import *
 from src.Camera import *
 from src.Basic import Ray
 import numpy as np
@@ -42,17 +42,8 @@ class Projection:
         
         return [min_distance, closest_object]
 
-    @property    
-    def lights(self):
-        return [obj for obj in self.objects if isinstance(obj, "LightRay")]
-    
-    @property
-    def shapes(self):
-        return [obj for obj in self.objects if isinstance(obj, Shape)]
-    
-    @property
-    def meshes(self):
-        return [obj for obj in self.objects if isinstance(obj, "Mesh")]
+    def GetObjectOfType(self, obj_type):
+        return [obj for obj in self.objects if isinstance(obj, obj_type)]
 
     def __repr__(self):
         return f"Projection(camera={self.camera}, objects={self.objects})"

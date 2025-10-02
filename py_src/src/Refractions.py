@@ -1,3 +1,5 @@
+from src.Basic import *
+import numpy as np
 import math
 
 REFRACTIVE_INDICIES = {
@@ -141,3 +143,33 @@ def calculate_critical_angle(
     critical_angle: float = math.degrees(critical_angle_rad)
     
     return critical_angle
+
+def refract_ray(normal: np.ndarray, incomingRay: Ray, refractiveIndexIncident: float, refractiveIndex: float) -> Ray:
+    """
+    Calculate the outgoing angle of the refracted ray.
+
+    Attributes:
+        normal (ndarray): the normal of the surface of interaction
+        incoming_ray (Ray): the incoming ray
+    """
+    incident_angle = incomingRay.get_angle(normal)
+    critcal_angle = calculate_critical_angle(refractiveIndexIncident, refractiveIndex)
+
+    if incident_angle >= critcal_angle:
+        raise ValueError("Total internal reflection occurs; no refraction.")
+    
+    # Calculate the direction of the refracted ray
+    normal_unit = normal / np.linalg.norm(normal)
+    incoming_unit = incomingRay.direction / np.linalg.norm(incomingRay.direction)
+    
+    cos_incident = -np.dot(normal_unit, incoming_unit)
+    sin_incident = math.sqrt(1 - cos_incident ** 2)
+    
+    sin_refracted = (refractiveIndexIncident / refractiveIndex) * sin_incident
+    cos_refracted = math.sqrt(1 - sin_refracted ** 2)
+    
+    refracted_direction = (refractiveIndexIncident / refractiveIndex) * incoming_unit + ( (refractiveIndexIncident / refractiveIndex) * cos_incident - cos_refracted ) * normal_unit
+    refracted_direction /= np.linalg.norm(refracted_direction)  # Normalize the direction
+    
+    refracted_ray = Ray(incomingRay.origin, refracted_direction)
+    return refracted_ray

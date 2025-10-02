@@ -1,7 +1,5 @@
 from src.Basic import *
-from src.InputManager import InputManager
 from enum import Enum
-from math import sin, cos, tan, radians
 
 class CameraType (Enum):
     """

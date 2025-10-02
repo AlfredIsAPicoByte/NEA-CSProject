@@ -89,6 +89,14 @@ class Ray:
             raise ValueError("Translation vector must match the ray's origin dimension")
         self.origin += vector
 
+    def get_angle(self, line: np.ndarray):
+        """Retruns the angles created from another vector"""
+        if line.shape != self.direction.shape:
+            raise ValueError("Input vector must match the ray's direction dimension")
+        dot_product = np.dot(self.direction, line) / (np.linalg.norm(self.direction) * np.linalg.norm(line))
+        angle = acos(dot_product)
+        return angle
+
     def __repr__(self):
         return f"Ray(origin={self.origin}, direction={self.direction})"
 

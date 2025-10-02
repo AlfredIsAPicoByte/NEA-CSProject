@@ -80,9 +80,9 @@ class Circle(Shape):
     def CheckIntersection(self, ray: Ray) -> bool:
         d = ray.direction
         s = ray.origin - self.center
-        a = d.Dot(d)
-        b = 2 * d.Dot(s)
-        c = s.Dot(s) - self.radius ** 2
+        a = np.dot(d, d)
+        b = 2 * np.dot(d, s)
+        c = np.dot(s, s) - self.radius ** 2
         discriminant = b ** 2 - 4 * a * c
         
         if discriminant < 0:
@@ -93,21 +93,22 @@ class Circle(Shape):
     def GetIntersection(self, ray: Ray) -> list[np.ndarray]:
         if not self.CheckIntersection(ray):
             return []
-        
         d = ray.direction
         s = ray.origin - self.center
         a = np.dot(d, d)
-        b = 2 * d.Dot(s)
-        c = s.Dot(s) - self.radius ** 2
+        b = 2 * np.dot(d, s)
+        c = np.dot(s, s) - self.radius ** 2
         discriminant = b ** 2 - 4 * a * c
-        
         if discriminant == 0:
-            t = -b - (discriminant ** 0.5) / a
-            return np.ndarray([ray.PointAtParameter(t)])
+            t = -b / (2 * a)
+            return np.array([ray.point_at(t)]) if t >= 0 else []
         else:
-            t1 = (-b + (discriminant ** 0.5)) / (2 * a)
-            t2 = (-b - (discriminant ** 0.5)) / (2 * a)
-            return np.ndarray([ray.PointAtParameter(t) for t in sorted([t1, t2]) if t >= 0])
+            sqrt_disc = discriminant ** 0.5
+            t1 = (-b + sqrt_disc) / (2 * a)
+            t2 = (-b - sqrt_disc) / (2 * a)
+            # For rays starting inside, t=0 is a valid intersection (origin on circle)
+            ts = [t for t in [t1, t2] if t >= 0 or np.isclose(t, 0)]
+            return np.array([ray.point_at(t) for t in sorted(ts)])
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
         if not self.CheckPoint(point, 0.01):
@@ -169,10 +170,74 @@ class Triangle(Shape):
     # D = -(Ax )
 
     def CheckPoint(self, point: np.ndarray, uncertainty: float) -> bool:
-        pass
+        # Barycentric technique
+        v0 = self.vertex2 - self.vertex1
+        v1 = self.vertex3 - self.vertex1
+        v2 = point - self.vertex1
 
-    def CheckIntersection(self, ray: Ray) -> bool:
-        pass
+        dot00 = np.dot(v0, v0)
+        dot01 = np.dot(v0, v1)
+        dot02 = np.dot(v0, v2)
+        dot11 = np.dot(v1, v1)
+        dot12 = np.dot(v1, v2)
+
+        invDenom = 1 / (dot00 * dot11 - dot01 * dot01)
+        u = (dot11 * dot02 - dot01 * dot12) * invDenom
+        v = (dot00 * dot12 - dot01 * dot02) * invDenom
+
+        return (u >= -uncertainty) and (v >= -uncertainty) and (u + v <= 1 + uncertainty)
+
+    def CheckIntersection(self, ray: Ray, epsilon: float = 1e-6) -> bool:
+        edge1 = self.vertex2 - self.vertex1
+        edge2 = self.vertex3 - self.vertex1
+        h = np.cross(ray.direction, edge2)
+        a = np.dot(edge1, h)
+        
+        if -epsilon < a < epsilon:
+            return False  # Ray is parallel to triangle
+        
+        f = 1.0 / a
+        s = ray.origin - self.vertex1
+        u = f * np.dot(s, h)
+        
+        if u < 0.0 or u > 1.0:
+            return False
+        
+        q = np.cross(s, edge1)
+        v = f * np.dot(ray.direction, q)
+        
+        if v < 0.0 or u + v > 1.0:
+            return False
+        
+        t = f * np.dot(edge2, q)
+        
+        if t > epsilon:  # Intersection with the triangle
+            return True
+        else:  # Line intersection but not a ray intersection
+            return False
+        
+    def GetIntersection(self, ray: Ray, epsilon: float = 1e-6) -> np.ndarray | None:
+        if not self.CheckIntersection(ray, epsilon):
+            return None
+        
+        edge1 = self.vertex2 - self.vertex1
+        edge2 = self.vertex3 - self.vertex1
+        h = np.cross(ray.direction, edge2)
+        a = np.dot(edge1, h)
+        
+        f = 1.0 / a
+        s = ray.origin - self.vertex1
+        u = f * np.dot(s, h)
+        
+        q = np.cross(s, edge1)
+        v = f * np.dot(ray.direction, q)
+        
+        t = f * np.dot(edge2, q)
+        
+        if t > epsilon:
+            return ray.point_at(t)
+        else:
+            return None
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
         if not self.CheckPoint(point):

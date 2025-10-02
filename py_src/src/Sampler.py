@@ -8,7 +8,7 @@ class SamplerType(Enum):
     MONTE_CARLO = 0
     STRATIFIED = 1
     QUASI_MONTE_CARLO = 2
-    ADAPTIVE = 3
+    ADAPTIVE = 3 # Not implemented yet
 
 class SampleSettings:
     position: int = 1
