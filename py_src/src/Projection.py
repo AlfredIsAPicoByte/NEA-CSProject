@@ -1,12 +1,14 @@
-from src.Gemometry import *
-from src.Camera import *
-from src.Basic import Ray
+from src.PrimaryStructures import Ray
 import numpy as np
 
-class Projection:
+"""
+
+"""
+
+class Scene:
     objects = []
 
-    def __init__(self, camera: Camera):
+    def __init__(self, camera: CameraObject):
         self.camera = camera
 
     def AddObject(self, obj):
@@ -40,18 +42,10 @@ class Projection:
                     min_distance = distance
                     closest_object = obj
         
-        return [min_distance, closest_object]
+        return (min_distance, closest_object)
 
     def GetObjectOfType(self, obj_type):
         return [obj for obj in self.objects if isinstance(obj, obj_type)]
 
     def __repr__(self):
-        return f"Projection(camera={self.camera}, objects={self.objects})"
-    
-class OrthographicProjection(Projection):
-    def __init__(self, camera: Camera):
-        super().__init__(camera)
-
-    def NearestObject(self, point: np.ndarray) -> np.ndarray:
-        point, object = super().Project(point)
-        return np.ndarray([point.x, point.y, 0]), object
+        return f"Projection(camera={self.camera}"

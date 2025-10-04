@@ -1,5 +1,9 @@
-from src.Basic import *
+
 from enum import Enum
+
+"""
+
+"""
 
 class CameraType (Enum):
     """
@@ -21,7 +25,7 @@ class CameraMode (Enum):
     PLANE = 2
     ORBIT = 3
 
-class Camera:
+class CameraObject:
     """
     A Camera class that supports different projection types and movement modes.
     Attributes:

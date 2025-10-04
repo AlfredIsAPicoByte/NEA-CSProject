@@ -1,6 +1,11 @@
-from src import Basic, Lighting, Algorithims
+from py_src.src import PrimaryStructures
+from src import Lighting, Algorithims
 from enum import Enum
 import numpy as np
+
+"""
+
+"""
 
 class SamplerType(Enum):
     MONTE_CARLO = 0
@@ -31,38 +36,39 @@ class RenderSettings:
         self.height = height
         self.rays_per_pixel = raysPerPixel
 
+class PixelData: 
+    def __init__(self, color: Lighting.Color):
+        self.color = color
+
 class Sample:
-    def __init__(self, u: float, v: float, rays: list[Basic.Ray] = []):
+    def __init__(self, u: float, v: float, rays: list[PrimaryStructures.Ray] = []):
         self.u = u
         self.v = v
 
         self.rays = rays
-        self.pixle_data: list[Basic.Color] = []
-    
-    def Render(self, render_mode: RenderMode):
-        pass
+        self.pixle_data: list[PixelData] = []
 
-class Sampler:
+class SamplingManager:
     def __init__(self, settings: SampleSettings, renderSettings: RenderSettings):
         self.sample_settings = settings
         self.render_settings = renderSettings
-
-        self.samples = self.GenerateSamples()
+        
+        self.samples: list[Sample] = []
+        self.GenerateSamples()
     
     def GenerateSamples(self):
-        samples = []
         if self.settings.sampler_type == SamplerType.MONTE_CARLO:
             for _ in range(self.settings.size):
                 x = np.random.uniform(0, 1)
                 y = np.random.uniform(0, 1)
-                samples.append((x, y))
+                self.samples.append((x, y))
         elif self.settings.sampler_type == SamplerType.STRATIFIED:
             n = int(np.sqrt(self.settings.size))
             for i in range(n):
                 for j in range(n):
                     x = (i + np.random.uniform(0, 1)) / n
                     y = (j + np.random.uniform(0, 1)) / n
-                    samples.append((x, y))
+                    self.samples.append((x, y))
         elif self.settings.sampler_type == SamplerType.QUASI_MONTE_CARLO:
             # Using Halton sequence for quasi-random sampling
             def halton(index, base):
@@ -78,7 +84,7 @@ class Sampler:
             for i in range(self.settings.size):
                 x = halton(i + 1, 2)
                 y = halton(i + 1, 3)
-                samples.append((x, y))
+                self.samples.append((x, y))
         elif self.settings.sampler_type == SamplerType.ADAPTIVE:
             # Placeholder for adaptive sampling logic
             # This would typically involve more complex logic based on scene analysis
@@ -86,8 +92,7 @@ class Sampler:
             for _ in range(self.settings.size):
                 x = np.random.uniform(0, 1)
                 y = np.random.uniform(0, 1)
-                samples.append((x, y))
-        return samples
+                self.samples.append((x, y))
     
     def GetSamples(self, range: int = 1, offset: int = 0) -> list[tuple[float, float]]:
         return self.samples[offset:offset + range]

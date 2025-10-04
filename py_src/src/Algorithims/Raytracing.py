@@ -1,9 +1,10 @@
-from src.Basic import Ray
-from src.Lighting import Color, LightRay, SimpleMaterial
-from src.Camera import Camera
-from src.Gemometry import Shape
+
 import numpy as np
 import random
+
+"""
+
+"""
 
 class Raytracer:
     max_bounces: int = 5

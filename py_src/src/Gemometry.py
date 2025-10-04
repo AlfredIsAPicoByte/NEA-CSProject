@@ -1,15 +1,35 @@
-from src.Basic import Ray
+from src.PrimaryStructures import Ray
 import numpy as np
 
-class Shape:
-    def __init__(self, name: str = "Shape"):
-        self.name = name
-    
-    def CheckPoint(self, point: np.ndarray, uncertainty: float) -> bool:
-        raise NotImplementedError("CheckPoint method must be implemented in subclasses")
+"""
 
-    def CheckIntersection(self, ray: Ray) -> bool:
-        raise NotImplementedError("CheckIntersection method must be implemented in subclasses")
+"""
+
+class Shape:
+    def __init__(self, **kwargs):
+        self.id: int = kwargs.get("id", 0)
+        self.name: str = kwargs.get("name", "Default Name")
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+    
+    def CheckPointOnEdge(self, point: np.ndarray, epsilon: float) -> bool:
+        raise NotImplementedError("CheckPointOnEdge method must be implemented in subclasses")
+    
+    def CheckPointInside(self, point: np.ndarray, epsilon: float) -> bool:
+        raise NotImplementedError("CheckPointInside method must be implemented in subclasses")
+    
+    def GetDistance(self, point: np.ndarray) -> float:
+        raise NotImplementedError("GetDistance method must be implemented in subclasses")
+
+    def GetClosestPoint(self, point: np.ndarray) -> float:
+        raise NotImplementedError("GetClosestPoint method must be implemented in subclasses")
+
+    def CheckRayIntersection(self, ray: Ray) -> bool:
+        raise NotImplementedError("CheckRayIntersection method must be implemented in subclasses")
+    
+    def GetRayIntersections(self, ray: Ray) -> list[np.ndarray]:
+        raise NotImplementedError("GetRayIntersections method must be implemented in subclasses")
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
         raise NotImplementedError("GetNormal method must be implemented in subclasses")
@@ -27,11 +47,11 @@ class Shape:
 
     @property
     def area(self) -> float:
-        raise NotImplementedError("Area method must be implemented in subclasses")
+        raise NotImplementedError("Area property must be implemented in subclasses")
 
     @property
     def perimeter(self) -> float:
-        raise NotImplementedError("Perimeter method must be implemented in subclasses")
+        raise NotImplementedError("Perimeter property must be implemented in subclasses")
     
     @property
     def dimensions(self) -> int:
@@ -39,10 +59,12 @@ class Shape:
     
     @property
     def volume(self) -> float:
-        raise NotImplementedError("Volume method must be implemented in subclasses")
+        raise NotImplementedError("Volume property must be implemented in subclasses")
 
     def __repr__(self):
         return f"Shape()"
+
+### TODO: Update the bellow classes to use the new methods
 
 class Circle(Shape):
     def __init__(self, center: np.ndarray, radius: float, name: str = "Circle"):

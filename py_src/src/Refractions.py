@@ -1,6 +1,10 @@
-from src.Basic import *
+from py_src.src.PrimaryStructures import *
 import numpy as np
 import math
+
+"""
+
+"""
 
 REFRACTIVE_INDICIES = {
     "air": 1.000293,

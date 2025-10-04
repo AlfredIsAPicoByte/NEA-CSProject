@@ -1,4 +1,5 @@
-from src import Gemometry, Basic, Lighting, Reflections, Refractions, Sampler, Projections, Camera
+from py_src.src import PrimaryStructures, Projection
+from src import Gemometry, Lighting, Reflections, Refractions, Sampler, Camera
 from py_src.src.Algorithims import Raytracing
 import numpy as np
 
@@ -50,7 +51,7 @@ def run_tests():
 
 def test_circle_ray_no_intersection():
     circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
-    ray = Basic.Ray(np.array([10, 0, 0]), np.array([1, 0, 0]))
+    ray = PrimaryStructures.Ray(np.array([10, 0, 0]), np.array([1, 0, 0]))
 
     if not circle.CheckIntersection(ray):
         print('Gemometry "test_circle_ray_no_intersection" Expect no intersection *Passed*')
@@ -65,7 +66,7 @@ def test_circle_ray_no_intersection():
 
 def test_circle_ray_tangent():
     circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
-    ray = Basic.Ray(np.array([5, -10, 0]), np.array([0, 1, 0]))
+    ray = PrimaryStructures.Ray(np.array([5, -10, 0]), np.array([0, 1, 0]))
 
     if circle.CheckIntersection(ray):
         intersections = circle.GetIntersection(ray)
@@ -80,7 +81,7 @@ def test_circle_ray_tangent():
 
 def test_circle_ray_two_intersections():
     circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
-    ray = Basic.Ray(np.array([-10, 0, 0]), np.array([1, 0, 0]))
+    ray = PrimaryStructures.Ray(np.array([-10, 0, 0]), np.array([1, 0, 0]))
 
     if circle.CheckIntersection(ray):
         intersections = circle.GetIntersection(ray)
@@ -95,7 +96,7 @@ def test_circle_ray_two_intersections():
 
 def test_circle_ray_origin_inside():
     circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
-    ray = Basic.Ray(np.array([0, 0, 0]), np.array([1, 0, 0]))
+    ray = PrimaryStructures.Ray(np.array([0, 0, 0]), np.array([1, 0, 0]))
     if circle.CheckIntersection(ray):
         intersections = circle.GetIntersection(ray)
         # For a ray starting at the center, only the forward intersection is returned
@@ -108,7 +109,7 @@ def test_circle_ray_origin_inside():
 
 def test_circle_ray_origin_on_edge():
     circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
-    ray = Basic.Ray(np.array([5, 0, 0]), np.array([1, 0, 0]))
+    ray = PrimaryStructures.Ray(np.array([5, 0, 0]), np.array([1, 0, 0]))
     if circle.CheckIntersection(ray):
         intersections = circle.GetIntersection(ray)
         # Should be one intersection (tangent at start)
@@ -121,7 +122,7 @@ def test_circle_ray_origin_on_edge():
 
 def test_circle_ray_reverse_direction():
     circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
-    ray = Basic.Ray(np.array([0, 0, 0]), np.array([-1, 0, 0]))
+    ray = PrimaryStructures.Ray(np.array([0, 0, 0]), np.array([-1, 0, 0]))
     # Ray from center, but in negative direction
     if circle.CheckIntersection(ray):
         intersections = circle.GetIntersection(ray)
@@ -175,7 +176,7 @@ def test_circle_normal_tangent_error():
 
 def test_triangle_ray_intersection():
     triangle = Gemometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
-    ray = Basic.Ray(np.array([1, 1, -10]), np.array([0, 0, 1]))
+    ray = PrimaryStructures.Ray(np.array([1, 1, -10]), np.array([0, 0, 1]))
 
     if triangle.CheckIntersection(ray):
         intersection = triangle.GetIntersection(ray)
@@ -190,7 +191,7 @@ def test_triangle_ray_intersection():
 
 def test_triangle_ray_no_intersection():
     triangle = Gemometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
-    ray = Basic.Ray(np.array([6, 6, -10]), np.array([0, 0, 1]))
+    ray = PrimaryStructures.Ray(np.array([6, 6, -10]), np.array([0, 0, 1]))
 
     if not triangle.CheckIntersection(ray):
         print('Gemometry "test_triangle_ray_no_intersection" Expect no intersection *Passed*')
@@ -208,7 +209,7 @@ def test_triangle_degenerate_collinear():
     v2 = np.array([1, 1, 1])
     v3 = np.array([2, 2, 2])  # Collinear
     triangle = Gemometry.Triangle(v1, v2, v3)
-    ray = Basic.Ray(np.array([0, 0, -1]), np.array([0, 0, 1]))
+    ray = PrimaryStructures.Ray(np.array([0, 0, -1]), np.array([0, 0, 1]))
     try:
         result = triangle.CheckIntersection(ray)
         print("Degenerate triangle test ran (should be False or error). Result:", result)
@@ -219,7 +220,7 @@ def test_triangle_degenerate_collinear():
 
 def test_triangle_ray_parallel():
     triangle = Gemometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
-    ray = Basic.Ray(np.array([0, 0, 1]), np.array([1, 1, 0]))  # Parallel to triangle plane
+    ray = PrimaryStructures.Ray(np.array([0, 0, 1]), np.array([1, 1, 0]))  # Parallel to triangle plane
     if not triangle.CheckIntersection(ray):
         print("Ray parallel to triangle plane: no intersection as expected.")
         return True
@@ -264,7 +265,7 @@ def test_lighting_basic():
         color_mul = color1 * 0.5
         color_eq = (color1 == Lighting.Color(0.5, 0.2, 0.7))
         # Test LightRay
-        ray = Basic.Ray(np.array([0,0,0]), np.array([1,0,0]))
+        ray = PrimaryStructures.Ray(np.array([0,0,0]), np.array([1,0,0]))
         lray = Lighting.LightRay(np.array([0,0,0]), np.array([1,0,0]), color1, intensity=2.0)
         assert isinstance(lray, Lighting.LightRay)
         # Test SimpleMaterial reflection
@@ -272,7 +273,7 @@ def test_lighting_basic():
         reflected_color = mat.ReflectColor(color2)
         reflected_ray = mat.ReflectRay(ray, np.array([0,1,0]), np.array([0,0,0]), seed=42)
         reflected_lightray = mat.ReflectLightRay(lray, np.array([0,1,0]), np.array([0,0,0]))
-        assert isinstance(reflected_ray, Basic.Ray)
+        assert isinstance(reflected_ray, PrimaryStructures.Ray)
         assert isinstance(reflected_lightray, Lighting.LightRay)
         print("Lighting: Color, LightRay, and SimpleMaterial tests successful.")
         return True
@@ -302,10 +303,10 @@ def test_material_reflect():
     try:
         color = Lighting.Color(0.5, 0.5, 0.5)
         mat = Lighting.SimpleMaterial(color, 0.1, 0.9)
-        ray = Basic.Ray(np.array([1, 2, 3]), np.array([0, 1, 0]))
+        ray = PrimaryStructures.Ray(np.array([1, 2, 3]), np.array([0, 1, 0]))
         normal = np.array([0, 1, 0])
         reflected = mat.ReflectRay(ray, normal, np.array([1, 2, 3]))
-        assert isinstance(reflected, Basic.Ray)
+        assert isinstance(reflected, PrimaryStructures.Ray)
         print("Lighting: Material reflect operation successful.")
         return True
     except Exception as e:
@@ -321,10 +322,10 @@ def test_reflections_basic():
         inc_angle = Reflections.calculate_incident_angle(10, 40)
         assert inc_angle == 30
         # Test reflect_ray
-        ray = Basic.Ray(np.array([0,0,0]), np.array([1,1,0]))
+        ray = PrimaryStructures.Ray(np.array([0,0,0]), np.array([1,1,0]))
         normal = np.array([0,1,0])
         reflected = Reflections.reflect_ray(normal, ray)
-        assert isinstance(reflected, Basic.Ray)
+        assert isinstance(reflected, PrimaryStructures.Ray)
 
         # Test error on shape mismatch
         try:
@@ -367,7 +368,7 @@ def test_refractions_basic():
             pass
 
         # Test refract_ray
-        ray = Basic.Ray(np.array([0,0,0]), np.array([1,0,0]))
+        ray = PrimaryStructures.Ray(np.array([0,0,0]), np.array([1,0,0]))
         normal = np.array([0,1,0])
         try:
             Refractions.refract_ray(normal, ray, 1.5, 1.0)
@@ -393,7 +394,7 @@ def test_sampler_basic():
 
 def test_projections_basic():
     try:
-        proj = Projections.Projection(Camera(Basic.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 1.77, 0.1, 1000, 1000))
+        proj = Projection.Projection(Camera(PrimaryStructures.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 1.77, 0.1, 1000, 1000))
         if hasattr(proj, 'project'):
             _ = proj.project(np.array([1,2,3]))
         print("Projections: Instantiation and method call successful.")
@@ -404,7 +405,7 @@ def test_projections_basic():
 
 def test_camera_basic():
     try:
-        cam = Camera.Camera(Basic.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 1.77, 0.1, 1000, 1000)
+        cam = Camera.Camera(PrimaryStructures.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 1.77, 0.1, 1000, 1000)
         if hasattr(cam, 'get_view_matrix'):
             _ = cam.get_view_matrix()
         print("Camera: Instantiation and method call successful.")

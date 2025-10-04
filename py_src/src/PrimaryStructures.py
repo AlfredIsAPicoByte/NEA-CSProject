@@ -1,6 +1,10 @@
 from math import cos, sin, acos
 import numpy as np
 
+"""
+
+"""
+
 class Ray:
     """
     Represents a ray in N-dimensional space, defined by an origin point and a direction vector.
