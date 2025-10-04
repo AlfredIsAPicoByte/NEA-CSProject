@@ -10,26 +10,41 @@ REFRACTIVE_INDICIES = {
     "silicon": 3.42,
     "germanium": 4.0,
     "sapphire": 1.76,
-    "quartz": 1.46
+    "quartz": 1.46,
+    "ice": 1.31,
+    "carbon_dioxide": 1.00045,
+    "ethanol": 1.36,
+    "methanol": 1.33,
+    "benzene": 1.5,
+    "acetone": 1.36,
+    "toluene": 1.496,
+    "chloroform": 1.445,
+    "glycerol": 1.473,
+    "olive_oil": 1.47,
+    "corn_oil": 1.47,
+    "castor_oil": 1.475,
+    "turpentine": 1.47,
 }
 
-def convert_speed_to_index(speed: float, speedOfLight: float = 3e8) -> float:
+SPEED_OF_LIGHT = 299792458 # m/s in a vacuum
+
+def convert_speed_to_index(speed: float, speedOfLight: float = SPEED_OF_LIGHT) -> float:
     """
     Convert the speed of light in a medium to its refractive index.
 
     Attributes:
         speed (float): The speed of light in the medium in m/s.
-        speedOfLight (float): The speed of light in vacuum in m/s. Default is 3e8 m/s.
+        speedOfLight (float): The speed of light in vacuum in m/s. Default is about 3e8 m/s.
     """
     return speedOfLight / speed
 
-def convert_index_to_speed(refractiveIndex: float, speedOfLight: float = 3e8) -> float:
+def convert_index_to_speed(refractiveIndex: float, speedOfLight: float = SPEED_OF_LIGHT) -> float:
     """
     Convert the refractive index of a medium to the speed of light in that medium.
 
     Attributes:
         refractiveIndex (float): The refractive index of the medium.
-        speedOfLight (float): The speed of light in vacuum in m/s. Default is 3e8 m/s.
+        speedOfLight (float): The speed of light in vacuum in m/s. Default is about 3e8 m/s.
     """
     return speedOfLight / refractiveIndex
 
@@ -144,6 +159,25 @@ def calculate_critical_angle(
     
     return critical_angle
 
+def refract_angle(normalAngle: float, incomingAngle: float, refractiveIndexIncident: float, refractiveIndex: float) -> float:
+    """
+    Calculate the outgoing angle of the refracted ray based on the law of refraction.
+    Attributes:
+        normalAngle (float): The angle of the surface normal in degrees.
+        incomingAngle (float): The angle of the incoming ray in degrees.
+        refractiveIndexIncident (float): The refractive index of the first medium.
+        refractiveIndex (float): The refractive index of the second medium.
+    """
+    incidentAngle = abs(incomingAngle - normalAngle)
+    refractionAngle = calculate_angle_of_refraction(incidentAngle, refractiveIndexIncident, refractiveIndex)
+
+    if incomingAngle > normalAngle:
+        outgoingAngle = normalAngle + refractionAngle
+    else:
+        outgoingAngle = normalAngle - refractionAngle
+
+    return outgoingAngle
+
 def refract_ray(normal: np.ndarray, incomingRay: Ray, refractiveIndexIncident: float, refractiveIndex: float) -> Ray:
     """
     Calculate the outgoing angle of the refracted ray.
@@ -152,24 +186,20 @@ def refract_ray(normal: np.ndarray, incomingRay: Ray, refractiveIndexIncident: f
         normal (ndarray): the normal of the surface of interaction
         incoming_ray (Ray): the incoming ray
     """
-    incident_angle = incomingRay.get_angle(normal)
-    critcal_angle = calculate_critical_angle(refractiveIndexIncident, refractiveIndex)
+    normal = normal / np.linalg.norm(normal)
+    incomingDirection = incomingRay.direction / np.linalg.norm(incomingRay.direction)
 
-    if incident_angle >= critcal_angle:
+    cos_theta_i = -np.dot(normal, incomingDirection)
+    sin_theta_i2 = 1.0 - cos_theta_i ** 2
+
+    n_ratio = refractiveIndexIncident / refractiveIndex
+    sin_theta_t2 = n_ratio ** 2 * sin_theta_i2
+
+    if sin_theta_t2 > 1.0:
         raise ValueError("Total internal reflection occurs; no refraction.")
-    
-    # Calculate the direction of the refracted ray
-    normal_unit = normal / np.linalg.norm(normal)
-    incoming_unit = incomingRay.direction / np.linalg.norm(incomingRay.direction)
-    
-    cos_incident = -np.dot(normal_unit, incoming_unit)
-    sin_incident = math.sqrt(1 - cos_incident ** 2)
-    
-    sin_refracted = (refractiveIndexIncident / refractiveIndex) * sin_incident
-    cos_refracted = math.sqrt(1 - sin_refracted ** 2)
-    
-    refracted_direction = (refractiveIndexIncident / refractiveIndex) * incoming_unit + ( (refractiveIndexIncident / refractiveIndex) * cos_incident - cos_refracted ) * normal_unit
-    refracted_direction /= np.linalg.norm(refracted_direction)  # Normalize the direction
-    
-    refracted_ray = Ray(incomingRay.origin, refracted_direction)
-    return refracted_ray
+
+    cos_theta_t = math.sqrt(1.0 - sin_theta_t2)
+    refractedDirection = n_ratio * incomingDirection + (n_ratio * cos_theta_i - cos_theta_t) * normal
+    refractedDirection = refractedDirection / np.linalg.norm(refractedDirection)
+
+    return Ray(origin=incomingRay.origin, direction=refractedDirection)

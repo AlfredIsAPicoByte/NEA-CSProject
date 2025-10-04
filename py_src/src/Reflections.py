@@ -2,6 +2,7 @@ from src.Basic import *
 import numpy as np
 import math
 
+
 def calculate_reflection_angle(incidentAngle: float) -> float:
     """
     Calculate the reflection angle based on the law of reflection.
@@ -22,17 +23,37 @@ def calculate_incident_angle(normalAngle: float, incomingAngle: float) -> float:
     """
     return abs(incomingAngle - normalAngle)
 
-def reflect_ray(normal: np.ndarray, incomingRay: Ray) -> Ray:
+def reflect_angle(normalAngle: float, incomingAngle: float) -> float:
     """
-    Calculate the outgoing angle of the reflected ray.
+    Calculate the outgoing angle of the reflected ray based on the law of reflection.
 
     Attributes:
-        normal (float): The angle of the surface normal in degrees.
-        incoming_ray (float): The angle of the incoming ray in degrees.
+        normalAngle (float): The angle of the surface normal in degrees.
+        incomingAngle (float): The angle of the incoming ray in degrees.
     """
-    if normal.shape != incomingRay.direction.shape:
-        raise ValueError("Input vector must match the ray's direction dimension")
-    
-    dot_product = np.dot(incomingRay.direction, normal)
-    reflected_direction = incomingRay.direction - 2 * dot_product * normal
-    return Ray(incomingRay.origin, reflected_direction)
+    incidentAngle = calculate_incident_angle(normalAngle, incomingAngle)
+    reflectionAngle = calculate_reflection_angle(incidentAngle)
+
+    if incomingAngle > normalAngle:
+        outgoingAngle = normalAngle + reflectionAngle
+    else:
+        outgoingAngle = normalAngle - reflectionAngle
+
+    return outgoingAngle
+
+def reflect_ray(normal: np.ndarray, incomingRay: Ray) -> Ray:
+    """
+    Calculate the outgoing direction of the reflected ray.
+
+    Attributes:
+        normal (ndarray): the normal of the surface of interaction
+        incoming_ray (Ray): the incoming ray
+    """
+    normal = normal / np.linalg.norm(normal)
+    incomingDirection = incomingRay.direction / np.linalg.norm(incomingRay.direction)
+
+    dot_product = np.dot(incomingDirection, normal)
+    reflectedDirection = incomingDirection - 2 * dot_product * normal
+    reflectedDirection = reflectedDirection / np.linalg.norm(reflectedDirection)
+
+    return Ray(origin=incomingRay.origin, direction=reflectedDirection)

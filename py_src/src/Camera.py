@@ -70,7 +70,7 @@ class Camera:
 
     def get_view_matrix(self) -> np.ndarray:
         # The view matrix is typically the inverse of the camera's global transform
-        return np.ndarray(self.transform.get_global_matrix().Inverse())
+        return np.linalg.inv(np.array(self.transform.get_global_matrix()))
 
     def get_projection_matrix(self) -> np.ndarray:
         if self.type == CameraType.PERSPECTIVE:
@@ -78,7 +78,7 @@ class Camera:
             f = 1.0 / (self.fov / 2).tan()
             aspect = float(self.aspect)
             near, far = self.near, self.far
-            m = np.ndarray([
+            m = np.array([
                 [f / aspect, 0, 0, 0],
                 [0, f, 0, 0],
                 [0, 0, (far + near) / (near - far), (2 * far * near) / (near - far)],
@@ -92,7 +92,7 @@ class Camera:
             top = self.fov
             bottom = -top
             near, far = self.near, self.far
-            m = np.ndarray([
+            m = np.array([
                 [2 / (right - left), 0, 0, -(right + left) / (right - left)],
                 [0, 2 / (top - bottom), 0, -(top + bottom) / (top - bottom)],
                 [0, 0, -2 / (far - near), -(far + near) / (far - near)],

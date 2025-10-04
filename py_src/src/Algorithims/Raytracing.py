@@ -3,7 +3,7 @@ from src.Lighting import Color, LightRay
 from src. Projections import *
 import numpy as np
 
-class Raycaster:
+class Raytracer:
     max_bounces: int = 5
     max_distance: float = 1000.0
     epsilon: float = 0.001 # Small offset to avoid self-intersection
@@ -12,7 +12,10 @@ class Raycaster:
     def __init__(self):
         pass
 
-    def Raycast(self, scene, rays_per_pixle: int) -> tuple[np.ndarray, np.ndarray, object] | None:
+    def CastRay(self, scene, rays_per_pixle: int) -> tuple[np.ndarray, np.ndarray, object] | None:
+        """
+        Cast rays from the camera through each pixel and return the color data.
+        """
         cam = scene.camera
         width, height = cam.width, cam.height
 
@@ -55,7 +58,10 @@ class Raycaster:
                 break
         return None
     
-    def RayCasting(self, ray: Ray, scene) -> Color:
+    def TraceRay(self, ray: Ray, scene) -> Color:
+        """
+        
+        """
         light = LightRay(ray.origin, ray.direction, Color(1, 1, 1), intensity=1.0)
         attenuation = 0.1
         

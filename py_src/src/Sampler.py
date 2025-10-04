@@ -1,6 +1,4 @@
-from src.Basic import *
-from src.Camera import *
-from src.Lighting import *
+from src import Basic, Lighting, Algorithims
 from enum import Enum
 import numpy as np
 
@@ -23,29 +21,32 @@ class RenderMode(Enum):
     RASTERIZATION = 1
 
 class RenderSettings:
-    width: int = 800
-    height: int = 600
-    rays_per_pixel: int = 16
     image_scale: float = 1.0
-    background_color: Color = Color(0, 0, 0)
-    ambient_light: Color = Color(0.1, 0.1, 0.1)
+    background_color: Lighting.Color = Lighting.Color(0, 0, 0)
+    ambient_light: Lighting.Color = Lighting.Color(0.1, 0.1, 0.1)
     render_mode: RenderMode = RenderMode.RAYTRACING
 
-    def __init__(self, width: int, height: int, rays_per_pixel: int):
-        pass
+    def __init__(self, width: int, height: int, raysPerPixel: int):
+        self.width = width
+        self.height = height
+        self.rays_per_pixel = raysPerPixel
 
 class Sample:
-    def __init__(self, u: float, v: float):
+    def __init__(self, u: float, v: float, rays: list[Basic.Ray] = []):
         self.u = u
         self.v = v
+
+        self.rays = rays
+        self.pixle_data: list[Basic.Color] = []
     
-    def Render(self):
+    def Render(self, render_mode: RenderMode):
         pass
 
 class Sampler:
-    def __init__(self, settings: SampleSettings, render_settings: RenderSettings):
+    def __init__(self, settings: SampleSettings, renderSettings: RenderSettings):
         self.sample_settings = settings
-        self.render_settings = render_settings
+        self.render_settings = renderSettings
+
         self.samples = self.GenerateSamples()
     
     def GenerateSamples(self):
