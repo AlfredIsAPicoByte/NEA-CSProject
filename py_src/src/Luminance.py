@@ -109,7 +109,7 @@ class LightRay(Ray, ColorData):
             self.direction,
             self.color_data * factor,
             intensity=self.intensity * factor,
-            name=self.name + " (dimmed)"
+            name=self.name + f" (X{factor})"
         )
     
     @property
@@ -146,10 +146,54 @@ class Material:
         self.color = color
         self.roughness = clamp(roughness)
         self.glossiness = clamp(glossiness)
+        self.can_refract = False
+        self.is_transparent = False
 
-    def Affect(self, data):
+    def RedirectedColor(self, **kwargs) -> ColorData:
         """Compute reflected color based on surface color and light color."""
-        return self.color * (light_color * self.glossiness)
+        if isinstance(kwargs.get("ray"), LightRay):
+            return self.AffectColor(kwargs["ray"].color_data * kwargs["ray"].intensity)
+        elif isinstance(kwargs.get("ray"), Ray):
+            return self.AffectColor(ColorData(1, 1, 1, 1))
+        elif isinstance(kwargs.get("color"), ColorData):
+            return self.AffectColor(kwargs["color"])
+        else:
+            raise TypeError("Material can only redirect LightRay or Ray instances.")
+            
+    def AffectColor(self, color: ColorData) -> ColorData:
+        """Apply material attributes to a color."""
+        return self.color * color * self.glossiness + color * (1 - self.glossiness) * (1 - self.roughness)
+
+    def RedirectedRay(self, **kwargs) -> LightRay:
+        """Compute reflected or refracted ray based on material properties."""
+        if (isinstance(kwargs.get("ray"), LightRay) or isinstance(kwargs.get("ray"), Ray)) and isinstance(kwargs.get("normal"), np.ndarray):
+            incoming_ray: LightRay = kwargs["ray"]
+            normal: np.ndarray = kwargs["normal"]
+            color_data: ColorData = kwargs["ray"].color_data if isinstance(kwargs["ray"], LightRay) else kwargs["color"] if isinstance(kwargs["color"], ColorData) else ColorData(1, 1, 1, 1)
+            final_color: ColorData = self.AffectColor(*kwargs)
+
+            if self.can_refract and kwargs.get("refractiveIndexIncident") and kwargs.get("refractiveIndex"):
+                refractii = kwargs["refractiveIndexIncident"]
+                refractio = kwargs["refractiveIndex"]
+
+                try:
+                    new_direction = refract_ray(normal, incoming_ray, refractii, refractio).direction
+                except ValueError:
+                    new_direction = reflect_ray(normal, incoming_ray).direction
+                    new_ray = LightRay(incoming_ray.origin, new_direction, final_color, incoming_ray.intensity)
+                    return new_ray
+                
+                new_ray = LightRay(incoming_ray.origin, new_direction, final_color, incoming_ray.intensity)
+                return new_ray
+            elif self.is_transparent:
+                new_ray = LightRay(incoming_ray.origin, incoming_ray.direction, final_color, incoming_ray.intensity)
+                return new_ray
+            else:
+                new_ray = reflect_ray(normal, incoming_ray)
+                new_light_ray = LightRay(new_ray.origin, new_ray.direction, final_color, incoming_ray.intensity)
+                return new_ray
+        else:
+            raise TypeError("Material can only redirect LightRay or Ray instances with a normal vector.")
 
     def __repr__(self):
         return (

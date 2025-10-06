@@ -1,4 +1,4 @@
-from src.Lighting import Color, SimpleMaterial
+from py_src.src.Luminance import Color, SimpleMaterial
 
 class Algorithim:
     def __init__(self):

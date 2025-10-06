@@ -1,5 +1,5 @@
-from py_src.src import PrimaryStructures, Projection
-from src import Gemometry, Lighting, Reflections, Refractions, Sampler, Camera
+from py_src.src import Luminance, PrimaryStructures, Projection
+from src import Gemometry, Reflections, Refractions, Sampler, Camera
 from py_src.src.Algorithims import Raytracing
 import numpy as np
 
@@ -258,23 +258,23 @@ def test_triangle_normal_tangent_error():
 def test_lighting_basic():
     try:
         # Test Color class
-        color1 = Lighting.Color(0.5, 0.2, 0.7)
-        color2 = Lighting.Color(0.1, 0.2, 0.3, 0.5)
+        color1 = Luminance.Color(0.5, 0.2, 0.7)
+        color2 = Luminance.Color(0.1, 0.2, 0.3, 0.5)
         assert color1.red == 0.5 and color2.alpha == 0.5
         color_sum = color1 + color2
         color_mul = color1 * 0.5
-        color_eq = (color1 == Lighting.Color(0.5, 0.2, 0.7))
+        color_eq = (color1 == Luminance.Color(0.5, 0.2, 0.7))
         # Test LightRay
         ray = PrimaryStructures.Ray(np.array([0,0,0]), np.array([1,0,0]))
-        lray = Lighting.LightRay(np.array([0,0,0]), np.array([1,0,0]), color1, intensity=2.0)
-        assert isinstance(lray, Lighting.LightRay)
+        lray = Luminance.LightRay(np.array([0,0,0]), np.array([1,0,0]), color1, intensity=2.0)
+        assert isinstance(lray, Luminance.LightRay)
         # Test SimpleMaterial reflection
-        mat = Lighting.SimpleMaterial(color1, roughness=0.2, glossiness=0.8)
+        mat = Luminance.SimpleMaterial(color1, roughness=0.2, glossiness=0.8)
         reflected_color = mat.ReflectColor(color2)
         reflected_ray = mat.ReflectRay(ray, np.array([0,1,0]), np.array([0,0,0]), seed=42)
         reflected_lightray = mat.ReflectLightRay(lray, np.array([0,1,0]), np.array([0,0,0]))
         assert isinstance(reflected_ray, PrimaryStructures.Ray)
-        assert isinstance(reflected_lightray, Lighting.LightRay)
+        assert isinstance(reflected_lightray, Luminance.LightRay)
         print("Lighting: Color, LightRay, and SimpleMaterial tests successful.")
         return True
     except Exception as e:
@@ -283,16 +283,16 @@ def test_lighting_basic():
 
 def test_color_arithmetic():
     try:
-        c1 = Lighting.Color(0.2, 0.3, 0.4)
-        c2 = Lighting.Color(0.1, 0.1, 0.1)
+        c1 = Luminance.Color(0.2, 0.3, 0.4)
+        c2 = Luminance.Color(0.1, 0.1, 0.1)
         c3 = c1 + c2
         c4 = c1 - c2
         c5 = c1 * 2
         c6 = c1 / 2
-        assert isinstance(c3, Lighting.Color)
-        assert isinstance(c4, Lighting.Color)
-        assert isinstance(c5, Lighting.Color)
-        assert isinstance(c6, Lighting.Color)
+        assert isinstance(c3, Luminance.Color)
+        assert isinstance(c4, Luminance.Color)
+        assert isinstance(c5, Luminance.Color)
+        assert isinstance(c6, Luminance.Color)
         print("Ligthing: Color arithmetic operations successful.")
         return True
     except Exception as e:
@@ -301,8 +301,8 @@ def test_color_arithmetic():
 
 def test_material_reflect():
     try:
-        color = Lighting.Color(0.5, 0.5, 0.5)
-        mat = Lighting.SimpleMaterial(color, 0.1, 0.9)
+        color = Luminance.Color(0.5, 0.5, 0.5)
+        mat = Luminance.SimpleMaterial(color, 0.1, 0.9)
         ray = PrimaryStructures.Ray(np.array([1, 2, 3]), np.array([0, 1, 0]))
         normal = np.array([0, 1, 0])
         reflected = mat.ReflectRay(ray, normal, np.array([1, 2, 3]))

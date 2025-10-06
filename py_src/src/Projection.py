@@ -1,4 +1,6 @@
 from src.PrimaryStructures import Ray
+from src.Camera import CameraObject
+from src.Gemometry import Shape
 import numpy as np
 
 """
