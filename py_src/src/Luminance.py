@@ -14,7 +14,12 @@ class ColorData:
     def __init__(self, r: float = 0, g: float = 0, b: float = 0, alpha: float = 1.0):
         """Clamp and store RGBA values between 0.0 and 1.0."""
         self.rgba = np.array([clamp(r), clamp(g), clamp(b), clamp(alpha)], dtype=float)
-
+    
+    def clamp(self):
+        """Clamp the RGBA values to be within [0.0, 1.0]."""
+        self.rgba = np.clip(self.rgba, 0.0, 1.0)
+        return self
+    
     @classmethod
     def use_hex(cls, hex_str: str):
         """Create a ColorData object from a hex string."""
@@ -29,6 +34,20 @@ class ColorData:
 
         rgba = np.array([clamp(r), clamp(g), clamp(b), clamp(a)], dtype=float)
         return cls(*rgba)
+
+    @classmethod
+    def use_array(cls, arr):
+        """Create a ColorData object from an array-like input."""
+        if len(arr) not in (3, 4):
+            raise ValueError("Array must have 3 (RGB) or 4 (RGBA) elements.")
+        r, g, b = arr[0], arr[1], arr[2]
+        a = arr[3] if len(arr) == 4 else 1.0
+        return cls(r, g, b, a)
+    
+    @classmethod
+    def from_rgb255(cls, r: int, g: int, b: int, alpha: int = 255):
+        """Create a ColorData object from 0-255 RGB(A) values."""
+        return cls(r / 255.0, g / 255.0, b / 255.0, alpha / 255.0)
 
     @property
     def red(self): return self.rgba[0]
@@ -102,12 +121,36 @@ class LightRay(Ray, ColorData):
         self.intensity = float(intensity)
         self.name = name  # keep name stored directly
     
-    def Attenuate(self, factor: float):
+    @classmethod
+    def from_ray(cls, ray: Ray, color: ColorData, intensity: float = 1.0, name: str = "Light Ray"):
+        """Create a LightRay from an existing Ray and color."""
+        return cls(ray.origin.copy(), ray.direction.copy(), color, intensity, name)
+    
+    @classmethod
+    def from_components(cls, origin, direction, r, g, b, alpha=1.0, intensity=1.0, name="Light Ray"):
+        """Create a LightRay from individual components."""
+        color = ColorData(r, g, b, alpha)
+        return cls(origin, direction, color, intensity, name)
+    
+    @classmethod
+    def from_hex(cls, origin, direction, hex_str, intensity=1.0, name="Light Ray"):
+        """Create a LightRay from a hex color string."""
+        color = ColorData.use_hex(hex_str)
+        return cls(origin, direction, color, intensity, name)
+    
+    @classmethod
+    def from_rgb255(cls, origin, direction, r, g, b, alpha=255, intensity=1.0, name="Light Ray"):
+        """Create a LightRay from 0-255 RGB(A) values."""
+        color = ColorData.from_rgb255(r, g, b, alpha)
+        return cls(origin, direction, color, intensity, name)
+
+    def Attenuate(self, distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0):
         """Return a dimmed copy of the LightRay."""
+        factor = 1 / (a * (distance ** 2) + b * distance + c)
         return LightRay(
             self.origin,
             self.direction,
-            self.color_data * factor,
+            self.rgba,
             intensity=self.intensity * factor,
             name=self.name + f" (X{factor})"
         )
@@ -118,9 +161,19 @@ class LightRay(Ray, ColorData):
         return Ray(self.origin.copy(), self.direction.copy(), self.name)
     
     @property
-    def color_data(self) -> ColorData:
-        """Return the color data of this LightRay as a ColorData object."""
+    def base_color(self) -> ColorData:
+        """Return the color data of this LightRay without intensity scaling."""
         return ColorData(self.red, self.green, self.blue, self.alpha)
+    
+    @property
+    def final_color(self) -> ColorData:
+        """Return the effective color of this LightRay after intensity scaling."""
+        return ColorData(
+            clamp(self.red * self.intensity),
+            clamp(self.green * self.intensity),
+            clamp(self.blue * self.intensity),
+            self.alpha
+        )
 
     def __repr__(self):
         return (
@@ -143,60 +196,46 @@ class Material:
             glossiness: A value between 0.0 and 1.0 that determines
                 how glossy the surface is. 0.0 = matte, 1.0 = perfectly glossy.
         """
-        self.color = color
+        self.base_color = color
         self.roughness = clamp(roughness)
         self.glossiness = clamp(glossiness)
         self.can_refract = False
         self.is_transparent = False
-
-    def RedirectedColor(self, **kwargs) -> ColorData:
-        """Compute reflected color based on surface color and light color."""
-        if isinstance(kwargs.get("ray"), LightRay):
-            return self.AffectColor(kwargs["ray"].color_data * kwargs["ray"].intensity)
-        elif isinstance(kwargs.get("ray"), Ray):
-            return self.AffectColor(ColorData(1, 1, 1, 1))
-        elif isinstance(kwargs.get("color"), ColorData):
-            return self.AffectColor(kwargs["color"])
-        else:
-            raise TypeError("Material can only redirect LightRay or Ray instances.")
             
     def AffectColor(self, color: ColorData) -> ColorData:
         """Apply material attributes to a color."""
-        return self.color * color * self.glossiness + color * (1 - self.glossiness) * (1 - self.roughness)
+        return self.base_color * color * self.glossiness + color * (1 - self.glossiness) * (1 - self.roughness)
 
-    def RedirectedRay(self, **kwargs) -> LightRay:
-        """Compute reflected or refracted ray based on material properties."""
-        if (isinstance(kwargs.get("ray"), LightRay) or isinstance(kwargs.get("ray"), Ray)) and isinstance(kwargs.get("normal"), np.ndarray):
-            incoming_ray: LightRay = kwargs["ray"]
-            normal: np.ndarray = kwargs["normal"]
-            color_data: ColorData = kwargs["ray"].color_data if isinstance(kwargs["ray"], LightRay) else kwargs["color"] if isinstance(kwargs["color"], ColorData) else ColorData(1, 1, 1, 1)
-            final_color: ColorData = self.AffectColor(*kwargs)
-
-            if self.can_refract and kwargs.get("refractiveIndexIncident") and kwargs.get("refractiveIndex"):
-                refractii = kwargs["refractiveIndexIncident"]
-                refractio = kwargs["refractiveIndex"]
-
-                try:
-                    new_direction = refract_ray(normal, incoming_ray, refractii, refractio).direction
-                except ValueError:
-                    new_direction = reflect_ray(normal, incoming_ray).direction
-                    new_ray = LightRay(incoming_ray.origin, new_direction, final_color, incoming_ray.intensity)
-                    return new_ray
-                
-                new_ray = LightRay(incoming_ray.origin, new_direction, final_color, incoming_ray.intensity)
-                return new_ray
-            elif self.is_transparent:
-                new_ray = LightRay(incoming_ray.origin, incoming_ray.direction, final_color, incoming_ray.intensity)
-                return new_ray
-            else:
-                new_ray = reflect_ray(normal, incoming_ray)
-                new_light_ray = LightRay(new_ray.origin, new_ray.direction, final_color, incoming_ray.intensity)
-                return new_ray
+    def RedirectLightRay(self, incoming_ray: LightRay, normal: np.ndarray):
+        """
+        Compute the redirected (reflected) ray and its color after interaction with the material.
+        Returns a tuple: (LightRay, ColorData)
+        """
+        # Decide between reflection and refraction based on material properties
+        if self.can_refract and self.is_transparent:
+            # Assume refract_ray returns the refracted direction
+            refracted_ray = refract_ray(incoming_ray.direction, normal)
+            reflected = refracted_ray.direction
         else:
-            raise TypeError("Material can only redirect LightRay or Ray instances with a normal vector.")
+            # Reflect the incoming ray direction about the normal
+            reflected_ray = reflect_ray(incoming_ray.direction, normal)
+            reflected = refracted_ray.direction
+
+        # Calculate the new color after material effect
+        new_color = self.AffectColor(incoming_ray.final_color)
+
+        # Create the new LightRay
+        redirected_ray = LightRay(
+            origin=reflected.origin,
+            direction=reflected.direction,
+            color=new_color,
+            intensity=incoming_ray.intensity,
+            name=f"{incoming_ray.name} (reflected)"
+        )
+        return redirected_ray
 
     def __repr__(self):
         return (
-            f"Material(color={self.color}, "
+            f"Material(color={self.base_color}, "
             f"roughness={self.roughness:.2f}, glossiness={self.glossiness:.2f})"
         )

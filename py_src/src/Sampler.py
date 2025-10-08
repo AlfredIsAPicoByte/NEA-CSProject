@@ -1,4 +1,4 @@
-from py_src.src import Luminance, PrimaryStructures
+from src import Luminance, PrimaryStructures
 from src import Algorithims
 from enum import Enum
 import numpy as np
@@ -27,8 +27,8 @@ class RenderMode(Enum):
 
 class RenderSettings:
     image_scale: float = 1.0
-    background_color: Luminance.Color = Luminance.Color(0, 0, 0)
-    ambient_light: Luminance.Color = Luminance.Color(0.1, 0.1, 0.1)
+    background_color: Luminance.ColorData = Luminance.ColorData(0, 0, 0)
+    ambient_light: Luminance.ColorData = Luminance.ColorData(0.1, 0.1, 0.1)
     render_mode: RenderMode = RenderMode.RAYTRACING
 
     def __init__(self, width: int, height: int, raysPerPixel: int):
@@ -37,7 +37,7 @@ class RenderSettings:
         self.rays_per_pixel = raysPerPixel
 
 class PixelData: 
-    def __init__(self, color: Luminance.Color):
+    def __init__(self, color: Luminance.ColorData):
         self.color = color
 
 class Sample:

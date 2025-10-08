@@ -7,7 +7,6 @@ import numpy as np
 
 class Shape:
     def __init__(self, **kwargs):
-        self.id: int = kwargs.get("id", 0)
         self.name: str = kwargs.get("name", "Default Name")
 
         for key, value in kwargs.items():
@@ -68,7 +67,7 @@ class Shape:
 
 class Circle(Shape):
     def __init__(self, center: np.ndarray, radius: float, name: str = "Circle"):
-        super().__init__(name)
+        super().__init__(name=name)
         self.center = center
         self.radius = radius
     
@@ -182,7 +181,7 @@ class Circle(Shape):
 
 class Triangle(Shape):
     def __init__(self, vertex1: np.ndarray, vertex2: np.ndarray, vertex3: np.ndarray, name: str = "Triangle"):
-        super().__init__(name)
+        super().__init__(name=name)
         self.vertex1 = vertex1
         self.vertex2 = vertex2
         self.vertex3 = vertex3
@@ -323,7 +322,7 @@ class Triangle(Shape):
 
 class Polygon(Shape):
     def __init__(self, vertices: list[np.ndarray], name: str = "Polygon"):
-        super().__init__(name)
+        super().__init__(name=name)
         self.vertices = vertices
     
     def CheckPoint(self, point: np.ndarray, uncertainty: float) -> bool:

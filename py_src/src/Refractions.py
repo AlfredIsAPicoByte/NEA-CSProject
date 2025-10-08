@@ -1,4 +1,4 @@
-from py_src.src.PrimaryStructures import *
+from src.PrimaryStructures import *
 import numpy as np
 import math
 

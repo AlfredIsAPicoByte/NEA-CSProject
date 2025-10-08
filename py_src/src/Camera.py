@@ -1,4 +1,5 @@
 from src.PrimaryStructures import Transform, Ratio
+import numpy as np
 from enum import Enum
 
 """

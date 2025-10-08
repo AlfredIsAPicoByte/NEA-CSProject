@@ -1,4 +1,7 @@
-
+from src.Camera import CameraObject
+from src.PrimaryStructures import Ray
+from src.Gemometry import Shape
+from src.Luminance import ColorData, LightRay
 import numpy as np
 import random
 
@@ -17,7 +20,7 @@ class Raytracer:
         self.bounces: list[int] = [] # bounces
         self.distance: list[float] = []
 
-    def CamaraCast(self, camara: Camera, rays_per_pixle: int, seed: int|None = None):
+    def CamaraCast(self, camara: CameraObject, rays_per_pixle: int, seed: int|None = None):
         if seed is not None:
             random.seed(seed)
         
@@ -83,8 +86,8 @@ class Raytracer:
         
         pass
     
-    def Raycast(self, index: int, scene) -> Color:
-        lightRay = LightRay(ray.origin, ray.direction, Color(1, 1, 1), intensity=1.0)
+    def Raycast(self, index: int, scene) -> ColorData:
+        lightRay = LightRay(ray.origin, ray.direction, ColorData(1, 1, 1), intensity=1.0)
 
         for bounce in range(self.max_bounces):
             hit_info = self.Raycast(Ray(), scene, self.max_distance, self.epsilon, self.raycast_steps)
