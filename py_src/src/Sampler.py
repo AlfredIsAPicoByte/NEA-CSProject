@@ -25,6 +25,22 @@ class RenderMode(Enum):
     RAYTRACING = 0
     RASTERIZATION = 1
 
+class PixleFilter(Enum):
+    BOX = 0
+    TENT = 1
+    GAUSSIAN = 2
+
+class PixleData:
+    def __init__(self, x: float, y: float, color: Luminance.ColorData):
+        self.x = 0.0
+        self.y = 0.0
+        self.color = color
+    
+    @classmethod
+    def from_array(cls, data: tuple[float, float, Luminance.ColorData]):
+        return cls(data[0], data[1], data[2])
+
+
 class RenderSettings:
     image_scale: float = 1.0
     background_color: Luminance.ColorData = Luminance.ColorData(0, 0, 0)
@@ -57,19 +73,19 @@ class SamplingManager:
         self.GenerateSamples()
     
     def GenerateSamples(self):
-        if self.settings.sampler_type == SamplerType.MONTE_CARLO:
-            for _ in range(self.settings.size):
+        if self.sample_settings.sampler_type == SamplerType.MONTE_CARLO:
+            for _ in range(self.sample_settings.size):
                 x = np.random.uniform(0, 1)
                 y = np.random.uniform(0, 1)
                 self.samples.append((x, y))
-        elif self.settings.sampler_type == SamplerType.STRATIFIED:
-            n = int(np.sqrt(self.settings.size))
+        elif self.sample_settings.sampler_type == SamplerType.STRATIFIED:
+            n = int(np.sqrt(self.sample_settings.size))
             for i in range(n):
                 for j in range(n):
                     x = (i + np.random.uniform(0, 1)) / n
                     y = (j + np.random.uniform(0, 1)) / n
                     self.samples.append((x, y))
-        elif self.settings.sampler_type == SamplerType.QUASI_MONTE_CARLO:
+        elif self.sample_settings.sampler_type == SamplerType.QUASI_MONTE_CARLO:
             # Using Halton sequence for quasi-random sampling
             def halton(index, base):
                 result = 0
@@ -81,15 +97,15 @@ class SamplingManager:
                     f /= base
                 return result
             
-            for i in range(self.settings.size):
+            for i in range(self.sample_settings.size):
                 x = halton(i + 1, 2)
                 y = halton(i + 1, 3)
                 self.samples.append((x, y))
-        elif self.settings.sampler_type == SamplerType.ADAPTIVE:
+        elif self.sample_settings.sampler_type == SamplerType.ADAPTIVE:
             # Placeholder for adaptive sampling logic
             # This would typically involve more complex logic based on scene analysis
             print("Adaptive sampling not implemented, defaulting to Monte Carlo")
-            for _ in range(self.settings.size):
+            for _ in range(self.sample_settings.size):
                 x = np.random.uniform(0, 1)
                 y = np.random.uniform(0, 1)
                 self.samples.append((x, y))

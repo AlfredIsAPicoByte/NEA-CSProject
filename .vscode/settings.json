@@ -63,5 +63,12 @@
     "xmemory": "cpp",
     "xtr1common": "cpp",
     "xutility": "cpp"
-  }
+  },
+  "python-envs.pythonProjects": [
+    {
+      "path": "",
+      "envManager": "ms-python.python:system",
+      "packageManager": "ms-python.python:pip"
+    }
+  ]
 }

@@ -71,8 +71,8 @@ class Circle(Shape):
         self.center = center
         self.radius = radius
     
-    def CheckPoint(self, point: np.ndarray, uncertainty: float = 0) -> bool:
-        return self.radius - uncertainty < np.linalg.norm(point - self.center) <= self.radius + uncertainty
+    def CheckPoint(self, point: np.ndarray, epsilon: float = 0) -> bool:
+        return self.radius - epsilon < np.linalg.norm(point - self.center) <= self.radius + epsilon
     
     # Using the quadratic equation to find intersection with circles
     # P(t) = dt + s
@@ -114,6 +114,7 @@ class Circle(Shape):
     def GetIntersection(self, ray: Ray) -> list[np.ndarray]:
         if not self.CheckIntersection(ray):
             return []
+        
         d = ray.direction
         s = ray.origin - self.center
         a = np.dot(d, d)
@@ -134,12 +135,24 @@ class Circle(Shape):
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
         if not self.CheckPoint(point, 0.01):
             raise ValueError("Point is not on the circle")
-        return np.linalg.norm(point - self.center)
+        vec = point - self.center
+        return vec / np.linalg.norm(vec)
 
     def GetTangent(self, point: np.ndarray) -> np.ndarray:
         if not self.CheckPoint(point, 0.01):
             raise ValueError("Point is not on the circle")
-        return np.linalg.norm(point - self.center)
+        normal = self.GetNormal(point)
+        # For 2D circle in XY plane, tangent is perpendicular to normal
+        # If 3D, use cross product with Z axis if normal is in XY
+        if normal.shape[0] == 2:
+            return np.array([-normal[1], normal[0]])
+        elif normal.shape[0] == 3:
+            # Tangent in XY plane: cross with Z axis
+            z_axis = np.array([0, 0, 1])
+            tangent = np.cross(z_axis, normal)
+            return tangent / np.linalg.norm(tangent)
+        else:
+            raise ValueError("Unsupported dimension for tangent computation")
 
     @property
     def normals(self, resolution:int = 100) -> list[np.ndarray]:
@@ -185,12 +198,29 @@ class Triangle(Shape):
         self.vertex1 = vertex1
         self.vertex2 = vertex2
         self.vertex3 = vertex3
+
+        if self.CheckDegeneracy():
+            raise ValueError("Triangle is degenerate")
+
+    def CheckDegeneracy(self, epsilon: float = 1e-6) -> bool:
+        """Check if any edge of the triangle is degenerate or area is near zero (collinear)."""
+        edge1 = np.linalg.norm(self.vertex2 - self.vertex1)
+        edge2 = np.linalg.norm(self.vertex3 - self.vertex2)
+        edge3 = np.linalg.norm(self.vertex1 - self.vertex3)
+        # If any edge is degenerate (zero length), triangle is degenerate
+        if edge1 < epsilon or edge2 < epsilon or edge3 < epsilon:
+            return True
+        # If area is near zero, triangle is degenerate (collinear)
+        area = self.area
+        if area < epsilon:
+            return True
+        return False
     
     # Using a geometric solution to find intersection with triangles
     # P(t) = O + Rt
     # D = -(Ax )
 
-    def CheckPoint(self, point: np.ndarray, uncertainty: float) -> bool:
+    def CheckPoint(self, point: np.ndarray, epsilon: float = 1e-6) -> bool:
         # Barycentric technique
         v0 = self.vertex2 - self.vertex1
         v1 = self.vertex3 - self.vertex1
@@ -206,7 +236,7 @@ class Triangle(Shape):
         u = (dot11 * dot02 - dot01 * dot12) * invDenom
         v = (dot00 * dot12 - dot01 * dot02) * invDenom
 
-        return (u >= -uncertainty) and (v >= -uncertainty) and (u + v <= 1 + uncertainty)
+        return (u >= -epsilon) and (v >= -epsilon) and (u + v <= 1 + epsilon)
 
     def CheckIntersection(self, ray: Ray, epsilon: float = 1e-6) -> bool:
         edge1 = self.vertex2 - self.vertex1
@@ -291,9 +321,9 @@ class Triangle(Shape):
         a = np.linalg.norm(self.vertex1 - self.vertex2)
         b = np.linalg.norm(self.vertex2 - self.vertex3)
         c = np.linalg.norm(self.vertex3 - self.vertex1)
-        s = np.linalg.norm(a + b + c) / 2
+        s = (a + b + c) / 2
         from math import sqrt
-        return sqrt(s * (s - a) * (s - b) * (s - c))
+        return sqrt(max(s * (s - a) * (s - b) * (s - c), 0.0))
 
     @property
     def perimeter(self) -> float:
@@ -325,7 +355,7 @@ class Polygon(Shape):
         super().__init__(name=name)
         self.vertices = vertices
     
-    def CheckPoint(self, point: np.ndarray, uncertainty: float) -> bool:
+    def CheckPoint(self, point: np.ndarray, epsilon: float = 1e-6) -> bool:
         pass
 
     def CheckIntersection(self, ray: Ray) -> bool:

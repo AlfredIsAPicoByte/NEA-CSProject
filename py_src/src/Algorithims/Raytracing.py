@@ -1,6 +1,6 @@
 from src.Camera import CameraObject
 from src.PrimaryStructures import Ray
-from src.Gemometry import Shape
+from src.Geometry import Shape
 from src.Luminance import ColorData, LightRay
 import numpy as np
 import random

@@ -1,4 +1,4 @@
-from src import Gemometry, Reflections, Refractions, Sampler, Camera, Luminance, PrimaryStructures, Projection
+from src import Geometry, Reflections, Refractions, Sampler, Camera, Luminance, PrimaryStructures, Projection
 from src.Algorithims import Raytracing
 import numpy as np
 
@@ -60,143 +60,143 @@ def run_tests():
 
 def test_circle_ray_no_intersection():
     try:
-        circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
+        circle = Geometry.Circle(np.array([0, 0, 0]), 5)
         ray = PrimaryStructures.Ray(np.array([10, 0, 0]), np.array([1, 0, 0]))
         if not circle.CheckIntersection(ray):
-            print('Gemometry, Primary: "Circle and Ray no intersection" Expected no intersections. *Passed*')
+            print('Geometry, Primary: "Circle and Ray no intersection" Expected no intersections. *Passed*')
             return True
         else:
             intersections = circle.GetIntersection(ray)
             if intersections is None or len(intersections) == 0:
-                print('Gemometry, Primary: "Circle and Ray no intersection" Expected no intersections. *Passed*')
+                print('Geometry, Primary: "Circle and Ray no intersection" Expected no intersections. *Passed*')
                 return True
-            print('Gemometry, Primary: "Circle and Ray no intersection" Found an intersection. *Failed*')
+            print('Geometry, Primary: "Circle and Ray no intersection" Found an intersection. *Failed*')
             return False
     except Exception as e:
-        print(f'Gemometry, Primary: "Circle and Ray no intersection" General error: {e} *Failed*')
+        print(f'Geometry, Primary: "Circle and Ray no intersection" General error: {e} *Failed*')
         return False
 
 def test_circle_ray_tangent():
     try:
-        circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
+        circle = Geometry.Circle(np.array([0, 0, 0]), 5)
         ray = PrimaryStructures.Ray(np.array([5, -10, 0]), np.array([0, 1, 0]))
         if circle.CheckIntersection(ray):
             intersections = circle.GetIntersection(ray)
             if len(intersections) == 1:
-                print('Gemometry, Primary: "Circle and Ray find intersection with the tangent" Expect 1 intersection (tangent). *Passed*')
+                print('Geometry, Primary: "Circle and Ray find intersection with the tangent" Expect 1 intersection (tangent). *Passed*')
                 return True
-            print('Gemometry, Primary: "Circle and Ray find intersection with the tangent" Expect 1 intersection (tangent). *Failed*')
+            print('Geometry, Primary: "Circle and Ray find intersection with the tangent" Expect 1 intersection (tangent). *Failed*')
             return False
         else:
-            print('Gemometry, Primary: "Circle and Ray find intersection with the tangent" Expect 1 intersection (tangent). *Failed*')
+            print('Geometry, Primary: "Circle and Ray find intersection with the tangent" Expect 1 intersection (tangent). *Failed*')
             return False
     except Exception as e:
-        print(f'Gemometry, Primary: "Circle and Ray tangent" General error: {e} *Failed*')
+        print(f'Geometry, Primary: "Circle and Ray tangent" General error: {e} *Failed*')
         return False
 
 def test_circle_ray_two_intersections():
     try:
-        circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
+        circle = Geometry.Circle(np.array([0, 0, 0]), 5)
         ray = PrimaryStructures.Ray(np.array([-10, 0, 0]), np.array([1, 0, 0]))
         if circle.CheckIntersection(ray):
             intersections = circle.GetIntersection(ray)
             if len(intersections) == 2:
-                print('Gemometry, Primary: "Circle and Ray find 2 intersection" Expect 2 intersections. *Passed*')
+                print('Geometry, Primary: "Circle and Ray find 2 intersection" Expect 2 intersections. *Passed*')
                 return True
-            print('Gemometry, Primary: "Circle and Ray find 2 intersection" Expect 2 intersections. *Failed*')
+            print('Geometry, Primary: "Circle and Ray find 2 intersection" Expect 2 intersections. *Failed*')
             return False
         else:
-            print('Gemometry, Primary: "Circle and Ray find 2 intersection" Expect 2 intersections. *Failed*')
+            print('Geometry, Primary: "Circle and Ray find 2 intersection" Expect 2 intersections. *Failed*')
             return False
     except Exception as e:
-        print(f'Gemometry, Primary: "Circle and Ray two intersections" General error: {e} *Failed*')
+        print(f'Geometry, Primary: "Circle and Ray two intersections" General error: {e} *Failed*')
         return False
 
 def test_circle_ray_origin_inside():
     try:
-        circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
+        circle = Geometry.Circle(np.array([0, 0, 0]), 5)
         ray = PrimaryStructures.Ray(np.array([0, 0, 0]), np.array([1, 0, 0]))
         if circle.CheckIntersection(ray):
             intersections = circle.GetIntersection(ray)
             # For a ray starting at the center, only the forward intersection is returned
             assert len(intersections) == 1
-            print('Gemometry, Primary: "Circle and Ray find intersection from inside circle" one intersection as expected. *Passed*')
+            print('Geometry, Primary: "Circle and Ray find intersection from inside circle" one intersection as expected. *Passed*')
             return True
         else:
-            print('Gemometry, Primary: "Circle and Ray find intersection from inside circle" No intersection detected for ray from inside circle. *Failed*')
+            print('Geometry, Primary: "Circle and Ray find intersection from inside circle" No intersection detected for ray from inside circle. *Failed*')
             return False
     except Exception as e:
-        print(f'Gemometry, Primary: "Circle and Ray origin inside" General error: {e} *Failed*')
+        print(f'Geometry, Primary: "Circle and Ray origin inside" General error: {e} *Failed*')
         return False
 
 def test_circle_ray_origin_on_edge():
     try:
-        circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
+        circle = Geometry.Circle(np.array([0, 0, 0]), 5)
         ray = PrimaryStructures.Ray(np.array([5, 0, 0]), np.array([1, 0, 0]))
         if circle.CheckIntersection(ray):
             intersections = circle.GetIntersection(ray)
             # Should be one intersection (tangent at start)
             assert len(intersections) >= 1
-            print('Gemometry, Primary: "Circle and Ray find intersection from edge of circle" intersection detected as expected. *Passed*')
+            print('Geometry, Primary: "Circle and Ray find intersection from edge of circle" intersection detected as expected. *Passed*')
             return True
         else:
-            print('Gemometry, Primary: "Circle and Ray find intersection from edge of circle" No intersection detected for ray from edge of circle. *Failed*')
+            print('Geometry, Primary: "Circle and Ray find intersection from edge of circle" No intersection detected for ray from edge of circle. *Failed*')
             return False
     except Exception as e:
-        print(f'Gemometry, Primary: "Circle and Ray origin on edge" General error: {e} *Failed*')
+        print(f'Geometry, Primary: "Circle and Ray origin on edge" General error: {e} *Failed*')
         return False
 
 def test_circle_ray_reverse_direction():
     try:
-        circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
+        circle = Geometry.Circle(np.array([0, 0, 0]), 5)
         ray = PrimaryStructures.Ray(np.array([0, 0, 0]), np.array([-1, 0, 0]))
         if circle.CheckIntersection(ray):
             intersections = circle.GetIntersection(ray)
             assert len(intersections) == 1
-            print('Gemometry, Primary: "Circle and Ray find intersection from inside in reverse direction" one intersection as expected. *Passed*')
+            print('Geometry, Primary: "Circle and Ray find intersection from inside in reverse direction" one intersection as expected. *Passed*')
             return True
         else:
-            print('Gemometry, Primary: "Circle and Ray find intersection from inside in reverse direction" No intersection detected for reverse direction ray from center. *Failed*')
+            print('Geometry, Primary: "Circle and Ray find intersection from inside in reverse direction" No intersection detected for reverse direction ray from center. *Failed*')
             return False
     except Exception as e:
-        print(f'Gemometry, Primary: "Circle and Ray reverse direction" General error: {e} *Failed*')
+        print(f'Geometry, Primary: "Circle and Ray reverse direction" General error: {e} *Failed*')
         return False
 
 def test_circle_point_normal_tangent():
     try:
-        circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
+        circle = Geometry.Circle(np.array([0, 0, 0]), 5)
         point_on_circle = np.array([5, 0, 0])
         if circle.CheckPoint(point_on_circle, 0.01):
             normal = circle.GetNormal(point_on_circle)
             tangent = circle.GetTangent(point_on_circle)
-            assert np.allclose(normal, np.array([1, 0, 0]))
-            assert np.allclose(tangent, np.array([0, 1, 0]))
-            print('Gemometry: "Circle check Point normal and tangent" Expect point on circle. *Passed*')
+            assert np.allclose(normal, np.array([1, 0, 0]))  # Normal at (5, 0) should be (1, 0)
+            assert np.allclose(tangent, np.array([0, 1, 0]))  # Tangent at (5, 0) should be (0, 1)
+            print('Geometry: "Circle check Point normal and tangent" Expect point on circle. *Passed*')
             return True
         else:
-            print('Gemometry: "Circle check Point normal and tangent" . *Failed*')
+            print('Geometry: "Circle check Point normal and tangent" Point not found on circle. *Failed*')
             return False
     except Exception as e:
-        print(f'Gemometry: "Circle check Point normal and tangent" General error: {e} *Failed*')
+        print(f'Geometry: "Circle check Point normal and tangent" General error: {e} *Failed*')
         return False
 
 def test_circle_point_not_on_circle():
     try:
-        circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
+        circle = Geometry.Circle(np.array([0, 0, 0]), 5)
         point_not_on_circle = np.array([6, 0, 0])
         if not circle.CheckPoint(point_not_on_circle, 0.01):
-            print('Gemometry: "Circle and Point is not inside" Expect point not on circle. *Passed*')
+            print('Geometry: "Circle and Point is not inside" Expect point not on circle. *Passed*')
             return True
         else:
-            print('Gemometry: "Circle and Point is not inside" Expect point not on circle. *Failed*')
+            print('Geometry: "Circle and Point is not inside" Expect point not on circle. *Failed*')
             return False
     except Exception as e:
-        print(f'Gemometry: "Circle and Point not on circle" General error: {e} *Failed*')
+        print(f'Geometry: "Circle and Point not on circle" General error: {e} *Failed*')
         return False
 
 def test_circle_normal_error():
     try:
-        circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
+        circle = Geometry.Circle(np.array([0, 0, 0]), 5)
         point = np.array([10, 0, 0])  # Not on circle
         _ = circle.GetNormal(point)
         print('Geometry: "Circle check Point has no normal" Expected error for GetNormal with point not on circle, but none raised. *Failed*')
@@ -207,7 +207,7 @@ def test_circle_normal_error():
     
 def test_circle_tangent_error():
     try:
-        circle = Gemometry.Circle(np.array([0, 0, 0]), 5)
+        circle = Geometry.Circle(np.array([0, 0, 0]), 5)
         point = np.array([10, 0, 0])  # Not on circle
         _ = circle.GetTangent(point)
         print('Geometry: "Circle check Point has no tangent" Expected error for GetTangent with point not on circle, but none raised. *Failed*')
@@ -217,63 +217,60 @@ def test_circle_tangent_error():
         return True
 
 def test_triangle_ray_intersection():
-    triangle = Gemometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
+    triangle = Geometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
     ray = PrimaryStructures.Ray(np.array([1, 1, -10]), np.array([0, 0, 1]))
 
     if triangle.CheckIntersection(ray):
         intersection = triangle.GetIntersection(ray)
         if intersection is not None:
-            print('Gemometry, Primary: "Triangle and Ray get intersections" Expected intersections. *Passed*')
+            print('Geometry, Primary: "Triangle and Ray get intersections" Expected intersections. *Passed*')
             return True
-        print('Gemometry, Primary: "Triangle and Ray get intersections" No intersections gotten. *Failed*')
+        print('Geometry, Primary: "Triangle and Ray get intersections" No intersections gotten. *Failed*')
         return False
     else:
-        print('Gemometry, Primary:  "Triangle and Ray get intersections" No intersections found. *Failed*')
+        print('Geometry, Primary:  "Triangle and Ray get intersections" No intersections found. *Failed*')
         return False
 
 def test_triangle_ray_no_intersection():
-    triangle = Gemometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
+    triangle = Geometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
     ray = PrimaryStructures.Ray(np.array([6, 6, -10]), np.array([0, 0, 1]))
 
     if not triangle.CheckIntersection(ray):
-        print('Gemometry, Primary: "Triangle and Ray get no intersections" Expected no intersection. *Passed*')
+        print('Geometry, Primary: "Triangle and Ray get no intersections" Expected no intersection. *Passed*')
         return True
     else:
         intersection = triangle.GetIntersection(ray)
         if intersection is None:
-            print('Gemometry, Primary: "Triangle and Ray get no intersections" Expected no intersection. *Passed*')
+            print('Geometry, Primary: "Triangle and Ray get no intersections" Expected no intersection. *Passed*')
             return True
-        print('Gemometry, Primary: "Triangle and Ray get no intersections" Found intersections. *Failed*')
+        print('Geometry, Primary: "Triangle and Ray get no intersections" Found intersections. *Failed*')
         return False
 
 def test_triangle_degenerate_collinear():
     v1 = np.array([0, 0, 0])
     v2 = np.array([1, 1, 1])
     v3 = np.array([2, 2, 2])  # Collinear
-    triangle = Gemometry.Triangle(v1, v2, v3)
-    ray = PrimaryStructures.Ray(np.array([0, 0, -1]), np.array([0, 0, 1]))
-
     try:
-        result = triangle.CheckIntersection(ray)
-        print(f'Gemometry, Primary: "Degenerate triangle" no exeptions raised - {result}. *Failed*')
+        triangle = Geometry.Triangle(v1, v2, v3)
+        print('Geometry, Primary: "Degenerate triangle" Expected exception, but none raised. *Failed*')
         return False
     except Exception as e:
-        print(f'Gemometry, Primary: "Degenerate triangle" raised exception as expected - {e}. *Passed*')
+        print(f'Geometry, Primary: "Degenerate triangle" raised exception as expected - {e}. *Passed*')
         return True
 
 def test_triangle_ray_parallel():
-    triangle = Gemometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
+    triangle = Geometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
     ray = PrimaryStructures.Ray(np.array([0, 0, 1]), np.array([1, 1, 0]))  # Parallel to triangle plane
 
     if not triangle.CheckIntersection(ray):
-        print('Gemometry, Primary: "Triangle and Ray no intersection and parallel to plane" no intersection as expected. *Passed*')
+        print('Geometry, Primary: "Triangle and Ray no intersection and parallel to plane" no intersection as expected. *Passed*')
         return True
     else:
-        print('Gemometry, Primary: "Triangle and Ray no intersection and parallel to plane" unexpected intersection for parallel ray. *Failed*')
+        print('Geometry, Primary: "Triangle and Ray no intersection and parallel to plane" unexpected intersection for parallel ray. *Failed*')
         return False
 
 def test_triangle_point_on_edge():
-    triangle = Gemometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
+    triangle = Geometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
     point_on_edge = np.array([2.5, 0, 0])
 
     if triangle.CheckPoint(point_on_edge, 0.01):
@@ -284,7 +281,7 @@ def test_triangle_point_on_edge():
         return False
 
 def test_triangle_normal_error():
-    triangle = Gemometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
+    triangle = Geometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
     point = np.array([10, 10, 10])  # Not on triangle
 
     try:
@@ -296,7 +293,7 @@ def test_triangle_normal_error():
         return True
 
 def test_triangle_tangent_error():
-    triangle = Gemometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
+    triangle = Geometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
     point = np.array([10, 10, 10])  # Not on triangle
 
     try:
@@ -323,7 +320,7 @@ def test_Luminance_basic():
 
         # Test LightRay
         ray = PrimaryStructures.Ray(np.array([0,0,0]), np.array([1,0,0]))
-        lray = Luminance.LightRay(np.array([0,0,0]), np.array([1,0,0]), color1, intensity=2.0)
+        lray = Luminance.LightRay(ray.origin, ray.direction, color1, intensity=2.0)
         assert isinstance(lray, Luminance.LightRay)
 
         # Test Material reflection
@@ -341,16 +338,16 @@ def test_Luminance_basic():
 
 def test_color_arithmetic():
     try:
-        c1 = Luminance.Color(0.2, 0.3, 0.4)
-        c2 = Luminance.Color(0.1, 0.1, 0.1)
+        c1 = Luminance.ColorData(0.2, 0.3, 0.4)
+        c2 = Luminance.ColorData(0.1, 0.1, 0.1)
         c3 = c1 + c2
         c4 = c1 - c2
         c5 = c1 * 2
         c6 = c1 / 2
-        assert isinstance(c3, Luminance.Color)
-        assert isinstance(c4, Luminance.Color)
-        assert isinstance(c5, Luminance.Color)
-        assert isinstance(c6, Luminance.Color)
+        assert isinstance(c3, Luminance.ColorData)
+        assert isinstance(c4, Luminance.ColorData)
+        assert isinstance(c5, Luminance.ColorData)
+        assert isinstance(c6, Luminance.ColorData)
     
         print('Luminance: Color arithmetic operations successful. *Passed*')
         return True
@@ -360,11 +357,11 @@ def test_color_arithmetic():
 
 def test_material_reflect():
     try:
-        color = Luminance.Color(0.5, 0.5, 0.5)
-        mat = Luminance.SimpleMaterial(color, 0.1, 0.9)
+        color = Luminance.ColorData(0.5, 0.5, 0.5)
+        mat = Luminance.Material(color, 0.1, 0.9)
         ray = PrimaryStructures.Ray(np.array([1, 2, 3]), np.array([0, 1, 0]))
         normal = np.array([0, 1, 0])
-        reflected = mat.ReflectRay(ray, normal, np.array([1, 2, 3]))
+        reflected = mat.RedirectLightRay(Luminance.LightRay(ray.origin, ray.direction, Luminance.ColorData()), normal)
         assert isinstance(reflected, PrimaryStructures.Ray)
 
         print('Luminance: Material reflect operation successful. *Passed*')
@@ -446,9 +443,10 @@ def test_refractions_basic():
 
 def test_sampler_basic():
     try:
-        sampler = Sampler.Sampler(Sampler.SampleSettings(), Sampler.RenderSettings(800, 600, 4))
-        if hasattr(sampler, 'sample'):
-            _ = sampler.sample(np.array([0.5, 0.5]))
+        samp = Sampler.SamplingManager(Sampler.SampleSettings(), Sampler.RenderSettings(800, 600, 4))
+        if hasattr(samp, 'sample'):
+            samp.GenerateSamples()
+            _ = samp.GetSamples(1, 0)
         print('Sampler: Instantiation and method call successful. *Passed*')
         return True
     except Exception as e:
@@ -457,9 +455,10 @@ def test_sampler_basic():
 
 def test_projections_basic():
     try:
-        proj = Projection.Projection(Camera(PrimaryStructures.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 1.77, 0.1, 1000, 1000))
+        cam = Camera(PrimaryStructures.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 1.77, 0.1, 1000, 1000)
+        proj = Projection.Scene(cam)
         if hasattr(proj, 'project'):
-            _ = proj.project(np.array([1,2,3]))
+            _ = proj.AddObject() # TODO: Add thing
         print('Projections: Instantiation and method call successful. *Passed*')
         return True
     except Exception as e:
@@ -468,7 +467,7 @@ def test_projections_basic():
 
 def test_camera_basic():
     try:
-        cam = Camera.Camera(PrimaryStructures.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 1.77, 0.1, 1000, 1000)
+        cam = Camera.CameraObject(PrimaryStructures.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 1.77, 0.1, 1000, 1000)
         if hasattr(cam, 'get_view_matrix'):
             _ = cam.get_view_matrix()
         print('Camera: Instantiation and method call successful. *Passed*')
@@ -479,7 +478,7 @@ def test_camera_basic():
 
 def test_raycasting_basic():
     try:
-        rc = Raytracing.Raycaster()
+        rc = Raytracing.Raytracer()
         if hasattr(rc, 'cast'):
             _ = rc.cast(np.array([0,0,0]), np.array([1,0,0]))
         print('Raycasting: Instantiation and method call successful. *Passed*')
@@ -490,7 +489,7 @@ def test_raycasting_basic():
 
 def test_circle_negative_radius():
     try:
-        circle = Gemometry.Circle(np.array([0, 0, 0]), -5)
+        circle = Geometry.Circle(np.array([0, 0, 0]), -5)
         print('Geometry: Circle with negative radius should raise an error. *Failed*')
         return False
     except Exception:
@@ -502,7 +501,7 @@ def test_triangle_area_zero():
     v2 = np.array([0, 0, 0])
     v3 = np.array([0, 0, 0])
     try:
-        triangle = Gemometry.Triangle(v1, v2, v3)
+        triangle = Geometry.Triangle(v1, v2, v3)
         print("Geometry: Triangle with zero area should raise an error. *Failed*")
         return False
     except Exception:
