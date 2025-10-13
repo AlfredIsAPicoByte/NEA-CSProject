@@ -99,7 +99,7 @@ class Circle(Shape):
     # t = -b - sqrt(b^2 - ac) / a
         
     def CheckIntersection(self, ray: Ray) -> bool:
-        d = ray.direction
+        d = ray.orientation 
         s = ray.origin - self.center
         a = np.dot(d, d)
         b = 2 * np.dot(d, s)
@@ -115,7 +115,7 @@ class Circle(Shape):
         if not self.CheckIntersection(ray):
             return []
         
-        d = ray.direction
+        d = ray.orientation 
         s = ray.origin - self.center
         a = np.dot(d, d)
         b = 2 * np.dot(d, s)
@@ -241,7 +241,7 @@ class Triangle(Shape):
     def CheckIntersection(self, ray: Ray, epsilon: float = 1e-6) -> bool:
         edge1 = self.vertex2 - self.vertex1
         edge2 = self.vertex3 - self.vertex1
-        h = np.cross(ray.direction, edge2)
+        h = np.cross(ray.orientation , edge2)
         a = np.dot(edge1, h)
         
         if -epsilon < a < epsilon:
@@ -255,7 +255,7 @@ class Triangle(Shape):
             return False
         
         q = np.cross(s, edge1)
-        v = f * np.dot(ray.direction, q)
+        v = f * np.dot(ray.orientation , q)
         
         if v < 0.0 or u + v > 1.0:
             return False
@@ -273,7 +273,7 @@ class Triangle(Shape):
         
         edge1 = self.vertex2 - self.vertex1
         edge2 = self.vertex3 - self.vertex1
-        h = np.cross(ray.direction, edge2)
+        h = np.cross(ray.orientation , edge2)
         a = np.dot(edge1, h)
         
         f = 1.0 / a
@@ -281,7 +281,7 @@ class Triangle(Shape):
         u = f * np.dot(s, h)
         
         q = np.cross(s, edge1)
-        v = f * np.dot(ray.direction, q)
+        v = f * np.dot(ray.orientation , q)
         
         t = f * np.dot(edge2, q)
         

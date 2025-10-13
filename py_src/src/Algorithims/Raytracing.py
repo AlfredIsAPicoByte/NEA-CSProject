@@ -39,9 +39,9 @@ class Raytracer:
                     v = (y + 0.5 + jitter_v) / height
 
                     # Align the rays to the portion of the scron from the 
-                    direction = camara.transfrom.forward + (u - 0.5) * camara.transfrom.right + (v - 0.5) * camara.transform.up
+                    orientation  = camara.transfrom.forward + (u - 0.5) * camara.transfrom.right + (v - 0.5) * camara.transform.up
 
-                    ray = Ray(camara.transform.position, np.linalg.norm(direction), name=f"{str(x)}_{str(y)}_{str(r)}")
+                    ray = Ray(camara.transform.position, np.linalg.norm(orientation ), name=f"{str(x)}_{str(y)}_{str(r)}")
                     rays_casted.append(ray)
 
                     self.bounces.append(0)
@@ -61,7 +61,7 @@ class Raytracer:
         distance_traveled = 0.0
 
         for step in range(self.raycast_steps):
-            point = self.ray[index].origin + self.ray[index].direction * distance_traveled
+            point = self.ray[index].origin + self.ray[index].orientation  * distance_traveled
 
             distance_to_closest, closest_object = scene.distance_estimator(point) #
 
@@ -87,7 +87,7 @@ class Raytracer:
         pass
     
     def Raycast(self, index: int, scene) -> ColorData:
-        lightRay = LightRay(ray.origin, ray.direction, ColorData(1, 1, 1), intensity=1.0)
+        lightRay = LightRay(ray.origin, ray.orientation , ColorData(1, 1, 1), intensity=1.0)
 
         for bounce in range(self.max_bounces):
             hit_info = self.Raycast(Ray(), scene, self.max_distance, self.epsilon, self.raycast_steps)
@@ -113,7 +113,7 @@ class Raytracer:
             if material.reflectivity <= 0:
                 break
 
-            reflect_dir = ray.direction - 2 * ray.direction.dot(normal) * normal
+            reflect_dir = ray.orientation  - 2 * ray.orientation .dot(normal) * normal
             ray = Ray(hit_point + normal * self.epsilon, reflect_dir.normalized())
         return color
     

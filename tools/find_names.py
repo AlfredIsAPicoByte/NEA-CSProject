@@ -4,7 +4,7 @@
 Generalized AST scanner.
 
 Usage examples:
-  python3 tools/find_names.py py_src --attr direction --class Ray --name origin
+  python3 tools/find_names.py py_src --attr orientation  --class Ray --name origin
   python3 tools/find_names.py py_src --pattern "todo"        # regex on source lines
   python3 tools/find_names.py py_src --kwarg data --call render
 

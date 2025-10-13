@@ -31,9 +31,9 @@ class Scene:
             elif isinstance(obj, Ray):
                 # Handle ray-specific distance estimation if needed
                 position = point - obj.origin
-                direction = obj.direction
+                orientation  = obj.orientation 
 
-                t = np.dot(position, direction) / np.dot(direction, direction)
+                t = np.dot(position, orientation ) / np.dot(orientation , orientation )
                 if t < 0:
                     distance = np.linalg.norm(position)
                 else:

@@ -12,7 +12,7 @@ def run_tests():
         test_circle_ray_two_intersections(),
         test_circle_ray_origin_inside(),
         test_circle_ray_origin_on_edge(),
-        test_circle_ray_reverse_direction(),
+        test_circle_ray_reverse_orientation (),
         test_circle_point_normal_tangent(),
         test_circle_point_not_on_circle(),
         test_circle_normal_error(),
@@ -146,20 +146,20 @@ def test_circle_ray_origin_on_edge():
         print(f'Geometry, Primary: "Circle and Ray origin on edge" General error: {e} *Failed*')
         return False
 
-def test_circle_ray_reverse_direction():
+def test_circle_ray_reverse_orientation ():
     try:
         circle = Geometry.Circle(np.array([0, 0, 0]), 5)
         ray = PrimaryStructures.Ray(np.array([0, 0, 0]), np.array([-1, 0, 0]))
         if circle.CheckIntersection(ray):
             intersections = circle.GetIntersection(ray)
             assert len(intersections) == 1
-            print('Geometry, Primary: "Circle and Ray find intersection from inside in reverse direction" one intersection as expected. *Passed*')
+            print('Geometry, Primary: "Circle and Ray find intersection from inside in reverse orientation " one intersection as expected. *Passed*')
             return True
         else:
-            print('Geometry, Primary: "Circle and Ray find intersection from inside in reverse direction" No intersection detected for reverse direction ray from center. *Failed*')
+            print('Geometry, Primary: "Circle and Ray find intersection from inside in reverse orientation " No intersection detected for reverse orientation  ray from center. *Failed*')
             return False
     except Exception as e:
-        print(f'Geometry, Primary: "Circle and Ray reverse direction" General error: {e} *Failed*')
+        print(f'Geometry, Primary: "Circle and Ray reverse orientation " General error: {e} *Failed*')
         return False
 
 def test_circle_point_normal_tangent():
@@ -320,7 +320,7 @@ def test_Luminance_basic():
 
         # Test LightRay
         ray = PrimaryStructures.Ray(np.array([0,0,0]), np.array([1,0,0]))
-        lray = Luminance.LightRay(ray.origin, ray.direction, color1, intensity=2.0)
+        lray = Luminance.LightRay(ray.origin, ray.orientation , color1, intensity=2.0)
         assert isinstance(lray, Luminance.LightRay)
 
         # Test Material reflection
@@ -361,7 +361,7 @@ def test_material_reflect():
         mat = Luminance.Material(color, 0.1, 0.9)
         ray = PrimaryStructures.Ray(np.array([1, 2, 3]), np.array([0, 1, 0]))
         normal = np.array([0, 1, 0])
-        reflected = mat.RedirectLightRay(Luminance.LightRay(ray.origin, ray.direction, Luminance.ColorData()), normal)
+        reflected = mat.RedirectLightRay(Luminance.LightRay(ray.origin, ray.orientation , Luminance.ColorData()), normal)
         assert isinstance(reflected, PrimaryStructures.Ray)
 
         print('Luminance: Material reflect operation successful. *Passed*')
@@ -530,12 +530,12 @@ def test_camera_fov_limits():
 
 def test_ray_normalization():
     ray = PrimaryStructures.Ray(np.array([0,0,0]), np.array([10,0,0]))
-    norm = np.linalg.norm(ray.direction)
+    norm = np.linalg.norm(ray.orientation )
     if abs(norm - 1.0) < 1e-6:
-        print("PrimaryStructures: Ray direction normalization works as expected. *Passed*")
+        print("PrimaryStructures: Ray orientation  normalization works as expected. *Passed*")
         return True
     else:
-        print("PrimaryStructures: Ray direction normalization failed. *Failed*")
+        print("PrimaryStructures: Ray orientation  normalization failed. *Failed*")
         return False
 
 def test_material_reflect_color_bounds():

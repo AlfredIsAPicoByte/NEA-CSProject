@@ -103,19 +103,19 @@ class LightRay(Ray, ColorData):
     def __init__(
         self,
         origin: np.ndarray,
-        direction: np.ndarray,
+        orientation : np.ndarray,
         color: ColorData,
         intensity: float = 1.0,
         name: str = "Light Ray"
     ):
-        # Normalize direction safely
-        norm = np.linalg.norm(direction)
+        # Normalize orientation  safely
+        norm = np.linalg.norm(orientation )
         if norm == 0:
-            raise ValueError("Direction vector cannot be zero-length.")
-        direction = direction / norm
+            raise ValueError("Orientation  vector cannot be zero-length.")
+        orientation  = orientation  / norm
 
         # Initialize both parent classes
-        Ray.__init__(self, origin, direction, name)
+        Ray.__init__(self, origin, orientation , name)
         ColorData.__init__(self, color.red, color.green, color.blue, color.alpha)
 
         self.intensity = float(intensity)
@@ -124,32 +124,32 @@ class LightRay(Ray, ColorData):
     @classmethod
     def from_ray(cls, ray: Ray, color: ColorData, intensity: float = 1.0, name: str = "Light Ray"):
         """Create a LightRay from an existing Ray and color."""
-        return cls(ray.origin.copy(), ray.direction.copy(), color, intensity, name)
+        return cls(ray.origin.copy(), ray.orientation .copy(), color, intensity, name)
     
     @classmethod
-    def from_components(cls, origin, direction, r, g, b, alpha=1.0, intensity=1.0, name="Light Ray"):
+    def from_components(cls, origin, orientation , r, g, b, alpha=1.0, intensity=1.0, name="Light Ray"):
         """Create a LightRay from individual components."""
         color = ColorData(r, g, b, alpha)
-        return cls(origin, direction, color, intensity, name)
+        return cls(origin, orientation , color, intensity, name)
     
     @classmethod
-    def from_hex(cls, origin, direction, hex_str, intensity=1.0, name="Light Ray"):
+    def from_hex(cls, origin, orientation , hex_str, intensity=1.0, name="Light Ray"):
         """Create a LightRay from a hex color string."""
         color = ColorData.use_hex(hex_str)
-        return cls(origin, direction, color, intensity, name)
+        return cls(origin, orientation , color, intensity, name)
     
     @classmethod
-    def from_rgb255(cls, origin, direction, r, g, b, alpha=255, intensity=1.0, name="Light Ray"):
+    def from_rgb255(cls, origin, orientation , r, g, b, alpha=255, intensity=1.0, name="Light Ray"):
         """Create a LightRay from 0-255 RGB(A) values."""
         color = ColorData.from_rgb255(r, g, b, alpha)
-        return cls(origin, direction, color, intensity, name)
+        return cls(origin, orientation , color, intensity, name)
 
     def Attenuate(self, distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0):
         """Return a dimmed copy of the LightRay."""
         factor = 1 / (a * (distance ** 2) + b * distance + c)
         return LightRay(
             self.origin,
-            self.direction,
+            self.orientation ,
             self.rgba,
             intensity=self.intensity * factor,
             name=self.name + f" (X{factor})"
@@ -158,7 +158,7 @@ class LightRay(Ray, ColorData):
     @property
     def ray(self) -> Ray:
         """Return an independent Ray copy of this LightRay's geometric component."""
-        return Ray(self.origin.copy(), self.direction.copy(), self.name)
+        return Ray(self.origin.copy(), self.orientation .copy(), self.name)
     
     @property
     def base_color(self) -> ColorData:
@@ -179,7 +179,7 @@ class LightRay(Ray, ColorData):
         return (
             f"LightRay("
             f"origin={np.round(self.origin, 3)}, "
-            f"direction={np.round(self.direction, 3)}, "
+            f"orientation ={np.round(self.orientation , 3)}, "
             f"color={self.color_data}, "
             f"intensity={self.intensity:.2f})"
         )
@@ -213,13 +213,13 @@ class Material:
         """
         # Decide between reflection and refraction based on material properties
         if self.can_refract and self.is_transparent:
-            # Assume refract_ray returns the refracted direction
-            refracted_ray = refract_ray(incoming_ray.direction, normal)
-            reflected = refracted_ray.direction
+            # Assume refract_ray returns the refracted orientation 
+            refracted_ray = refract_ray(incoming_ray.orientation , normal)
+            reflected = refracted_ray.orientation 
         else:
-            # Reflect the incoming ray direction about the normal
-            reflected_ray = reflect_ray(incoming_ray.direction, normal)
-            reflected = refracted_ray.direction
+            # Reflect the incoming ray orientation  about the normal
+            reflected_ray = reflect_ray(incoming_ray.orientation , normal)
+            reflected = refracted_ray.orientation 
 
         # Calculate the new color after material effect
         new_color = self.AffectColor(incoming_ray.final_color)
@@ -227,7 +227,7 @@ class Material:
         # Create the new LightRay
         redirected_ray = LightRay(
             origin=reflected.origin,
-            direction=reflected.direction,
+            orientation =reflected.orientation ,
             color=new_color,
             intensity=incoming_ray.intensity,
             name=f"{incoming_ray.name} (reflected)"

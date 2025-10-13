@@ -7,34 +7,34 @@ import numpy as np
 
 class Ray:
     """
-    Represents a ray in N-dimensional space, defined by an origin point and a direction vector.
+    Represents a ray in N-dimensional space, defined by an origin point and a orientation  vector.
     
     Attributes:
         origin (np.ndarray): The starting point of the ray.
-        direction (np.ndarray): The direction of the ray (should be normalized).
+        orientation  (np.ndarray): The orientation  of the ray (should be normalized).
     Methods:
         PointAtParameter(t): Returns the point along the ray at parameter t.
         CheckPointOnRay(point): Checks if a given point lies on the ray.
-        CheckPointInFront(point): Checks if a given point is in front of the ray's origin along its direction.
-        CheckPointBehind(point): Checks if a given point is behind the ray's origin opposite its direction.
-        Rotate(angle, axis): Rotates the ray's direction vector.
+        CheckPointInFront(point): Checks if a given point is in front of the ray's origin along its orientation .
+        CheckPointBehind(point): Checks if a given point is behind the ray's origin opposite its orientation .
+        Rotate(angle, axis): Rotates the ray's orientation  vector.
         Translate(vector): Translates the ray's origin.
         __repr__(): Returns a string representation of the ray.
     """
-    def __init__(self, origin: np.ndarray, direction: np.ndarray, name: str = "Ray"):
+    def __init__(self, origin: np.ndarray, orientation : np.ndarray, name: str = "Ray"):
         """
-        A ray defined by an origin point and a direction vector.
+        A ray defined by an origin point and a orientation  vector.
         """
-        if np.linalg.norm(direction) == 0:
-            raise ValueError("Direction vector cannot be zero-length")
+        if np.linalg.norm(orientation ) == 0:
+            raise ValueError("Orientation  vector cannot be zero-length")
 
         self.origin = origin
-        self.direction = direction / np.linalg.norm(direction)
+        self.orientation  = orientation  / np.linalg.norm(orientation )
         self.name = name
 
     def point_at(self, t: float):
         """Returns the point along the ray at parameter t."""
-        return self.origin + self.direction * t
+        return self.origin + self.orientation  * t
 
     def check_point_on_ray(self, point: np.ndarray):
         """Checks if a given point lies on the ray."""
@@ -46,30 +46,30 @@ class Ray:
             return True
         
         to_point_normalized = to_point / np.linalg.norm(to_point)
-        return np.allclose(to_point_normalized, self.direction)
+        return np.allclose(to_point_normalized, self.orientation )
 
     def check_point_in_front(self, point: np.ndarray):
-        """Checks if a given point is in front of the ray's origin along its direction."""
+        """Checks if a given point is in front of the ray's origin along its orientation ."""
         if point.shape != self.origin.shape:
             raise ValueError("Point and ray origin must be of the same dimension")
         
         to_point = point - self.origin
-        return np.dot(self.direction, to_point) > 0
+        return np.dot(self.orientation , to_point) > 0
 
     def check_point_behind(self, point: np.ndarray):
-        """Checks if a given point is behind the ray's origin opposite its direction."""
+        """Checks if a given point is behind the ray's origin opposite its orientation ."""
         if point.shape != self.origin.shape:
             raise ValueError("Point and ray origin must be of the same dimension")
         
         to_point = point - self.origin
-        return np.dot(self.direction, to_point) < 0
+        return np.dot(self.orientation , to_point) < 0
 
     def rotate(self, angle: float, axis: np.ndarray):
         """
-        Rotates the ray's direction vector around the given axis by the specified angle (in radians).
+        Rotates the ray's orientation  vector around the given axis by the specified angle (in radians).
         Only works for 3D rays.
         """
-        if self.direction.shape[0] != 3 or axis.shape[0] != 3:
+        if self.orientation .shape[0] != 3 or axis.shape[0] != 3:
             raise ValueError("Rotate only supports 3D vectors")
         
         axis = axis / np.linalg.norm(axis)
@@ -84,8 +84,8 @@ class Ray:
             [uz*ux*(1 - cos_a) - uy*sin_a, uz*uy*(1 - cos_a) + ux*sin_a, cos_a + uz**2 * (1 - cos_a)]
         ])
         
-        self.direction = R @ self.direction
-        self.direction /= np.linalg.norm(self.direction)
+        self.orientation  = R @ self.orientation 
+        self.orientation  /= np.linalg.norm(self.orientation )
 
     def translate(self, vector: np.ndarray):
         """Translates the ray's origin by the given vector."""
@@ -95,14 +95,14 @@ class Ray:
 
     def get_angle(self, line: np.ndarray):
         """Retruns the angles created from another vector"""
-        if line.shape != self.direction.shape:
-            raise ValueError("Input vector must match the ray's direction dimension")
-        dot_product = np.dot(self.direction, line) / (np.linalg.norm(self.direction) * np.linalg.norm(line))
+        if line.shape != self.orientation .shape:
+            raise ValueError("Input vector must match the ray's orientation  dimension")
+        dot_product = np.dot(self.orientation , line) / (np.linalg.norm(self.orientation ) * np.linalg.norm(line))
         angle = acos(dot_product)
         return angle
 
     def __repr__(self):
-        return f"Ray(origin={self.origin}, direction={self.direction})"
+        return f"Ray(origin={self.origin}, orientation ={self.orientation })"
 
 class Transform:
     """
@@ -121,9 +121,9 @@ class Transform:
         self.parent = parent
         self.name = name
 
-        self.update_directions()
+        self.update_orientations()
 
-    def update_directions(self):
+    def update_orientations(self):
         """Updates the forward, right, and up vectors based on the current rotation."""
         rx, ry, rz = self.rotation
         cx, sx = cos(rx), sin(rx)
@@ -235,10 +235,10 @@ class Transform:
     
     def reflect(self, axis: Ray, isWorld: bool = False):
         """Reflects the transform across a specified axis."""
-        if np.linalg.norm(axis.direction) == 0:
+        if np.linalg.norm(axis.orientation ) == 0:
             raise ValueError("Cannot reflect across a zero-length vector")
             
-        n = axis.direction / np.linalg.norm(axis.direction)
+        n = axis.orientation  / np.linalg.norm(axis.orientation )
         reflection_matrix = np.eye(3) - 2 * np.outer(n, n)
         
         if isWorld:
