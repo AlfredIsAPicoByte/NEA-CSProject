@@ -2,7 +2,6 @@ from src import Geometry, Reflections, Refractions, Sampler, Camera, Luminance, 
 from src.Algorithims import Raytracing
 import numpy as np
 
-import inspect
 from typing import Callable, Tuple, Any
 
 # --- Custom Text Definitions ---
@@ -53,31 +52,6 @@ def return_message_handler(test_logic: Callable[[], Any], title: str, expected: 
 
     except Exception as e:
         raise Exception(f"{e.__class__.__name__}: {e}")
-"""
-Geometry, Primary: "Circle and Ray no intersection" no intersections expected.
-Geometry, Primary: "Circle and Ray find intersection with the tangent" one intersection expected.
-Geometry, Primary: "Circle and Ray find 2 intersections" two intersections expected.
-Geometry, Primary: "Circle and Ray find intersection from inside circle" one intersection expected.
-Geometry, Primary: "Circle and Ray find intersection from edge of circle" one intersection expected.
-Geometry, Primary: "Circle and Ray find intersection from inside in reverse orientation " one intersection expected.
-Geometry: "Circle check Point normal and tangent" expect point on circle.
-Geometry: "Circle and Point is not inside" expect point not on circle.
-Geometry: "Circle check Point has no normal"  Correctly raised error for GetNormal with point not on circle - {e}.
-Geometry: "Circle check Point has no tangent" Correctly raised error for GetTangent with point not on circle - {e}.
-Geometry, Primary: "Triangle and Ray get intersections" Expected intersections.
-Geometry, Primary: "Triangle and Ray get no intersections" Expected no intersection.
-Geometry, Primary: "Degenerate triangle" raised exception as expected - {e}.
-Geometry, Primary: "Triangle and Ray no intersection and parallel to plane" no intersection as expected.
-Geometry: "Triangle and Point on edge" Expexted point on edge.
-Geometry: "Triangle and Point no normal" Correctly raised error for GetNormal with point not on triangle - {e}.
-Geometry: "Triangle and Point no tangent" Correctly raised error for GetTangent with point not on triangle - {e}.
-Luminance, PrimaryStructures: "Luminance initialization" Color, LightRay, and Material tests successful.
-Luminance: "Color Arithmetic" no exeptions expected.
-Luminance: "Material Reflection" no exeptions expected.
-
-
-
-"""
 
 def test_circle_ray_no_intersection():
     try:
@@ -319,7 +293,6 @@ def test_material_reflect():
         return True
     except Exception as e:
         return False
-    
 def test_reflections_basic():
     try:
         # Test angle calculations
@@ -339,16 +312,12 @@ def test_reflections_basic():
         # Test error on shape mismatch
         try:
             Reflections.reflect_ray(np.array([0,1]), ray)
-            print('Reflections: "Reflection calculation gives error" failed to raise error on shape mismatch. *Failed*')
             return False
         except Exception:
-            print('Reflections: "Reflection calculation gives error" angle, reflect_ray, and error handling tests successful. *Passed*')
             return True
         
     except Exception as e:
-        print(f'Reflections: "Reflection calculation gives error" failed - {e}. *Failed*')
         return False
-
 def test_refractions_basic():
     try:
         # Test refractive index conversions
@@ -377,168 +346,165 @@ def test_refractions_basic():
         normal = np.array([0,1,0])
         try:
             Refractions.refract_ray(normal, ray, 1.5, 1.0)
-            print('Refractions: "Refraction calculation gives error" failed to raise error for total internal reflection in refract_ray. *Failed*')
             return False
         except Exception:
-            print('Refractions: "Refraction calculation gives error" index, angle, critical angle, and error handling tests successful. *Passed*')
             return True
     except Exception as e:
-        print(f'Refractions: "Refraction calculation gives error" failed - {e}. *Failed*')
         return False
-
 def test_sampler_basic():
     try:
         samp = Sampler.SamplingManager(Sampler.SampleSettings(), Sampler.RenderSettings(800, 600, 4))
         if hasattr(samp, 'sample'):
             samp.GenerateSamples()
             _ = samp.GetSamples(1, 0)
-        print('Sampler: "Sampler initialization" no exeptions expected. *Passed*')
         return True
     except Exception as e:
-        print(f'Sampler: failed - {e}. *Failed*')
         return False
-
 def test_projections_basic():
     try:
         cam = Camera(PrimaryStructures.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 1.77, 0.1, 1000, 1000)
         proj = Projection.Scene(cam)
         if hasattr(proj, 'project'):
             _ = proj.AddObject() # TODO: Add thing
-        print('Projections: "Initialization" no exeptions expected. *Passed*')
         return True
     except Exception as e:
         print(f'Projections: failed - {e}. *Failed*')
         return False
-
 def test_camera_basic():
     try:
         cam = Camera.CameraObject(PrimaryStructures.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 1.77, 0.1, 1000, 1000)
         if hasattr(cam, 'get_view_matrix'):
             _ = cam.get_view_matrix()
-        print('Camera: "Initialization" no exeptions expected. *Passed*')
         return True
     except Exception as e:
-        print(f'Camera: failed - {e}. *Failed*')
         return False
-
 def test_raycasting_basic():
     try:
         rc = Raytracing.Raytracer()
         if hasattr(rc, 'cast'):
             _ = rc.cast(np.array([0,0,0]), np.array([1,0,0]))
-        print('Raycasting: "Initialization" no exeptions expected. *Passed*')
         return True
     except Exception as e:
-        print('Raycasting: failed - {e}. *Failed*')
         return False
-
 def test_circle_negative_radius():
     try:
         circle = Geometry.Circle(np.array([0, 0, 0]), -5)
-        print('Geometry: "Negative Circle radius gives error" Circle with negative radius should raise an error. *Failed*')
         return False
     except Exception as e:
-        print(f'Geometry: "Negative Circle radius gives error" Circle with negative radius correctly raised an error - {e}. *Passed*')
         return True
-
 def test_triangle_area_zero():
     v1 = np.array([0, 0, 0])
     v2 = np.array([0, 0, 0])
     v3 = np.array([0, 0, 0])
     try:
         triangle = Geometry.Triangle(v1, v2, v3)
-        print('Geometry: "Triangle near-zero area gives error" Triangle with zero area should raise an error. *Failed*')
         return False
     except Exception as e:
-        print(f'Geometry: "Triangle near-zero area gives error" Triangle with zero area correctly raised an error - {e}. *Passed*')
         return True
-
 def test_color_clamping():
     color: Luminance.ColorData = Luminance.ColorData(0, 0, 0)
     color.rgba = np.array([1.5, -0.2, 0.5, 1.2])  # Intentionally out of bounds
     clamped = color.clamp()
     try:
         if 0.0 <= clamped.red <= 1.0 and 0.0 <= clamped.green <= 1.0 and 0.0 <= clamped.blue <= 1.0:
-            print('Luminance: "Color Clamping" no exeptions epected. *Passed*')
             return True
         else:
-            print('Luminance: "Color Clamping" failed to clamp the RGB channels to the ranges between 0 to 1. *Failed*')
             return False
     except Exception as e:
-        print(f'Luminance: "Color Clamping" failed - {e}. *Failed*')
         return False
-
 def test_camera_fov_limits():
     try:
         cam = Camera.CameraObject(PrimaryStructures.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 0, 1.77, 0.1, 1000, 1000)
-        print('Camera: "Camera with zero FOV gives error" expected an exeption. *Failed*')
         return False
     except Exception as e:
-        print(f'Camera: "Camera with zero FOV gives error" succesfully raised an error - {e}. *Passed*')
         return True
-
 def test_ray_normalization():
     ray = PrimaryStructures.Ray(np.array([0,0,0]), np.array([10,0,0]))
     norm = np.linalg.norm(ray.direction)
     try:
         if abs(norm - 1.0) < 1e-6:
-            print('PrimaryStructures: "Ray direction normalization" works as expected. *Passed*')
             return True
         else:
-            print('PrimaryStructures: "Ray direction normalization" failed to get the normalized version of the ray direction. *Failed*')
             return False
     except Exception as e:
-        print(f'PrimaryStructures: "Ray direction normalization" failed - {e}. *Failed*')
         return False
-
 def test_material_reflect_color_bounds():
     color = Luminance.ColorData(1.0, 1.0, 1.0)
     mat = Luminance.Material(color, 0.5, 0.5)
     reflected = mat.AffectColor(Luminance.ColorData(2.0, 2.0, 2.0))
     try:
         if all(0.0 <= c <= 1.0 for c in [reflected.red, reflected.green, reflected.blue]):
-            print('Luminance: "Material reflection color bounds" no exeptions expected. *Passed*')
             return True
         else:
-            print('Luminance: "Material eflection color bounds" failed to clamp color values. *Failed*')
             return False
     except Exception as e:
-        print(f'Luminance: "Material eflection color bounds" failed - {e}. *Failed*')
         return False
 
 available_tests = {
-        ': "" .': test_circle_ray_no_intersection,
-        ': "" .': test_circle_ray_tangent,
-        ': "" .': test_circle_ray_two_intersections,
-        ': "" .': test_circle_ray_origin_inside,
-        ': "" .': test_circle_ray_origin_on_edge,
-        ': "" .': test_circle_ray_reverse_orientation,
-        ': "" .': test_circle_point_normal_tangent,
-        ': "" .': test_circle_point_not_on_circle,
-        ': "" .': test_circle_normal_error,
-        ': "" .': test_circle_tangent_error,
-        ': "" .': test_triangle_ray_intersection,
-        ': "" .': test_triangle_ray_no_intersection,
-        ': "" .': test_triangle_degenerate_collinear,
-        ': "" .': test_triangle_ray_parallel,
-        ': "" .': test_triangle_point_on_edge,
-        ': "" .': test_triangle_normal_error,
-        ': "" .': test_triangle_tangent_error,
-        ': "" .': test_Luminance_basic,
-        ': "" .': test_color_arithmetic,
-        ': "" .': test_material_reflect,
-        ': "" .': test_reflections_basic,
-        ': "" .': test_refractions_basic,
-        ': "" .': test_sampler_basic,
-        ': "" .': test_projections_basic,
-        ': "" .': test_camera_basic,
-        ': "" .': test_raycasting_basic,
-        ': "" .': test_circle_negative_radius,
-        ': "" .': test_triangle_area_zero,
-        ': "" .': test_color_clamping,
-        ': "" .': test_camera_fov_limits,
-        ': "" .': test_ray_normalization,
-        ': "" .': test_material_reflect_color_bounds
+        'Geometry, Primary: "Circle and Ray no intersection" no intersections expected.' :
+        test_circle_ray_no_intersection,
+        'Geometry, Primary: "Circle and Ray find intersection with the tangent" one intersection expected.' :
+        test_circle_ray_tangent,
+        'Geometry, Primary: "Circle and Ray find 2 intersections" two intersections expected.' :
+        test_circle_ray_two_intersections,
+        'Geometry, Primary: "Circle and Ray find intersection from inside circle" one intersection expected.' :
+        test_circle_ray_origin_inside,
+        'Geometry, Primary: "Circle and Ray find intersection from edge of circle" one intersection expected.' :
+        test_circle_ray_origin_on_edge,
+        'Geometry, Primary: "Circle and Ray find intersection from inside in reverse orientation " one intersection expected.' : 
+        test_circle_ray_reverse_orientation,
+        'Geometry: "Circle check Point normal and tangent" expect point on circle.' : 
+        test_circle_point_normal_tangent,
+        'Geometry: "Circle and Point is not inside" expect point not on circle.' : 
+        test_circle_point_not_on_circle,
+        'Geometry: "Circle check Point has no normal"  Correctly raised error for GetNormal with point not on circle - {e}.' : 
+        test_triangle_ray_intersection,
+        'Geometry: "Circle check Point has no tangent" Correctly raised error for GetTangent with point not on circle - {e}.' : 
+        test_triangle_ray_no_intersection,
+        'Geometry, Primary: "Triangle and Ray get intersections" Expected intersections.' : 
+        test_triangle_degenerate_collinear,
+        'Geometry, Primary: "Triangle and Ray get no intersections" Expected no intersection.' : 
+        test_triangle_ray_parallel,
+        'Geometry, Primary: "Degenerate triangle" raised exception as expected - {e}.' : 
+        test_triangle_point_on_edge,
+        'Geometry, Primary: "Triangle and Ray no intersection and parallel to plane" no intersection as expected.' : 
+        test_triangle_normal_error,
+        'Geometry: "Triangle and Point on edge" Expexted point on edge.' : 
+        test_triangle_tangent_error,
+        'Geometry: "Triangle and Point no normal" Correctly raised error for GetNormal with point not on triangle - {e}.' : 
+        test_Luminance_basic,
+        'Geometry: "Triangle and Point no tangent" Correctly raised error for GetTangent with point not on triangle - {e}.' : 
+        test_color_arithmetic,
+        'Luminance, PrimaryStructures: "Luminance initialization" Color, LightRay, and Material tests successful.' : 
+        test_material_reflect,
+        'Luminance: "Color Arithmetic" no exeptions expected.' : 
+        test_reflections_basic,
+        'Luminance: "Material Reflection" no exeptions expected.' : 
+        test_refractions_basic,
+        'Reflections: "Reflection calculation gives error" angle, reflect_ray, and error handling tests successful.' : 
+        test_sampler_basic,
+        'Refractions: "Refraction calculation gives error" index, angle, critical angle, and error handling tests successful.' : 
+        test_projections_basic,
+        'Sampler: "Sampler initialization" no exeptions expected.' : 
+        test_camera_basic,
+        'Projections: "Initialization" no exeptions expected.' : 
+        test_raycasting_basic,
+        'Camera: "Initialization" no exeptions expected.' : 
+        test_circle_negative_radius,
+        'Raycasting: "Initialization" no exeptions expected.' : 
+        test_triangle_area_zero,
+        'Geometry: "Negative Circle radius gives error" Circle with negative radius correctly raised an error - {e}.' : 
+        test_color_clamping,
+        'Geometry: "Triangle near-zero area gives error" Triangle with zero area correctly raised an error - {e}.' : 
+        test_camera_fov_limits,
+        'Luminance: "Color Clamping" no exeptions epected.' : 
+        test_ray_normalization,
+        'Camera: "Camera with zero FOV gives error" succesfully raised an error - {e}.' : 
+        test_material_reflect_color_bounds,
+        'PrimaryStructures: "Ray direction normalization" works as expected.' : 
+        test_material_reflect_color_bounds,
+        'Luminance: "Material reflection color bounds" no exeptions expected.' : 
+        test_material_reflect_color_bounds,
 }
 
 def run_tests(ignore_passed: bool = False, ignore_fail: bool = False, ignore_error: bool = False):
