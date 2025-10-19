@@ -69,6 +69,8 @@ class Circle(Shape):
     def __init__(self, center: np.ndarray, radius: float, name: str = "Circle"):
         super().__init__(name=name)
         self.center = center
+        if radius <= 0:
+            raise AttributeError("The radius of the Circle must be greater than 0")
         self.radius = radius
     
     def CheckPoint(self, point: np.ndarray, epsilon: float = 0) -> bool:
@@ -199,8 +201,7 @@ class Triangle(Shape):
         self.vertex2 = vertex2
         self.vertex3 = vertex3
 
-        if self.CheckDegeneracy():
-            raise ValueError("Triangle is degenerate")
+        self.CheckDegeneracy()
 
     def CheckDegeneracy(self, epsilon: float = 1e-6) -> bool:
         """Check if any edge of the triangle is degenerate or area is near zero (collinear)."""
@@ -209,12 +210,11 @@ class Triangle(Shape):
         edge3 = np.linalg.norm(self.vertex1 - self.vertex3)
         # If any edge is degenerate (zero length), triangle is degenerate
         if edge1 < epsilon or edge2 < epsilon or edge3 < epsilon:
-            return True
+            raise AttributeError("The triangle's verticies create edges that have near-zero lengths. The triangle is degenrate")
         # If area is near zero, triangle is degenerate (collinear)
         area = self.area
         if area < epsilon:
-            return True
-        return False
+            raise AttributeError("The triangle has a near-zero Area. The triangle is degenrate")
     
     # Using a geometric solution to find intersection with triangles
     # P(t) = O + Rt
