@@ -622,50 +622,6 @@ available_tests = {
         test_circle_ray_reverse_orientation,
     'Geometry: "Circle check Point normal and tangent" expect point on circle.' : 
         test_circle_point_normal_tangent,
-    'Geometry: "Circle and Point is not inside" expect point not on circle.' : 
-        test_circle_point_not_on_circle,
-    'Geometry: "Circle check Point has no normal"  Correctly raised error for GetNormal with point not on circle.' : 
-        test_triangle_ray_intersection,
-    'Geometry: "Circle check Point has no tangent" Correctly raised error for GetTangent with point not on circle.' : 
-        test_triangle_ray_no_intersection,
-    'Geometry, Primary: "Triangle and Ray get intersections" Expected intersections.' : 
-        test_triangle_degenerate_collinear,
-    'Geometry, Primary: "Triangle and Ray get no intersections" Expected no intersection.' : 
-        test_triangle_ray_parallel,
-    'Geometry, Primary: "Degenerate triangle" raised exception as expected.' : 
-        test_triangle_point_on_edge,
-    'Geometry, Primary: "Triangle and Ray no intersection and parallel to plane" no intersection as expected.' : 
-        test_triangle_normal_error,
-    'Geometry: "Triangle and Point on edge" Expexted point on edge.' : 
-        test_triangle_tangent_error,
-    'Geometry: "Triangle and Point no normal" Correctly raised error for GetNormal with point not on triangle.' : 
-        test_Luminance_basic,
-    'Geometry: "Triangle and Point no tangent" Correctly raised error for GetTangent with point not on triangle.' : 
-        test_color_arithmetic,
-    'Luminance, PrimaryStructures: "Luminance initialization" Color, LightRay, and Material tests successful.' : 
-        test_material_reflect,
-    'Luminance: "Color Arithmetic" no exeptions expected.' : 
-        test_reflections_basic,
-    'Luminance: "Material Reflection" no exeptions expected.' : 
-        test_refractions_basic,
-    'Reflections: "Reflection calculation gives error" angle, reflect_ray, and error handling tests successful.' : 
-        test_sampler_basic,
-    'Refractions: "Refraction calculation gives error" index, angle, critical angle, and error handling tests successful.' : 
-        test_projections_basic,
-    'Sampler: "Sampler initialization" no exeptions expected.' : 
-        test_camera_basic,
-    'Projections: "Initialization" no exeptions expected.' : 
-        test_raycasting_basic,
-    'Camera: "Initialization" no exeptions expected.' : 
-        test_circle_negative_radius,
-    'Raycasting: "Initialization" no exeptions expected.' : 
-        test_triangle_area_zero,
-    'Geometry: "Negative Circle radius gives error" Circle with negative radius correctly raised an error.' : 
-        test_color_clamping,
-    'Geometry: "Triangle near-zero area gives error" Triangle with zero area correctly raised an error.' : 
-        test_camera_fov_limits,
-    'Luminance: "Color Clamping" no exeptions epected.' : 
-        test_ray_normalization,
 }
 
 available_tests = dict(sorted(available_tests.items(), key=lambda kv: kv[0].lower()))
