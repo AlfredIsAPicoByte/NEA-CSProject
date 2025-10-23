@@ -1,7 +1,6 @@
 from src import Geometry, Reflections, Refractions, Sampler, Camera, Luminance, PrimaryStructures, Projection
 from src.Algorithims import Raytracing
 import numpy as np
-import inspect
 from typing import Callable, Tuple, Any
 
 # --- Custom Text Definitions ---
@@ -19,12 +18,14 @@ def return_message_handler(test_logic: Callable[[], Tuple[bool, str|None] | bool
     result_bool: bool = False
     
     try:
-        out: Tuple[bool, str|None] | bool = test_logic()
+        out = test_logic()
         
         # Normalize outputs:
-        if isinstance(out, tuple) and len(out) == 2 and isinstance(out[0], bool):
-            result_bool, details = out
-            details = details if details is not None else ""
+        if isinstance(out, (tuple, list)) and len(out) >= 1:
+            # coerce first element to a Python bool (handles numpy.bool_ etc.)
+            result_bool = bool(out[0])
+            # optional message in second element
+            details = str(out[1]) if len(out) >= 2 and out[1] is not None else ""
         elif isinstance(out, bool):
             result_bool = out
             details = ""
@@ -47,11 +48,9 @@ def return_message_handler(test_logic: Callable[[], Tuple[bool, str|None] | bool
             if details:
                 msg += f" - {details}"
             msg += f" {FAIL_TEXT[1]}"
-            # If the test result (result_bool) didn't match the expectation, it's a failure.
             return False, msg
 
     except Exception as e:
-        # Critical, unexpected runtime error caught
         error_msg = f"{ERROR_TEXT[0]} [{title}] - {e.__class__.__name__}: {e} {ERROR_TEXT[1]}"
         raise Exception(error_msg)
 
@@ -143,14 +142,17 @@ def test_triangle_ray_parallel_to_edge():
 
 def test_color_clamp_alpha_negative():
     """Luminance: Color clamping, specifically testing negative alpha channel."""
-    color = Luminance.ColorData(0.5, 0.5, 0.5, 0.5)
-    # Test setting alpha to a clamped value
-    color.alpha = -1.0
-    
-    # Check if the internal rgba array was properly clamped on assignment/access
-    alpha_clamped_correctly = color.alpha == 0.0
-    
-    return alpha_clamped_correctly, f"Alpha was {color.alpha}, expected 0.0."
+    try:
+        color = Luminance.ColorData(0.5, 0.5, 0.5, 0.5)
+        # Test setting alpha to a clamped value
+        color.alpha = -1.0
+        
+        # Check if the internal rgba array was properly clamped on assignment/access
+        alpha_clamped_correctly = color.alpha == 0.0
+        
+        return alpha_clamped_correctly, f"Alpha was {color.alpha}, expected 0.0."
+    except Exception as e:
+        return False, e
 
 def test_reflection_normalization():
     """Reflections: Ensure the reflected ray direction is normalized (magnitude 1)."""
@@ -168,29 +170,34 @@ def test_reflection_normalization():
 
 def test_refraction_total_internal_reflection():
     """Refractions: Check if refraction fails (returns None) during Total Internal Reflection."""
-    n1 = 1.5 # From glass
-    n2 = 1.0 # To air
-    
-    # Calculate critical angle
-    critical_angle_rad = np.arcsin(n2 / n1)
-    
-    # Incident ray angle greater than critical angle (e.g., 60 degrees)
-    incident_angle_rad = np.deg2rad(60.0) 
-    
-    # Need to simulate a ray and normal that result in a 60-degree incident angle
-    normal = np.array([0, 1, 0])
-    # Ray incident at 60 degrees (relative to -Y normal)
-    incident_dir = np.array([np.sin(incident_angle_rad), -np.cos(incident_angle_rad), 0]) 
-    ray = PrimaryStructures.Ray(np.array([0, 0, 0]), incident_dir)
-    
-    # Refract ray function should return None or raise exception during TIR
-    refracted = Refractions.refract_ray(normal, ray, n1, n2)
-    
-    if refracted is None:
-        # Success: Refraction failed as expected due to TIR
+    try:
+        n1 = 1.5 # From glass
+        n2 = 1.0 # To air
+        
+        # Calculate critical angle
+        critical_angle_rad = np.arcsin(n2 / n1)
+        
+        # Incident ray angle greater than critical angle (e.g., 60 degrees)
+        incident_angle_rad = np.deg2rad(60.0) 
+        
+        # Need to simulate a ray and normal that result in a 60-degree incident angle
+        normal = np.array([0, 1, 0])
+        # Ray incident at 60 degrees (relative to -Y normal)
+        incident_dir = np.array([np.sin(incident_angle_rad), -np.cos(incident_angle_rad), 0]) 
+        ray = PrimaryStructures.Ray(np.array([0, 0, 0]), incident_dir)
+        
+        # Refract ray function should return None or raise exception during TIR
+        refracted = Refractions.refract_ray(normal, ray, n1, n2)
+        
+        if refracted is None:
+            # Success: Refraction failed as expected due to TIR
+            return True
+        else:
+            return False, f"Unexpectedly refracted ray found during TIR check."
+    except ValueError:
         return True
-    else:
-        return False, f"Unexpectedly refracted ray found during TIR check."
+    except Exception as e:
+        return False, e
 
 def test_raytracing_hit_world_origin():
     """Raytracing: Basic test for a ray hit at the world origin."""
@@ -291,22 +298,22 @@ def test_circle_point_not_on_circle():
         return False, e
 
 def test_circle_tangent_error():
-    errors = ""
     try:
         circle = Geometry.Circle(np.array([0, 0, 0]), 5)
         point = np.array([10, 0, 0])  # Not on circle
         _ = circle.GetNormal(point)
         return False
     except Exception as e:
-        errors = e
+        return True, e
+    
+def test_circle_normal_error():
     try:
         circle = Geometry.Circle(np.array([0, 0, 0]), 5)
         point = np.array([10, 0, 0])  # Not on circle
         _ = circle.GetTangent(point)
         return False
     except Exception as e:
-        errors += f", {e}"
-        return True, errors
+        return True, e
 
 def test_triangle_ray_intersection():
     triangle = Geometry.Triangle(np.array([0, 0, 0]), np.array([5, 0, 0]), np.array([0, 5, 0]))
@@ -380,31 +387,34 @@ def test_triangle_tangent_error():
     except Exception as e:
         return True, e
 
-def test_Luminance_basic():
+def test_luminance_color():
     try:
         # Test Color class
         color1 = Luminance.ColorData(0.5, 0.2, 0.7)
         color2 = Luminance.ColorData(0.1, 0.2, 0.3, 0.5)
         assert color1.red == 0.5 and color2.alpha == 0.5
 
-        color_sum = color1 + color2
-        color_mul = color1 * 0.5
-        color_eq = (color1 == Luminance.ColorData(0.5, 0.2, 0.7))
-        assert isinstance(color_sum, Luminance.ColorData)
-        assert isinstance(color_mul, Luminance.ColorData)
-        assert color_eq is True
+        return True
+    except Exception as e:
+        return False, e
 
+def test_luminance_light_ray():
+    try:
+        color1 = Luminance.ColorData(0.5, 0.2, 0.7)
         # Test LightRay
         ray = PrimaryStructures.Ray(np.array([0,0,0]), np.array([1,0,0]))
-        lray = Luminance.LightRay(ray.origin, ray.orientation , color1, intensity=2.0)
+        lray = Luminance.LightRay(ray.origin, ray.orientation, color1, intensity=2.0)
         assert isinstance(lray, Luminance.LightRay)
 
-        # Test Material reflection
-        mat = Luminance.Material(color1, roughness=0.2, glossiness=0.8)
-        reflected = mat.RedirectLightRay(lray, np.array([0,1,0]))
-        reflected_ray, refected_color = reflected.ray, reflected.base_color
-        assert isinstance(reflected_ray, PrimaryStructures.Ray)
-        assert isinstance(refected_color, Luminance.ColorData)
+        return True
+    except Exception as e:
+        return False, e
+    
+def test_luminance_material():
+    try:
+        col = Luminance.ColorData(0.3, 0.4, 0.5)
+        mat = Luminance.Material(color=col, roughness=0.8, glossiness=0.1)
+        assert mat.base_color == col and mat.roughness == 0.8
 
         return True
     except Exception as e:
@@ -433,7 +443,7 @@ def test_material_reflect():
         mat = Luminance.Material(color, 0.1, 0.9)
         ray = PrimaryStructures.Ray(np.array([1, 2, 3]), np.array([0, 1, 0]))
         normal = np.array([0, 1, 0])
-        reflected = mat.RedirectLightRay(Luminance.LightRay(ray.origin, ray.orientation , Luminance.ColorData()), normal)
+        reflected = mat.RedirectLightRay(Luminance.LightRay(ray.origin, ray.orientation, Luminance.ColorData()), normal)
         assert isinstance(reflected, PrimaryStructures.Ray)
 
         return True
@@ -494,9 +504,9 @@ def test_refractions_basic():
         normal = np.array([0,1,0])
         try:
             Refractions.refract_ray(normal, ray, 1.5, 1.0)
-            return False
+            return False, "Expected total internal reflection exception not raised."
         except Exception:
-            return True
+            return True, e
     except Exception as e:
         return False, e
     
@@ -512,7 +522,7 @@ def test_sampler_basic():
     
 def test_projections_basic():
     try:
-        cam = Camera(PrimaryStructures.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 1.77, 0.1, 1000, 1000)
+        cam = Camera(PrimaryStructures.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 0.1, 1000, 800, 600)
         proj = Projection.Scene(cam)
         if hasattr(proj, 'project'):
             _ = proj.AddObject() # TODO: Add thing
@@ -522,7 +532,7 @@ def test_projections_basic():
     
 def test_camera_basic():
     try:
-        cam = Camera.CameraObject(PrimaryStructures.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 1.77, 0.1, 1000, 1000)
+        cam = Camera.CameraObject(PrimaryStructures.Transform(position=np.array([0,0,0]), rotation=np.array([0,0,0]), scale=np.array([1,1,1])), 60, 0.1, 1000, 800, 600)
         if hasattr(cam, 'get_view_matrix'):
             _ = cam.get_view_matrix()
         return True
@@ -622,6 +632,54 @@ available_tests = {
         test_circle_ray_reverse_orientation,
     'Geometry: "Circle check Point normal and tangent" expect point on circle.' : 
         test_circle_point_normal_tangent,
+    'Geometry: Point Not On Circle': 
+        test_circle_point_not_on_circle,
+    'Geometry: Circle Tangent Error Handling': 
+        test_circle_tangent_error,
+    'Geometry: Circle Normal Error Handling': 
+        test_circle_normal_error,
+    'Geometry: Triangle Ray Intersection': 
+        test_triangle_ray_intersection,
+    'Geometry: Triangle Ray No Intersection': 
+        test_triangle_ray_no_intersection,
+    'Geometry: Triangle Ray Parallel to Plane': 
+        test_triangle_ray_parallel,
+    'Geometry: Triangle Point On Edge': 
+        test_triangle_point_on_edge,
+    'Geometry: Triangle Normal Error Handling': 
+        test_triangle_normal_error,
+    'Geometry: Triangle Tangent Error Handling': 
+        test_triangle_tangent_error,
+    'Luminance: Color Data Basic Functionality': 
+        test_luminance_color,
+    'Luminance: LightRay Basic Functionality':
+        test_luminance_light_ray,
+    'Luminance: Material Basic Functionality': 
+        test_luminance_material,
+    'Luminance: Color Arithmetic Operators': 
+        test_color_arithmetic,
+    'Luminance: Material Reflect Produces Ray': 
+        test_material_reflect,
+    'Reflections: Basic Functions': 
+        test_reflections_basic,
+    'Refractions: Basic Functions': 
+        test_refractions_basic,
+    'Sampler: Basic Sampling Manager': 
+        test_sampler_basic,
+    'Projection: Basic Scene/Camera Projection': 
+        test_projections_basic,
+    'Camera: Basic CameraObject': 
+        test_camera_basic,
+    'Raycasting: Basic Cast Function': 
+        test_raycasting_basic,
+    'Geometry: Circle Negative Radius (duplicate check)': 
+        test_circle_negative_radius,
+    'Geometry: Triangle Area Zero (degenerate)': 
+        test_triangle_area_zero,
+    'Luminance: Color Clamping (duplicate check)': 
+        test_color_clamping,
+    'Camera: FOV Limits Validation': 
+        test_camera_fov_limits
 }
 
 available_tests = dict(sorted(available_tests.items(), key=lambda kv: kv[0].lower()))

@@ -59,13 +59,21 @@ class CameraObject:
         Initializes the Camera with the given parameters.
         """
         self.transform = transform
+
+        if fov <= 0:
+            raise ValueError("FOV must be greater than 0")
         self.fov = fov
+        
+        if near <= 0 or far <= near:
+            raise ValueError("Invalid near and far plane values")
         self.near = near
         self.far = far
 
         self.type = camType
         self.mode = camMode
 
+        if width <= 0 or height <= 0:
+            raise ValueError("Width and Height must be greater than 0")
         self.width = width
         self.height = height
         self.aspect = Ratio(width, height)

@@ -51,12 +51,24 @@ class ColorData:
 
     @property
     def red(self): return self.rgba[0]
+    @red.setter
+    def red(self, value: float):
+        self.rgba[0] = clamp(value)
     @property
     def green(self): return self.rgba[1]
+    @green.setter
+    def green(self, value: float):
+        self.rgba[1] = clamp(value)
     @property
     def blue(self): return self.rgba[2]
+    @blue.setter
+    def blue(self, value: float):
+        self.rgba[2] = clamp(value)
     @property
     def alpha(self): return self.rgba[3]
+    @alpha.setter
+    def alpha(self, value: float):
+        self.rgba[3] = clamp(value)
 
     def __mul__(self, other):
         if isinstance(other, ColorData):
@@ -109,13 +121,13 @@ class LightRay(Ray, ColorData):
         name: str = "Light Ray"
     ):
         # Normalize orientation  safely
-        norm = np.linalg.norm(orientation )
+        norm = np.linalg.norm(orientation)
         if norm == 0:
-            raise ValueError("Orientation  vector cannot be zero-length.")
-        orientation  = orientation  / norm
+            raise ValueError("Orientation vector cannot be zero-length.")
+        orient  = orientation  / norm
 
         # Initialize both parent classes
-        Ray.__init__(self, origin, orientation , name)
+        Ray.__init__(self, origin, orient , name)
         ColorData.__init__(self, color.red, color.green, color.blue, color.alpha)
 
         self.intensity = float(intensity)
@@ -219,7 +231,7 @@ class Material:
         else:
             # Reflect the incoming ray orientation  about the normal
             reflected_ray = reflect_ray(incoming_ray.orientation , normal)
-            reflected = refracted_ray.orientation 
+            reflected = reflected_ray.orientation 
 
         # Calculate the new color after material effect
         new_color = self.AffectColor(incoming_ray.final_color)
