@@ -1,14 +1,15 @@
 #pragma once
-#include <pybind11/embed.h>
+#include <iostream>
 #include <string>
 #include <vector>
+#include <pybind11/embed.h>
 
 namespace py = pybind11;
 
 class PythonManager {
 public:
-    PythonManager() { py::initialize_interpreter(); }
-    ~PythonManager() { py::finalize_interpreter(); }
+    PythonManager();
+    ~PythonManager();
 
     py::object loadModule(const std::string& moduleName);
 
