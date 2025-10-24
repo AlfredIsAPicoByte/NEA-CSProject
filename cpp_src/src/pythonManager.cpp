@@ -1,41 +1,56 @@
 #include "pythonManager.h"
+#include <iostream>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 PythonManager::PythonManager() {
-    Py_Initialize();
+    if (!Py_IsInitialized()) {
+        py::initialize_interpreter();
+        try {
+            fs::path scriptPath = fs::current_path() / "../py_src/src";
+            py::module_ sys = py::module_::import("sys");
+            sys.attr("path").attr("append")(scriptPath.string());
+            std::cout << "[PythonManager] Added Python path: " << scriptPath << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "[PythonManager] Failed to add Python path: " << e.what() << std::endl;
+        }
+    }
 }
 
 PythonManager::~PythonManager() {
-    Py_Finalize();
+    if (Py_IsInitialized()) {
+        py::finalize_interpreter();
+    }
 }
 
-PyObject* PythonManager::loadModule(const std::string& moduleName) {
-    PyObject* pName = PyUnicode_DecodeFSDefault(moduleName.c_str());
-    if (!pName) return nullptr;
-
-    PyObject* pModule = PyImport_Import(pName);
-    Py_XDECREF(pName);
-
-    return pModule; // nullptr if the module couldn't be loaded
+py::object PythonManager::loadModule(const std::string& moduleName) {
+    try {
+        return py::module_::import(moduleName.c_str());
+    } catch (const py::error_already_set& error) {
+        std::cerr << "[PythonManager] Error loading module '" << moduleName
+                  << "': " << error.what() << std::endl;
+        return py::none();
+    }
 }
 
-PyObject* PythonManager::callFunction(PyObject* module, const std::string& funcName, const std::vector<PyObject*>& args) {
-    if (!module) return nullptr;
+py::object PythonManager::callFunction(const py::object& module, const std::string& funcName, const std::vector<py::object>& args) {
+    try {
+        if (!module.contains(funcName.c_str())) {
+            std::cerr << "[PythonManager] Function '" << funcName << "' not found in module" << std::endl;
+            return py::none();
+        }
 
-    PyObject* pFunc = PyObject_GetAttrString(module, funcName.c_str());
-    if (!pFunc || !PyCallable_Check(pFunc)) {
-        Py_XDECREF(pFunc);
-        return nullptr; // Function not found or not callable
+        py::object func = module.attr(funcName.c_str());
+
+        if (args.empty()) {
+            return func();
+        } else {
+            return func(args);
+        }
+    } catch (const py::error_already_set& error) {
+        std::cerr << "[PythonManager] Error calling function '" << funcName
+                  << "': " << error.what() << std::endl;
+        return py::none();
     }
-
-    PyObject* pArgs = PyTuple_New(args.size());
-    for (size_t i = 0; i < args.size(); ++i) {
-        Py_XINCREF(args[i]); // Increment reference count for each argument
-        PyTuple_SetItem(pArgs, i, args[i]); // Note: This steals a reference to args[i]
-    }
-
-    PyObject* pValue = PyObject_CallObject(pFunc, pArgs);
-    Py_XDECREF(pArgs);
-    Py_XDECREF(pFunc);
-
-    return pValue; // nullptr if the call failed
 }

@@ -1,11 +1,15 @@
 #pragma once
-
-#include <Python.h>
+#include <iostream>
 #include <string>
 #include <vector>
+#include <pybind11/embed.h>
+
+namespace py = pybind11;
 
 class PythonManager {
 public:
+    PythonManager();
+    ~PythonManager();
     PythonManager();
     ~PythonManager();
 
