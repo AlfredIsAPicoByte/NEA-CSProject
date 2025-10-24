@@ -1,4 +1,5 @@
 #include "Engine.h"
+#include "colorClass.h"
 
 void Exit(GLFWwindow *window)
 {
@@ -75,4 +76,8 @@ void CleanUp(GLFWwindow* window)
     glfwDestroyWindow(window);
     // Terminate GLFW before ending the program
     glfwTerminate();
+}
+
+void applyClearColor(const Color& color) {
+    glClearColor(color.r, color.g, color.b, color.a);
 }

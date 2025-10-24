@@ -1,5 +1,4 @@
-#ifndef COLOR_CLASS_H
-#define COLOR_CLASS_H
+#pragma once
 
 #include <glad/glad.h>
 #include <string>
@@ -36,8 +35,4 @@ private:
     }
 };
 
-void applyClearColor(const Color& c) {
-    glClearColor(c.r, c.g, c.b, c.a);
-}
-
-#endif // COLOR_CLASS_H
+void applyClearColor(const Color& color);

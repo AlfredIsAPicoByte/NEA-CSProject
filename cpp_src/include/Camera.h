@@ -9,6 +9,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 #include <glm/gtx/vector_angle.hpp>
+#include <string>
 
 #include "shaderClass.h"
 #include "timeClass.h"
@@ -16,13 +17,13 @@
 enum CameraType {
 	PERSPECTIVE,
 	ORTHOGRAPHIC
-}
+};
 
 enum CamaraMovementMode {
 	FIRST_PERSON,
 	PLANE,
 	ORBIT
-}
+};
 
 class Camera
 {
@@ -39,15 +40,16 @@ public:
 	bool firstClick = true;
 
 	// Stores the width and height of the window
-	int width;
-	int height;
+	int windowWidth;
+	int windowHeight;
+	float aspectRatio;
 
 	CameraType type;
 	CamaraMovementMode mode;
 
 	// Adjust the speed of the camera and it's sensitivity when looking around
-	float baseSpeed = 0.1f;
-	float speedMultiplier = 4.0f;
+	float moveSpeed = 0.1f;
+	float speedMult = 4.0f;
 	float sensitivity = 100.0f;
 
 	float fov = 45.0f;
@@ -81,5 +83,8 @@ public:
 	void OrbitMovement(GLFWwindow* window, Time& time);
 	void SelectOrbitTarget(const glm::vec3& target);
 	void LookAt(const glm::vec3& target);
+
+	// scroll callback that can access Camera members
+	static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 };
 #endif

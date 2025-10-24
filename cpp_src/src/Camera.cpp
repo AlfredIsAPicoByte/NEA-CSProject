@@ -136,9 +136,9 @@ void Camera::FirstPersonMovement(GLFWwindow* window, Time& time)
 
 void Camera::PlaneMovement(GLFWwindow* window, Time& time)
 {
-	float velocity = baseSpeed * time.deltaTime;
+	float velocity = moveSpeed * time.deltaTime;
 	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-		velocity *= speedMultiplier;
+		velocity *= speedMult;
 	}
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		Position += Orientation * velocity;
@@ -156,15 +156,15 @@ void Camera::PlaneMovement(GLFWwindow* window, Time& time)
 	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 		if (firstClick) {
-			glfwSetCursorPos(window, width / 2, height / 2);
+			glfwSetCursorPos(window, windowWidth / 2, windowHeight / 2);
 			firstClick = false;
 		}
 		double mouseX, mouseY;
 		glfwGetCursorPos(window, &mouseX, &mouseY);
-		float mouse_dx = (float)(mouseX - (width / 2));
-		float mouse_dy = (float)(mouseY - (height / 2));
-		float rot_x = (sensitivity * mouse_dx / width) * time.deltaTime;
-		float rot_y = (sensitivity * mouse_dy / height) * time.deltaTime;
+		float mouse_dx = (float)(mouseX - (windowWidth / 2));
+		float mouse_dy = (float)(mouseY - (windowHeight / 2));
+		float rot_x = (sensitivity * mouse_dx / windowWidth) * time.deltaTime;
+		float rot_y = (sensitivity * mouse_dy / windowHeight) * time.deltaTime;
 		if (abs(rot_y) > 89.0f) {
 			rot_y = 89.0f * (rot_y > 0 ? 1 : -1);
 		}
@@ -173,7 +173,7 @@ void Camera::PlaneMovement(GLFWwindow* window, Time& time)
 		// Pitch rotation around right
 		glm::vec3 right = glm::normalize(glm::cross(Orientation, Up));
 		Orientation = glm::rotate(Orientation, -glm::radians(rot_y), right);
-		glfwSetCursorPos(window, width / 2, height / 2);
+		glfwSetCursorPos(window, windowWidth / 2, windowHeight / 2);
 	} else {
 		firstClick = true;
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -185,39 +185,47 @@ void Camera::SelectOrbitTarget(const glm::vec3& target)
 	orbitTarget = target;
 }
 
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+void Camera::scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
-	// yoffset > 0: scroll up, yoffset < 0: scroll down
-	if (yoffset > 0) {
-		// Zoom in
-		orbitDistance -= orbitZoomSpeed;
-	} else {
-		// Zoom out
-		orbitDistance += orbitZoomSpeed;
-	}
+    Camera* cam = static_cast<Camera*>(glfwGetWindowUserPointer(window));
+    if (!cam) return;
+
+    if (yoffset > 0) {
+        cam->orbitDistance -= cam->orbitZoomSpeed;
+    } else {
+        cam->orbitDistance += cam->orbitZoomSpeed;
+    }
+
+    if (cam->orbitDistance < cam->orbitMinDistance) cam->orbitDistance = cam->orbitMinDistance;
+    if (cam->orbitDistance > cam->orbitMaxDistance) cam->orbitDistance = cam->orbitMaxDistance;
 }
 
 void Camera::OrbitMovement(GLFWwindow* window, Time& time)
 {
-	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+    // ensure the window user pointer points to this Camera instance
+    glfwSetWindowUserPointer(window, this);
+    // set the scroll callback to the static Camera method
+    glfwSetScrollCallback(window, Camera::scroll_callback);
+
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
 
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 		if (firstClick) {
-			glfwSetCursorPos(window, width / 2, height / 2);
+			glfwSetCursorPos(window, windowWidth / 2, windowHeight / 2);
 			firstClick = false;
 		}
 
 		double mouseX, mouseY;
 		glfwGetCursorPos(window, &mouseX, &mouseY);
 
-		float mouse_dx = (float)(mouseX - (width / 2));
-		float mouse_dy = (float)(mouseY - (height / 2));
+		float mouse_dx = (float)(mouseX - (windowWidth / 2));
+		float mouse_dy = (float)(mouseY - (windowHeight / 2));
 
 		float orbit_speed = sensitivity * time.deltaTime;
 		
-		float yaw = orbit_speed * mouse_dx / width;
+		float yaw = orbit_speed * mouse_dx / windowWidth;
 
-		float pitch = orbit_speed * mouse_dy / height;
+		float pitch = orbit_speed * mouse_dy / windowHeight;
 		float max_pitch = glm::radians(89.0f);
 		float new_pitch = orbitPitch + pitch;
 
@@ -229,7 +237,6 @@ void Camera::OrbitMovement(GLFWwindow* window, Time& time)
 		orbitYaw += yaw;
 		orbitDistance = glm::length(Position - orbitTarget);
 		
-		glfwSetScrollCallback(window, scroll_callback);
 		// Clamp radius
 		if (orbitDistance < orbitMinDistance) orbitDistance = orbitMinDistance;
 		if (orbitDistance > orbitMaxDistance) orbitDistance = orbitMaxDistance;
@@ -241,7 +248,7 @@ void Camera::OrbitMovement(GLFWwindow* window, Time& time)
 
 		Position = glm::vec3(x, y, z);
 		LookAt(orbitTarget);
-		glfwSetCursorPos(window, width / 2, height / 2);
+		glfwSetCursorPos(window, windowWidth / 2, windowHeight / 2);
 	} else {
 		firstClick = true;
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
