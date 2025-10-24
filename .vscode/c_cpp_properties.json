@@ -1,13 +1,18 @@
 {
-    "includePath": [
-        "${workspaceFolder}/**",
-        "C:/Python311/include",
-        "C:/Libraries/vcpkg/installed/x64-windows/include"
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "C:/Python311/include",
+                "C:/Libraries/vcpkg/installed/x64-windows/include"
+            ],
+            "defines": [],
+            "compilerPath": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.38.33130/bin/Hostx64/x64/cl.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "windows-msvc-x64"
+        }
     ],
-    "defines": [],
-    "compilerPath": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.38.33130/bin/Hostx64/x64/cl.exe",
-    "cStandard": "c17",
-    "cppStandard": "c++20",
-    "intelliSenseMode": "windows-msvc-x64"
-
+    "version": 4
 }

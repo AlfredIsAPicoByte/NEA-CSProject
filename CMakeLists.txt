@@ -5,6 +5,9 @@ project(Raycaster)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Explicitly point to Python installation
+find_package(Python COMPONENTS Development REQUIRED)
+
 # ---- Find packages ----
 find_package(Python COMPONENTS Interpreter Development REQUIRED)
 find_package(OpenGL REQUIRED)
@@ -12,13 +15,11 @@ find_package(glfw3 CONFIG REQUIRED)
 find_package(glad CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
-find_package(pybind11 CONFIG REQUIRED)
 
 # ---- Include directories ----
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/include
 )
-target_include_directories(main PRIVATE /path/to/pybind11/include)
 
 # ---- Source files ----
 file(GLOB_RECURSE CPP_SRC_FILES
@@ -28,6 +29,8 @@ list(APPEND CPP_SRC_FILES cpp_src/main.cpp)     # include main.cpp from cpp_src
 
 # ---- Executable ----
 add_executable(main ${CPP_SRC_FILES})
+
+target_include_directories(main PRIVATE ${STB_INCLUDE_DIRS} ${Python_INCLUDE_DIRS})
 
 # ---- Libraries ----
 target_link_libraries(main PRIVATE
