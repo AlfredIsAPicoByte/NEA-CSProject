@@ -1,5 +1,6 @@
 #include "Engine.h"
 #include "colorClass.h"
+#include "Debug.h"
 
 void Exit(GLFWwindow *window)
 {
@@ -14,9 +15,10 @@ int InitGLFW()
 {
     // Initialize GLFW
     if (!glfwInit()) {
-        std::cerr << "Failed to initialize GLFW" << std::endl;
-        return -1;
-    }
+		std::string msg = std::string("Failed to initialize GLFW");
+		AppendOpenGLError(msg);
+		throw std::runtime_error(msg);
+	}
 
     // Tell GLFW what version of OpenGL we are using 
     // Example: OpenGL 4.6
@@ -34,7 +36,7 @@ int InitGLAD()
 {
     // Load GLAD to configure OpenGL
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cerr << "Failed to initialize GLAD" << std::endl;
+		AppendOpenGLError("Failed to initialize GLAD");
         return -1;
     }
     return 0;
@@ -48,7 +50,7 @@ GLFWwindow* createWindow(int width, int height, const char* title)
     // Error check if the window fails to create
     if (window == NULL)
     {
-        std::cout << "Failed to create GLFW window" << std::endl;
+		AppendOpenGLError("Failed to create GLFW window");
         glfwTerminate();
         return nullptr;
     }

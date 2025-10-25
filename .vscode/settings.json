@@ -79,6 +79,8 @@
     "stop_token": "cpp",
     "thread": "cpp",
     "typeindex": "cpp",
-    "unordered_set": "cpp"
+    "unordered_set": "cpp",
+    "chrono": "cpp",
+    "filesystem": "cpp"
   }
 }

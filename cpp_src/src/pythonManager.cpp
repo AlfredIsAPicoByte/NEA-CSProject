@@ -1,6 +1,7 @@
 #include "pythonManager.h"
 #include <iostream>
 #include <filesystem>
+#include "Debug.h"
 
 namespace fs = std::filesystem;
 
@@ -11,9 +12,9 @@ PythonManager::PythonManager() {
             fs::path scriptPath = fs::current_path() / "../py_src/src";
             py::module_ sys = py::module_::import("sys");
             sys.attr("path").attr("append")(scriptPath.string());
-            std::cout << "[PythonManager] Added Python path: " << scriptPath << std::endl;
+            AppendMessage(std::string("[PythonManager] Added Python path: ") + scriptPath.string());
         } catch (const std::exception& e) {
-            std::cerr << "[PythonManager] Failed to add Python path: " << e.what() << std::endl;
+            AppendError(std::string("[PythonManager] Failed to add Python path: ") + e.what());
         }
     }
 }
@@ -28,8 +29,7 @@ py::object PythonManager::loadModule(const std::string& moduleName) {
     try {
         return py::module_::import(moduleName.c_str());
     } catch (const py::error_already_set& error) {
-        std::cerr << "[PythonManager] Error loading module '" << moduleName
-                  << "': " << error.what() << std::endl;
+        AppendError(std::string("[PythonManager] Error loading module '" + moduleName + "': " + error.what()));
         return py::none();
     }
 }
@@ -37,7 +37,7 @@ py::object PythonManager::loadModule(const std::string& moduleName) {
 py::object PythonManager::callFunction(const py::object& module, const std::string& funcName, const std::vector<py::object>& args) {
     try {
         if (!module.contains(funcName.c_str())) {
-            std::cerr << "[PythonManager] Function '" << funcName << "' not found in module" << std::endl;
+            AppendError(std::string("[PythonManager] Function '" + funcName + "' not found in module"));
             return py::none();
         }
 
@@ -49,8 +49,7 @@ py::object PythonManager::callFunction(const py::object& module, const std::stri
             return func(args);
         }
     } catch (const py::error_already_set& error) {
-        std::cerr << "[PythonManager] Error calling function '" << funcName
-                  << "': " << error.what() << std::endl;
+        AppendError(std::string("[PythonManager] Error calling function '" + funcName + "': " + error.what()));
         return py::none();
     }
 }

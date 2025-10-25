@@ -1,6 +1,7 @@
 #include "Texture.h"
+#include "Debug.h"
 
-Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum format, GLenum pixelType)
+Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum internalFormat, GLenum externalFormat, GLenum pixelType)
 {
 	// Assigns the type of the texture ot the texture object
 	type = texType;
@@ -10,15 +11,15 @@ Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum for
 	// Flips the image so it appears right side up
 	stbi_set_flip_vertically_on_load(true);
 	// Reads the image from a file and stores it in bytes
-	std::string imagePath = "src/textures/" + std::string(image);
+	std::string imagePath = "textures/" + std::string(image);
 	unsigned char* bytes = stbi_load(imagePath.c_str(), &widthImg, &heightImg, &numColCh, 0);
+	if (!bytes) {
+		std::string msg = std::string("Texture source is null for file: ") + imagePath.c_str();
+		AppendError(msg);
+		throw std::runtime_error(msg);
+	}
 
-	// Generates an OpenGL texture object
-	glGenTextures(1, &ID);
-	// Assigns the texture to a Texture Unit
-	glActiveTexture(GL_TEXTURE0 + slot);
-	unit = slot;
-	glBindTexture(GL_TEXTURE_2D, ID);
+	AppendMessage("Loaded texture: " + imagePath + " (Width: " + std::to_string(widthImg) + ", Height: " + std::to_string(heightImg) + ", Channels: " + std::to_string(numColCh) + ")");
 
 	// Configures the type of algorithm that is used to make the image smaller or bigger
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
@@ -32,10 +33,7 @@ Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum for
 	// float flatColor[] = {1.0f, 1.0f, 1.0f, 1.0f};
 	// glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, flatColor);
 
-	// Assigns the image to the OpenGL Texture object
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, widthImg, heightImg, 0, format, pixelType, bytes);
-	// Generates MipMaps
-	glGenerateMipmap(GL_TEXTURE_2D);
+	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, widthImg, heightImg, 0, externalFormat, pixelType, bytes);  // Assigns the texture to the Opengl texture object
 
 	// Deletes the image data as it is already in the OpenGL Texture object
 	stbi_image_free(bytes);

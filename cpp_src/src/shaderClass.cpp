@@ -1,4 +1,6 @@
 #include "shaderClass.h"
+#include <stdexcept>
+#include "Debug.h"
 
 // Reads a text file and outputs a string with everything in the text file
 std::string get_file_contents(const char* filename)
@@ -21,8 +23,8 @@ std::string get_file_contents(const char* filename)
 Shader::Shader(const char* vertexFileName, const char* fragmentFileName)
 {
 	// Path to the Vertex and Fragment shader files
-	std::string vertexPath = std::string("src/shader/") + vertexFileName;
-	std::string fragmentPath = std::string("src/shader/") + fragmentFileName;
+	std::string vertexPath = std::string("shader/") + vertexFileName;
+	std::string fragmentPath = std::string("shader/") + fragmentFileName;
 
 	// Read vertexFile and fragmentFile and store the strings
 	std::string vertexCode = get_file_contents(vertexPath.c_str());
@@ -30,7 +32,17 @@ Shader::Shader(const char* vertexFileName, const char* fragmentFileName)
 
 	// Convert the shader source strings into character arrays
 	const char* vertexSource = vertexCode.c_str();
+	if (!vertexSource) {
+		std::string msg = std::string("Vertex shader source is null for file: ") + vertexPath;
+		AppendError(msg);
+		throw std::runtime_error(msg);
+	}
 	const char* fragmentSource = fragmentCode.c_str();
+	if (!fragmentSource) {
+		std::string msg = std::string("Fragment shader source is null for file: ") + fragmentPath;
+		AppendError(msg);
+		throw std::runtime_error(msg);
+	}
 
 	// Create Vertex Shader Object and get its reference
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -98,7 +110,7 @@ void Shader::compileErrors(unsigned int shader, const char* type)
 		if (hasCompiled == GL_FALSE)
 		{
 			glGetShaderInfoLog(shader, 1024, NULL, infoLog);
-			std::cout << "SHADER_COMPILATION_ERROR for:" << type << "\n" << infoLog << std::endl;
+			AppendMessage(std::string("SHADER_COMPILATION_ERROR for: ") + type + " " + infoLog);
 		}
 	}
 	else
@@ -107,7 +119,7 @@ void Shader::compileErrors(unsigned int shader, const char* type)
 		if (hasCompiled == GL_FALSE)
 		{
 			glGetProgramInfoLog(shader, 1024, NULL, infoLog);
-			std::cout << "SHADER_LINKING_ERROR for:" << type << "\n" << infoLog << std::endl;
+			AppendMessage(std::string("SHADER_LINKING_ERROR for: ") + type + " " + infoLog);
 		}
 	}
 }
