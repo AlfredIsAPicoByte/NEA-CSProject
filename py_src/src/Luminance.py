@@ -51,12 +51,20 @@ class ColorData:
 
     @property
     def red(self): return self.rgba[0]
+    @red.setter
+    def red(self, value): self.rgba[0] = clamp(value)
     @property
     def green(self): return self.rgba[1]
+    @green.setter
+    def green(self, value): self.rgba[1] = clamp(value)
     @property
     def blue(self): return self.rgba[2]
+    @blue.setter
+    def blue(self, value): self.rgba[2] = clamp(value)
     @property
     def alpha(self): return self.rgba[3]
+    @alpha.setter
+    def alpha(self, value): self.rgba[3] = clamp(value)
 
     def __mul__(self, other):
         if isinstance(other, ColorData):
