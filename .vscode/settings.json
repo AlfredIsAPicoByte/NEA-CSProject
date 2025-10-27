@@ -2,6 +2,10 @@
   "cmake.configureOnOpen": true,
   "cmake.buildBeforeRun": true,
   "C_Cpp.default.compileCommands": "${command:cmake.getLaunchTargetCompileCommands}",
+  "C_Cpp.files.exclude": {
+    "**/include/pythonManager.h": true,
+    "**/src/pythonManager.cpp": true
+  },
   "files.associations": {
     "xstring": "cpp",
     "functional": "cpp",

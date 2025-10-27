@@ -122,8 +122,3 @@ class CameraObject:
         self.width = width
         self.height = height
         self.aspect = Ratio(width, height)
-
-    def resize_aspect(self, aspect: Ratio, scale: float = 1.0):
-        self.aspect = aspect
-        self.width = int(aspect.numerator * scale)
-        self.height = int(aspect.denominator * scale)

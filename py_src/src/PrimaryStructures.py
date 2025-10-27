@@ -1,36 +1,42 @@
 from math import cos, sin, acos
 import numpy as np
 
-"""
-
-"""
-
 class Ray:
-    """
-    Represents a ray in N-dimensional space, defined by an origin point and a orientation  vector.
-    
-    Attributes:
-        origin (np.ndarray): The starting point of the ray.
-        orientation  (np.ndarray): The orientation  of the ray (should be normalized).
-    Methods:
-        PointAtParameter(t): Returns the point along the ray at parameter t.
-        CheckPointOnRay(point): Checks if a given point lies on the ray.
-        CheckPointInFront(point): Checks if a given point is in front of the ray's origin along its orientation .
-        CheckPointBehind(point): Checks if a given point is behind the ray's origin opposite its orientation .
-        Rotate(angle, axis): Rotates the ray's orientation  vector.
-        Translate(vector): Translates the ray's origin.
-        __repr__(): Returns a string representation of the ray.
-    """
-    def __init__(self, origin: np.ndarray, orientation : np.ndarray, name: str = "Ray"):
+    def __init__(self, origin: np.ndarray, orientation: np.ndarray, name: str = "Ray"):
         """
-        A ray defined by an origin point and a orientation  vector.
+        A ray defined by an origin point and an orientation vector.
         """
-        if np.linalg.norm(orientation ) == 0:
-            raise ValueError("Orientation  vector cannot be zero-length")
+        if np.linalg.norm(orientation) == 0:
+            raise ValueError("Orientation vector cannot be zero-length")
 
-        self.origin = origin
-        self.orientation  = orientation  / np.linalg.norm(orientation )
+        self.origin = np.asarray(origin, dtype=float)
+        self._orientation = None
+        self.orientation = orientation  # uses property setter (normalizes)
         self.name = name
+
+    @property
+    def orientation(self) -> np.ndarray:
+        # return a copy so callers can't mutate internal storage accidentally
+        return self._orientation.copy()
+
+    @orientation.setter
+    def orientation(self, v):
+        v = np.asarray(v, dtype=float)
+        if v.ndim != 1:
+            raise ValueError("Orientation must be a 1D vector")
+        norm = np.linalg.norm(v)
+        if norm == 0:
+            raise ValueError("Orientation vector cannot be zero-length")
+        self._orientation = v / norm
+
+    # alias 'direction' to the same data (keeps compatibility)
+    @property
+    def direction(self) -> np.ndarray:
+        return self.orientation
+
+    @direction.setter
+    def direction(self, v):
+        self.orientation = v
 
     def point_at(self, t: float):
         """Returns the point along the ray at parameter t."""
