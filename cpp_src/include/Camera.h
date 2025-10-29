@@ -13,6 +13,7 @@
 
 #include "shaderClass.h"
 #include "timeClass.h"
+#include "Debug.h"
 
 enum CameraType {
 	PERSPECTIVE,
@@ -78,13 +79,14 @@ public:
 
 	void Move(GLFWwindow* window, Time& time);
 
-	void FirstPersonMovement(GLFWwindow* window, Time& time);
-	void PlaneMovement(GLFWwindow* window, Time& time);
-	void OrbitMovement(GLFWwindow* window, Time& time);
 	void SelectOrbitTarget(const glm::vec3& target);
 	void LookAt(const glm::vec3& target);
 
 	// scroll callback that can access Camera members
 	static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+private:
+	void FirstPersonMovement(GLFWwindow* window, Time& time);
+	void PlaneMovement(GLFWwindow* window, Time& time);
+	void OrbitMovement(GLFWwindow* window, Time& time);
 };
 #endif

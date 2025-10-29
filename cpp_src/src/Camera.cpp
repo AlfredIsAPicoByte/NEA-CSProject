@@ -2,7 +2,7 @@
 
 Camera::Camera(int width, int height, glm::vec3 position)
 {
-	windowWidth= width;
+	windowWidth = width;
 	windowHeight = height;
     aspectRatio = static_cast<float>(windowWidth / windowHeight);
     Position = position;
@@ -25,7 +25,7 @@ void Camera::updateMatrix()
 
 void Camera::Matrix(Shader& shader, const char* uniform)
 {
-	// Exports camera matrix
+	// Exports camera matrix to the shader
 	glUniformMatrix4fv(glGetUniformLocation(shader.ID, uniform), 1, GL_FALSE, glm::value_ptr(cameraMatrix));
 }
 

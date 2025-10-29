@@ -37,6 +37,7 @@ void Mesh::Draw(Shader& shader, Camera& camera)
 	{
 		std::string num;
 		std::string type = textures[i].type;
+
 		if (type == "diffuse")
 		{
 			num = std::to_string(numDiffuse++);
@@ -45,6 +46,7 @@ void Mesh::Draw(Shader& shader, Camera& camera)
 		{
 			num = std::to_string(numSpecular++);
 		}
+		
 		textures[i].texUnit(shader, (type + num).c_str(), i);
 		textures[i].Bind();
 	}
@@ -54,4 +56,9 @@ void Mesh::Draw(Shader& shader, Camera& camera)
 
 	// Draw the actual mesh
 	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+}
+
+void Mesh::CleanUp()
+{
+	VAO.Delete();
 }

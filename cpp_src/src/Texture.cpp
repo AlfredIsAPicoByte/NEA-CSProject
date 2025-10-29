@@ -1,10 +1,14 @@
 #include "Texture.h"
-#include "Debug.h"
 
-Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum internalFormat, GLenum externalFormat, GLenum pixelType)
+Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum pixelType)
 {
 	// Assigns the type of the texture ot the texture object
 	type = texType;
+	unit = slot;
+
+	glGenTextures(1, &ID);
+    glActiveTexture(GL_TEXTURE0 + slot);
+    glBindTexture(GL_TEXTURE_2D, ID);
 
 	// Stores the width, height, and the number of color channels of the image
 	int widthImg, heightImg, numColCh;
@@ -17,6 +21,21 @@ Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum int
 		std::string msg = std::string("Texture source is null for file: ") + imagePath.c_str();
 		AppendError(msg);
 		throw std::runtime_error(msg);
+	}
+
+	GLenum internalFormat, externalFormat;
+	if (numColCh == 1) {
+	    internalFormat = GL_R8;
+	    externalFormat = GL_RED;
+	} else if (numColCh == 3) {
+	    internalFormat = GL_RGB8;
+	    externalFormat = GL_RGB;
+	} else if (numColCh == 4) {
+	    internalFormat = GL_RGBA8;
+	    externalFormat = GL_RGBA;
+	} else {
+	    stbi_image_free(bytes);
+	    throw std::runtime_error("Unsupported number of channels in texture: " + std::to_string(numColCh));
 	}
 
 	AppendMessage("Loaded texture: " + imagePath + " (Width: " + std::to_string(widthImg) + ", Height: " + std::to_string(heightImg) + ", Channels: " + std::to_string(numColCh) + ")");
@@ -34,12 +53,15 @@ Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum int
 	// glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, flatColor);
 
 	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, widthImg, heightImg, 0, externalFormat, pixelType, bytes);  // Assigns the texture to the Opengl texture object
+	glGenerateMipmap(GL_TEXTURE_2D);
 
 	// Deletes the image data as it is already in the OpenGL Texture object
 	stbi_image_free(bytes);
 
 	// Unbinds the OpenGL Texture object so that it can't accidentally be modified
 	glBindTexture(GL_TEXTURE_2D, 0);
+
+	AppendMessage("Texture created with ID: " + std::to_string(ID));
 }
 
 void Texture::texUnit(Shader& shader, const char* uniform, GLuint unit)

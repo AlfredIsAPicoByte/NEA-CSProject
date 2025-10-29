@@ -2,18 +2,16 @@
 #include <iostream>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <functional>
 
-#include "Debug.h"
 #include "Mesh.h"
+#include "shaderClass.h"
 #include "colorClass.h"
-
+#include "Debug.h"
 
 void Exit(GLFWwindow *window);
 void WaitForEscape(GLFWwindow *window);
 
 int InitGLFW();
 int InitGLAD();
-GLFWwindow* createWindow(int width, int height, const char* title);
-void MainLoop(GLFWwindow* window, std::function<void(GLFWwindow*)> renderFunc);
+GLFWwindow* CreateWindow(int width, int height, const char* title);
 void CleanUp(GLFWwindow* window);

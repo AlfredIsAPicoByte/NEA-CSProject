@@ -1,8 +1,12 @@
 #pragma once
 
+#include <iostream>
+#include <filesystem>
 #include <string>
 #include <vector>
 #include <pybind11/embed.h>
+
+#include "Debug.h"
 
 namespace py = pybind11;
 

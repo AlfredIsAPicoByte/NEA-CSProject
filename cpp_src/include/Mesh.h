@@ -8,6 +8,7 @@
 #include "EBO.h"
 #include "Camera.h"
 #include "Texture.h"
+#include "Debug.h"
 
 class Mesh
 {
@@ -23,5 +24,7 @@ public:
 
 	// Draws the mesh
 	void Draw(Shader& shader, Camera& camera);
+
+	void CleanUp();
 };
 #endif

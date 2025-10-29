@@ -97,7 +97,7 @@ void APIENTRY glDebugOutput(GLenum source,
 void EnableOpenGLDebugger()
 {
     if (!glGetStringi) {
-        AppendOpenGLError("glGetStringi not available! Ensure GLAD was initialized properly.");
+        AppendOpenGLWarning("glGetStringi not available! Ensure GLAD was initialized properly.");
         return;
     }
 

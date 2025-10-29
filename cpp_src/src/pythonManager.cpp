@@ -1,7 +1,4 @@
 #include "pythonManager.h"
-#include <iostream>
-#include <filesystem>
-#include "Debug.h"
 
 namespace fs = std::filesystem;
 

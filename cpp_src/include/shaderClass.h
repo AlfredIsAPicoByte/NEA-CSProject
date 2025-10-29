@@ -7,6 +7,9 @@
 #include <sstream>
 #include <iostream>
 #include <cerrno>
+#include <stdexcept>
+
+#include "Debug.h"
 
 std::string get_file_contents(const char* filename);
 
