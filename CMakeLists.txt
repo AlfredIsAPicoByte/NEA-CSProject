@@ -59,8 +59,6 @@ add_custom_command(TARGET main POST_BUILD
     ${SHADER_DIR} $<TARGET_FILE_DIR:main>/shaders
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${TEXTURE_DIR} $<TARGET_FILE_DIR:main>/textures
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_CURRENT_SOURCE_DIR}/py_src $<TARGET_FILE_DIR:main>/py_src
 )
 
 # ---- Optional: support embedding Python. Disabled by default; enable with -DUSE_EMBEDDED_PYTHON=ON ----
@@ -77,7 +75,7 @@ endif()
 
 # ---- Optional: Output folders ----
 set_target_properties(main PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build
 )
 
 # ---- Optional: Debugging definitions ----
@@ -86,4 +84,15 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_compile_definitions(DEBUG_MODE=1)
 else()
     add_compile_definitions(DEBUG_MODE=0)
+endif()
+
+# ---- Optional: Copy py_src directory after build ----
+option(COPY_PY_SRC "Copy py_src directory after build" OFF)
+
+if(COPY_PY_SRC)
+    add_custom_command(TARGET main POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/py_src
+        $<TARGET_FILE_DIR:main>/py_src
+    )
 endif()

@@ -2,23 +2,22 @@
 
 // Positions/Coordinates
 layout (location = 0) in vec3 aPos;
-// Normals (not necessarily normalized)
-layout (location = 1) in vec3 aNormal;
 // Colors
-layout (location = 2) in vec3 aColor;
+layout (location = 1) in vec3 aColor;
+// Normals (not necessarily normalized)
+layout (location = 2) in vec3 aNormal;
 // Texture Coordinates
 layout (location = 3) in vec2 aTex;
 
 
 // Outputs the current position for the Fragment Shader
 out vec3 crntPos;
-// Outputs the normal for the Fragment Shader
-out vec3 Normal;
 // Outputs the color for the Fragment Shader
 out vec3 color;
+// Outputs the normal for the Fragment Shader
+out vec3 Normal;
 // Outputs the texture coordinates to the Fragment Shader
 out vec2 texCoord;
-
 
 
 // Imports the camera matrix from the main function

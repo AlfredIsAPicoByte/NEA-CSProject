@@ -5,13 +5,12 @@ out vec4 FragColor;
 
 // Imports the current position from the Vertex Shader
 in vec3 crntPos;
-// Imports the normal from the Vertex Shader
-in vec3 Normal;
 // Imports the color from the Vertex Shader
 in vec3 color;
+// Imports the normal from the Vertex Shader
+in vec3 Normal;
 // Imports the texture coordinates from the Vertex Shader
 in vec2 texCoord;
-
 
 // Gets the Texture Units from the main function
 uniform sampler2D diffuse0;
@@ -24,7 +23,6 @@ uniform vec3 lightPos;
 uniform vec3 camPos;
 
 uniform int lightType; // 0 = directional, 1 = point, 2 = spot
-
 
 vec4 pointLight()
 {	

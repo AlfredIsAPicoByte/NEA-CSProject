@@ -3,26 +3,21 @@
 // Reads a text file and outputs a string with everything in the text file
 std::string get_file_contents(const char* filename)
 {
-	std::ifstream in(filename, std::ios::binary);
-	if (in)
-	{
-		std::string contents;
-		in.seekg(0, std::ios::end);
-		contents.resize(in.tellg());
-		in.seekg(0, std::ios::beg);
-		in.read(&contents[0], contents.size());
-		in.close();
-		return(contents);
+	std::ifstream in(filename, std::ios::in | std::ios::binary);
+	if (!in) {
+		throw std::runtime_error(std::string("Failed to open file: ") + filename);
 	}
-	throw(errno);
+	std::ostringstream ss;
+	ss << in.rdbuf();
+	return ss.str();
 }
 
 // Constructor that build the Shader Program from 2 different shaders
 Shader::Shader(const char* vertexFileName, const char* fragmentFileName)
 {
 	// Path to the Vertex and Fragment shader files
-	std::string vertexPath = std::string("src/shader/") + vertexFileName;
-	std::string fragmentPath = std::string("src/shader/") + fragmentFileName;
+	std::string vertexPath = std::string("shaders/") + vertexFileName;
+	std::string fragmentPath = std::string("shaders/") + fragmentFileName;
 
 	// Read vertexFile and fragmentFile and store the strings
 	std::string vertexCode = get_file_contents(vertexPath.c_str());
@@ -30,7 +25,22 @@ Shader::Shader(const char* vertexFileName, const char* fragmentFileName)
 
 	// Convert the shader source strings into character arrays
 	const char* vertexSource = vertexCode.c_str();
+	if (!vertexSource) {
+		std::string msg = std::string("Vertex shader source is null for file: ") + vertexPath;
+		AppendError(msg);
+		throw std::runtime_error(msg);
+	}
+
+	AppendMessage("Loaded shader: " + vertexPath);
+
 	const char* fragmentSource = fragmentCode.c_str();
+	if (!fragmentSource) {
+		std::string msg = std::string("Fragment shader source is null for file: ") + fragmentPath;
+		AppendError(msg);
+		throw std::runtime_error(msg);
+	}
+
+	AppendMessage("Loaded shader: " + fragmentPath);
 
 	// Create Vertex Shader Object and get its reference
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -98,7 +108,7 @@ void Shader::compileErrors(unsigned int shader, const char* type)
 		if (hasCompiled == GL_FALSE)
 		{
 			glGetShaderInfoLog(shader, 1024, NULL, infoLog);
-			std::cout << "SHADER_COMPILATION_ERROR for:" << type << "\n" << infoLog << std::endl;
+			AppendMessage(std::string("SHADER_COMPILATION_ERROR for: ") + type + " " + infoLog);
 		}
 	}
 	else
@@ -107,7 +117,7 @@ void Shader::compileErrors(unsigned int shader, const char* type)
 		if (hasCompiled == GL_FALSE)
 		{
 			glGetProgramInfoLog(shader, 1024, NULL, infoLog);
-			std::cout << "SHADER_LINKING_ERROR for:" << type << "\n" << infoLog << std::endl;
+			AppendMessage(std::string("SHADER_LINKING_ERROR for: ") + type + " " + infoLog);
 		}
 	}
 }

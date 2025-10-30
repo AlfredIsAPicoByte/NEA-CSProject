@@ -1,8 +1,12 @@
 #pragma once
+
 #include <iostream>
+#include <filesystem>
 #include <string>
 #include <vector>
 #include <pybind11/embed.h>
+
+#include "Debug.h"
 
 namespace py = pybind11;
 
@@ -10,12 +14,8 @@ class PythonManager {
 public:
     PythonManager();
     ~PythonManager();
-    PythonManager();
-    ~PythonManager();
 
-    // Loads a Python module by name
-    PyObject* loadModule(const std::string& moduleName);
-
-    // Calls a function from a module with no arguments
-    PyObject* callFunction(PyObject* module, const std::string& funcName, const std::vector<PyObject*>& args = {});
+    // match the implementation: use pybind11::object
+    py::object loadModule(const std::string& moduleName);
+    py::object callFunction(const py::object& module, const std::string& funcName, const std::vector<py::object>& args = {});
 };

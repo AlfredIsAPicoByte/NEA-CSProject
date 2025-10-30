@@ -80,3 +80,4 @@ Color Color::lerp(const Color& start, const Color& end, float t)
         start.a + (end.a - start.a) * t
     );
 }
+

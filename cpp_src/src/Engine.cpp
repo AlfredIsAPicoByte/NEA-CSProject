@@ -1,78 +1,68 @@
 #include "Engine.h"
 
-void Exit(GLFWwindow *window)
+void Engine::Start()
 {
-    glfwSetWindowShouldClose(window, true);
-}
-void WaitForEscape(GLFWwindow *window)
-{
-    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) Exit(window);
+    state = EngineState::STARTING;
 }
 
-int InitGLFW()
+void Engine::PausePlay()
 {
-    // Initialize GLFW
-    if (!glfwInit()) {
-        std::cerr << "Failed to initialize GLFW" << std::endl;
-        return -1;
+    if (state == EngineState::RUNNING) {
+        state = EngineState::PAUSED;
+    } else if (state == EngineState::PAUSED) {
+        state = EngineState::RUNNING;
     }
-
-    // Tell GLFW what version of OpenGL we are using 
-    // Example: OpenGL 4.6
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    // Enable debug context (optional)
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
-
-    return 0;
 }
 
-int InitGLAD()
+void Engine::Update(GLFWwindow* window, std::function<void()> render)
 {
-    // Load GLAD to configure OpenGL
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cerr << "Failed to initialize GLAD" << std::endl;
-        return -1;
-    }
-    return 0;
-}
+    state = EngineState::RUNNING;
 
-
-GLFWwindow* createWindow(int width, int height, const char* title)
-{
-    // Create a GLFWwindow object of 800 by 800 pixels, naming it "YoutubeOpenGL"
-    GLFWwindow* window = glfwCreateWindow(width, height, title, NULL, NULL);
-    // Error check if the window fails to create
-    if (window == NULL)
+    while (!glfwWindowShouldClose(window))
     {
-        std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
-        return nullptr;
-    }
+        clearScreen();
+        // Process user input
+		awiatExitWindow(window);
 
-    // Specify the viewport of OpenGL in the Window
-    // In this case the viewport goes from x = 0, y = 0, to x = width, y = height
-    glViewport(0, 0, width, height);
+        // Render the scene
+        render();
 
-    return window;
-}
-
-void MainLoop(GLFWwindow* window, std::function<void(GLFWwindow*)> renderFunc)
-{
-    while (!glfwWindowShouldClose(window)) {
-        renderFunc(window);
-
+        // Swap buffers and poll events
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 }
 
-void CleanUp(GLFWwindow* window)
+void Engine::Exit()
+{
+    state = EngineState::STOPPED;
+	AppendMessage("Engine Stopped.");
+}
+
+void Engine::cleanUp(GLFWwindow* window)
 {
     // Delete window before ending the program
     glfwDestroyWindow(window);
     // Terminate GLFW before ending the program
     glfwTerminate();
+
+	AppendMessage("Destroyed window and terminated GLFW.");
+    Exit();
+}
+
+void Engine::applyClearColor(const Color& color) {
+    glClearColor(color.r, color.g, color.b, color.a);
+}
+void Engine::setDepthTest(bool enable) {
+    if (enable) {
+        glEnable(GL_DEPTH_TEST);
+        AppendMessage("Depth testing enabled.");
+    } else {
+        glDisable(GL_DEPTH_TEST);
+        AppendMessage("Depth testing disabled.");
+    }
+}
+
+void Engine::clearScreen() {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }

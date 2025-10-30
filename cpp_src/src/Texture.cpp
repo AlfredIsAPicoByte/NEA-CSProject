@@ -1,24 +1,44 @@
 #include "Texture.h"
 
-Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum format, GLenum pixelType)
+Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum pixelType)
 {
 	// Assigns the type of the texture ot the texture object
 	type = texType;
+	unit = slot;
+
+	glGenTextures(1, &ID);
+    glActiveTexture(GL_TEXTURE0 + slot);
+    glBindTexture(GL_TEXTURE_2D, ID);
 
 	// Stores the width, height, and the number of color channels of the image
 	int widthImg, heightImg, numColCh;
 	// Flips the image so it appears right side up
 	stbi_set_flip_vertically_on_load(true);
 	// Reads the image from a file and stores it in bytes
-	std::string imagePath = "src/textures/" + std::string(image);
+	std::string imagePath = "textures/" + std::string(image);
 	unsigned char* bytes = stbi_load(imagePath.c_str(), &widthImg, &heightImg, &numColCh, 0);
+	if (!bytes) {
+		std::string msg = std::string("Texture source is null for file: ") + imagePath.c_str();
+		AppendError(msg);
+		throw std::runtime_error(msg);
+	}
 
-	// Generates an OpenGL texture object
-	glGenTextures(1, &ID);
-	// Assigns the texture to a Texture Unit
-	glActiveTexture(GL_TEXTURE0 + slot);
-	unit = slot;
-	glBindTexture(GL_TEXTURE_2D, ID);
+	GLenum internalFormat, externalFormat;
+	if (numColCh == 1) {
+	    internalFormat = GL_R8;
+	    externalFormat = GL_RED;
+	} else if (numColCh == 3) {
+	    internalFormat = GL_RGB8;
+	    externalFormat = GL_RGB;
+	} else if (numColCh == 4) {
+	    internalFormat = GL_RGBA8;
+	    externalFormat = GL_RGBA;
+	} else {
+	    stbi_image_free(bytes);
+	    throw std::runtime_error("Unsupported number of channels in texture: " + std::to_string(numColCh));
+	}
+
+	AppendMessage("Loaded texture: " + imagePath + " (Width: " + std::to_string(widthImg) + ", Height: " + std::to_string(heightImg) + ", Channels: " + std::to_string(numColCh) + ")");
 
 	// Configures the type of algorithm that is used to make the image smaller or bigger
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
@@ -32,9 +52,7 @@ Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum for
 	// float flatColor[] = {1.0f, 1.0f, 1.0f, 1.0f};
 	// glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, flatColor);
 
-	// Assigns the image to the OpenGL Texture object
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, widthImg, heightImg, 0, format, pixelType, bytes);
-	// Generates MipMaps
+	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, widthImg, heightImg, 0, externalFormat, pixelType, bytes);  // Assigns the texture to the Opengl texture object
 	glGenerateMipmap(GL_TEXTURE_2D);
 
 	// Deletes the image data as it is already in the OpenGL Texture object
@@ -42,6 +60,8 @@ Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum for
 
 	// Unbinds the OpenGL Texture object so that it can't accidentally be modified
 	glBindTexture(GL_TEXTURE_2D, 0);
+
+	AppendMessage("Texture created with ID: " + std::to_string(ID));
 }
 
 void Texture::texUnit(Shader& shader, const char* uniform, GLuint unit)
