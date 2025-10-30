@@ -14,12 +14,14 @@ void Engine::PausePlay()
     }
 }
 
-void Engine::Update(GLFWwindow* window, std::function<void()> render)
+void Engine::Update(GLFWwindow* window, Time timer, std::function<void()> render)
 {
     state = EngineState::RUNNING;
 
     while (!glfwWindowShouldClose(window))
     {
+        timer.update();
+        
         clearScreen();
         // Process user input
 		awiatExitWindow(window);

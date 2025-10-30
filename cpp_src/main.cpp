@@ -166,10 +166,9 @@ int main()
 	// Main loop
 	Engine::Instance().Start();
 	Engine::Instance().applyClearColor(bgClolor);
-	Engine::Instance().Update(window,
+	Engine::Instance().Update(window, timer,
 		// Render
 		[&]() {
-			timer.update();
 			Engine::Instance().applyClearColor(bgClolor);
 
 			camera.Move(window, timer);
@@ -182,6 +181,7 @@ int main()
 			if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS & camMode != 1) {
 				camera.mode = FIRST_PERSON;
 				camMode = 1;
+				camera.Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
 				AppendMessage("Set camera momvent mode to FIRST_PERSON");
 			}
 			else if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS & camMode != 2) {
@@ -193,10 +193,12 @@ int main()
 			else if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS & camMode != 3) {
 				camera.mode = ORBIT;
 				camMode = 3;
+				camera.orbitDistance = glm::length(camera.Position - lightPos);
 				camera.SelectOrbitTarget(lightPos);
 				AppendMessage("Set camera momvent mode to ORBIT");
 			}
 			
+			AppendMessage("FPS: " + std::to_string(timer.frameRate) + " | Delta Time: " + std::to_string(timer.deltaTime) + "s");
 		}
 	);
 
