@@ -1,14 +1,14 @@
 #pragma once
 
 #include <iostream>
-#include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <string>
-#include <sstream>
+#include <thread>
+#include <chrono>
 
 class Time
 {
 public:
+    float frameRate = 0.0f; 
     float deltaTime = 0.0f;
     float lastFrame = 0.0f;
 
@@ -17,7 +17,4 @@ public:
 
     // Call this once per frame (e.g., at the start of your main loop)
     void update();
-
-    float displayFPS(GLFWwindow* window);
 };
-

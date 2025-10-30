@@ -31,5 +31,8 @@ void AppendError(const std::string& error);
 void AppendOpenGLMessage(const std::string& msg);
 void AppendOpenGLWarning(const std::string& warning);
 void AppendOpenGLError(const std::string& error);
+void AppendPythonMessage(const std::string& msg);
+void AppendPythonWarning(const std::string& warning);
+void AppendPythonError(const std::string& error);
 void PrintDebugLog();
 void ClearDebugLog();

@@ -145,6 +145,13 @@ int main()
 	glUniform4f(glGetUniformLocation(shaderProgram.ID, "lightColor"), lightColor.x, lightColor.y, lightColor.z, lightColor.w);
 	glUniform3f(glGetUniformLocation(shaderProgram.ID, "lightPos"), lightPos.x, lightPos.y, lightPos.z);
 
+	PythonManager pm;
+	pm.Initialize();
+	pm.AddModulePath("C:/Users/atang/Documents/GitHub/Programing_Projects/NEA-CSProject/py_src/src");
+	py::object primaryStructures = pm.LoadModule("PrimaryStructures");
+
+	py::object ray = primaryStructures.attr("Ray")(py::make_tuple(0.0f, 1.0f, 0.0f), py::make_tuple(1.0f, -1.0f, 0.0f));
+	AppendPythonMessage("Created Ray from Python module PrimaryStructures" + static_cast<std::string>(py::str(ray)));
 
 	// Enable depth (3D)
 	glEnable(GL_DEPTH_TEST);
@@ -159,10 +166,9 @@ int main()
 	// Main loop
 	Engine::Instance().Start();
 	Engine::Instance().applyClearColor(bgClolor);
-	Engine::Instance().Update(window,
+	Engine::Instance().Update(window, timer,
 		// Render
 		[&]() {
-			timer.update();
 			Engine::Instance().applyClearColor(bgClolor);
 
 			camera.Move(window, timer);
@@ -175,6 +181,7 @@ int main()
 			if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS & camMode != 1) {
 				camera.mode = FIRST_PERSON;
 				camMode = 1;
+				camera.Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
 				AppendMessage("Set camera momvent mode to FIRST_PERSON");
 			}
 			else if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS & camMode != 2) {
@@ -187,6 +194,7 @@ int main()
 				camera.mode = ORBIT;
 				camMode = 3;
 				camera.SelectOrbitTarget(lightPos);
+				camera.orbitDistance = glm::length(camera.Position - lightPos);
 				AppendMessage("Set camera momvent mode to ORBIT");
 			}
 			

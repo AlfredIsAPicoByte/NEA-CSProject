@@ -9,6 +9,7 @@
 #include "colorClass.h"
 #include "Debug.h"
 #include "InputManager.h"
+#include "pythonManager.h"
 
 enum EngineState {
     STARTING,
@@ -31,7 +32,7 @@ public:
 
     void Start();
     void PausePlay();
-    void Update(GLFWwindow* window, std::function<void()> render);
+    void Update(GLFWwindow* window, Time timer, std::function<void()> render);
     void Exit();
 
     
