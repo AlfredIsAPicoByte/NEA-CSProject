@@ -5,11 +5,10 @@ project(Raycaster)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Explicitly point to Python installation
-find_package(Python COMPONENTS Development REQUIRED)
+# point to venv python (fix missing slash). Use the variable name FindPython expects and cache it.
+set(Python_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../.venv/Scripts/python.exe" CACHE FILEPATH "Path to the Python executable in the project venv")
 
 # ---- Find packages ----
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glad CONFIG REQUIRED)
@@ -87,7 +86,7 @@ else()
 endif()
 
 # ---- Optional: Copy py_src directory after build ----
-option(COPY_PY_SRC "Copy py_src directory after build" OFF)
+option(COPY_PY_SRC "Copy py_src directory after build" ON)
 
 if(COPY_PY_SRC)
     add_custom_command(TARGET main POST_BUILD

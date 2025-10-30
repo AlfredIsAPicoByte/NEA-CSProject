@@ -88,6 +88,7 @@ void Camera::FirstPersonMovement(GLFWwindow* window, Time& time)
 	{
 		Position += _speed * -Up;
 	}
+
 	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
 	{
 		_speed = speed * speedFactor * time.deltaTime;
@@ -305,10 +306,6 @@ void Camera::OrbitMovement(GLFWwindow* window, Time& time)
 		LookAt(orbitTarget);
 		
 		glfwSetCursorPos(window, windowWidth / 2, windowHeight / 2);
-
-		AppendMessage("Orbit Camera - Target: (" + std::to_string(orbitTarget.x) + ", " + std::to_string(orbitTarget.y) + ", " + std::to_string(orbitTarget.z) + 
-			") Position: (" + std::to_string(Position.x) + ", " + std::to_string(Position.y) + ", " + std::to_string(Position.z) + 
-			") Distance: " +  std::to_string(orbitDistance));
 	} else {
 		firstClick = true;
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);

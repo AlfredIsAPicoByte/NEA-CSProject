@@ -189,6 +189,33 @@ void AppendOpenGLError(const std::string& error) {
     debugLog += "[OpenGL Error] " + error + "\n";
     std::cerr << "[OpenGL Error] " << error << std::endl;
 }
+void AppendPythonMessage(const std::string& msg) {
+    if (debugLog.size() + msg.size() > MAX_LOG_SIZE) {
+        debugLog.clear(); // Clear log if exceeding max size
+        debugLog += "[Debug Log Cleared Due to Size Limit]\n";
+    }
+
+    debugLog += "[Python Message] " + msg + "\n";
+    std::cout << "[Python Message] " << msg << std::endl;
+}
+void AppendPythonWarning(const std::string& warning) {
+    if (debugLog.size() + warning.size() > MAX_LOG_SIZE) {
+        debugLog.clear(); // Clear log if exceeding max size
+        debugLog += "[Debug Log Cleared Due to Size Limit]\n";
+    }
+
+    debugLog += "[Python Warning] " + warning + "\n";
+    std::cout << "[Python Warning] " << warning << std::endl;
+}
+void AppendPythonError(const std::string& error) {
+    if (debugLog.size() + error.size() > MAX_LOG_SIZE) {
+        debugLog.clear(); // Clear log if exceeding max size
+        debugLog += "[Debug Log Cleared Due to Size Limit]\n";
+    }
+
+    debugLog += "[Python Error] " + error + "\n";
+    std::cerr << "[Python Error] " << error << std::endl;
+}
 void PrintDebugLog() {
     if (debugLog.empty()) {
         std::cout << "[Debug Log is empty]" << std::endl;
