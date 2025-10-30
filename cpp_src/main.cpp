@@ -151,33 +151,50 @@ int main()
 
 	Time timer;
 	Camera camera(windowWidth, windowHeight, glm::vec3(0.0f, 0.0f, 2.0f));
-	camera.fov = 45.0f;
-	camera.mode = PLANE;
-	
-	// Main loop
-    while (!glfwWindowShouldClose(window)) {
-        applyClearColor(bgClolor);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	camera.fov = 60.0f;
+	camera.speed = 0.5f;
+	camera.speedFactor = 3.0f;
 
-	    WaitForEscape(window);
+	int camMode = 1;
+	// Main loop
+	Engine::Instance().Start();
+	Engine::Instance().applyClearColor(bgClolor);
+	Engine::Instance().Update(window,
+		// Render
+		[&]() {
+			timer.update();
+			Engine::Instance().applyClearColor(bgClolor);
 
 			camera.Move(window, timer);
 			camera.updateMatrix();
 
-			
-
-			// Draws different meshes
+			// Draw floor
 			floor.Draw(shaderProgram, camera);
 			light.Draw(lightShader, camera);
-
-		// Swap the window buffers
-        glfwSwapBuffers(window);
-		// Update window events
-        glfwPollEvents();
-    }
+			
+			if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS & camMode != 1) {
+				camera.mode = FIRST_PERSON;
+				camMode = 1;
+				AppendMessage("Set camera momvent mode to FIRST_PERSON");
+			}
+			else if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS & camMode != 2) {
+				camera.mode = PLANE;
+				camMode = 2;
+				camera.SetPlaneTarget(-objectPos);
+				AppendMessage("Set camera momvent mode to PLANE");
+			}
+			else if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS & camMode != 3) {
+				camera.mode = ORBIT;
+				camMode = 3;
+				camera.SelectOrbitTarget(lightPos);
+				AppendMessage("Set camera momvent mode to ORBIT");
+			}
+			
+		}
+	);
 
 	// Clean up and exit
-	CleanUp(window);
+	Engine::Instance().cleanUp(window);
 
 	return 0;
 }
