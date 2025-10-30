@@ -66,21 +66,13 @@
     "xloctime": "cpp",
     "xmemory": "cpp",
     "xtr1common": "cpp",
-    "xutility": "cpp",
-    "array": "cpp",
-    "deque": "cpp",
-    "forward_list": "cpp",
-    "mutex": "cpp",
-    "numeric": "cpp",
-    "ranges": "cpp",
-    "ratio": "cpp",
-    "span": "cpp",
-    "stack": "cpp",
-    "stop_token": "cpp",
-    "thread": "cpp",
-    "typeindex": "cpp",
-    "unordered_set": "cpp",
-    "chrono": "cpp",
-    "filesystem": "cpp"
-  }
+    "xutility": "cpp"
+  },
+  "python-envs.pythonProjects": [
+    {
+      "path": "",
+      "envManager": "ms-python.python:system",
+      "packageManager": "ms-python.python:pip"
+    }
+  ]
 }
