@@ -197,7 +197,6 @@ int main()
 				camera.orbitDistance = glm::length(camera.Position - lightPos);
 				AppendMessage("Set camera momvent mode to ORBIT");
 			}
-			
 		}
 	);
 
