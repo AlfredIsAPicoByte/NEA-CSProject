@@ -3,6 +3,9 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <functional>
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
 
 #include "Mesh.h"
 #include "shaderClass.h"
@@ -32,9 +35,8 @@ public:
 
     void Start();
     void PausePlay();
-    void Update(GLFWwindow* window, Time timer, std::function<void()> render);
+    void Update(GLFWwindow* window, std::function<void()> input, std::function<void()> render, Time timer);
     void Exit();
-
     
     void cleanUp(GLFWwindow* window);
     void applyClearColor(const Color& color);

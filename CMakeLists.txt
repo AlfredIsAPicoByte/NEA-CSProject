@@ -14,6 +14,7 @@ find_package(glfw3 CONFIG REQUIRED)
 find_package(glad CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 
 # ---- Include directories ----
 include_directories(
@@ -38,6 +39,7 @@ target_link_libraries(main PRIVATE
     glad::glad
     glm::glm
     pybind11::embed
+    imgui::imgui
     ${Python_LIBRARIES}
 )
 target_include_directories(main PRIVATE ${Python_INCLUDE_DIRS})
@@ -95,3 +97,23 @@ if(COPY_PY_SRC)
         $<TARGET_FILE_DIR:main>/py_src
     )
 endif()
+
+# ---- ImGui ----
+# Add ImGui headers and sources from your project directories
+set(IMGUI_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/include")
+set(IMGUI_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/src")
+
+set(IMGUI_SOURCES
+    ${IMGUI_SRC_DIR}/imgui.cpp
+    ${IMGUI_SRC_DIR}/imgui_draw.cpp
+    ${IMGUI_SRC_DIR}/imgui_tables.cpp
+    ${IMGUI_SRC_DIR}/imgui_widgets.cpp
+    ${IMGUI_SRC_DIR}/imgui_impl_glfw.cpp
+    ${IMGUI_SRC_DIR}/imgui_impl_opengl3.cpp
+)
+
+# Add ImGui sources to your executable
+target_sources(main PRIVATE ${IMGUI_SOURCES})
+
+# Add ImGui include directory
+target_include_directories(main PRIVATE ${IMGUI_INCLUDE_DIR})
