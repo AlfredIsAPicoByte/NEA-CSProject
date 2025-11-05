@@ -2,46 +2,46 @@ from src.Camera import CameraObject
 from src.PrimaryStructures import Ray
 from src.Geometry import Shape
 from src.Luminance import ColorData, LightRay
+from src.Algorithims.Base import Algorithm
 import numpy as np
 import random
 
 """
-
 """
 
-class Raytracer:
+class Raytracer(Algorithm):
     max_bounces: int = 5
     max_distance: float = 1000.0
-    epsilon: float = 0.001 # Small offset to avoid self-intersection
     raycast_steps: int = 1000 # Number of steps for ray marching
 
     def __init__(self):
-        self.rays: list[Ray|LightRay] = []
-        self.bounces: list[int] = [] # bounces
+        super().__init__()
+        self.rays: list[Ray] = []
+        self.bounces: list[int] = []
         self.distance: list[float] = []
 
-    def CamaraCast(self, camara: CameraObject, rays_per_pixle: int, seed: int|None = None):
+    def camera_cast(self, camera: CameraObject, rays_per_pixel: int, seed: int | None = None):
         if seed is not None:
             random.seed(seed)
-        
-        width, height = camara.width, camara.height
+
+        width, height = camera.width, camera.height
 
         rays_casted = []
         for y in range(height):
             for x in range(width):
-                for r in range(rays_per_pixle):
+                for r in range(rays_per_pixel):
                     # Jitter for anti-aliasing
                     jitter_u = random.uniform(-0.5, 0.5) / width
                     jitter_v = random.uniform(-0.5, 0.5) / height
 
-                    # Set the pixle positions for the rays
+                    # Set the pixel positions for the rays
                     u = (x + 0.5 + jitter_u) / width
                     v = (y + 0.5 + jitter_v) / height
 
-                    # Align the rays to the portion of the scron from the 
-                    orientation  = camara.transfrom.forward + (u - 0.5) * camara.transfrom.right + (v - 0.5) * camara.transform.up
+                    # Align the rays to the portion of the screen from the camera
+                    orientation = camera.transform.forward + (u - 0.5) * camera.transform.right + (v - 0.5) * camera.transform.up
 
-                    ray = Ray(camara.transform.position, np.linalg.norm(orientation ), name=f"{str(x)}_{str(y)}_{str(r)}")
+                    ray = Ray(camera.transform.position, np.linalg.norm(orientation), name=f"{str(x)}_{str(y)}_{str(r)}")
                     rays_casted.append(ray)
 
                     self.bounces.append(0)
@@ -49,11 +49,11 @@ class Raytracer:
         
         self.rays = rays_casted
 
-    def IntractCast(self, index: int, object: Shape):
+    def intract_cast(self, index: int, object: Shape):
         normal = object.GetNormal(self.rays[index].point_at(self.distance[index]))
         pass
 
-    def RayIntersection(self, index: int, scene) -> Shape | None: 
+    def ray_intersection(self, index: int, scene) -> Shape | None: 
         """
         Perform ray marching to find the intersection of a ray with the scene.
         Returns the hit information (hit point, normal, material) or None if no hit.
@@ -80,13 +80,13 @@ class Raytracer:
         print("Max steps taken for this ray")
         return None
     
-    def RayInteraction(self, index: int, hit_object: Shape):
+    def ray_interaction(self, index: int, hit_object: Shape):
         if hit_object is None:
             pass
         
         pass
     
-    def Raycast(self, index: int, scene) -> ColorData:
+    def render(self, scene, camera, samples_per_pixel: int = 1, seed = None) -> ColorData:
         lightRay = LightRay(ray.origin, ray.orientation , ColorData(1, 1, 1), intensity=1.0)
 
         for bounce in range(self.max_bounces):
