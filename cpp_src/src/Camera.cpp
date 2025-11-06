@@ -41,17 +41,17 @@ void Camera::Matrix(Shader& shader, const char* uniform)
 	glUniformMatrix4fv(glGetUniformLocation(shader.ID, uniform), 1, GL_FALSE, glm::value_ptr(cameraMatrix));
 }
 
-void Camera::Move(GLFWwindow* window, Time& time)
+void Camera::Move(GLFWwindow* window, double deltaTime)
 {
 	switch (mode) {
 		case FIRST_PERSON:
-			FirstPersonMovement(window, time);
+			FirstPersonMovement(window, deltaTime);
 			break;
 		case PLANE:
-			PlaneMovement(window, time);
+			PlaneMovement(window, deltaTime);
 			break;
 		case ORBIT:
-			OrbitMovement(window, time);
+			OrbitMovement(window, deltaTime);
 			break;
 		default:
 			// Unknown mode
@@ -59,9 +59,9 @@ void Camera::Move(GLFWwindow* window, Time& time)
 	}
 }
 
-void Camera::FirstPersonMovement(GLFWwindow* window, Time& time)
+void Camera::FirstPersonMovement(GLFWwindow* window, double deltaTime)
 {
-    float _speed = speed * time.deltaTime; // Movement speed
+    float _speed = speed * deltaTime; // Movement speed
 
 	// Handles key inputs
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
@@ -91,24 +91,25 @@ void Camera::FirstPersonMovement(GLFWwindow* window, Time& time)
 	
 	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
 	{
-		_speed = speed * speedFactor * time.deltaTime;
+		_speed = speed * speedFactor * deltaTime;
 	}
 	else if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_RELEASE)
 	{
-		_speed = speed * time.deltaTime;
+		_speed = speed * deltaTime;
 	}
 
-
 	// Handles mouse inputs
-	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
-	{
+	InputManager::Instance(window).doWhenKey(GLFW_MOUSE_BUTTON_RIGHT, true, true, [&]() {
 		// Hides mouse cursor
-		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+		if (!cursorHidden) {
+			InputManager::Instance(window).setCursorVisibility(false);
+			cursorHidden = true;
+		}
 
 		// Prevents camera from jumping on the first click
 		if (firstClick)
 		{
-			glfwSetCursorPos(window, (windowWidth / 2), (windowHeight / 2));
+			InputManager::Instance(window).setMousePosition(windowWidth / 2, windowHeight / 2);
 			firstClick = false;
 		}
 
@@ -116,7 +117,7 @@ void Camera::FirstPersonMovement(GLFWwindow* window, Time& time)
 		double mouseX;
 		double mouseY;
 		// Fetches the coordinates of the cursor
-		glfwGetCursorPos(window, &mouseX, &mouseY);
+		InputManager::Instance(window).getMousePosition(mouseX, mouseY);
 
 		// Normalizes and shifts the coordinates of the cursor such that they begin in the middle of the screen
 		// and then "transforms" them into degrees 
@@ -136,81 +137,99 @@ void Camera::FirstPersonMovement(GLFWwindow* window, Time& time)
 		Orientation = glm::rotate(Orientation, glm::radians(-rotY), Up);
 
 		// Sets mouse cursor to the middle of the screen so that it doesn't end up roaming around
-		glfwSetCursorPos(window, (windowWidth / 2), (windowHeight / 2));
-	}
-	else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_RELEASE)
-	{
+		InputManager::Instance(window).setMousePosition(windowWidth / 2, windowHeight / 2);
+	});
+	
+	InputManager::Instance(window).doWhenKey(GLFW_MOUSE_BUTTON_RIGHT, true, false, [&]() {
 		// Unhides cursor since camera is not looking around anymore
-		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+		if (cursorHidden) {
+			InputManager::Instance(window).setCursorVisibility(true);
+			cursorHidden = false;
+		}
+
 		// Makes sure the next time the camera looks around it doesn't jump
 		firstClick = true;
-	}
+	});
 }
 
 void Camera::SetPlaneTarget(glm::vec3 target)
 {
-	planePitch = glm::degrees(asin(target.y - Position.y));
-	planeYaw = glm::degrees(atan2(target.x - Position.x, target.z - Position.z));
+	planePitch = glm::degrees(asin(-target.y - Position.y));
+	planeYaw = glm::degrees(atan2(-target.x - Position.x, -target.z - Position.z));
 	planeRoll = 0.0f;
 }
 
-void Camera::PlaneMovement(GLFWwindow* window, Time& time)
+void Camera::PlaneMovement(GLFWwindow* window, double deltaTime)
 {
-	float rotationSpeed = planeRotateSpeed * time.deltaTime; // Rotation speed
+	float rotationSpeed = planeRotateSpeed * deltaTime; // Rotation speed
 
 	// Handles key inputs
-	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-	{
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_W, false, true, [&]() {
 		planePitch -= rotationSpeed * 10.0f * (invertY ? -1.0f : 1.0f);
 		if (planePitch < -89.0f) planePitch = -89.0f;
-	}
-	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-	{
+	});
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_S, false, true, [&]() {
 		planePitch += rotationSpeed * 10.0f * (invertY ? -1.0f : 1.0f);
 		if (planePitch > 89.0f) planePitch = 89.0f;
-	}
-	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-	{
-		planeYaw += rotationSpeed * 10.0f * (invertX ? -1.0f : 1.0f);
-		if (planeYaw > 180.0f) planeYaw -= 360.0f;
-	}
-	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-	{
+	});
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_D, false, true, [&]() {
 		planeYaw -= rotationSpeed * 10.0f * (invertX ? -1.0f : 1.0f);
 		if (planeYaw < -180.0f) planeYaw += 360.0f;
-	}
-	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
-	{
+	});
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_A, false, true, [&]() {
+		planeYaw += rotationSpeed * 10.0f * (invertX ? -1.0f : 1.0f);
+		if (planeYaw > 180.0f) planeYaw -= 360.0f;
+	});
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_Q, false, true, [&]() {
 		planeRoll -= rotationSpeed * 10.0f;
 		if (planeRoll < -180.0f) planeRoll += 360.0f;
-	}
-	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
-	{
+	});
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_E, false, true, [&]() {
 		planeRoll += rotationSpeed * 10.0f;
 		if (planeRoll > 180.0f) planeRoll -= 360.0f;
-	}
+	});
+	
+	bool isIncreasing = true;
+	bool isStoping = false;
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_SHIFT, false, true, [&]() {
+		if (!isIncreasing) {
+			isIncreasing = true;
+			return;
+		}
 
-	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-	{
-		planePower += planePowerIncrement * time.deltaTime;
-	}
-	else if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
-	{
-		planePower -= planePowerIncrement * time.deltaTime;
-	}
-	else if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS)
-	{
+		planePower += planePowerIncrement * deltaTime;
+	});
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_CONTROL, false, true, [&]() {
+		if (isIncreasing) {
+			isIncreasing = false;
+			return;
+		}
+		
+		planePower -= planePowerIncrement * deltaTime;
+	});
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_ALT, false, true, [&]() {
+		if (!isStoping) {
+			isStoping = true;
+			return;
+		}
+
 		if (planePower > 0) {
-			planePower -= planePowerIncrement * time.deltaTime;
+			planePower -= planePowerIncrement * deltaTime;
 		}
 		else if (planePower < 0) {
-			planePower += planePowerIncrement * time.deltaTime;
+			planePower += planePowerIncrement * deltaTime;
 		}
 		
 		if (abs(planePower) < 0.01f) {
 			planePower = 0.0f;
 		}
-	}
+	});
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_ALT, false, false, [&]() {
+		if (isStoping) {
+			isStoping = false;
+			return;
+		}
+	});
 	
 	if (planePower > planeMaxPower) {
 		planePower = planeMaxPower;
@@ -233,7 +252,7 @@ void Camera::PlaneMovement(GLFWwindow* window, Time& time)
 	Orientation = glm::normalize(front);
 	
 	// Move the camera forward in the direction it's facing
-	Position += planePower * Orientation * time.deltaTime;
+	Position += planePower * static_cast<float>(deltaTime) * Orientation;
 }
 
 void Camera::SelectOrbitTarget(const glm::vec3& target)
@@ -256,28 +275,32 @@ void Camera::scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
     if (cam->orbitDistance > cam->orbitMaxDistance) cam->orbitDistance = cam->orbitMaxDistance;
 }
 
-void Camera::OrbitMovement(GLFWwindow* window, Time& time)
+void Camera::OrbitMovement(GLFWwindow* window, double deltaTime)
 {
     // ensure the window user pointer points to this Camera instance
     glfwSetWindowUserPointer(window, this);
     // set the scroll callback to the static Camera method
     glfwSetScrollCallback(window, Camera::scroll_callback);
 
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+	
+	InputManager::Instance(window).doWhenKey(GLFW_MOUSE_BUTTON_RIGHT, true, true, [&]() {
+		if (!cursorHidden) {
+			InputManager::Instance(window).setCursorVisibility(false);
+			cursorHidden = true;
+		}
 
-		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 		if (firstClick) {
-			glfwSetCursorPos(window, windowWidth / 2, windowHeight / 2);
+			InputManager::Instance(window).setMousePosition(windowWidth / 2, windowHeight / 2);
 			firstClick = false;
 		}
 
 		double mouseX, mouseY;
-		glfwGetCursorPos(window, &mouseX, &mouseY);
+		InputManager::Instance(window).getMousePosition(mouseX, mouseY);
 
 		float mouse_dx = (float)(mouseX - (windowWidth / 2));
 		float mouse_dy = (float)(mouseY - (windowHeight / 2));
 
-		float orbit_speed = mouseSensitivity * time.deltaTime;
+		float orbit_speed = mouseSensitivity * deltaTime;
 		
 		float yaw = orbit_speed * mouse_dx / windowWidth;
 
@@ -305,15 +328,23 @@ void Camera::OrbitMovement(GLFWwindow* window, Time& time)
 
 		LookAt(orbitTarget);
 		
-		glfwSetCursorPos(window, windowWidth / 2, windowHeight / 2);
+		InputManager::Instance(window).setMousePosition(windowWidth / 2, windowHeight / 2);
 
 		AppendMessage("Orbit Camera - Target: (" + std::to_string(orbitTarget.x) + ", " + std::to_string(orbitTarget.y) + ", " + std::to_string(orbitTarget.z) + 
 			") Position: (" + std::to_string(Position.x) + ", " + std::to_string(Position.y) + ", " + std::to_string(Position.z) + 
 			") Distance: " +  std::to_string(orbitDistance));
-	} else {
+	});
+	
+	InputManager::Instance(window).doWhenKey(GLFW_MOUSE_BUTTON_RIGHT, true, false, [&]() {
+		// Unhides cursor since camera is not looking around anymore
+		if (cursorHidden) {
+			InputManager::Instance(window).setCursorVisibility(true);
+			cursorHidden = false;
+		}
+
+		// Makes sure the next time the camera looks around it doesn't jump
 		firstClick = true;
-		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-	}
+	});
 }
 
 void Camera::LookAt(const glm::vec3& target)

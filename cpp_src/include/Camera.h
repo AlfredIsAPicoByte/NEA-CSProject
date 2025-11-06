@@ -14,6 +14,7 @@
 #include "shaderClass.h"
 #include "timeClass.h"
 #include "Debug.h"
+#include "InputManager.h"
 
 enum CameraType {
 	PERSPECTIVE,
@@ -40,12 +41,12 @@ public:
 
 	// Prevents the camera from jumping around when first clicking left click
 	bool firstClick = true;
+	bool cursorHidden = false;
 
 	// Stores the width and height of the window
 	int windowWidth;
 	int windowHeight;
 	float aspectRatio;
-
 
 	std::string name = "";
 	int id;
@@ -64,7 +65,6 @@ public:
 	float mouseSensitivity = 100.0f;
 	bool invertY = false;
 	bool invertX = false;
-
 
 	// Plane mode state
 	float planeRotateSpeed = 5.0f;
@@ -98,7 +98,7 @@ public:
 	// Exports the camera matrix to a shader
 	void Matrix(Shader& shader, const char* uniform);
 
-	void Move(GLFWwindow* window, Time& time);
+	void Move(GLFWwindow* window, double deltaTime);
 
 	void SetPlaneTarget(glm::vec3 target);
 	void SelectOrbitTarget(const glm::vec3& target);
@@ -107,8 +107,8 @@ public:
 	// scroll callback that can access Camera members
 	static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 private:
-	void FirstPersonMovement(GLFWwindow* window, Time& time);
-	void PlaneMovement(GLFWwindow* window, Time& time);
-	void OrbitMovement(GLFWwindow* window, Time& time);
+	void FirstPersonMovement(GLFWwindow* window, double deltaTime);
+	void PlaneMovement(GLFWwindow* window, double deltaTime);
+	void OrbitMovement(GLFWwindow* window, double deltaTime);
 };
 #endif

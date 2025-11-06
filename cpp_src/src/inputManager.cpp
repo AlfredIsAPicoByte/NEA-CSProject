@@ -1,35 +1,26 @@
 #include "InputManager.h"
 
-InputManager::InputManager(GLFWwindow* window)
-    : m_window(window)
+void InputManager::processInputs(std::vector<ActionInput> inputs)
 {
-    AppendMessage("InputManager initialized.")
+    for (const auto& inp : inputs)
+    {
+        doWhenKey(inp);
+    }
 }
 
-InputManager::~InputManager()
+void InputManager::doWhenKey(GLint key, bool isMouse, bool isPressed, std::function<void()> action)
 {
-    AppendMessage("InputManager destroyed.")
+    int state = glfwGetKey(m_window, key);
+    if (isMouse) state = glfwGetMouseButton(m_window, key);
+
+    if ((isPressed && state == GLFW_PRESS) || (!isPressed && state == GLFW_RELEASE)) {
+        action();
+    }
 }
 
-void InputManager::processInput()
+void InputManager::doWhenKey(ActionInput input)
 {
-    if (glfwGetKey(m_window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(m_window, true);
-}
-
-void InputManager::setCursorMode(int mode) // e.g., GLFW_CURSOR_NORMAL, GLFW_CURSOR_HIDDEN, GLFW_CURSOR_DISABLED
-{
-    glfwSetInputMode(m_window, GLFW_CURSOR, mode);
-}
-
-bool InputManager::isKeyPressed(int key) // e.g., GLFW_KEY_W
-{
-    return glfwGetKey(m_window, key) == GLFW_PRESS;
-}
-
-bool InputManager::isMouseButtonPressed(int button) // e.g., GLFW_MOUSE_BUTTON_LEFT
-{
-    return glfwGetMouseButton(m_window, button) == GLFW_PRESS;
+    doWhenKey(input.key, input.isMouse, input.isPressed, input.action);
 }
 
 void InputManager::getMousePosition(double& xpos, double& ypos)
@@ -42,8 +33,20 @@ void InputManager::setMousePosition(double xpos, double ypos)
     glfwSetCursorPos(m_window, xpos, ypos);
 }
 
-void InputManager::setScrollCallback(GLFWscrollfun callback)
+void InputManager::setCursorVisibility(bool isVisible)
 {
-    glfwSetScrollCallback(m_window, callback);
+    if (isVisible) {
+        glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    } else {
+        glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+    }
 }
 
+void InputManager::toggleCursor(bool isEnabled)
+{
+    if (isEnabled) {
+        glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    } else {
+        glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    }
+}

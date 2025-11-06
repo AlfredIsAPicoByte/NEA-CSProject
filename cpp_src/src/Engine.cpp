@@ -20,7 +20,7 @@ void Engine::PausePlay()
     }
 }
 
-void Engine::Update(GLFWwindow* window, std::function<void()> input, std::function<void()> render, Time timer)
+void Engine::Update(GLFWwindow* window, std::function<void()> processing, std::function<void()> render, std::function<void()> gui)
 {
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -30,17 +30,33 @@ void Engine::Update(GLFWwindow* window, std::function<void()> input, std::functi
 
     while (!glfwWindowShouldClose(window))
     {
-        timer.update();
-        clearScreen();
-
         // Process user input
         if (!io.WantCaptureKeyboard && !io.WantCaptureMouse){
-            awiatExitWindow(window);
-            input();
+            processing();
+            
+            InputManager::Instance(window).doWhenKey(GLFW_KEY_ESCAPE, false, true, [&]()
+            {
+                glfwSetWindowShouldClose(window, true);
+            });
         }
+
+        if (state == EngineState::PAUSED) {
+            continue;
+        }
+
+        clearScreen();
 
         // Render the scene
         render();
+        
+
+        // Start the ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+        gui();
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         // Swap buffers and poll events
         glfwSwapBuffers(window);
@@ -73,6 +89,7 @@ void Engine::cleanUp(GLFWwindow* window)
 void Engine::applyClearColor(const Color& color) {
     glClearColor(color.r, color.g, color.b, color.a);
 }
+
 void Engine::setDepthTest(bool enable) {
     if (enable) {
         glEnable(GL_DEPTH_TEST);

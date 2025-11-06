@@ -156,7 +156,7 @@ int main()
 	// Enable depth (3D)
 	glEnable(GL_DEPTH_TEST);
 
-	Time timer;
+	Time time;
 	Camera camera(windowWidth, windowHeight, glm::vec3(0.0f, 0.0f, 2.0f));
 	camera.fov = 60.0f;
 	camera.speed = 0.5f;
@@ -167,57 +167,74 @@ int main()
 	Engine::Instance().Start();
 	Engine::Instance().applyClearColor(bgClolor);
 	Engine::Instance().Update(window,
-		// Input
+		// Procecing and input
 		[&]() {
-			camera.Move(window, timer);
+			time.update();
+
+			camera.Move(window, time.deltaTime);
 			camera.updateMatrix();
 
-			if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS & camMode != 1) {
-				camera.mode = FIRST_PERSON;
-				camMode = 1;
-				camera.Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
-				AppendMessage("Set camera momvent mode to FIRST_PERSON");
-			}
-			else if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS & camMode != 2) {
-				camera.mode = PLANE;
-				camMode = 2;
-				camera.SetPlaneTarget(-objectPos);
-				AppendMessage("Set camera momvent mode to PLANE");
-			}
-			else if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS & camMode != 3) {
-				camera.mode = ORBIT;
-				camMode = 3;
-				camera.SelectOrbitTarget(lightPos);
-				camera.orbitDistance = glm::length(camera.Position - lightPos);
-				AppendMessage("Set camera momvent mode to ORBIT");
-			}
+			InputManager::Instance(window).doWhenKey(GLFW_KEY_1, false, true, [&]() {
+				if (camMode != 1) {
+					camera.mode = FIRST_PERSON;
+					camMode = 1;
+					camera.Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
+					AppendMessage("Set camera momvent mode to FIRST_PERSON");
+				}
+			});
+			InputManager::Instance(window).doWhenKey(GLFW_KEY_2, false, true, [&]() {
+				if (camMode != 2) {
+					camera.mode = PLANE;
+					camMode = 2;
+					camera.SetPlaneTarget(objectPos);
+					AppendMessage("Set camera momvent mode to PLANE");
+				}
+			});
+			InputManager::Instance(window).doWhenKey(GLFW_KEY_3, false, true, [&]() {
+				if (camMode != 3) {
+					camera.mode = ORBIT;
+					camMode = 3;
+					camera.SelectOrbitTarget(lightPos);
+					camera.orbitDistance = glm::length(camera.Position - lightPos);
+					AppendMessage("Set camera momvent mode to ORBIT");
+				}
+			});
 		},
 		// Render
 		[&]() {
 			Engine::Instance().applyClearColor(bgClolor);
 
-			ImGui_ImplOpenGL3_NewFrame();
-			ImGui_ImplGlfw_NewFrame();
-			ImGui::NewFrame();
-
+			// Draw floor
+			floor.Draw(shaderProgram, camera);
+			light.Draw(lightShader, camera);
+			
+		},
+		// ImGui Objects
+		[&]() {
 			ImGui::Begin("Info Panel");
-			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", time.deltaTime * 1000.0f, time.frameRate);
 			ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", camera.Position.x, camera.Position.y, camera.Position.z);
 			ImGui::Text("Camera Orientation: (%.2f, %.2f, %.2f)", camera.Orientation.x, camera.Orientation.y, camera.Orientation.z);
 			ImGui::Text("Camera Up: (%.2f, %.2f, %.2f)", camera.Up.x, camera.Up.y, camera.Up.z);
 			ImGui::Text("Camera Mode: %s", camera.mode == FIRST_PERSON ? "FIRST_PERSON" : camera.mode == PLANE ? "PLANE" : "ORBIT");
+			ImGui::Text("Controls:");
+			ImGui::Text("  - WASD to move");
+			ImGui::Text("  - QE to move up and down, or roll in Plane mode");
+			ImGui::Text("  - Mouse to look around");
+			ImGui::Text("  - Scroll to zoom (Orbit mode)");
+			ImGui::Text("  - 1: First Person mode");
+			ImGui::Text("  - 2: Plane mode");
+			ImGui::Text("  - 3: Orbit mode");
 			ImGui::End();
 
-			// Draw floor
-			floor.Draw(shaderProgram, camera);
-			light.Draw(lightShader, camera);
-
-			ImGui::Render();
-			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-			
-		}, timer);
+			// Todo: Add hiearchy for objects 
+		});
 
 	// Clean up and exit
+	shaderProgram.Delete();
+	lightShader.Delete();
+	floor.CleanUp();
+	light.CleanUp();
 	Engine::Instance().cleanUp(window);
 
 	return 0;

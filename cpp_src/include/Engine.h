@@ -24,7 +24,6 @@ enum EngineState {
 class Engine
 {
 public:
-    // Access the single global instance (Meyers' singleton, thread-safe since C++11)
     static Engine& Instance()
     {
         static Engine instance;
@@ -35,7 +34,7 @@ public:
 
     void Start();
     void PausePlay();
-    void Update(GLFWwindow* window, std::function<void()> input, std::function<void()> render, Time timer);
+    void Update(GLFWwindow* window, std::function<void()> input, std::function<void()> render, std::function<void()> gui);
     void Exit();
     
     void cleanUp(GLFWwindow* window);
