@@ -1,4 +1,4 @@
-from src.PrimaryStructures import Ray
+from src.PrimaryStructures import Ray, Transform
 import numpy as np
 
 """
@@ -8,6 +8,7 @@ import numpy as np
 class Shape:
     def __init__(self, **kwargs):
         self.name: str = kwargs.get("name", "Default Name")
+        self.origin: np.ndarray = kwargs.get("origin", np.zeros(3))
 
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -72,6 +73,8 @@ class Circle(Shape):
         if radius <= 0:
             raise AttributeError("The radius of the Circle must be greater than 0")
         self.radius = radius
+
+        self.origin = center
     
     def CheckPoint(self, point: np.ndarray, epsilon: float = 0) -> bool:
         return self.radius - epsilon < np.linalg.norm(point - self.center) <= self.radius + epsilon
@@ -200,6 +203,8 @@ class Triangle(Shape):
         self.vertex1 = vertex1
         self.vertex2 = vertex2
         self.vertex3 = vertex3
+
+        self.origin = (vertex1 + vertex2 + vertex3) / 3
 
         self.CheckDegeneracy()
 
@@ -354,6 +359,7 @@ class Polygon(Shape):
     def __init__(self, vertices: list[np.ndarray], name: str = "Polygon"):
         super().__init__(name=name)
         self.vertices = vertices
+        self.origin = np.mean(vertices, axis=0)
     
     def CheckPoint(self, point: np.ndarray, epsilon: float = 1e-6) -> bool:
         pass
@@ -393,3 +399,13 @@ class Polygon(Shape):
 
     def __repr__(self):
         return f"Polygon(vertices={self.vertices})"
+    
+class VObject:
+    def __init__(self, shape: Shape, transform: Transform, material=None, name: str = "VObject"):
+        self.shape = shape
+        self.transform = transform
+        self.material = material
+        self.name = name
+
+    def __repr__(self):
+        return f"VObject(name={self.name}, shape={self.shape}, transform={self.transform}, material={self.material})"
