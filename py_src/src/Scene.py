@@ -1,6 +1,7 @@
 from src.PrimaryStructures import Transform, Ratio
+from src.Geometry import VObject
 from src.Camera import CameraObject
-from Luminance import LightRay, LightSource
+from Luminance import LightSource
 import numpy as np
 from enum import Enum
 
@@ -8,25 +9,43 @@ from enum import Enum
 
 """
 
-
-class SceneType(Enum):
-    SCENE_2D = 1
-    SCENE_3D = 2
-
 class Scene:
-    def __init__(self, stype: SceneType):
-        self.type = stype
-        self.objects = []
+    def __init__(self, dimension: int = 2, name: str = "Scene"):
+        if dimension not in (2, 3):
+            raise AttributeError("Scene dimension must be either 2 or 3")
+        self.dimension = dimension
+
+        self.objects: list[VObject] = []
         self.lights: LightSource = []
         self.cam: CameraObject = None
+        self.name = name
     
     def set_camera(self, camera: CameraObject):
         self.cam = camera
     
-    def add_object(self, obj):
+    def add_object(self, obj: VObject):
         self.objects.append(obj)
     
-    def add_light(self, light):
+    def add_light(self, light: LightSource):
         self.lights.append(light)
 
+    def distance_estimator(self, point: np.ndarray) -> tuple[float, VObject]:
+        """Returns the minimum distance from the point to any object in the scene."""
+
+        min_dist = float("inf")
+        closest_object = None
+
+        for vobject in self.objects:
+            # Placeholder for actual distance calculation
+            dist = np.linalg.norm(point - vobject.transform.position)
+
+            if dist < min_dist:
+                min_dist = dist
+                closest_object = vobject
+        
+        if closest_object is not None:
+            min_dist = np.linalg.norm(point - vobject.shape.GetClosestPoint(point))
+            return min_dist, closest_object
+        else:
+            return float("inf"), None
     

@@ -157,7 +157,17 @@ class LightRay(Ray, ColorData):
         factor = 1 / (a * (distance ** 2) + b * distance + c)
         return LightRay(
             self.origin,
-            self.orientation ,
+            self.orientation,
+            self.rgba,
+            intensity=self.intensity * factor,
+            name=self.name + f" (X{factor})"
+        )
+    
+    def Attenuate(self, factor: float):
+        """Return a dimmed copy of the LightRay."""
+        return LightRay(
+            self.origin,
+            self.orientation,
             self.rgba,
             intensity=self.intensity * factor,
             name=self.name + f" (X{factor})"

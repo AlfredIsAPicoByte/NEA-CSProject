@@ -1,12 +1,14 @@
-from src.Algorithims.Base import Algorithm, register_algorithm
-from src.Luminance import LightRay, ColorData
-from src.Geometry import Shape
+from src.Scene import Scene
 from src.Camera import CameraObject
-from abc import ABC, abstractmethod
-from typing import Any, Optional, List, Tuple
-from src.Algorithims.Sampling import SamplingManager, Sampler, Sample
+from src.Geometry import VObject
+from src.Luminance import LightRay, ColorData
+from src.Algorithims.Base import Algorithm, register_algorithm
+from src.Algorithims.Sampling import Sampler
+
 import numpy as np
 import random
+from typing import Any, Optional, List, Tuple
+from abc import ABC, abstractmethod
 
 # Strategy interfaces and simple implementations
 class RayGenerator(ABC):
@@ -33,7 +35,7 @@ class CameraJitterRayGenerator(RayGenerator):
         rays_per_pixel: int,
         seed: Optional[int] = None,
         region: Optional[Tuple[int, int, int, int]] = None,
-        sampler: Optional[Any] = None,
+        sampler: Optional[Sampler] = None,
     ) -> List[LightRay]:
         if seed is not None:
             rand = random.Random(seed)
@@ -127,16 +129,19 @@ class CameraJitterRayGenerator(RayGenerator):
 
 class IntersectionStrategy(ABC):
     @abstractmethod
-    def find_hit(self, scene: Any, ray: LightRay) -> Tuple[Optional[Shape], float]:
+    def find_hit(self, scene: Any, ray: LightRay) -> Tuple[Optional[VObject], float]:
         ...
 
 class RayMarchingIntersection(IntersectionStrategy):
-    def __init__(self, epsilon: float = 1e-4, max_distance: float = 100.0, max_steps: int = 256):
+    def __init__(self, epsilon: float = 1e-4, max_distance: float = 100.0, max_steps: int = 256, attenuation: float = 0.9):
         self.epsilon = epsilon
         self.max_distance = max_distance
         self.max_steps = max_steps
 
-    def find_hit(self, scene: Any, ray: LightRay) -> Tuple[Optional[Shape], float]:
+        self.attenuation = attenuation
+        
+
+    def find_hit(self, scene: Scene, ray: LightRay) -> Tuple[Optional[VObject], float]:
         distance_traveled = 0.0
 
         for _ in range(self.max_steps):
@@ -149,7 +154,9 @@ class RayMarchingIntersection(IntersectionStrategy):
                 distance_to_closest, closest_object = dist_obj, None
             if distance_to_closest <= self.epsilon:
                 return closest_object, distance_traveled
-            ray.Attenuate(distance_to_closest, 1.0, 0.0, 0.1)  # simple attenuation
+            
+            ray.Attenuate(distance_to_closest, self.attenuation)  # simple attenuation
+
             distance_traveled += distance_to_closest
             if distance_traveled >= self.max_distance:
                 return None, float("inf")
@@ -157,17 +164,18 @@ class RayMarchingIntersection(IntersectionStrategy):
 
 class ShadingStrategy(ABC):
     @abstractmethod
-    def shade(self, scene: Any, ray: LightRay, hit_object: Shape, distance: float) -> ColorData:
+    def shade(self, scene: Scene, ray: LightRay, hit_object: VObject, distance: float) -> ColorData:
         ...
 
 class BasicLambertShading(ShadingStrategy):
-    def shade(self, scene: Any, ray: LightRay, hit_object: Shape, distance: float) -> ColorData:
+    def shade(self, scene: Scene, ray: LightRay, hit_object: VObject, distance: float) -> ColorData:
         point = ray.point_at(distance)
+        
         # try common method names for normal
-        if hasattr(hit_object, "get_normal"):
-            normal = hit_object.get_normal(point)
-        elif hasattr(hit_object, "GetNormal"):
-            normal = hit_object.GetNormal(point)
+        if hasattr(hit_object.shape, "get_normal"):
+            normal = hit_object.shape.get_normal(point)
+        elif hasattr(hit_object.shape, "GetNormal"):
+            normal = hit_object.shape.GetNormal(point)
         else:
             # fallback normal
             normal = np.array([0.0, 1.0, 0.0])
@@ -211,13 +219,13 @@ class Raytracer(Algorithm):
         self.intersector = intersection_strategy if intersection_strategy is not None else RayMarchingIntersection()
         self.shader = shading_strategy if shading_strategy is not None else BasicLambertShading()
 
-    def render(self, scene: Any, camera: "CameraObject", seed: Optional[int] = None, tile_size: Optional[Tuple[int,int]] = None, sampler: Optional[Any] = None) -> Any:
+    def render(self, scene: Scene, camera: "CameraObject", seed: Optional[int] = None, tile_size: Optional[Tuple[int,int]] = None, sampler: Optional[Sampler] = None) -> Any:
         """
         Render the scene. Accepts optional sampler (SamplingManager or Sampler) and optional tile_size.
         """
         cam_w, cam_h = camera.width, camera.height
         output_rays: List[LightRay] = []
-        hits: list[Tuple[LightRay, Shape, float]] = []
+        hits: list[Tuple[LightRay, VObject, float]] = []
 
         if tile_size is None:
             # full-image generation (existing behaviour)

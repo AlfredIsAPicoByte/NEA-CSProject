@@ -55,6 +55,15 @@ class Sampler(ABC):
     def set_samples_per_pixel(self, spp: int) -> None:
         self.samples_per_pixel = spp
 
+    def get_samples_per_pixel(self, x: int, y:int) -> list[Sample]:
+        """Utility to get all samples for a pixel as Sample(u,v) list."""
+        self.start_pixel(x, y)
+        out: list[Sample] = []
+        for _ in range(self.samples_per_pixel):
+            u, v = self.next_2d()
+            out.append(Sample(u, v))
+        return out
+
 class RandomSampler(Sampler):
     """Independent RNG sampler, deterministic with base seed + pixel coords."""
     def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
@@ -213,20 +222,6 @@ class SamplingManager:
                 for _ in range(self._spp):
                     u, v = sampler.next_2d()
                     self.samples.append((u, v))
-        
-    def get_samples_for_pixel(self, x: int, y: int) -> List[Sample]:
-        """
-        Return a list of Sample(u,v) for the given pixel.
-        Uses the configured sampler for per-sample values and guarantees deterministic per-pixel sequences when seed provided.
-        """
-        sampler = self._sampler.clone(self.seed)
-        sampler.set_samples_per_pixel(self._spp)
-        sampler.start_pixel(x, y)
-        out: List[Sample] = []
-        for _ in range(self._spp):
-            u, v = sampler.next_2d()
-            out.append(Sample(u, v))
-        return out
 
     def get_precomputed_samples(self, count: int = 0, offset: int = 0) -> List[Tuple[float, float]]:
         """Return a slice of the precomputed sample list."""
