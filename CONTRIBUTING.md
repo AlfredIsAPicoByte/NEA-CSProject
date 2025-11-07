@@ -1,6 +1,6 @@
 Only merge feature branches into main. Do not merge python and cpp branches directly into each other.
 
-`
+```treminal
 # On python branch
 git checkout python
 git add .
@@ -18,4 +18,4 @@ git checkout main
 git pull origin main
 git merge cpp
 git push origin main
-`
+```
