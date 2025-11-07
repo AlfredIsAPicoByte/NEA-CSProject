@@ -209,6 +209,7 @@ class Material:
         self.glossiness = clamp(glossiness)
         self.can_refract = False
         self.is_transparent = False
+        self._rng = np.random.default_rng()
             
     def AffectColor(self, color: ColorData) -> ColorData:
         """Apply material attributes to a color."""
@@ -246,4 +247,69 @@ class Material:
         return (
             f"Material(color={self.base_color}, "
             f"roughness={self.roughness:.2f}, glossiness={self.glossiness:.2f})"
+        )
+    
+class LightSource:
+    def __init__(self, position: np.ndarray, color: ColorData, intensity: float = 1.0, name: str = "Light Source"):
+        self.position = position
+        self.color = color
+        self.intensity = intensity
+        self.name = name
+    
+    def emit_light_to_direction(self, direction: np.ndarray) -> LightRay:
+        """Emit a LightRay from the light source in the given direction."""
+        return LightRay(
+            origin=self.position.copy(),
+            orientation =direction / np.linalg.norm(direction),
+            color=self.color,
+            intensity=self.intensity,
+            name=f"{self.name} Ray"
+        )
+    
+    def emit_light_at_target(self, target: np.ndarray, angle_spread: float = 0, epsilon: float = 0.08) -> LightRay:
+        """Emit a LightRay from the light source towards a target point with the option to spread out the ray."""
+        if angle_spread > 0:
+            # Calculate random spread within the angle
+            direction = target - self.position
+            direction = direction / np.linalg.norm(direction)
+
+            # Generate random perturbation
+            random_perturbation = np.random.normal(0, epsilon, size=3)
+            perturbed_direction = direction + random_perturbation
+            perturbed_direction = perturbed_direction / np.linalg.norm(perturbed_direction)
+
+            return self.emit_light_to_direction(perturbed_direction)
+        else:
+            direction = target - self.position
+            return self.emit_light_ray(direction)
+    
+    def emit(self, rays_per_degree_angle: int = 10, dimentions: int = 2) -> list[LightRay]:
+        """Emit LightRays uniformly in all directions."""
+        if dimentions == 2:
+            rays = []
+            step = 1.0 / rays_per_degree_angle
+            for angle in np.arange(0, 2 * np.pi, step * (np.pi / 180)):
+                x = np.cos(angle)
+                y = np.sin(angle)
+                direction = np.array([x, y, 0])
+                rays.append(self.emit_light_to_direction(direction))
+            return rays
+        elif dimentions == 3:
+            rays = []
+            step = 1.0 / rays_per_degree_angle
+            for theta in np.arange(0, np.pi, step * (np.pi / 180)):
+                for phi in np.arange(0, 2 * np.pi, step * (np.pi / 180)):
+                    x = np.sin(theta) * np.cos(phi)
+                    y = np.sin(theta) * np.sin(phi)
+                    z = np.cos(theta)
+                    direction = np.array([x, y, z])
+                    rays.append(self.emit_light_to_direction(direction))
+            return rays
+        else:
+            raise ValueError("dimentions must be either 2 or 3.")
+
+    def __repr__(self):
+        return (
+            f"LightSource(position={np.round(self.position, 3)}, "
+            f"color={self.color}, intensity={self.intensity:.2f})"
         )
