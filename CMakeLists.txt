@@ -88,7 +88,7 @@ else()
 endif()
 
 # ---- Optional: Copy py_src directory after build (ON, OFF) ----
-option(COPY_PY_SRC "Copy py_src directory after build" OFF)
+option(COPY_PY_SRC "Copy py_src directory after build" ON)
 
 if(COPY_PY_SRC)
     add_custom_command(TARGET main POST_BUILD

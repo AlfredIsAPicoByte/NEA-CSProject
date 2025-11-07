@@ -187,6 +187,7 @@ int main()
 			else if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS & camMode != 3) {
 				camera.mode = ORBIT;
 				camMode = 3;
+				camera.orbitDistance = glm::length(camera.Position - lightPos);
 				camera.SelectOrbitTarget(lightPos);
 				camera.orbitDistance = glm::length(camera.Position - lightPos);
 				AppendMessage("Set camera momvent mode to ORBIT");
