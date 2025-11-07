@@ -88,7 +88,7 @@ void Camera::FirstPersonMovement(GLFWwindow* window, Time& time)
 	{
 		Position += _speed * -Up;
 	}
-
+	
 	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
 	{
 		_speed = speed * speedFactor * time.deltaTime;

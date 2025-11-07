@@ -166,18 +166,12 @@ int main()
 	// Main loop
 	Engine::Instance().Start();
 	Engine::Instance().applyClearColor(bgClolor);
-	Engine::Instance().Update(window, timer,
-		// Render
+	Engine::Instance().Update(window,
+		// Input
 		[&]() {
-			Engine::Instance().applyClearColor(bgClolor);
-
 			camera.Move(window, timer);
 			camera.updateMatrix();
 
-			// Draw floor
-			floor.Draw(shaderProgram, camera);
-			light.Draw(lightShader, camera);
-			
 			if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS & camMode != 1) {
 				camera.mode = FIRST_PERSON;
 				camMode = 1;
@@ -195,12 +189,34 @@ int main()
 				camMode = 3;
 				camera.orbitDistance = glm::length(camera.Position - lightPos);
 				camera.SelectOrbitTarget(lightPos);
+				camera.orbitDistance = glm::length(camera.Position - lightPos);
 				AppendMessage("Set camera momvent mode to ORBIT");
 			}
+		},
+		// Render
+		[&]() {
+			Engine::Instance().applyClearColor(bgClolor);
+
+			ImGui_ImplOpenGL3_NewFrame();
+			ImGui_ImplGlfw_NewFrame();
+			ImGui::NewFrame();
+
+			ImGui::Begin("Info Panel");
+			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+			ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", camera.Position.x, camera.Position.y, camera.Position.z);
+			ImGui::Text("Camera Orientation: (%.2f, %.2f, %.2f)", camera.Orientation.x, camera.Orientation.y, camera.Orientation.z);
+			ImGui::Text("Camera Up: (%.2f, %.2f, %.2f)", camera.Up.x, camera.Up.y, camera.Up.z);
+			ImGui::Text("Camera Mode: %s", camera.mode == FIRST_PERSON ? "FIRST_PERSON" : camera.mode == PLANE ? "PLANE" : "ORBIT");
+			ImGui::End();
+
+			// Draw floor
+			floor.Draw(shaderProgram, camera);
+			light.Draw(lightShader, camera);
+
+			ImGui::Render();
+			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 			
-			AppendMessage("FPS: " + std::to_string(timer.frameRate) + " | Delta Time: " + std::to_string(timer.deltaTime) + "s");
-		}
-	);
+		}, timer);
 
 	// Clean up and exit
 	Engine::Instance().cleanUp(window);

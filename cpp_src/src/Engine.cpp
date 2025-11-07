@@ -3,6 +3,12 @@
 void Engine::Start()
 {
     state = EngineState::STARTING;
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
+    AppendMessage("Engine Started.");
 }
 
 void Engine::PausePlay()
@@ -14,17 +20,24 @@ void Engine::PausePlay()
     }
 }
 
-void Engine::Update(GLFWwindow* window, Time timer, std::function<void()> render)
+void Engine::Update(GLFWwindow* window, std::function<void()> input, std::function<void()> render, Time timer)
 {
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 460");
+
     state = EngineState::RUNNING;
 
     while (!glfwWindowShouldClose(window))
     {
         timer.update();
-        
         clearScreen();
+
         // Process user input
-		awiatExitWindow(window);
+        if (!io.WantCaptureKeyboard && !io.WantCaptureMouse){
+            awiatExitWindow(window);
+            input();
+        }
 
         // Render the scene
         render();
@@ -38,11 +51,16 @@ void Engine::Update(GLFWwindow* window, Time timer, std::function<void()> render
 void Engine::Exit()
 {
     state = EngineState::STOPPED;
+
 	AppendMessage("Engine Stopped.");
 }
 
 void Engine::cleanUp(GLFWwindow* window)
 {
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
     // Delete window before ending the program
     glfwDestroyWindow(window);
     // Terminate GLFW before ending the program
