@@ -87,7 +87,7 @@ else()
     add_compile_definitions(DEBUG_MODE=0)
 endif()
 
-# ---- Optional: Copy py_src directory after build ----
+# ---- Optional: Copy py_src directory after build (ON, OFF) ----
 option(COPY_PY_SRC "Copy py_src directory after build" ON)
 
 if(COPY_PY_SRC)
