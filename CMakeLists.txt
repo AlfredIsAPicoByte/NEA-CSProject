@@ -5,16 +5,16 @@ project(Raycaster)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Explicitly point to Python installation
-find_package(Python COMPONENTS Development REQUIRED)
+# point to venv python (fix missing slash). Use the variable name FindPython expects and cache it.
+set(Python_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../.venv/Scripts/python.exe" CACHE FILEPATH "Path to the Python executable in the project venv")
 
 # ---- Find packages ----
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glad CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 
 # ---- Include directories ----
 include_directories(
@@ -39,6 +39,7 @@ target_link_libraries(main PRIVATE
     glad::glad
     glm::glm
     pybind11::embed
+    imgui::imgui
     ${Python_LIBRARIES}
 )
 target_include_directories(main PRIVATE ${Python_INCLUDE_DIRS})
@@ -59,8 +60,6 @@ add_custom_command(TARGET main POST_BUILD
     ${SHADER_DIR} $<TARGET_FILE_DIR:main>/shaders
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${TEXTURE_DIR} $<TARGET_FILE_DIR:main>/textures
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_CURRENT_SOURCE_DIR}/py_src $<TARGET_FILE_DIR:main>/py_src
 )
 
 # ---- Optional: support embedding Python. Disabled by default; enable with -DUSE_EMBEDDED_PYTHON=ON ----
@@ -77,7 +76,7 @@ endif()
 
 # ---- Optional: Output folders ----
 set_target_properties(main PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build
 )
 
 # ---- Optional: Debugging definitions ----
@@ -87,3 +86,34 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 else()
     add_compile_definitions(DEBUG_MODE=0)
 endif()
+
+# ---- Optional: Copy py_src directory after build (ON, OFF) ----
+option(COPY_PY_SRC "Copy py_src directory after build" ON)
+
+if(COPY_PY_SRC)
+    add_custom_command(TARGET main POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/py_src
+        $<TARGET_FILE_DIR:main>/py_src
+    )
+endif()
+
+# ---- ImGui ----
+# Add ImGui headers and sources from your project directories
+set(IMGUI_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/include")
+set(IMGUI_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/src")
+
+set(IMGUI_SOURCES
+    ${IMGUI_SRC_DIR}/imgui.cpp
+    ${IMGUI_SRC_DIR}/imgui_draw.cpp
+    ${IMGUI_SRC_DIR}/imgui_tables.cpp
+    ${IMGUI_SRC_DIR}/imgui_widgets.cpp
+    ${IMGUI_SRC_DIR}/imgui_impl_glfw.cpp
+    ${IMGUI_SRC_DIR}/imgui_impl_opengl3.cpp
+)
+
+# Add ImGui sources to your executable
+target_sources(main PRIVATE ${IMGUI_SOURCES})
+
+# Add ImGui include directory
+target_include_directories(main PRIVATE ${IMGUI_INCLUDE_DIR})
