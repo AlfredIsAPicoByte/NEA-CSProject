@@ -151,7 +151,7 @@ class LightRay(Ray, ColorData):
         """Create a LightRay from 0-255 RGB(A) values."""
         color = ColorData.from_rgb255(r, g, b, alpha)
         return cls(origin, orientation , color, intensity, name)
-
+    
     def Attenuate(self, distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0):
         """Return a dimmed copy of the LightRay."""
         factor = 1 / (a * (distance ** 2) + b * distance + c)

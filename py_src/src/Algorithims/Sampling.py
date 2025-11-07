@@ -6,16 +6,6 @@ from typing import Tuple, Optional, List
 import random
 import math
 
-class SamplerType(Enum):
-    MONTE_CARLO = 0
-    STRATIFIED = 1
-    QUASI_MONTE_CARLO = 2
-    ADAPTIVE = 3  # placeholder
-
-class RenderMode(Enum):
-    RAYTRACING = 0
-    RASTERIZATION = 1
-
 class PixelFilter(Enum):
     BOX = 0
     TENT = 1
@@ -23,28 +13,18 @@ class PixelFilter(Enum):
 
 @dataclass
 class SampleSettings:
+    width: int = 800               # image width in pixels
+    height: int = 600              # image height in pixels
+    filter_type: PixelFilter = PixelFilter.BOX
+    filter_width: float = 1.0          # size of the filter kernel
     size: int = 16               # total samples per pixel (may be square for stratified)
-    sampler_type: SamplerType = SamplerType.STRATIFIED
-    position: int = 1            # reserved / legacy
-
-@dataclass
-class RenderSettings:
-    width: int = 640
-    height: int = 480
-    rays_per_pixel: int = 1
-    image_scale: float = 1.0
-    # background_color and ambient_light are left generic to avoid tight coupling
-    background_color: Optional[object] = None
-    ambient_light: Optional[object] = None
-    render_mode: RenderMode = RenderMode.RAYTRACING
 
 @dataclass
 class Sample:
-    u: float
-    v: float
-    # rays and pixel-level results can be attached by the renderer
-    rays: List[object] = None
-    pixel_data: List[object] = None
+    u: float                      # horizontal sample position in [0,1)
+    v: float                      # vertical sample position in [0,1)
+    
+    pixels_covered: int = 1        # number of pixels this sample covers (for adaptive sampling)
 
 class Sampler(ABC):
     """
@@ -175,11 +155,30 @@ class HaltonSampler(Sampler):
     def clone(self, seed: Optional[int] = None) -> "HaltonSampler":
         return HaltonSampler(self.samples_per_pixel, seed if seed is not None else self._base_seed)
 
+class AdaptiveSampler(Sampler):
+    """Placeholder for an adaptive sampler implementation."""
+    def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
+        super().__init__(samples_per_pixel)
+        # Implementation would go here
+
+    def start_pixel(self, x: int, y: int) -> None:
+        pass
+
+    def next_1d(self) -> float:
+        return random.random()
+
+    def next_2d(self) -> Tuple[float, float]:
+        return (random.random(), random.random())
+
+    def clone(self, seed: Optional[int] = None) -> "AdaptiveSampler":
+        return AdaptiveSampler(self.samples_per_pixel, seed)
+
 # Registry and factory
 _SAMPLER_REGISTRY: dict[str, type[Sampler]] = {
     "random": RandomSampler,
     "stratified": StratifiedSampler,
     "halton": HaltonSampler,
+    "adaptive": AdaptiveSampler,
 }
 
 def create_sampler(name: str, samples_per_pixel: int = 1, seed: Optional[int] = None) -> Sampler:
@@ -192,50 +191,29 @@ class SamplingManager:
     """
     High-level manager combining settings and sampler use.
     Use get_samples_for_pixel(x,y) to obtain a list of Sample(u,v).
-    Also supports legacy bulk generation (GenerateSamples) for precomputed sample sets.
     """
-    def __init__(self, sample_settings: SampleSettings, render_settings: RenderSettings, sampler_name: str | None = None, seed: Optional[int] = None):
+    def __init__(self, sample_settings: SampleSettings, sampler_name: str | None = None, seed: Optional[int] = None, precompute: bool = False):
         self.sample_settings = sample_settings
-        self.render_settings = render_settings
         self.seed = seed
-        self.sampler_name = sampler_name or ("stratified" if self.sample_settings.sampler_type == SamplerType.STRATIFIED else "random")
+        self.sampler_name = sampler_name if sampler_name is not None else "random"
         self._spp = max(1, self.sample_settings.size)
         self._sampler = create_sampler(self.sampler_name, self._spp, seed)
-
-        # optional precomputed list (legacy behaviour from older code)
+        # Precompute samples if requested (disabled by default to save memory)
         self.samples: List[Tuple[float, float]] = []
-        self.GenerateSamples()
-
-    def GenerateSamples(self) -> None:
-        """Precompute a global sample set according to SampleSettings (keeps legacy behaviour)."""
-        self.samples.clear()
-        t = self.sample_settings.sampler_type
-        n = self.sample_settings.size
-        if t == SamplerType.MONTE_CARLO:
-            for _ in range(n):
-                self.samples.append((random.random(), random.random()))
-        elif t == SamplerType.STRATIFIED:
-            grid = int(math.ceil(math.sqrt(max(1, n))))
-            for i in range(grid):
-                for j in range(grid):
-                    if len(self.samples) >= n: break
-                    x = (i + random.random()) / grid
-                    y = (j + random.random()) / grid
-                    self.samples.append((x, y))
-        elif t == SamplerType.QUASI_MONTE_CARLO:
-            def halton(idx, base):
-                result = 0.0; f = 1.0 / base; i = idx
-                while i > 0:
-                    result += f * (i % base)
-                    i //= base; f /= base
-                return result
-            for i in range(n):
-                self.samples.append((halton(i + 1, 2), halton(i + 1, 3)))
-        else:
-            # fallback to random
-            for _ in range(n):
-                self.samples.append((random.random(), random.random()))
-
+        self._precompute = bool(precompute)
+        if self._precompute:
+            self._precompute_samples()
+    
+    def _precompute_samples(self):
+        self.samples = []
+        sampler = self._sampler.clone(self.seed)
+        for y in range(self.sample_settings.height):
+            for x in range(self.sample_settings.width):
+                sampler.start_pixel(x, y)
+                for _ in range(self._spp):
+                    u, v = sampler.next_2d()
+                    self.samples.append((u, v))
+        
     def get_samples_for_pixel(self, x: int, y: int) -> List[Sample]:
         """
         Return a list of Sample(u,v) for the given pixel.
