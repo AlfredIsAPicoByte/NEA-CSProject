@@ -32,9 +32,8 @@ class Camera
 public:
 	// Stores the main vectors of the camera
 	glm::vec3 Position;
-	glm::vec3 Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
-	glm::vec3 Up;
 	glm::vec3 WorldUp;
+	glm::vec3 Up, Forward, Right;
 	glm::mat4 viewMatrix = glm::mat4(1.0f);
 	glm::mat4 projectionMatrix = glm::mat4(1.0f);
 	glm::mat4 cameraMatrix = glm::mat4(1.0f);
@@ -75,11 +74,14 @@ public:
 	float planeMaxPower = 5.0f;
 	float planeMinPower = -5.0f;
 	float planePowerIncrement = 1.0f;
+	bool isPlanePowerIncreasing = false;
+	bool isPlaneActivelyStoping = false;
 
 	// Orbit mode state
-	float orbit_speed = 100.0f;
+	float orbitSpeed = 10.0f;
 	float orbitPitch = 0.0f;
 	float orbitYaw = 0.0f;
+	float orbitRoll = 0.0f;
 	float orbitDistance = 5.0f;
 	float orbitMinDistance = 0.1f;
 	float orbitMaxDistance = 100.0f;
@@ -87,7 +89,7 @@ public:
 	glm::vec3 orbitTarget = glm::vec3(0.0f);
 
 	// Camera constructor to set up initial values
-	Camera(int width, int height, glm::vec3 position);
+	Camera(int width, int height, glm::vec3 position, glm::vec3 forward, glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f));
 
 	// Updates the camera matrix to the Vertex Shader
 	void updateMatrix();

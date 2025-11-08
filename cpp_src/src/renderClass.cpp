@@ -1,7 +1,6 @@
 #include "renderClass.h"
 
 Scene::Scene()
-    : shaderProgram(nullptr), camera(nullptr)
 {
     AppendMessage("Scene created.");
 }
@@ -41,11 +40,6 @@ void Scene::cleanup()
 }
 
 void Scene::loadModel(const std::string& modelPath)
-{
-
-}
-
-void Scene::loadTexture(const std::string& texturePath)
 {
 
 }

@@ -157,7 +157,7 @@ int main()
 	glEnable(GL_DEPTH_TEST);
 
 	Time time;
-	Camera camera(windowWidth, windowHeight, glm::vec3(0.0f, 0.0f, 2.0f));
+	Camera camera(windowWidth, windowHeight, glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, -1.0f));
 	camera.fov = 60.0f;
 	camera.speed = 0.5f;
 	camera.speedFactor = 3.0f;
@@ -178,7 +178,6 @@ int main()
 				if (camMode != 1) {
 					camera.mode = FIRST_PERSON;
 					camMode = 1;
-					camera.Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
 					AppendMessage("Set camera momvent mode to FIRST_PERSON");
 				}
 			});
@@ -214,7 +213,7 @@ int main()
 			ImGui::Begin("Info Panel");
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", time.deltaTime * 1000.0f, time.frameRate);
 			ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", camera.Position.x, camera.Position.y, camera.Position.z);
-			ImGui::Text("Camera Orientation: (%.2f, %.2f, %.2f)", camera.Orientation.x, camera.Orientation.y, camera.Orientation.z);
+			ImGui::Text("Camera Orientation: (%.2f, %.2f, %.2f)", camera.Forward.x, camera.Forward.y, camera.Forward.z);
 			ImGui::Text("Camera Up: (%.2f, %.2f, %.2f)", camera.Up.x, camera.Up.y, camera.Up.z);
 			ImGui::Text("Camera Mode: %s", camera.mode == FIRST_PERSON ? "FIRST_PERSON" : camera.mode == PLANE ? "PLANE" : "ORBIT");
 			ImGui::Text("Controls:");
