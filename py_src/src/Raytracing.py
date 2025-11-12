@@ -1,9 +1,9 @@
-from src.Scene import Scene
-from src.Camera import CameraObject
-from src.Geometry import VObject
-from src.Luminance import LightRay, ColorData
-from src.Algorithims.Base import Algorithm, register_algorithm
-from src.Algorithims.Sampling import Sampler
+from Scene import Scene
+from Camera import VCamera
+from Geometry import VObject
+from Luminance import LightRay, Color
+from Algorithims import Algorithm, register_algorithm
+from Sampling import Sampler
 
 import numpy as np
 import random
@@ -15,7 +15,7 @@ class RayGenerator(ABC):
     @abstractmethod
     def generate(
         self,
-        camera: "CameraObject",
+        camera: "VCamera",
         rays_per_pixel: int,
         seed: Optional[int] = None,
         region: Optional[Tuple[int, int, int, int]] = None,  # (x, y, width, height)
@@ -30,12 +30,12 @@ class CameraJitterRayGenerator(RayGenerator):
        stratified or quasi-random sample positions per pixel (useful for tiles).
     """
     def generate(
-        self,
-        camera: "CameraObject",
-        rays_per_pixel: int,
-        seed: Optional[int] = None,
-        region: Optional[Tuple[int, int, int, int]] = None,
-        sampler: Optional[Sampler] = None,
+    self,
+    camera: "VCamera",
+    rays_per_pixel: int,
+    seed: Optional[int] = None,
+    region: Optional[Tuple[int, int, int, int]] = None,
+    sampler: Optional[Sampler] = None,
     ) -> List[LightRay]:
         if seed is not None:
             rand = random.Random(seed)
@@ -76,7 +76,7 @@ class CameraJitterRayGenerator(RayGenerator):
                         ray = LightRay(
                             origin=camera.transform.position,
                             orientation=orientation,
-                            color=ColorData(1.0, 1.0, 1.0, 1.0),
+                            color=Color(1.0, 1.0, 1.0, 1.0),
                             name=f"Camera Ray ({x},{y}) #{r}"
                         )
                         rays.append(ray)
@@ -104,7 +104,7 @@ class CameraJitterRayGenerator(RayGenerator):
                         ray = LightRay(
                             origin=camera.transform.position,
                             orientation=orientation,
-                            color=ColorData(1.0, 1.0, 1.0, 1.0),
+                            color=Color(1.0, 1.0, 1.0, 1.0),
                             name=f"Camera Ray ({x},{y}) #{r}"
                         )
                         rays.append(ray)
@@ -121,7 +121,7 @@ class CameraJitterRayGenerator(RayGenerator):
                     ray = LightRay(
                         origin=camera.transform.position,
                         orientation=orientation,
-                        color=ColorData(1.0, 1.0, 1.0, 1.0),
+                        color=Color(1.0, 1.0, 1.0, 1.0),
                         name=f"Camera Ray ({x},{y}) #{r}"
                     )
                     rays.append(ray)
@@ -164,13 +164,13 @@ class RayMarchingIntersection(IntersectionStrategy):
 
 class ShadingStrategy(ABC):
     @abstractmethod
-    def shade(self, scene: Scene, ray: LightRay, hit_object: VObject, distance: float) -> ColorData:
+    def shade(self, scene: Scene, ray: LightRay, hit_object: VObject, distance: float) -> Color:
         ...
 
 class BasicLambertShading(ShadingStrategy):
-    def shade(self, scene: Scene, ray: LightRay, hit_object: VObject, distance: float) -> ColorData:
+    def shade(self, scene: Scene, ray: LightRay, hit_object: VObject, distance: float) -> Color:
         point = ray.point_at(distance)
-        
+
         # try common method names for normal
         if hasattr(hit_object.shape, "get_normal"):
             normal = hit_object.shape.get_normal(point)
@@ -179,7 +179,8 @@ class BasicLambertShading(ShadingStrategy):
         else:
             # fallback normal
             normal = np.array([0.0, 1.0, 0.0])
-        color = ColorData(0.0, 0.0, 0.0, 1.0)
+
+        color = Color(0.0, 0.0, 0.0, 1.0)
         for light in scene.get_lights():
             light_dir = light.position - point
             light_dist = np.linalg.norm(light_dir)
@@ -193,13 +194,13 @@ class BasicLambertShading(ShadingStrategy):
                 mat_color = base_color.color
             else:
                 # default white if material missing
-                mat_color = ColorData(1.0, 1.0, 1.0, 1.0)
+                mat_color = Color(1.0, 1.0, 1.0, 1.0)
             # accumulate
-            color = ColorData(
+            color = Color(
                 color.r + mat_color.r * light.color.r * intensity,
                 color.g + mat_color.g * light.color.g * intensity,
                 color.b + mat_color.b * light.color.b * intensity,
-                1.0
+                1.0,
             )
         return color
 
@@ -219,7 +220,7 @@ class Raytracer(Algorithm):
         self.intersector = intersection_strategy if intersection_strategy is not None else RayMarchingIntersection()
         self.shader = shading_strategy if shading_strategy is not None else BasicLambertShading()
 
-    def render(self, scene: Scene, camera: "CameraObject", seed: Optional[int] = None, tile_size: Optional[Tuple[int,int]] = None, sampler: Optional[Sampler] = None) -> Any:
+    def render(self, scene: Scene, camera: "VCamera", seed: Optional[int] = None, tile_size: Optional[Tuple[int,int]] = None, sampler: Optional[Sampler] = None) -> Any:
         """
         Render the scene. Accepts optional sampler (SamplingManager or Sampler) and optional tile_size.
         """

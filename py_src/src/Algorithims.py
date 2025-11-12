@@ -3,10 +3,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Dict, Type, Any
 
-# Keep imports minimal here to avoid circular imports. Import concrete implementations lazily.
-# from src.Luminance import Color, SimpleMaterial
-# from src.PrimaryStructures import Ray
-# from src.Camera import CameraObject
+from Luminance import Color, SimpleMaterial
+from PrimaryStructures import Ray
+from Camera import VCamera
 
 @dataclass
 class RenderStats:

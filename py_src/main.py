@@ -1,5 +1,4 @@
-import src
-import numpy as np
+from src import *
 
 if __name__ == "__main__":
     pass

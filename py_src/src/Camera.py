@@ -1,6 +1,7 @@
-from src.PrimaryStructures import Transform, Ratio
 import numpy as np
 from enum import Enum
+
+from PrimaryStructures import Transform, Ratio
 
 """
 
@@ -26,7 +27,7 @@ class CameraMode (Enum):
     PLANE = 2
     ORBIT = 3
 
-class CameraObject:
+class VCamera:
     """
     A Camera class that supports different projection types and movement modes.
     Attributes:
@@ -125,5 +126,5 @@ class CameraObject:
 
     def resize_aspect(self, aspect: Ratio, scale: float = 1.0):
         self.aspect = aspect
-        self.width = int(aspect.numerator * scale)
-        self.height = int(aspect.denominator * scale)
+        self.width = int(aspect.width * scale)
+        self.height = int(aspect.height * scale)
