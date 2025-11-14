@@ -1,7 +1,8 @@
-from src.PrimaryStructures import Ray
-from src.Reflections import reflect_ray
-from src.Refractions import refract_ray
 import numpy as np
+
+from PrimaryStructures import Ray
+from Reflections import reflect_ray
+from Refractions import refract_ray
 
 """
 
@@ -10,7 +11,7 @@ import numpy as np
 def clamp(value, min_value: float|int = 0.0, max_value: float|int = 1.0):
     return max(min_value, min(value, max_value))
 
-class ColorData:
+class Color:
     def __init__(self, r: float = 0, g: float = 0, b: float = 0, alpha: float = 1.0):
         """Clamp and store RGBA values between 0.0 and 1.0."""
         self.rgba = np.array([clamp(r), clamp(g), clamp(b), clamp(alpha)], dtype=float)
@@ -22,7 +23,7 @@ class ColorData:
     
     @classmethod
     def use_hex(cls, hex_str: str):
-        """Create a ColorData object from a hex string."""
+        """Create a Color object from a hex string."""
         hex_str = hex_str.strip().lstrip('#')
         if len(hex_str) not in (6, 8):
             raise ValueError("Hex color must be 6 (RGB) or 8 (RGBA) characters long.")
@@ -37,7 +38,7 @@ class ColorData:
 
     @classmethod
     def use_array(cls, arr):
-        """Create a ColorData object from an array-like input."""
+        """Create a Color object from an array-like input."""
         if len(arr) not in (3, 4):
             raise ValueError("Array must have 3 (RGB) or 4 (RGBA) elements.")
         r, g, b = arr[0], arr[1], arr[2]
@@ -46,7 +47,7 @@ class ColorData:
     
     @classmethod
     def from_rgb255(cls, r: int, g: int, b: int, alpha: int = 255):
-        """Create a ColorData object from 0-255 RGB(A) values."""
+        """Create a Color object from 0-255 RGB(A) values."""
         return cls(r / 255.0, g / 255.0, b / 255.0, alpha / 255.0)
 
     @property
@@ -66,53 +67,30 @@ class ColorData:
     @alpha.setter
     def alpha(self, value): self.rgba[3] = clamp(value)
 
-    def __mul__(self, other):
-        if isinstance(other, ColorData):
-            return ColorData(*np.clip(self.rgba * other.rgba, 0, 1))
-        elif isinstance(other, (int, float)):
-            r, g, b, a = self.rgba
-            return ColorData(clamp(r * other), clamp(g * other), clamp(b * other), a)
-        return NotImplemented
-
     def __add__(self, other):
-        if isinstance(other, ColorData):
-            return ColorData(*np.clip(self.rgba + other.rgba, 0, 1))
-        return NotImplemented
-    
-    def __sub__(self, other):
-        if isinstance(other, ColorData):
-            return ColorData(*np.clip(self.rgba - other.rgba, 0, 1))
-        return NotImplemented
-    
+        return Color(self.red + other.red, self.green + other.green, self.blue + other.blue)
+    def __mul__(self, scalar):
+        return Color(self.red * scalar, self.green * scalar, self.blue * scalar)
     def __truediv__(self, other):
-        if isinstance(other, ColorData):
-            return ColorData(*np.clip(self.rgba / np.maximum(other.rgba, 1e-8), 0, 1))
-        elif isinstance(other, (int, float)):
-            return ColorData(*np.clip(self.rgba / max(other, 1e-8), 0, 1))
-        return NotImplemented
-    
+        return Color(self.red / other.red, self.green / other.green, self.blue / other.blue)
     def __eq__(self, other):
-        if isinstance(other, ColorData):
-            return np.allclose(self.rgba, other.rgba)
-        return NotImplemented
-
+        return np.array_equal(self.rgba, other.rgba)
     def __iter__(self):
         yield from self.rgba
-
+        
     def to_hex(self, include_alpha=True):
         r, g, b, a = (self.rgba * 255).astype(int)
         return f"#{r:02X}{g:02X}{b:02X}{a:02X}" if include_alpha else f"#{r:02X}{g:02X}{b:02X}"
-
     def __repr__(self):
         r, g, b, a = self.rgba
-        return f"ColorData(r={r:.3f}, g={g:.3f}, b={b:.3f}, a={a:.3f})"
+        return f"Color(r={r:.3f}, g={g:.3f}, b={b:.3f}, a={a:.3f})"
 
-class LightRay(Ray, ColorData):
+class LightRay(Ray, Color):
     def __init__(
         self,
         origin: np.ndarray,
         orientation : np.ndarray,
-        color: ColorData,
+        color: Color,
         intensity: float = 1.0,
         name: str = "Light Ray"
     ):
@@ -124,32 +102,42 @@ class LightRay(Ray, ColorData):
 
         # Initialize both parent classes
         Ray.__init__(self, origin, orient , name)
-        ColorData.__init__(self, color.red, color.green, color.blue, color.alpha)
+        Color.__init__(self, color.red, color.green, color.blue, color.alpha)
 
         self.intensity = float(intensity)
         self.name = name  # keep name stored directly
     
+
     @classmethod
-    def from_ray(cls, ray: Ray, color: ColorData, intensity: float = 1.0, name: str = "Light Ray"):
-        """Create a LightRay from an existing Ray and color."""
-        return cls(ray.origin.copy(), ray.orientation .copy(), color, intensity, name)
+    def from_ray(cls, ray: Ray, color: "Color", intensity: float):
+        """
+        Helper constructor that preserves the Ray and ColorData instances passed in.
+        Accepts signature used by tests: from_ray(ray, color, intensity)
+        """
+        # Ensure intensity is numeric and color is passed through
+        try:
+            intensity_f = float(intensity)
+        except Exception as exc:
+            raise TypeError(f"Invalid intensity value: {intensity}") from exc
+        # Construct from an existing Ray and Color
+        return cls(ray.origin.copy(), ray.orientation.copy(), color, intensity_f, ray.name)
     
     @classmethod
     def from_components(cls, origin, orientation , r, g, b, alpha=1.0, intensity=1.0, name="Light Ray"):
         """Create a LightRay from individual components."""
-        color = ColorData(r, g, b, alpha)
+        color = Color(r, g, b, alpha)
         return cls(origin, orientation , color, intensity, name)
     
     @classmethod
     def from_hex(cls, origin, orientation , hex_str, intensity=1.0, name="Light Ray"):
         """Create a LightRay from a hex color string."""
-        color = ColorData.use_hex(hex_str)
+        color = Color.use_hex(hex_str)
         return cls(origin, orientation , color, intensity, name)
     
     @classmethod
     def from_rgb255(cls, origin, orientation , r, g, b, alpha=255, intensity=1.0, name="Light Ray"):
         """Create a LightRay from 0-255 RGB(A) values."""
-        color = ColorData.from_rgb255(r, g, b, alpha)
+        color = Color.from_rgb255(r, g, b, alpha)
         return cls(origin, orientation , color, intensity, name)
     
     def Attenuate(self, distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0):
@@ -179,14 +167,14 @@ class LightRay(Ray, ColorData):
         return Ray(self.origin.copy(), self.orientation .copy(), self.name)
     
     @property
-    def base_color(self) -> ColorData:
+    def base_color(self) -> Color:
         """Return the color data of this LightRay without intensity scaling."""
-        return ColorData(self.red, self.green, self.blue, self.alpha)
+        return Color(self.red, self.green, self.blue, self.alpha)
     
     @property
-    def final_color(self) -> ColorData:
+    def final_color(self) -> Color:
         """Return the effective color of this LightRay after intensity scaling."""
-        return ColorData(
+        return Color(
             clamp(self.red * self.intensity),
             clamp(self.green * self.intensity),
             clamp(self.blue * self.intensity),
@@ -198,12 +186,12 @@ class LightRay(Ray, ColorData):
             f"LightRay("
             f"origin={np.round(self.origin, 3)}, "
             f"orientation ={np.round(self.orientation , 3)}, "
-            f"color={self.color_data}, "
+            f"color={self.base_color}, "
             f"intensity={self.intensity:.2f})"
         )
 
 class Material:
-    def __init__(self, color: ColorData, roughness: float, glossiness: float):
+    def __init__(self, color: Color, roughness: float, glossiness: float):
         """
         A simple material that reflects LightRay based on its color, roughness, and glossiness.
         
@@ -221,7 +209,7 @@ class Material:
         self.is_transparent = False
         self._rng = np.random.default_rng()
             
-    def AffectColor(self, color: ColorData) -> ColorData:
+    def AffectColor(self, color: Color) -> Color:
         """Apply material attributes to a color."""
         return self.base_color * color * self.glossiness + color * (1 - self.glossiness) * (1 - self.roughness)
 
@@ -260,63 +248,27 @@ class Material:
         )
     
 class LightSource:
-    def __init__(self, position: np.ndarray, color: ColorData, intensity: float = 1.0, name: str = "Light Source"):
+    def __init__(self, position: np.ndarray, color: Color, intensity: float = 1.0, name: str = "Light Source"):
         self.position = position
         self.color = color
         self.intensity = intensity
         self.name = name
     
-    def emit_light_to_direction(self, direction: np.ndarray) -> LightRay:
-        """Emit a LightRay from the light source in the given direction."""
+    def LightRayReturn(self, incoming_ray: Ray) -> LightRay:
+        """Generate a LightRay from this light source towards the incoming ray's origin."""
+        direction = incoming_ray.origin - self.position
+        norm = np.linalg.norm(direction)
+        if norm == 0:
+            raise ValueError("Incoming ray origin cannot be the same as light source position.")
+        orientation  = direction / norm
+
         return LightRay(
             origin=self.position.copy(),
-            orientation =direction / np.linalg.norm(direction),
+            orientation=orientation ,
             color=self.color,
             intensity=self.intensity,
-            name=f"{self.name} Ray"
+            name=f"{self.name} to {incoming_ray.name}"
         )
-    
-    def emit_light_at_target(self, target: np.ndarray, angle_spread: float = 0, epsilon: float = 0.08) -> LightRay:
-        """Emit a LightRay from the light source towards a target point with the option to spread out the ray."""
-        if angle_spread > 0:
-            # Calculate random spread within the angle
-            direction = target - self.position
-            direction = direction / np.linalg.norm(direction)
-
-            # Generate random perturbation
-            random_perturbation = np.random.normal(0, epsilon, size=3)
-            perturbed_direction = direction + random_perturbation
-            perturbed_direction = perturbed_direction / np.linalg.norm(perturbed_direction)
-
-            return self.emit_light_to_direction(perturbed_direction)
-        else:
-            direction = target - self.position
-            return self.emit_light_ray(direction)
-    
-    def emit(self, rays_per_degree_angle: int = 10, dimentions: int = 2) -> list[LightRay]:
-        """Emit LightRays uniformly in all directions."""
-        if dimentions == 2:
-            rays = []
-            step = 1.0 / rays_per_degree_angle
-            for angle in np.arange(0, 2 * np.pi, step * (np.pi / 180)):
-                x = np.cos(angle)
-                y = np.sin(angle)
-                direction = np.array([x, y, 0])
-                rays.append(self.emit_light_to_direction(direction))
-            return rays
-        elif dimentions == 3:
-            rays = []
-            step = 1.0 / rays_per_degree_angle
-            for theta in np.arange(0, np.pi, step * (np.pi / 180)):
-                for phi in np.arange(0, 2 * np.pi, step * (np.pi / 180)):
-                    x = np.sin(theta) * np.cos(phi)
-                    y = np.sin(theta) * np.sin(phi)
-                    z = np.cos(theta)
-                    direction = np.array([x, y, z])
-                    rays.append(self.emit_light_to_direction(direction))
-            return rays
-        else:
-            raise ValueError("dimentions must be either 2 or 3.")
 
     def __repr__(self):
         return (

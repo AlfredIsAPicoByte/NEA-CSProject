@@ -113,25 +113,34 @@ class Ray:
 class Transform:
     """
     Represents a 3D transformation with position, rotation, scale, and hierarchical parent support.
+
+    Modes:
+      - "global": methods update the public position/rotation/scale (default, keeps simple test usage)
+      - "local" : methods update the local_* offsets which are applied on top of the public transform
     """
     def __init__(self, position: np.ndarray, rotation: np.ndarray, scale: np.ndarray, parent=None, name: str = "Transform"):
         if position.shape != (3,) or rotation.shape != (3,) or scale.shape != (3,):
             raise ValueError("position, rotation, and scale must be 3D vectors")
             
-        self.position = position
-        self.rotation = rotation  # in radians (Euler angles)
-        self.scale = scale
-        self.local_position = np.zeros(3)
-        self.local_rotation = np.zeros(3)  # in radians
-        self.local_scale = np.ones(3)
+        # public/base transform (treated as the "global/base" transform)
+        self.position = np.asarray(position, dtype=float)
+        self.rotation = np.asarray(rotation, dtype=float)  # Euler angles in radians
+        self.scale = np.asarray(scale, dtype=float)
+
+        # explicit local offsets applied on top of the base transform
+        self.local_position = np.zeros(3, dtype=float)
+        self.local_rotation = np.zeros(3, dtype=float)
+        self.local_scale = np.ones(3, dtype=float)
+
         self.parent = parent
         self.name = name
 
         self.update_orientations()
 
     def update_orientations(self):
-        """Updates the forward, right, and up vectors based on the current rotation."""
-        rx, ry, rz = self.rotation
+        """Updates forward/right/up vectors based on the combined (base + local) rotation."""
+        # use combined rotation (base + local) for orientation vectors
+        rx, ry, rz = self.rotation + self.local_rotation
         cx, sx = cos(rx), sin(rx)
         cy, sy = cos(ry), sin(ry)
         cz, sz = cos(rz), sin(rz)
@@ -147,13 +156,8 @@ class Transform:
         self.right = R @ np.array([1, 0, 0])
         self.up = R @ np.array([0, 1, 0])
 
-    def get_local_matrix(self):
-        """Returns the local transformation matrix."""
-        tx, ty, tz = self.local_position
-        sx, sy, sz = self.local_scale
-        rx, ry, rz = self.local_rotation
-        
-        # Rotation matrices
+    def _rotation_matrix_from_euler(self, euler: np.ndarray) -> np.ndarray:
+        rx, ry, rz = euler
         rot_x = np.array([
             [1, 0, 0],
             [0, cos(rx), -sin(rx)],
@@ -169,178 +173,221 @@ class Transform:
             [sin(rz), cos(rz), 0],
             [0, 0, 1]
         ])
+        return rot_z @ rot_y @ rot_x
 
-        # Scale and translation
-        scale = np.diag([sx, sy, sz])
-        translate = np.array([tx, ty, tz])
+    def _make_transform_matrix(self, position: np.ndarray, rotation: np.ndarray, scale: np.ndarray) -> np.ndarray:
+        """Create a 4x4 transform matrix from position, euler rotation and scale."""
+        R = self._rotation_matrix_from_euler(rotation)
+        S = np.diag(np.append(scale, 1.0))
+        M = np.eye(4)
+        M[:3, :3] = R @ np.diag(scale)
+        M[:3, 3] = position
+        return M
 
-        # Combine: T * Rz * Ry * Rx * S
-        return np.eye(4)
+    def get_local_matrix(self) -> np.ndarray:
+        """Returns the local (offset) transformation matrix (4x4) built from local_position/local_rotation/local_scale."""
+        return self._make_transform_matrix(self.local_position, self.local_rotation, self.local_scale)
         
-    def get_global_matrix(self):
-        """Returns the global transformation matrix."""
+    def get_base_matrix(self) -> np.ndarray:
+        """Returns the base/global matrix built from the public position/rotation/scale."""
+        return self._make_transform_matrix(self.position, self.rotation, self.scale)
+
+    def get_global_matrix(self) -> np.ndarray:
+        """Returns the global transformation matrix: parent's global @ base @ local."""
+        base = self.get_base_matrix()
         local = self.get_local_matrix()
+        combined = base @ local
         if self.parent is not None:
-            return self.parent.get_global_matrix() @ local
-        return local
+            return self.parent.get_global_matrix() @ combined
+        return combined
     
-    def get_global_position(self):
-        """Returns the global position of the transform."""
+    def get_global_position(self) -> np.ndarray:
+        """Returns the global position of the transform (applies parent, base and local)."""
         global_matrix = self.get_global_matrix()
         return global_matrix[:3, 3]
 
-    def get_global_rotation(self):
-        """Returns the global rotation (Euler angles) of the transform."""
-        global_matrix = self.get_global_matrix()
-        # This is a complex operation and depends on the specific matrix decomposition.
-        # A simplified version is not straightforward.
-        return np.array([acos(global_matrix[0,0]), acos(global_matrix[1,1]), acos(global_matrix[2,2])])
-
-    def get_global_scale(self):
-        """Returns the global scale of the transform."""
-        global_matrix = self.get_global_matrix()
-        return np.linalg.norm(global_matrix[:3, :3], axis=0)
-
-    def translate(self, vector: np.ndarray, isWorld: bool = False):
-        """Translates the transform in the specified space (world or local)."""
-        if isWorld:
-            self.position += vector
+    def get_global_rotation(self) -> np.ndarray:
+        """Returns an approximation of the global Euler rotation (base + local)."""
+        # Exact Euler extraction from a matrix is non-trivial; return summed euler as a reasonable approximation.
+        if self.parent is not None:
+            parent_rot = self.parent.get_global_rotation()
         else:
-            self.local_position += vector
-    
-    def rotate(self, angle: float, axis: np.ndarray, isWorld: bool = False):
-        """Rotates the transform around a specified axis."""
-        if np.linalg.norm(axis) == 0:
+            parent_rot = np.zeros(3, dtype=float)
+        return parent_rot + (self.rotation + self.local_rotation)
+
+    def get_global_scale(self) -> np.ndarray:
+        """Returns the global scale (element-wise) combining parent, base and local."""
+        base_scale = self.scale * self.local_scale
+        if self.parent is not None:
+            return self.parent.get_global_scale() * base_scale
+        return base_scale
+
+    def translate(self, vector: np.ndarray, space: str = "global"):
+        """
+        Translate this transform.
+        space: "global" (default) updates the public/base position.
+               "local" updates the local_position offset.
+        """
+        if vector.shape != (3,):
+            raise ValueError("Translation vector must be 3D")
+        if space not in ("local", "global"):
+            raise ValueError("space must be 'local' or 'global'")
+        if space == "global":
+            self.position = self.position + vector
+        else:
+            self.local_position = self.local_position + vector
+        self.update_orientations()
+
+    def rotate(self, angle: float, axis: np.ndarray, space: str = "global"):
+        """
+        Rotate this transform by a small Euler-like delta constructed from angle * normalized(axis).
+        space: "global" updates the public/base rotation, "local" updates the local_rotation.
+        """
+        axis = np.asarray(axis, dtype=float)
+        if axis.shape != (3,):
+            raise ValueError("Axis must be 3D")
+        norm = np.linalg.norm(axis)
+        if norm == 0:
             raise ValueError("Cannot rotate around a zero-length vector")
-
-        axis = axis / np.linalg.norm(axis)
-        
-        # Rodrigues' rotation formula
-        cos_angle = cos(angle)
-        sin_angle = sin(angle)
-        cross_product_matrix = np.array([
-            [0, -axis[2], axis[1]],
-            [axis[2], 0, -axis[0]],
-            [-axis[1], axis[0], 0]
-        ])
-        rotation_matrix = np.eye(3) * cos_angle + cross_product_matrix * sin_angle + np.outer(axis, axis) * (1 - cos_angle)
-
-        if isWorld:
-            self.position = rotation_matrix @ self.position
-            self.rotation = rotation_matrix @ self.rotation
+        delta = (angle * (axis / norm))
+        if space == "global":
+            self.rotation = self.rotation + delta
         else:
-            self.local_position = rotation_matrix @ self.local_position
-            self.local_rotation = rotation_matrix @ self.local_rotation
+            self.local_rotation = self.local_rotation + delta
+        self.update_orientations()
+
+    def enlarge(self, vector: np.ndarray, space: str = "global"):
+        """
+        Scale the transform.
+        space: "global" multiplies the public/base scale, "local" multiplies the local_scale.
+        """
+        vec = np.asarray(vector, dtype=float)
+        if vec.shape != (3,):
+            raise ValueError("Scale/enlarge vector must be 3D")
+        if space == "global":
+            self.scale = self.scale * vec
+        else:
+            self.local_scale = self.local_scale * vec
+        self.update_orientations()
     
-    def enlarge(self, vector: np.ndarray, isWorld: bool = False):
-        """Enlarges the transform in the specified space (world or local)."""
-        if isWorld:
-            self.scale += vector
-        else:
-            self.local_scale += vector
-    
-    def reflect(self, axis: Ray, isWorld: bool = False):
-        """Reflects the transform across a specified axis."""
-        if np.linalg.norm(axis.orientation ) == 0:
-            raise ValueError("Cannot reflect across a zero-length vector")
-            
-        n = axis.orientation  / np.linalg.norm(axis.orientation )
-        reflection_matrix = np.eye(3) - 2 * np.outer(n, n)
+    def reflect_axis(self, axis: np.ndarray, space: str = "global"):
+        """
+        Reflect the transform across the given axis (2D only).
+        space: "global" reflects the public/base scale, "local" reflects the local_scale.
+        """
+        ax = np.asarray(axis, dtype=float)
+        if ax.shape != (2,):
+            raise ValueError("Reflection axis must be 2D")
+        norm = np.linalg.norm(ax)
+        if norm == 0:
+            raise ValueError("Cannot reflect across a zero-length axis")
         
-        if isWorld:
-            self.position = reflection_matrix @ self.position
-            self.rotation = reflection_matrix @ self.rotation
+        # Extend axis to 3D for compatibility with scale
+        axis3d = np.zeros(3, dtype=float)
+        axis3d[:2] = ax / norm
+        reflection = np.sign(axis3d)
+        if space == "global":
+            self.scale = self.scale * reflection
         else:
-            self.local_position = reflection_matrix @ self.local_position
-            self.local_rotation = reflection_matrix @ self.local_rotation
-
+            self.local_scale = self.local_scale * reflection
+        self.update_orientations()
+    
     def __repr__(self):
-        return f"Transform(position={self.position}, rotation={self.rotation}, scale={self.scale})"
+        return (f"Transform(position={self.position}, rotation={self.rotation}, scale={self.scale}, "
+                f"local_position={self.local_position}, local_rotation={self.local_rotation}, local_scale={self.local_scale})")
 
 class Ratio:
     """
-    Represents a ratio (fraction) with a denominator and numerator.
+    Represents a ratio (fraction) with a width and height.
     Supports basic arithmetic operations and comparisons.
     """
-    def __init__(self, denominator: float, numerator: float):
+    def __init__(self, width: float, height: float):
         """
-        Creates a ratio (fraction) with a denominator and numerator.
+        Creates a ratio (fraction) with a width and height.
         """
-        if denominator == 0:
-            raise ValueError("Denominator cannot be zero")
+        if width == 0:
+            raise ValueError("Width (denominator) cannot be zero")
+        
+        if height == 0:
+            raise ValueError("Height (numerator) cannot be zero")
             
-        self.denominator = denominator
-        self.numerator = numerator
+        self.width = width
+        self.height = height
 
     def __add__(self, other):
         if not isinstance(other, Ratio):
             return NotImplemented
         
-        new_numerator = self.numerator * other.denominator + other.numerator * self.denominator
-        new_denominator = self.denominator * other.denominator
-        return Ratio(new_denominator, new_numerator)
+        new_height = self.height * other.width + other.height * self.width
+        new_width = self.width * other.width
+        return Ratio(new_width, new_height)
     
     def __sub__(self, other):
         if not isinstance(other, Ratio):
             return NotImplemented
             
-        new_numerator = self.numerator * other.denominator - other.numerator * self.denominator
-        new_denominator = self.denominator * other.denominator
-        return Ratio(new_denominator, new_numerator)
+        new_height = self.height * other.width - other.height * self.width
+        new_width = self.width * other.width
+        return Ratio(new_width, new_height)
 
     def __mul__(self, other):
         if not isinstance(other, Ratio):
             return NotImplemented
             
-        new_numerator = self.numerator * other.numerator
-        new_denominator = self.denominator * other.denominator
-        return Ratio(new_denominator, new_numerator)
+        new_height = self.height * other.height
+        new_width = self.width * other.width
+        return Ratio(new_width, new_height)
     
     def __truediv__(self, other):
         if not isinstance(other, Ratio):
             return NotImplemented
-        if other.numerator == 0:
-            raise ValueError("Cannot divide by a Ratio with a numerator of zero")
+        if other.height == 0:
+            raise ValueError("Cannot divide by a Ratio with a height of zero")
             
-        new_numerator = self.numerator * other.denominator
-        new_denominator = self.denominator * other.numerator
-        return Ratio(new_denominator, new_numerator)
+        new_height = self.height * other.width
+        new_width = self.width * other.height
+        return Ratio(new_width, new_height)
     
     def __repr__(self):
-        return f"Ratio({self.numerator}/{self.denominator})"
+        return f"Ratio({self.height}/{self.width})"
     
     def __float__(self):
-        return self.numerator / self.denominator
+        return self.height / self.width
     
     def __neg__(self):
-        return Ratio(-self.denominator, -self.numerator)
+        return Ratio(-self.width, -self.height)
     
     def __eq__(self, other):
         if not isinstance(other, Ratio):
             return NotImplemented
-        return self.numerator * other.denominator == self.denominator * other.numerator
+        return self.height * other.width == self.width * other.height
     
     def __lt__(self, other):
         if not isinstance(other, Ratio):
             return NotImplemented
-        return self.numerator * other.denominator < self.denominator * other.numerator
+        return self.height * other.width < self.width * other.height
         
     def __le__(self, other):
         if not isinstance(other, Ratio):
             return NotImplemented
-        return self.numerator * other.denominator <= self.denominator * other.numerator
+        return self.height * other.width <= self.width * other.height
         
     def __gt__(self, other):
         if not isinstance(other, Ratio):
             return NotImplemented
-        return self.numerator * other.denominator > self.denominator * other.numerator
+        return self.height * other.width > self.width * other.height
         
     def __ge__(self, other):
         if not isinstance(other, Ratio):
             return NotImplemented
-        return self.numerator * other.denominator >= self.denominator * other.numerator
+        return self.height * other.width >= self.width * other.height
         
     def __ne__(self, other):
         if not isinstance(other, Ratio):
             return NotImplemented
-        return self.numerator * other.denominator != self.denominator * other.numerator
+        return self.height * other.width != self.width * other.height
+    
+    @property
+    def value(self):
+        """Returns the float value of the ratio."""
+        return self.width / self.height

@@ -1,9 +1,10 @@
-from src.PrimaryStructures import Transform, Ratio
-from src.Geometry import VObject
-from src.Camera import CameraObject
-from Luminance import LightSource
 import numpy as np
 from enum import Enum
+
+from PrimaryStructures import Transform, Ratio
+from Geometry import VObject
+from Camera import VCamera
+from Luminance import LightSource
 
 """
 
@@ -16,11 +17,11 @@ class Scene:
         self.dimension = dimension
 
         self.objects: list[VObject] = []
-        self.lights: LightSource = []
-        self.cam: CameraObject = None
+        self.lights: list[LightSource] = []
+        self.cam: VCamera = None
         self.name = name
     
-    def set_camera(self, camera: CameraObject):
+    def set_camera(self, camera: VCamera):
         self.cam = camera
     
     def add_object(self, obj: VObject):
@@ -48,4 +49,6 @@ class Scene:
             return min_dist, closest_object
         else:
             return float("inf"), None
-    
+
+    def __repr__(self):
+        return f"Scene(camera={self.cam}, objects={len(self.objects)}, lights={len(self.lights)})"
