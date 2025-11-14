@@ -275,14 +275,6 @@ void Camera::OrbitMovement(GLFWwindow* window, double deltaTime)
 	glfwSetWindowUserPointer(window, this);
 	// set the scroll callback to the static Camera method
 	glfwSetScrollCallback(window, Camera::scroll_callback);
-
-
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_Q, false, true, [&]() {
-		orbitRoll -= orbitSpeed * static_cast<float>(deltaTime);
-	});
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_E, false, true, [&]() {
-		orbitRoll += orbitSpeed * static_cast<float>(deltaTime);
-	});
 	
 	InputManager::Instance(window).doWhenKey(GLFW_MOUSE_BUTTON_RIGHT, true, true, [&]() {
 		if (!cursorHidden) {
@@ -333,9 +325,15 @@ void Camera::OrbitMovement(GLFWwindow* window, double deltaTime)
 
 		// Apply roll as a rotation around the camera-target axis (i.e., local to the camera orientation).
 		// This makes roll affect the overall motion of the orbit rather than being a global/world Z rotation.
+		InputManager::Instance(window).doWhenKey(GLFW_KEY_Q, false, true, [&]() {
+			orbitRoll -= orbitSpeed;
+		});
+		InputManager::Instance(window).doWhenKey(GLFW_KEY_E, false, true, [&]() {
+			orbitRoll += orbitSpeed;
+		});
+
 		if (fabs(orbitRoll) > 1e-6f) {
-			glm::vec3 rollAxis = glm::normalize(offset); // axis from target to camera
-			glm::quat qroll = glm::angleAxis(orbitRoll, rollAxis);
+			glm::quat qroll = glm::angleAxis(orbitRoll, Forward) * static_cast<float>(deltaTime);
 			offset = qroll * offset;
 		}
 
