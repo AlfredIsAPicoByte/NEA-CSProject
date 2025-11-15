@@ -35,17 +35,17 @@ public:
 	glm::vec3 Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
 	glm::vec3 Up;
 	glm::vec3 WorldUp;
-	glm::mat4 viewMatrix = glm::mat4(1.0f);
-	glm::mat4 projectionMatrix = glm::mat4(1.0f);
-	glm::mat4 cameraMatrix = glm::mat4(1.0f);
+	glm::vec3 Up, Forward, Right;
+	glm::mat4 viewMatrix = glm::mat4(1.0f),
+		projectionMatrix = glm::mat4(1.0f),
+		cameraMatrix = glm::mat4(1.0f);
 
 	// Prevents the camera from jumping around when first clicking left click
-	bool firstClick = true;
-	bool cursorHidden = false;
+	bool firstClick = true,
+		cursorHidden = false;
 
 	// Stores the width and height of the window
-	int windowWidth;
-	int windowHeight;
+	int windowWidth, windowHeight;
 	float aspectRatio;
 
 	std::string name = "";
@@ -54,36 +54,40 @@ public:
 	CameraType type = PERSPECTIVE;
 	CamaraMovementMode mode = FIRST_PERSON;
 
-	float fov = 45.0f;
-	float nearPlane = 0.1f;
-	float farPlane = 100.0f;
+	float fov = 45.0f,
+		nearPlane = 0.1f,
+		farPlane = 100.0f;
 
 
 	// Adjust the speed of the camera and it's sensitivity when looking around
-	float speed = 0.1f;
-	float speedFactor = 4.0f;
-	float mouseSensitivity = 100.0f;
+	float speed = 0.1f,
+		speedFactor = 4.0f,
+		mouseSensitivity = 100.0f;
 	bool invertY = false;
 	bool invertX = false;
 
 	// Plane mode state
-	float planeRotateSpeed = 5.0f;
-	float planePitch = 0.0f;
-	float planeYaw = -90.0f;
-	float planeRoll = 0.0f;
-	float planePower = 0.0f;
-	float planeMaxPower = 5.0f;
-	float planeMinPower = -5.0f;
-	float planePowerIncrement = 1.0f;
+	float planeRotateSpeed = 5.0f,
+		planePitch = 0.0f,
+		planeYaw = -90.0f,
+		planeRoll = 0.0f,
+		planePower = 0.0f,
+		planeMaxPower = 5.0f,
+		planeMinPower = -5.0f,
+		planePowerIncrement = 1.0f;
+	bool isPlanePowerIncreasing = false;
+	bool isPlaneActivelyStoping = false;
 
 	// Orbit mode state
-	float orbit_speed = 100.0f;
-	float orbitPitch = 0.0f;
-	float orbitYaw = 0.0f;
-	float orbitDistance = 5.0f;
-	float orbitMinDistance = 0.1f;
-	float orbitMaxDistance = 100.0f;
-	float orbitZoomSpeed = 0.1f;
+	float orbitSpeed = 10.0f,
+		orbitPitch = 0.0f,
+		orbitYaw = 0.0f,
+		orbitRoll = 0.0f,
+		orbitRollSpeed = glm::degrees(0.05f),
+		orbitDistance = 5.0f,
+		orbitMinDistance = 0.1f,
+		orbitMaxDistance = 100.0f,
+		orbitZoomSpeed = 0.1f;
 	glm::vec3 orbitTarget = glm::vec3(0.0f);
 
 	// Camera constructor to set up initial values
@@ -91,6 +95,7 @@ public:
 
 	// Updates the camera matrix to the Vertex Shader
 	void updateMatrix();
+	void updateOrientation();
 
 	// Resize the camera aspect ratio
 	void Resize(int width, int height);

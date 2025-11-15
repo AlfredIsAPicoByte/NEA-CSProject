@@ -28,6 +28,13 @@ void Camera::updateMatrix()
 	cameraMatrix = projection * view;
 }
 
+void Camera::updateOrientation()
+{
+	Forward = glm::normalize(Forward);
+	Right = glm::normalize(glm::cross(Forward, WorldUp));
+	Up = glm::normalize(glm::cross(Right, Forward));
+}
+
 void Camera::Resize(int width, int height)
 {
 	windowWidth = width;
@@ -133,8 +140,9 @@ void Camera::FirstPersonMovement(GLFWwindow* window, double deltaTime)
 			Orientation = newOrientation;
 		}
 
-		// Rotates the Orientation left and right
-		Orientation = glm::rotate(Orientation, glm::radians(-rotY), Up);
+		// Rotates the orientation left and right (yaw) around Up
+		Forward = glm::mat3(glm::rotate(glm::mat4(1.0f), glm::radians(-rotY), Up)) * Forward;
+		updateOrientation();
 
 		// Sets mouse cursor to the middle of the screen so that it doesn't end up roaming around
 		InputManager::Instance(window).setMousePosition(windowWidth / 2, windowHeight / 2);
@@ -154,8 +162,10 @@ void Camera::FirstPersonMovement(GLFWwindow* window, double deltaTime)
 
 void Camera::SetPlaneTarget(glm::vec3 target)
 {
-	planePitch = glm::degrees(asin(-target.y - Position.y));
-	planeYaw = glm::degrees(atan2(-target.x - Position.x, -target.z - Position.z));
+	LookAt(target);
+
+	planePitch = glm::degrees(asin(Forward.y));
+	planeYaw = glm::degrees(atan2(Forward.x, -Forward.z));
 	planeRoll = 0.0f;
 }
 
@@ -173,20 +183,18 @@ void Camera::PlaneMovement(GLFWwindow* window, double deltaTime)
 		if (planePitch > 89.0f) planePitch = 89.0f;
 	});
 	InputManager::Instance(window).doWhenKey(GLFW_KEY_D, false, true, [&]() {
-		planeYaw -= rotationSpeed * 10.0f * (invertX ? -1.0f : 1.0f);
 		if (planeYaw < -180.0f) planeYaw += 360.0f;
+		planeYaw += rotationSpeed * 10.0f * (invertX ? -1.0f : 1.0f);
 	});
 	InputManager::Instance(window).doWhenKey(GLFW_KEY_A, false, true, [&]() {
-		planeYaw += rotationSpeed * 10.0f * (invertX ? -1.0f : 1.0f);
 		if (planeYaw > 180.0f) planeYaw -= 360.0f;
+		planeYaw -= rotationSpeed * 10.0f * (invertX ? -1.0f : 1.0f);
 	});
 	InputManager::Instance(window).doWhenKey(GLFW_KEY_Q, false, true, [&]() {
 		planeRoll -= rotationSpeed * 10.0f;
-		if (planeRoll < -180.0f) planeRoll += 360.0f;
 	});
 	InputManager::Instance(window).doWhenKey(GLFW_KEY_E, false, true, [&]() {
 		planeRoll += rotationSpeed * 10.0f;
-		if (planeRoll > 180.0f) planeRoll -= 360.0f;
 	});
 	
 	bool isIncreasing = true;
@@ -238,18 +246,29 @@ void Camera::PlaneMovement(GLFWwindow* window, double deltaTime)
 		planePower = planeMinPower;
 	}
 
-	// Update Orientation based on pitch, yaw, and roll
-	glm::vec3 front;
-	// Build a quaternion from Euler angles (pitch -> X, yaw -> Y, roll -> Z)
-	glm::quat q = glm::quat(glm::vec3(glm::radians(planePitch), glm::radians(planeYaw), glm::radians(planeRoll)));
+	// Updates Forward vector based on Euler Angles
+	Forward.x = cos(glm::radians(planePitch)) * sin(glm::radians(planeYaw));
+	Forward.y = sin(glm::radians(planePitch));
+	Forward.z = -cos(glm::radians(planePitch)) * cos(glm::radians(planeYaw));
+	Forward = glm::normalize(Forward);
 
-	front.x = q.x * q.w * 2.0f + q.y * q.z * 2.0f;
-	front.y = q.y * q.w * 2.0f - q.x * q.z * 2.0f;
-	front.z = 1.0f - (q.x * q.x * 2.0f + q.y * q.y * 2.0f);
+	// Base Right/Up from world up
+	Right = glm::normalize(glm::cross(Forward, WorldUp));
+	Up = glm::normalize(glm::cross(Right, Forward));
 
-	// Apply roll to Up as well so lookAt will reflect roll tilt
-	Up = q * WorldUp; // Use the stored world up vector as the base
-	Orientation = glm::normalize(front);
+	// Normalize roll to [-180,180] to avoid drifting angles
+	if (planeRoll > 180.0f) planeRoll -= 360.0f;
+	if (planeRoll <= -180.0f) planeRoll += 360.0f;
+
+	// Applies roll rotation around Forward axis (planeRoll is in degrees)
+	if (fabs(planeRoll) > 1e-6f) {
+		float rollRad = glm::radians(planeRoll);
+		glm::quat qroll = glm::angleAxis(rollRad, Forward);
+		Right = glm::normalize(qroll * Right);
+		Up = glm::normalize(qroll * Up);
+	}
+
+	// Do not call updateOrientation() here because it would recompute Up/Right and overwrite roll
 	
 	// Move the camera forward in the direction it's facing
 	Position += planePower * static_cast<float>(deltaTime) * Orientation;
@@ -309,7 +328,7 @@ void Camera::OrbitMovement(GLFWwindow* window, double deltaTime)
 		float new_pitch = orbitPitch + pitch;
 
 		if (abs(new_pitch) > max_pitch) {
-			pitch = max_pitch * (new_pitch > 0 ? 1 : -1) - orbitPitch;
+			pitch = (new_pitch > 0 ? max_pitch : -max_pitch) - orbitPitch;
 		}
 
 		orbitPitch += pitch * (invertY ? -1.0f : 1.0f);
@@ -319,15 +338,40 @@ void Camera::OrbitMovement(GLFWwindow* window, double deltaTime)
 		if (orbitDistance < orbitMinDistance) orbitDistance = orbitMinDistance;
 		if (orbitDistance > orbitMaxDistance) orbitDistance = orbitMaxDistance;
 
-		// Spherical coordinates
-		float x = orbitTarget.x + orbitDistance * cos(orbitPitch) * sin(orbitYaw);
-		float y = orbitTarget.y + orbitDistance * sin(orbitPitch);
-		float z = orbitTarget.z + orbitDistance * cos(orbitPitch) * cos(orbitYaw);
+		// Build rotation from orbitPitch and orbitYaw (no roll here)
+		glm::quat q = glm::quat(glm::vec3(orbitPitch, orbitYaw, 0.0f));
 
-		Position = glm::vec3(x, y, z);
+		// Rotate a vector at distance along +Z by the quaternion to get camera offset (without roll)
+		glm::vec3 offset = q * glm::vec3(0.0f, 0.0f, orbitDistance);
 
+		// Update position and forward
+		Position = orbitTarget + offset;
 		LookAt(orbitTarget);
-		
+
+		// Recompute base Right/Up from the updated Forward
+		Right = glm::normalize(glm::cross(Forward, WorldUp));
+		Up = glm::normalize(glm::cross(Right, Forward));
+
+		// Adjust roll via keys (registered each frame like other modes)
+		InputManager::Instance(window).doWhenKey(GLFW_KEY_Q, false, true, [&]() {
+			orbitRoll -= orbitSpeed * orbitRollSpeed;
+		});
+		InputManager::Instance(window).doWhenKey(GLFW_KEY_E, false, true, [&]() {
+			orbitRoll += orbitSpeed * orbitRollSpeed;
+		});
+
+		// Normalize roll to [-180,180] to avoid drifting angles
+		if (orbitRoll > 180.0f) orbitRoll -= 360.0f;
+		if (orbitRoll <= -180.0f) orbitRoll += 360.0f;
+
+		// Apply roll around the current Forward axis (now correct)
+		if (fabs(orbitRoll) > 1e-6f) {
+			float rollRad = glm::radians(orbitRoll);
+			glm::quat qroll = glm::angleAxis(rollRad, Forward);
+			Right = glm::normalize(qroll * Right);
+			Up = glm::normalize(qroll * Up);
+		}
+
 		InputManager::Instance(window).setMousePosition(windowWidth / 2, windowHeight / 2);
 
 		AppendMessage("Orbit Camera - Target: (" + std::to_string(orbitTarget.x) + ", " + std::to_string(orbitTarget.y) + ", " + std::to_string(orbitTarget.z) + 
@@ -349,5 +393,6 @@ void Camera::OrbitMovement(GLFWwindow* window, double deltaTime)
 
 void Camera::LookAt(const glm::vec3& target)
 {
-	Orientation = glm::normalize(target - Position);
+	Forward = target - Position;
+	updateOrientation();
 }

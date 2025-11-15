@@ -186,7 +186,7 @@ int main()
 				if (camMode != 2) {
 					camera.mode = PLANE;
 					camMode = 2;
-					camera.SetPlaneTarget(objectPos);
+					camera.SetPlaneTarget(lightPos);
 					AppendMessage("Set camera momvent mode to PLANE");
 				}
 			});
@@ -195,7 +195,6 @@ int main()
 					camera.mode = ORBIT;
 					camMode = 3;
 					camera.SelectOrbitTarget(lightPos);
-					camera.orbitDistance = glm::length(camera.Position - lightPos);
 					AppendMessage("Set camera momvent mode to ORBIT");
 				}
 			});
