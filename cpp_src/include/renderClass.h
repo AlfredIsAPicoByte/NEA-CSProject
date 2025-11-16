@@ -2,15 +2,14 @@
 
 #include <string>
 #include <vector>
-#include <GL/glew.h>
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
 #include <functional>
 
 #include "pythonManager.h"
 #include "shaderClass.h"
 #include "Model.h"
-#include "textureClass.h"
+#include "Texture.h"
 #include "Camera.h"
 
 class Scene{
@@ -38,4 +37,4 @@ private:
     py::object pyScene;
     py::object pyBaseAlgorithm;
     py::object pyRayTracer;
-}
+};

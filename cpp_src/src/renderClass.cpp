@@ -1,7 +1,6 @@
 #include "renderClass.h"
 
 Scene::Scene()
-    : shaderProgram(nullptr), camera(nullptr)
 {
     AppendMessage("Scene created.");
 }

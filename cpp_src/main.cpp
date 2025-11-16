@@ -145,19 +145,11 @@ int main()
 	glUniform4f(glGetUniformLocation(shaderProgram.ID, "lightColor"), lightColor.x, lightColor.y, lightColor.z, lightColor.w);
 	glUniform3f(glGetUniformLocation(shaderProgram.ID, "lightPos"), lightPos.x, lightPos.y, lightPos.z);
 
-	PythonManager pm;
-	pm.Initialize();
-	pm.AddModulePath("C:/Users/atang/Documents/GitHub/Programing_Projects/NEA-CSProject/py_src/src");
-	py::object primaryStructures = pm.LoadModule("PrimaryStructures");
-
-	py::object ray = primaryStructures.attr("Ray")(py::make_tuple(0.0f, 1.0f, 0.0f), py::make_tuple(1.0f, -1.0f, 0.0f));
-	AppendPythonMessage("Created Ray from Python module PrimaryStructures" + static_cast<std::string>(py::str(ray)));
-
 	// Enable depth (3D)
 	glEnable(GL_DEPTH_TEST);
 
 	Time time;
-	Camera camera(windowWidth, windowHeight, glm::vec3(0.0f, 0.0f, 2.0f));
+	Camera camera(windowWidth, windowHeight, glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, -1.0f));
 	camera.fov = 60.0f;
 	camera.speed = 0.5f;
 	camera.speedFactor = 3.0f;
@@ -178,7 +170,6 @@ int main()
 				if (camMode != 1) {
 					camera.mode = FIRST_PERSON;
 					camMode = 1;
-					camera.Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
 					AppendMessage("Set camera momvent mode to FIRST_PERSON");
 				}
 			});
@@ -186,7 +177,7 @@ int main()
 				if (camMode != 2) {
 					camera.mode = PLANE;
 					camMode = 2;
-					camera.SetPlaneTarget(lightPos);
+					camera.SetPlaneTarget(objectPos);
 					AppendMessage("Set camera momvent mode to PLANE");
 				}
 			});
@@ -195,6 +186,7 @@ int main()
 					camera.mode = ORBIT;
 					camMode = 3;
 					camera.SelectOrbitTarget(lightPos);
+					camera.orbitDistance = glm::length(camera.Position - lightPos);
 					AppendMessage("Set camera momvent mode to ORBIT");
 				}
 			});
@@ -213,7 +205,7 @@ int main()
 			ImGui::Begin("Info Panel");
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", time.deltaTime * 1000.0f, time.frameRate);
 			ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", camera.Position.x, camera.Position.y, camera.Position.z);
-			ImGui::Text("Camera Orientation: (%.2f, %.2f, %.2f)", camera.Orientation.x, camera.Orientation.y, camera.Orientation.z);
+			ImGui::Text("Camera Orientation: (%.2f, %.2f, %.2f)", camera.Forward.x, camera.Forward.y, camera.Forward.z);
 			ImGui::Text("Camera Up: (%.2f, %.2f, %.2f)", camera.Up.x, camera.Up.y, camera.Up.z);
 			ImGui::Text("Camera Mode: %s", camera.mode == FIRST_PERSON ? "FIRST_PERSON" : camera.mode == PLANE ? "PLANE" : "ORBIT");
 			ImGui::Text("Controls:");
@@ -228,7 +220,7 @@ int main()
 
 			// Todo: Add hiearchy for objects 
 		});
-
+		
 	// Clean up and exit
 	shaderProgram.Delete();
 	lightShader.Delete();
