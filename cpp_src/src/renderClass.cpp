@@ -20,13 +20,11 @@ void Scene::initialize()
     PythonManager::Instance().AddModulePath("src/Algorithms");
     pyBaseAlgorithm = PythonManager::Instance().LoadModule("Base");
     pyRayTracer = PythonManager::Instance().LoadModule("Raytracer");
-
-
 }
 
 void Scene::render()
 {
-    
+
 }
 
 void Scene::update()
@@ -36,12 +34,20 @@ void Scene::update()
 
 void Scene::cleanup()
 {
+    for (auto& mesh : meshes) {
+        delete mesh;
+    }
+    meshes.clear();
 
+    for (auto& texture : textures) {
+        delete texture;
+    }
+    textures.clear();
 }
 
 void Scene::loadModel(const std::string& modelPath)
 {
-
+    
 }
 
 void Scene::loadTexture(const std::string& texturePath)
