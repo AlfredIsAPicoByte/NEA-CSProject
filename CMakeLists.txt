@@ -29,7 +29,6 @@ list(APPEND CPP_SRC_FILES cpp_src/main.cpp)     # include main.cpp from cpp_src
 
 # ---- Executable ----
 add_executable(main ${CPP_SRC_FILES})
-
 target_include_directories(main PRIVATE ${STB_INCLUDE_DIRS} ${Python_INCLUDE_DIRS})
 
 # ---- Libraries ----
@@ -50,17 +49,44 @@ if(STB_INCLUDE_DIRS)
     target_include_directories(main PRIVATE ${STB_INCLUDE_DIRS})
 endif()
 
+# ---- ImGui ----
+# Add ImGui headers and sources from your project directories
+set(IMGUI_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/include")
+set(IMGUI_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/src")
+set(IMGUI_SOURCES
+    ${IMGUI_SRC_DIR}/imgui.cpp
+    ${IMGUI_SRC_DIR}/imgui_draw.cpp
+    ${IMGUI_SRC_DIR}/imgui_tables.cpp
+    ${IMGUI_SRC_DIR}/imgui_widgets.cpp
+    ${IMGUI_SRC_DIR}/imgui_impl_glfw.cpp
+    ${IMGUI_SRC_DIR}/imgui_impl_opengl3.cpp
+)
+# Add ImGui sources to your executable
+target_sources(main PRIVATE ${IMGUI_SOURCES})
+# Add ImGui include directory
+target_include_directories(main PRIVATE ${IMGUI_INCLUDE_DIR})
+
 # ---- Resources ----
 set(SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/src/shaders")
 set(TEXTURE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/src/textures")
-
-# Copy shaders and textures to the output folder
+set(MODEL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/src/models")
+# Copy shaders, textures and models to the output folder after build
 add_custom_command(TARGET main POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${SHADER_DIR} $<TARGET_FILE_DIR:main>/shaders
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${TEXTURE_DIR} $<TARGET_FILE_DIR:main>/textures
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${SHADER_DIR}" $<TARGET_FILE_DIR:main>/shaders
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${TEXTURE_DIR}" $<TARGET_FILE_DIR:main>/textures
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${MODEL_DIR}" $<TARGET_FILE_DIR:main>/models
 )
+set_target_properties(main PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+# ---- Optional: Debugging definitions ----
+# You can define DEBUG_MODE based on your build type
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_definitions(DEBUG_MODE=1)
+else()
+    add_compile_definitions(DEBUG_MODE=0)
+endif()
 
 # ---- Optional: support embedding Python. Disabled by default; enable with -DUSE_EMBEDDED_PYTHON=ON ----
 option(USE_EMBEDDED_PYTHON "Enable embedding Python into the executable" OFF)
@@ -74,22 +100,8 @@ if(USE_EMBEDDED_PYTHON)
     endif()
 endif()
 
-# ---- Optional: Output folders ----
-set_target_properties(main PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build
-)
-
-# ---- Optional: Debugging definitions ----
-# You can define DEBUG_MODE based on your build type
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    add_compile_definitions(DEBUG_MODE=1)
-else()
-    add_compile_definitions(DEBUG_MODE=0)
-endif()
-
 # ---- Optional: Copy py_src directory after build (ON, OFF) ----
 option(COPY_PY_SRC "Copy py_src directory after build" OFF)
-
 if(COPY_PY_SRC)
     add_custom_command(TARGET main POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -97,23 +109,3 @@ if(COPY_PY_SRC)
         $<TARGET_FILE_DIR:main>/py_src
     )
 endif()
-
-# ---- ImGui ----
-# Add ImGui headers and sources from your project directories
-set(IMGUI_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/include")
-set(IMGUI_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/src")
-
-set(IMGUI_SOURCES
-    ${IMGUI_SRC_DIR}/imgui.cpp
-    ${IMGUI_SRC_DIR}/imgui_draw.cpp
-    ${IMGUI_SRC_DIR}/imgui_tables.cpp
-    ${IMGUI_SRC_DIR}/imgui_widgets.cpp
-    ${IMGUI_SRC_DIR}/imgui_impl_glfw.cpp
-    ${IMGUI_SRC_DIR}/imgui_impl_opengl3.cpp
-)
-
-# Add ImGui sources to your executable
-target_sources(main PRIVATE ${IMGUI_SOURCES})
-
-# Add ImGui include directory
-target_include_directories(main PRIVATE ${IMGUI_INCLUDE_DIR})

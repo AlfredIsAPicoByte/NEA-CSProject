@@ -145,6 +145,38 @@ int main()
 	glUniform4f(glGetUniformLocation(shaderProgram.ID, "lightColor"), lightColor.x, lightColor.y, lightColor.z, lightColor.w);
 	glUniform3f(glGetUniformLocation(shaderProgram.ID, "lightPos"), lightPos.x, lightPos.y, lightPos.z);
 
+	// Load model
+	Shader bunnyShader("default.vert", "default.frag");
+	Model bunny("bunny/scene.gltf");
+
+	// Bunny properties
+	glm::vec3 bunnyPos = glm::vec3(-5.0f, 5.0f, 0.0f);
+	glm::quat bunnyRot = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+	glm::vec3 bunnyScale = glm::vec3(1.0f, 1.0f, 1.0f);
+	glm::mat4 bunnyModel = glm::mat4(1.0f);
+	bunnyModel = glm::translate(bunnyModel, bunnyPos);
+	bunnyModel *= glm::mat4_cast(bunnyRot);
+	bunnyModel = glm::scale(bunnyModel, bunnyScale);
+
+	bunnyShader.Activate();
+	glUniformMatrix4fv(glGetUniformLocation(bunnyShader.ID, "model"), 1, GL_FALSE, glm::value_ptr(bunnyModel));
+	
+	// Load model
+	Shader swordShader("default.vert", "default.frag");
+	Model sword("sword/scene.gltf");
+
+	// Sword properties
+	glm::vec3 swordPos = glm::vec3(5.0f, 0.0f, 0.0f);
+	glm::quat swordRot = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+	glm::vec3 swordScale = glm::vec3(0.05f, 0.05f, 0.05f);
+	glm::mat4 swordModel = glm::mat4(1.0f);
+	swordModel = glm::translate(swordModel, swordPos);
+	swordModel *= glm::mat4_cast(swordRot);
+	swordModel = glm::scale(swordModel, swordScale);
+
+	swordShader.Activate();
+	glUniformMatrix4fv(glGetUniformLocation(swordShader.ID, "model"), 1, GL_FALSE, glm::value_ptr(swordModel));
+
 	// Enable depth (3D)
 	glEnable(GL_DEPTH_TEST);
 
@@ -155,6 +187,7 @@ int main()
 	camera.speedFactor = 3.0f;
 
 	int camMode = 1;
+	bool resetKeyPressed = false;
 	// Main loop
 	Engine::Instance().Start();
 	Engine::Instance().applyClearColor(bgClolor);
@@ -190,14 +223,51 @@ int main()
 					AppendMessage("Set camera momvent mode to ORBIT");
 				}
 			});
+
+			InputManager::Instance(window).doWhenKey(GLFW_KEY_R, false, true, [&]() {
+				if (!resetKeyPressed) {
+					camera.Reset(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+					AppendMessage("Camera reset to default position and orientation");
+					resetKeyPressed = true;
+				}
+			});
+			InputManager::Instance(window).doWhenKey(GLFW_KEY_R, false, false, [&]() {
+				resetKeyPressed = false;
+			});
+			InputManager::Instance(window).doWhenKey(GLFW_KEY_T, false, true, [&]() {
+				if (!resetKeyPressed) {
+					camera.ResetPlane();
+					AppendMessage("Camera Plane mode reset to default orientation and power");
+					resetKeyPressed = true;
+				}
+			});
+			InputManager::Instance(window).doWhenKey(GLFW_KEY_T, false, false, [&]() {
+				resetKeyPressed = false;
+			});
+			InputManager::Instance(window).doWhenKey(GLFW_KEY_Y, false, true, [&]() {
+				if (!resetKeyPressed)  {
+					camera.ResetOrbit();
+					AppendMessage("Camera Orbit mode reset to default orientation and distance");
+					resetKeyPressed = true;
+				}
+			});
+			InputManager::Instance(window).doWhenKey(GLFW_KEY_Y, false, false, [&]() {
+				resetKeyPressed = false;
+			});
+
+			InputManager::Instance(window).doWhenKey(GLFW_KEY_ESCAPE, false, true, [&]() {
+				Engine::Instance().Exit();
+			});
 		},
 		// Render
 		[&]() {
 			Engine::Instance().applyClearColor(bgClolor);
 
-			// Draw floor
+			// Draw objects
 			floor.Draw(shaderProgram, camera);
 			light.Draw(lightShader, camera);
+			bunny.Draw(bunnyShader, camera);
+			sword.Draw(swordShader, camera);
 			
 		},
 		// ImGui Objects
@@ -216,6 +286,9 @@ int main()
 			ImGui::Text("  - 1: First Person mode");
 			ImGui::Text("  - 2: Plane mode");
 			ImGui::Text("  - 3: Orbit mode");
+			ImGui::Text("  - R: Reset camera");
+			ImGui::Text("  - T: Reset Plane mode");
+			ImGui::Text("  - Y: Reset Orbit mode");
 			ImGui::End();
 
 			// Todo: Add hiearchy for objects 
@@ -226,6 +299,8 @@ int main()
 	lightShader.Delete();
 	floor.CleanUp();
 	light.CleanUp();
+	bunny.CleanUp();
+	sword.CleanUp();
 	Engine::Instance().cleanUp(window);
 
 	return 0;

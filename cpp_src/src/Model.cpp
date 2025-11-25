@@ -2,16 +2,41 @@
 
 Model::Model(const char* file)
 {
-	// Make a JSON object
-	std::string text = get_file_contents(file);
-	JSON = json::parse(text);
+    namespace fs = std::filesystem;
+    try {
+        fs::path model_path = fs::path("models") / file;
+        AppendMessage("Model path: " + model_path.string());
 
-	// Get the binary data
-	Model::file = file;
-	data = getData();
+        if (!fs::exists(model_path)) {
+            throw std::runtime_error("Model file not found: " + model_path.string());
+        }
 
-	// Traverse all nodes
-	traverseNode(0);
+        // store resolved model path for later (used to resolve .bin and images)
+        this->modelPath = model_path;
+
+        std::string text = get_file_contents(model_path.string().c_str());
+
+        try {
+            JSON = json::parse(text);
+        } catch (const json::parse_error& pex) {
+            throw std::runtime_error(std::string("JSON parse error: ") + pex.what());
+        }
+
+        if (!JSON.contains("asset")) {
+            throw std::runtime_error("Model JSON missing 'asset' section");
+        }
+        AppendMessage("Loaded model generator: " + JSON["asset"]["generator"].get<std::string>());
+
+        // Get the binary data
+        Model::file = file;
+        data = getData();
+
+        // Traverse all nodes
+        traverseNode(0);
+    } catch (const std::exception& e) {
+        AppendError(std::string("Error loading model '") + file + "': " + e.what());
+        throw; // rethrow to be handled by caller
+    }
 }
 
 void Model::Draw(Shader& shader, Camera& camera)
@@ -128,18 +153,32 @@ void Model::traverseNode(unsigned int nextNode, glm::mat4 matrix)
 
 std::vector<unsigned char> Model::getData()
 {
-	// Create a place to store the raw text, and get the uri of the .bin file
-	std::string bytesText;
-	std::string uri = JSON["buffers"][0]["uri"];
+    // Use filesystem to resolve buffer uri relative to the model file location
+    std::string uri = JSON["buffers"][0]["uri"];
+    std::filesystem::path binPath = modelPath.parent_path() / uri;
+    AppendMessage("Resolved binary path: " + binPath.string());
 
-	// Store raw text data into bytesText
-	std::string fileStr = std::string(file);
-	std::string fileDirectory = fileStr.substr(0, fileStr.find_last_of('/') + 1);
-	bytesText = get_file_contents((fileDirectory + uri).c_str());
+    if (!std::filesystem::exists(binPath)) {
+        throw std::runtime_error("Failed to open file: " + binPath.string());
+    }
 
-	// Transform the raw text data into bytes and put them in a vector
-	std::vector<unsigned char> data(bytesText.begin(), bytesText.end());
-	return data;
+    // Read binary file
+    std::ifstream infile(binPath, std::ios::binary);
+    if (!infile) {
+        throw std::runtime_error("Failed to open file: " + binPath.string());
+    }
+
+    infile.seekg(0, std::ios::end);
+    std::streamsize size = infile.tellg();
+    infile.seekg(0, std::ios::beg);
+
+    std::vector<unsigned char> buffer;
+    buffer.resize(static_cast<size_t>(size));
+    if (!infile.read(reinterpret_cast<char*>(buffer.data()), size)) {
+        throw std::runtime_error("Failed to read binary file: " + binPath.string());
+    }
+
+    return buffer;
 }
 
 std::vector<float> Model::getFloats(json accessor)
@@ -147,7 +186,7 @@ std::vector<float> Model::getFloats(json accessor)
 	std::vector<float> floatVec;
 
 	// Get properties from the accessor
-	unsigned int buffViewInd = accessor.value("bufferView", 1);
+	unsigned int buffViewInd = accessor.value("bufferView", 0);
 	unsigned int count = accessor["count"];
 	unsigned int accByteOffset = accessor.value("byteOffset", 0);
 	std::string type = accessor["type"];
@@ -234,6 +273,7 @@ std::vector<Texture> Model::getTextures()
 
 	std::string fileStr = std::string(file);
 	std::string fileDirectory = fileStr.substr(0, fileStr.find_last_of('/') + 1);
+	AppendMessage("Model directory: " + fileDirectory);
 
 	// Go over all images
 	for (unsigned int i = 0; i < JSON["images"].size(); i++)
@@ -302,6 +342,23 @@ std::vector<Vertex> Model::assembleVertices
 	return vertices;
 }
 
+void Model::computeTangents(std::vector<Vertex>& verts, const std::vector<GLuint>& idx)
+{
+    for (auto& v : verts) v.tangent = glm::vec3(0.0f);
+    for (size_t i = 0; i + 2 < idx.size(); i += 3) {
+        Vertex &v0 = verts[idx[i+0]], &v1 = verts[idx[i+1]], &v2 = verts[idx[i+2]];
+        glm::vec3 e1 = v1.position - v0.position;
+        glm::vec3 e2 = v2.position - v0.position;
+        glm::vec2 d1 = v1.texUV - v0.texUV;
+        glm::vec2 d2 = v2.texUV - v0.texUV;
+        float denom = (d1.x * d2.y - d2.x * d1.y);
+        float f = (fabs(denom) > 1e-6f) ? 1.0f/denom : 0.0f;
+        glm::vec3 tangent = f * (e1 * d2.y - e2 * d1.y);
+        v0.tangent += tangent; v1.tangent += tangent; v2.tangent += tangent;
+    }
+    for (auto& v : verts) v.tangent = glm::normalize(v.tangent - v.normal * glm::dot(v.normal, v.tangent));
+}
+
 std::vector<glm::vec2> Model::groupFloatsVec2(std::vector<float> floatVec)
 {
 	const unsigned int floatsPerVector = 2;
@@ -349,4 +406,12 @@ std::vector<glm::vec4> Model::groupFloatsVec4(std::vector<float> floatVec)
 		}
 	}
 	return vectors;
+}
+
+void Model::CleanUp()
+{
+	for (auto& mesh : meshes)
+	{
+		mesh.CleanUp();
+	}
 }

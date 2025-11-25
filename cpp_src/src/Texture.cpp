@@ -23,16 +23,20 @@ Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum pix
 		throw std::runtime_error(msg);
 	}
 
-	GLenum internalFormat, externalFormat;
+	GLenum externalFormat = GL_RGB;
+	GLenum internalFormat = GL_RGB8;
 	if (numColCh == 1) {
-	    internalFormat = GL_R8;
 	    externalFormat = GL_RED;
+	    internalFormat = GL_R8;
+	    glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // important for 1-byte rows
 	} else if (numColCh == 3) {
-	    internalFormat = GL_RGB8;
 	    externalFormat = GL_RGB;
+	    internalFormat = GL_RGB8;
+	    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 	} else if (numColCh == 4) {
-	    internalFormat = GL_RGBA8;
 	    externalFormat = GL_RGBA;
+	    internalFormat = GL_RGBA8;
+	    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 	} else {
 	    stbi_image_free(bytes);
 	    throw std::runtime_error("Unsupported number of channels in texture: " + std::to_string(numColCh));
@@ -52,8 +56,10 @@ Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum pix
 	// float flatColor[] = {1.0f, 1.0f, 1.0f, 1.0f};
 	// glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, flatColor);
 
-	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, widthImg, heightImg, 0, externalFormat, pixelType, bytes);  // Assigns the texture to the Opengl texture object
+	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, widthImg, heightImg, 0, externalFormat, pixelType, bytes);
 	glGenerateMipmap(GL_TEXTURE_2D);
+	// reset alignment if you changed it elsewhere
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 
 	// Deletes the image data as it is already in the OpenGL Texture object
 	stbi_image_free(bytes);

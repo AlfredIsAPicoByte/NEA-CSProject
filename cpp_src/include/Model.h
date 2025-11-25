@@ -12,11 +12,14 @@ public:
 	Model(const char* file);
 
 	void Draw(Shader& shader, Camera& camera);
+
+	void CleanUp();
 private:
 	// Variables for easy access
 	const char* file;
 	std::vector<unsigned char> data;
 	json JSON;
+	std::filesystem::path modelPath;
 
 	// All the meshes and transformations
 	std::vector<Mesh> meshes;
@@ -55,4 +58,6 @@ private:
 	std::vector<glm::vec3> groupFloatsVec3(std::vector<float> floatVec);
 	std::vector<glm::vec4> groupFloatsVec4(std::vector<float> floatVec);
 
+	// Computes the tangents for normal mapping
+	void computeTangents(std::vector<Vertex>& verts, const std::vector<GLuint>& indices);
 };
