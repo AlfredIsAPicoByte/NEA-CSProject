@@ -108,6 +108,10 @@ public:
 
 	// scroll callback that can access Camera members
 	static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+
+	void ResetOrbit();
+	void ResetPlane();
+	void Reset(glm::vec3 position, glm::vec3 forward, glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f));
 private:
 	void FirstPersonMovement(GLFWwindow* window, double deltaTime);
 	void PlaneMovement(GLFWwindow* window, double deltaTime);

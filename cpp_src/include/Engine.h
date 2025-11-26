@@ -8,6 +8,7 @@
 #include "imgui_impl_opengl3.h"
 
 #include "Mesh.h"
+#include "Model.h"
 #include "shaderClass.h"
 #include "colorClass.h"
 #include "Debug.h"

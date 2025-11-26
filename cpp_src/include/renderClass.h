@@ -2,11 +2,14 @@
 
 #include <string>
 #include <vector>
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 #include <functional>
 
 #include "pythonManager.h"
 #include "shaderClass.h"
 #include "Model.h"
+#include "Texture.h"
 #include "Camera.h"
 
 class Scene{

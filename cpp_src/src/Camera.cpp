@@ -364,3 +364,28 @@ void Camera::LookAt(const glm::vec3& target)
 {
 	Forward = glm::normalize(target - Position);
 }
+
+void Camera::ResetOrbit()
+{
+	orbitPitch = 0.0f;
+	orbitYaw = 0.0f;
+	orbitRoll = 0.0f;
+	orbitDistance = orbitMinDistance + 10.0f;
+}
+
+void Camera::ResetPlane()
+{
+	planePitch = 0.0f;
+	planeYaw = -90.0f;
+	planeRoll = 0.0f;
+	planePower = 0.0f;
+}
+
+void Camera::Reset(glm::vec3 position, glm::vec3 forward, glm::vec3 worldUp)
+{
+	Position = position;
+	Forward = glm::normalize(forward);
+	WorldUp = worldUp;
+	Right = glm::normalize(glm::cross(Forward, WorldUp));
+	Up = glm::normalize(glm::cross(Right, Forward));
+}
