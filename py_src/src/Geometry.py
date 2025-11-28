@@ -1,12 +1,23 @@
 import numpy as np 
+from dataclasses import dataclass
+from typing import Any, Dict, Type, Optional, Tuple
+from abc import ABC, abstractmethod
 
 from PrimaryStructures import Ray, Transform
 
-"""
+@dataclass
+class Material:
+    color: "Color"  # from Luminance.py
+    emissive: "Color" = None
+    roughness: float = 1.0
+    metallic: float = 0.0
 
 """
 
-class Shape:
+"""
+
+class Shape(ABC):
+    """Base shape interface for the renderer."""
     ts: np.ndarray = np.zeros(3)  # translation vectror
     rs: np.ndarray = np.zeros(3)  # rotation vector (Euler angles)
     sf: float = 1.0  # scale factor
@@ -81,6 +92,22 @@ class Shape:
     
     def ApplyTransform(self, transform: Transform) -> None:
         raise NotImplementedError("ApplyTransform method must be implemented in subclasses")
+
+    def signed_distance(self, point: np.ndarray) -> float:
+        raise NotImplementedError
+
+    def get_normal(self, point: np.ndarray) -> np.ndarray:
+        # numeric normal from SDF by default
+        eps = 1e-4
+        dx = np.array([eps, 0.0, 0.0])
+        dy = np.array([0.0, eps, 0.0])
+        dz = np.array([0.0, 0.0, eps])
+        nx = self.signed_distance(point + dx) - self.signed_distance(point - dx)
+        ny = self.signed_distance(point + dy) - self.signed_distance(point - dy)
+        nz = self.signed_distance(point + dz) - self.signed_distance(point - dz)
+        n = np.array([nx, ny, nz])
+        n = n / (np.linalg.norm(n) + 1e-12)
+        return n
 
     def __repr__(self):
         return f"Shape()"
@@ -805,12 +832,12 @@ class Capsule(Shape3D):
     def __repr__(self):
         return f"Capsule(point1={self.point1}, point2={self.point2}, radius={self.radius})"
 
+@dataclass
 class VObject:
-    def __init__(self, shape: Shape, transform: Transform, material=None, name: str = "VObject"):
-        self.shape = shape
-        self.transform = transform
-        self.material = material
-        self.name = name
+    shape: Shape
+    transform: Optional["Transform"] = None  # from PrimaryStructures.Camera/Transform
+    material: Optional[Material] = None
+    name: str = "VObject"
 
     @property
     def position(self) -> np.ndarray:
@@ -837,9 +864,6 @@ class VObject:
     
     def __repr__(self):
         return f"VObject(name={self.name}, shape={self.shape}, transform={self.transform}, material={self.material})"
-
-from typing import Any, Dict, Type, Optional
-from abc import ABC, abstractmethod
 
 class ShapeFactory(ABC):
     @abstractmethod
@@ -906,3 +930,16 @@ class CapsuleFactory(ShapeFactory):
     
     def __repr__(self):
         return f"CapsuleFactory()"
+
+# Simple Sphere SDF
+class Sphere(Shape):
+    def __init__(self, center: Tuple[float, float, float], radius: float):
+        self.center = np.array(center, dtype=float)
+        self.radius = float(radius)
+
+    def signed_distance(self, point: np.ndarray) -> float:
+        return np.linalg.norm(point - self.center) - self.radius
+
+    def get_normal(self, point: np.ndarray) -> np.ndarray:
+        n = point - self.center
+        return n / (np.linalg.norm(n) + 1e-12)

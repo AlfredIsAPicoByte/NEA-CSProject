@@ -25,6 +25,10 @@ include_directories(
 file(GLOB_RECURSE CPP_SRC_FILES
     cpp_src/src/*.cpp                           # all cpp files in src folder
 )
+
+# exclude the test runner from the main executable sources (tester.cpp has its own target)
+list(REMOVE_ITEM CPP_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/src/tester.cpp")
+
 list(APPEND CPP_SRC_FILES cpp_src/main.cpp)     # include main.cpp from cpp_src
 
 # ---- Executable ----
@@ -79,6 +83,16 @@ add_custom_command(TARGET main POST_BUILD
 set_target_properties(main PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
+
+# ---- Python test runner executable ----
+add_executable(python_test_runner cpp_src/src/tester.cpp)
+target_link_libraries(python_test_runner PRIVATE pybind11::embed)
+set_target_properties(python_test_runner PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test_bin"
+)
+
+# remove or comment out this dependency so main does not try to recompile/link tester into itself
+# add_dependencies(main python_test_runner)
 
 # ---- Optional: Debugging definitions ----
 # You can define DEBUG_MODE based on your build type

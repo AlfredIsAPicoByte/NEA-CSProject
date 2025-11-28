@@ -11,11 +11,14 @@
 #include "Model.h"
 #include "Texture.h"
 #include "Camera.h"
+#include "IRenderable.h"
 
 class Scene{
 public:
     Scene();
     ~Scene();
+
+    bool pythonRenderingUsed = false;
 
     int selectedMeshIndex = -1;
 
@@ -27,8 +30,10 @@ public:
     void setCamera(Camera* cam);
 private:
     Shader* shaderProgram;
-    std::vector<Model*> models;
     Camera* sceneCamera;
+
+    std::vector<std::shared_ptr<IRenderable>> renderables;
+
 
     py::object pyCamera;
     py::object pySampler;

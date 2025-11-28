@@ -24,7 +24,14 @@ void Scene::initialize()
 
 void Scene::render()
 {
-
+    if (pythonRenderingUsed) {
+        pyScene.attr("render")(pyCamera, pySampler);
+    } else {
+        shaderProgram->Activate();
+        for (const auto& renderable : renderables) {
+            renderable->Draw(*shaderProgram, *sceneCamera);
+        }
+    }
 }
 
 void Scene::update()
@@ -34,15 +41,7 @@ void Scene::update()
 
 void Scene::cleanup()
 {
-    for (auto& mesh : meshes) {
-        delete mesh;
-    }
-    meshes.clear();
-
-    for (auto& texture : textures) {
-        delete texture;
-    }
-    textures.clear();
+    renderables.clear();
 }
 
 void Scene::loadModel(const std::string& modelPath)

@@ -1,54 +1,46 @@
+from typing import List, Tuple, Optional
 import numpy as np
-from enum import Enum
-
-from PrimaryStructures import Transform, Ratio
 from Geometry import VObject
-from Camera import VCamera
 from Luminance import LightSource
 
-"""
-
-"""
-
 class Scene:
-    def __init__(self, dimension: int = 2, name: str = "Scene"):
-        if dimension not in (2, 3):
-            raise AttributeError("Scene dimension must be either 2 or 3")
-        self.dimension = dimension
+    def __init__(self):
+        self.objects: List[VObject] = []
+        self.lights: List[Light] = []
 
-        self.objects: list[VObject] = []
-        self.lights: list[LightSource] = []
-        self.cam: VCamera = None
-        self.name = name
-    
-    def set_camera(self, camera: VCamera):
-        self.cam = camera
-    
     def add_object(self, obj: VObject):
         self.objects.append(obj)
-    
+
     def add_light(self, light: LightSource):
         self.lights.append(light)
 
-    def distance_estimator(self, point: np.ndarray) -> tuple[float, VObject]:
-        """Returns the minimum distance from the point to any object in the scene."""
+    def get_lights(self):
+        return list(self.lights)
 
-        min_dist = float("inf")
-        closest_object = None
+    def distance_estimator(self, point: np.ndarray):
+        """Return either a scalar distance or (distance, object). RayMarchingIntersection expects either."""
+        min_d = float("inf")
+        closest = None
+        for obj in self.objects:
+            try:
+                d = obj.distance_to(point)
+            except Exception:
+                continue
+            if d < min_d:
+                min_d = d
+                closest = obj
+        return (min_d, closest)
+    
+    def get_background_color(self, direction: np.ndarray) -> Tuple[float, float, float]:
+        """Return the background color as an RGB tuple based on the direction vector."""
+        # Simple gradient based on the y-component of the direction
+        t = 0.5 * (direction[1] + 1.0)
+        return (1.0 - t) * np.array([1.0, 1.0, 1.0]) + t * np.array([0.5, 0.7, 1.0])
+    
+    def clear(self):
+        self.objects.clear()
+        self.lights.clear()
 
-        for vobject in self.objects:
-            # Placeholder for actual distance calculation
-            dist = np.linalg.norm(point - vobject.transform.position)
-
-            if dist < min_dist:
-                min_dist = dist
-                closest_object = vobject
-        
-        if closest_object is not None:
-            min_dist = np.linalg.norm(point - vobject.shape.GetClosestPoint(point))
-            return min_dist, closest_object
-        else:
-            return float("inf"), None
-
-    def __repr__(self):
-        return f"Scene(camera={self.cam}, objects={len(self.objects)}, lights={len(self.lights)})"
+    def render(self):
+        """Placeholder for rendering logic."""
+        pass

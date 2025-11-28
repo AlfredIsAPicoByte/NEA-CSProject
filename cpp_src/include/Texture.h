@@ -3,6 +3,8 @@
 
 #include <glad/glad.h>
 #include <stb_image.h>
+#include <filesystem>
+#include <iostream>
 
 #include "shaderClass.h"
 #include "Debug.h"

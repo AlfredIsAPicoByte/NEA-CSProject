@@ -1,5 +1,55 @@
-from src import *
+import sys
+import os
+
+# Make local package importable when run from C++ or directly
+ROOT = os.path.dirname(__file__)
+SRC = os.path.join(ROOT, "src")
+if SRC not in sys.path:
+    sys.path.insert(0, SRC)
+
 import numpy as np
+from Geometry import Sphere, VObject
+from Scene import Scene
+
+def run_unit_tests() -> bool:
+    """
+    Minimal unit tests for the python ray-casting components.
+    - verifies Sphere.signed_distance
+    - verifies Scene.distance_estimator finds the sphere
+    Returns True on success, False on failure.
+    """
+    try:
+        s = Sphere((0.0, 0.0, 0.0), 1.0)
+        p = np.array([0.0, 0.0, 2.0], dtype=float)
+        d = s.signed_distance(p)
+        print(f"[tester] Sphere distance @ {p.tolist()} = {d}")
+        if not np.isclose(d, 1.0, atol=1e-6):
+            print("[tester][ERROR] Sphere distance mismatch")
+            return False
+
+        scene = Scene()
+        obj = VObject(shape=s, transform=None, material=None, name="unit_sphere")
+        scene.add_object(obj)
+
+        dist, closest = scene.distance_estimator(p)
+        print(f"[tester] Scene distance = {dist}, closest = {getattr(closest,'name',None)}")
+        if not np.isclose(dist, 1.0, atol=1e-6):
+            print("[tester][ERROR] Scene distance mismatch")
+            return False
+        if closest is not obj:
+            print("[tester][ERROR] Closest object mismatch")
+            return False
+
+        print("[tester] All python unit tests passed")
+        return True
+    except Exception as e:
+        print(f"[tester][EXCEPTION] {e}")
+        return False
+
+if __name__ == "__main__":
+    ok = run_unit_tests()
+    sys.exit(0 if ok else 1)
+
 from typing import Callable, Tuple, Any
 
 # --- Custom Text Definitions ---
