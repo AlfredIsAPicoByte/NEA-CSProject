@@ -291,6 +291,23 @@ class Transform:
         else:
             self.local_scale = self.local_scale * reflection
         self.update_orientations()
+
+    def copy_transform(self, other: 'Transform') -> 'Transform':
+        """Combines this transform with another, returning a new Transform."""
+        new_position = self.position + other.position
+        new_rotation = self.rotation + other.rotation
+        new_scale = self.scale * other.scale
+        
+        new_local_position = self.local_position + other.local_position
+        new_local_rotation = self.local_rotation + other.local_rotation
+        new_local_scale = self.local_scale * other.local_scale
+        
+        combined = Transform(new_position, new_rotation, new_scale)
+        combined.local_position = new_local_position
+        combined.local_rotation = new_local_rotation
+        combined.local_scale = new_local_scale
+        combined.update_orientations()
+        return combined
     
     def __repr__(self):
         return (f"Transform(position={self.position}, rotation={self.rotation}, scale={self.scale}, "
@@ -391,3 +408,13 @@ class Ratio:
     def value(self):
         """Returns the float value of the ratio."""
         return self.width / self.height
+    
+"""
+PrimaryStructures module: Provides datastructures essential for most graphical computations.
+Includes Ray, Transform, and Ratio classes.
+
+Classes:
+- Ray: Represents a ray in 2D/3D space with origin and orientation.
+- Transform: Represents a 3D transformation with position, rotation, scale, and hierarchical parent support.
+- Ratio: Represents a ratio (fraction) with width and height, supporting basic arithmetic operations and comparisons.
+"""
