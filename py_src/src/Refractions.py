@@ -192,7 +192,7 @@ def refract_ray(normal: np.ndarray, incomingRay: Ray, refractiveIndexIncident: f
         incoming_ray (Ray): the incoming ray
     """
     normal = normal / np.linalg.norm(normal)
-    incomingDirection = incomingRay.direction / np.linalg.norm(incomingRay.direction)
+    incomingDirection = incomingRay.orientation / np.linalg.norm(incomingRay.orientation)
 
     cos_theta_i = -np.dot(normal, incomingDirection)
     sin_theta_i2 = 1.0 - cos_theta_i ** 2
