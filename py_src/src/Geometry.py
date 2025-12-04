@@ -1,231 +1,199 @@
-import numpy as np 
-from dataclasses import dataclass
-from typing import Any, Dict, Type, Optional, Tuple
 from abc import ABC, abstractmethod
+import numpy as np
+from typing import Optional, Tuple, List
+from dataclasses import dataclass
+from PrimaryStructures import Transform, Ray
+from Luminance import Color, Material
 
-from PrimaryStructures import Ray, Transform
+# Base Classes & Mixins
+class GeometryMixin(ABC):
+    """Mixin providing default geometric query implementations."""
+    
+    @abstractmethod
+    def SignedDistance(self, point: np.ndarray) -> float:
+        """Signed distance (negative inside, positive outside)."""
+        raise NotImplementedError
 
-@dataclass
-class Material:
-    color: "Color"  # from Luminance.py
-    emissive: "Color" = None
-    roughness: float = 1.0
-    metallic: float = 0.0
+    def GetDistance(self, point: np.ndarray) -> float:
+        """Unsigned distance to surface."""
+        return abs(self.SignedDistance(point))
 
-"""
+    def CheckPointInside(self, point: np.ndarray, epsilon: float = 1e-6) -> bool:
+        """Point is inside if signed distance < -epsilon."""
+        return self.SignedDistance(point) < -epsilon
 
-"""
+    def CheckPointOnSurface(self, point: np.ndarray, epsilon: float = 1e-6) -> bool:
+        """Point is on surface if |signed distance| <= epsilon."""
+        return abs(self.SignedDistance(point)) <= epsilon
+
+    def GetClosestPoint(self, point: np.ndarray, max_iterations: int = 10) -> np.ndarray:
+        """
+        Use gradient descent to find closest point on surface.
+        Fallback for shapes without closed-form solution.
+        """
+        current = np.array(point, dtype=float)
+        step_size = 0.1
+        
+        for _ in range(max_iterations):
+            dist = self.SignedDistance(current)
+            if abs(dist) < 1e-6:
+                return current
+            
+            # Approximate gradient via finite differences
+            eps = 1e-5
+            grad = np.array([
+                (self.SignedDistance(current + np.array([eps, 0, 0])) - dist) / eps,
+                (self.SignedDistance(current + np.array([0, eps, 0])) - dist) / eps,
+                (self.SignedDistance(current + np.array([0, 0, eps])) - dist) / eps,
+            ])
+            grad_norm = np.linalg.norm(grad)
+            if grad_norm > 1e-10:
+                grad = grad / grad_norm
+            else:
+                break
+            
+            current = current - dist * grad
+        
+        return current
+
+class RayIntersectionMixin(ABC):
+    """Mixin for ray-shape intersection tests."""
+    
+    @abstractmethod
+    def CheckRayIntersection(self, ray: "Ray") -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
+        raise NotImplementedError
+
+class SurfacePropertiesMixin(ABC):
+    """Mixin for surface normal/tangent/binormal queries."""
+    
+    @abstractmethod
+    def GetNormal(self, point: np.ndarray) -> np.ndarray:
+        raise NotImplementedError
+    
+    def GetTangent(self, point: np.ndarray) -> np.ndarray:
+        """Default: perpendicular to normal (requires override for custom behavior)."""
+        raise NotImplementedError
+    
+    def GetBinormal(self, point: np.ndarray) -> np.ndarray:
+        """Default: cross(normal, tangent)."""
+        normal = self.GetNormal(point)
+        tangent = self.GetTangent(point)
+        return np.cross(normal, tangent) / (np.linalg.norm(np.cross(normal, tangent)) + 1e-12)
 
 class Shape(ABC):
-    """Base shape interface for the renderer."""
-    ts: np.ndarray = np.zeros(3)  # translation vectror
-    rs: np.ndarray = np.zeros(3)  # rotation vector (Euler angles)
-    sf: float = 1.0  # scale factor
-
-    def __init__(self, **kwargs):
-        self.name: str = kwargs.get("name", "Default Name")
-        self.origin: np.ndarray = kwargs.get("origin", np.zeros(3))
-        
-
+    """
+    Abstract base for all shapes.
+    Provides transform, material, and naming.
+    """
+    def __init__(self, name: str = "Shape", transform: Optional["Transform"] = None, 
+                 material: Optional["Material"] = None, **kwargs):
+        self.name = name
+        self.transform = transform or Transform(np.zeros(3), np.zeros(3), np.ones(3))
+        self.material = material
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-    def CheckPointOnEdge(self, point: np.ndarray, epsilon: float) -> bool:
-        raise NotImplementedError("CheckPointOnEdge method must be implemented in subclasses")
-    
-    def CheckPointInside(self, point: np.ndarray, epsilon: float) -> bool:
-        raise NotImplementedError("CheckPointInside method must be implemented in subclasses")
-    
-    def GetDistance(self, point: np.ndarray) -> float:
-        raise NotImplementedError("GetDistance method must be implemented in subclasses")
-
-    def GetClosestPoint(self, point: np.ndarray) -> float:
-        raise NotImplementedError("GetClosestPoint method must be implemented in subclasses")
-
-    def CheckRayIntersection(self, ray: Ray) -> bool:
-        raise NotImplementedError("CheckRayIntersection method must be implemented in subclasses")
-    
-    def GetRayIntersections(self, ray: Ray) -> list[np.ndarray]:
-        raise NotImplementedError("GetRayIntersections method must be implemented in subclasses")
-
-    def GetNormal(self, point: np.ndarray) -> np.ndarray:
-        raise NotImplementedError("GetNormal method must be implemented in subclasses")
-
-    def GetTangent(self, point: np.ndarray) -> np.ndarray:
-        raise NotImplementedError("GetTangent method must be implemented in subclasses")
-    
     @property
-    def normals(self) -> list[np.ndarray]:
-        raise NotImplementedError("Normals property must be implemented in subclasses")
-    
-    @property
-    def tangents(self) -> list[np.ndarray]:
-        raise NotImplementedError("Tangents property must be implemented in subclasses")
+    def origin(self) -> np.ndarray:
+        return self.transform.position
+
+    @abstractmethod
+    def SignedDistance(self, point: np.ndarray) -> float:
+        raise NotImplementedError
 
     @property
-    def area(self) -> float:
-        raise NotImplementedError("Area property must be implemented in subclasses")
+    @abstractmethod
+    def dimensions(self) -> int:
+        """2 for 2D, 3 for 3D."""
+        raise NotImplementedError
 
-    @property
-    def perimeter(self) -> float:
-        raise NotImplementedError("Perimeter property must be implemented in subclasses")
+    def Translate(self, offset: np.ndarray) -> None:
+        self.transform.translate(offset, space="global")
+
+    def Rotate(self, angle: float, axis: np.ndarray) -> None:
+        self.transform.rotate(angle, axis, space="global")
+
+    def Scale(self, factor: np.ndarray) -> None:
+        self.transform.enlarge(factor, space="global")
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(name={self.name})"
+
+# 2D Shapes
+
+class Shape2D(Shape, GeometryMixin, RayIntersectionMixin, SurfacePropertiesMixin):
+    """Base for 2D shapes."""
     
     @property
     def dimensions(self) -> int:
-        raise NotImplementedError("Dimensions property must be implemented in subclasses")
-    
+        return 2
+
     @property
     def volume(self) -> float:
-        raise NotImplementedError("Volume property must be implemented in subclasses")
-    
-    def Translate(self, translation: np.ndarray) -> None:
-        self.origin += translation
+        return 0.0
 
-    def Scale(self, scale_factor: float) -> None:
-        raise NotImplementedError("Scale method must be implemented in subclasses")
-
-    def Rotate(self, rotation_matrix: np.ndarray) -> None:
-        raise NotImplementedError("Rotate method must be implemented in subclasses")
-
-    def ResetTransform(self) -> None:
-        raise NotImplementedError("ResetTransform method must be implemented in subclasses")
-    
-    def ApplyTransform(self, transform: Transform) -> None:
-        raise NotImplementedError("ApplyTransform method must be implemented in subclasses")
-
-    def signed_distance(self, point: np.ndarray) -> float:
+    @property
+    @abstractmethod
+    def area(self) -> float:
         raise NotImplementedError
 
-    def get_normal(self, point: np.ndarray) -> np.ndarray:
-        # numeric normal from SDF by default
-        eps = 1e-4
-        dx = np.array([eps, 0.0, 0.0])
-        dy = np.array([0.0, eps, 0.0])
-        dz = np.array([0.0, 0.0, eps])
-        nx = self.signed_distance(point + dx) - self.signed_distance(point - dx)
-        ny = self.signed_distance(point + dy) - self.signed_distance(point - dy)
-        nz = self.signed_distance(point + dz) - self.signed_distance(point - dz)
-        n = np.array([nx, ny, nz])
-        n = n / (np.linalg.norm(n) + 1e-12)
-        return n
+    @property
+    @abstractmethod
+    def perimeter(self) -> float:
+        raise NotImplementedError
 
-    def __repr__(self):
-        return f"Shape()"
-
-### TODO: Update the bellow classes to use all the new methods
-
-class Circle(Shape):
-    def __init__(self, center: np.ndarray, radius: float, name: str = "Circle"):
-        super().__init__(name=name)
-        self.center = center
+class Circle(Shape2D):
+    def __init__(self, center: np.ndarray, radius: float, **kwargs):
+        super().__init__(**kwargs)
+        self.center = np.asarray(center, dtype=float)
         if radius <= 0:
-            raise AttributeError("The radius of the Circle must be greater than 0")
-        self.radius = radius
+            raise ValueError("Radius must be > 0")
+        self.radius = float(radius)
+        self.transform.position = self.center
 
-        self.origin = center
-    
-    def CheckPointInside(self, point: np.ndarray, epsilon: float = 0) -> bool:
-        return self.radius - epsilon < np.linalg.norm(point - self.center) <= self.radius + epsilon
-    
-    # Using the quadratic equation to find intersection with circles
-    # P(t) = dt + s
-    # ||P(t)|| = r
-    # (d * t + s)^2 = r^2
-    
-    # d * dt^2 + 2d * st + s^2 - r^2 = 0
-    #
-    # a = d.Dot(d)
-    # b = 2 * d.Dot(s)
-    # c = s.Dot(s) - r^2
-    # at^2 + bt + c = 0
-    
-    # t = (-b ± sqrt(b^2 - 4ac)) / 2a
-    # b/2 = d.Dot(s) 
-    # t = (-2b ± sqrt(4b^2 - 4ac)) / 2a
-    
-    # Discriminant = b^2 - ac
-    # b^2-ac < 0 ==> no intersection
-    # b^2-ac = 0 ==> one intersection
-    # b^2-ac > 0 ==> two intersections
-    
-    # the clossest intersection is the one with the smallest t
-    # t = -b - sqrt(b^2 - ac) / a
-        
-    def CheckRayIntersection(self, ray: Ray) -> bool:
-        d = ray.orientation 
+    def SignedDistance(self, point: np.ndarray) -> float:
+        return np.linalg.norm(point - self.center) - self.radius
+
+    def CheckRayIntersection(self, ray: "Ray") -> bool:
+        d = ray.orientation
         s = ray.origin - self.center
         a = np.dot(d, d)
         b = 2 * np.dot(d, s)
         c = np.dot(s, s) - self.radius ** 2
-        discriminant = b ** 2 - 4 * a * c
-        
-        if discriminant < 0:
-            return False
-        else:
-            return True
+        return b ** 2 - 4 * a * c >= 0
 
-    def GetRayIntersections(self, ray: Ray) -> list[np.ndarray]:
+    def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
         if not self.CheckRayIntersection(ray):
             return []
-        
-        d = ray.orientation 
+        d = ray.orientation
         s = ray.origin - self.center
         a = np.dot(d, d)
         b = 2 * np.dot(d, s)
         c = np.dot(s, s) - self.radius ** 2
         discriminant = b ** 2 - 4 * a * c
-        if discriminant == 0:
+        
+        if abs(discriminant) < 1e-10:
             t = -b / (2 * a)
-            return np.array([ray.point_at(t)]) if t >= 0 else []
-        else:
-            sqrt_disc = discriminant ** 0.5
-            t1 = (-b + sqrt_disc) / (2 * a)
-            t2 = (-b - sqrt_disc) / (2 * a)
-            # For rays starting inside, t=0 is a valid intersection (origin on circle)
-            ts = [t for t in [t1, t2] if t >= 0 or np.isclose(t, 0)]
-            return np.array([ray.point_at(t) for t in sorted(ts)])
+            return [ray.point_at(t)] if t >= 0 else []
+        
+        sqrt_disc = np.sqrt(discriminant)
+        t1 = (-b - sqrt_disc) / (2 * a)
+        t2 = (-b + sqrt_disc) / (2 * a)
+        ts = [t for t in [t1, t2] if t >= -1e-10]
+        return [ray.point_at(t) for t in sorted(ts)]
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
-        if not self.CheckPoint(point, 0.01):
-            raise ValueError("Point is not on the circle")
         vec = point - self.center
-        return vec / np.linalg.norm(vec)
+        return vec / (np.linalg.norm(vec) + 1e-12)
 
     def GetTangent(self, point: np.ndarray) -> np.ndarray:
-        if not self.CheckPoint(point, 0.01):
-            raise ValueError("Point is not on the circle")
         normal = self.GetNormal(point)
-        # For 2D circle in XY plane, tangent is perpendicular to normal
-        # If 3D, use cross product with Z axis if normal is in XY
-        if normal.shape[0] == 2:
-            return np.array([-normal[1], normal[0]])
-        elif normal.shape[0] == 3:
-            # Tangent in XY plane: cross with Z axis
-            z_axis = np.array([0, 0, 1])
-            tangent = np.cross(z_axis, normal)
-            return tangent / np.linalg.norm(tangent)
-        else:
-            raise ValueError("Unsupported dimension for tangent computation")
-        
-    def CheckPointOnEdge(self, point: np.ndarray, epsilon: float) -> bool:
-        dist = np.linalg.norm(point - self.center)
-        return abs(dist - self.radius) <= epsilon
-    
-    def GetDistance(self, point: np.ndarray) -> float:
-        return abs(np.linalg.norm(point - self.center) - self.radius)
-
-    def GetClosestPoint(self, point: np.ndarray) -> float:
-        direction = point - self.center
-        direction_normalized = direction / np.linalg.norm(direction)
-        return self.center + direction_normalized * self.radius
-
-    @property
-    def normals(self, resolution:int = 100) -> list[np.ndarray]:
-        return [np.array([np.cos(theta), np.sin(theta)]) for theta in np.linspace(0, 2 * np.pi, num=resolution, endpoint=False)]
-    
-    @property
-    def tangents(self, resolution:int = 100) -> list[np.ndarray]:
-        return [np.array([-np.sin(theta), np.cos(theta)]) for theta in np.linspace(0, 2 * np.pi, num=resolution, endpoint=False)]
+        # Perpendicular in 2D (assumes Z=0 plane)
+        return np.array([-normal[1], normal[0], 0]) / (np.linalg.norm([-normal[1], normal[0], 0]) + 1e-12)
 
     @property
     def area(self) -> float:
@@ -237,709 +205,580 @@ class Circle(Shape):
         from math import pi
         return 2 * pi * self.radius
 
-    @property
-    def diameter(self) -> float:
-        return 2 * self.radius
-
-    @property
-    def circumference(self) -> float:
-        return self.Perimeter()
-    
-    @property
-    def dimensions(self) -> int:
-        return 2
-    
-    @property
-    def volume(self) -> float:
-        return 0.0
-    
-    def Scale(self, scale_factor: float) -> None:
-        if scale_factor <= 0:
-            raise ValueError("Scale factor must be greater than 0")
-        self.sf *= scale_factor
-
-        self.radius *= scale_factor
-
     def __repr__(self):
         return f"Circle(center={self.center}, radius={self.radius})"
 
+class Triangle(Shape2D):
+    def __init__(self, v1: np.ndarray, v2: np.ndarray, v3: np.ndarray, **kwargs):
+        super().__init__(**kwargs)
+        self.v1 = np.asarray(v1, dtype=float)
+        self.v2 = np.asarray(v2, dtype=float)
+        self.v3 = np.asarray(v3, dtype=float)
+        self.transform.position = (self.v1 + self.v2 + self.v3) / 3
+        self._validate()
 
-class Triangle(Shape):
-    def __init__(self, vertex1: np.ndarray, vertex2: np.ndarray, vertex3: np.ndarray, name: str = "Triangle"):
-        super().__init__(name=name)
-        self.vertex1 = np.asarray(vertex1, dtype=float)
-        self.vertex2 = np.asarray(vertex2, dtype=float)
-        self.vertex3 = np.asarray(vertex3, dtype=float)
-
-        self.origin = (vertex1 + vertex2 + vertex3) / 3
-
-        self.CheckDegeneracy()
-
-    def CheckDegeneracy(self, epsilon: float = 1e-6) -> bool:
-        """Check if any edge of the triangle is degenerate or area is near zero (collinear)."""
-        edge1 = np.linalg.norm(self.vertex2 - self.vertex1)
-        edge2 = np.linalg.norm(self.vertex3 - self.vertex2)
-        edge3 = np.linalg.norm(self.vertex1 - self.vertex3)
-        # If any edge is degenerate (zero length), triangle is degenerate
-        if edge1 < epsilon or edge2 < epsilon or edge3 < epsilon:
-            raise AttributeError("The triangle's verticies create edges that have near-zero lengths. The triangle is degenrate")
-        # If area is near zero, triangle is degenerate (collinear)
+    def _validate(self):
+        """Check for degeneracy."""
         area = self.area
-        if area < epsilon:
-            raise AttributeError("The triangle has a near-zero Area. The triangle is degenrate")
-    
-    # Using a geometric solution to find intersection with triangles
-    # P(t) = O + Rt
-    # D = -(Ax )
+        if area < 1e-6:
+            raise ValueError("Triangle is degenerate (collinear or zero area)")
 
-    def CheCheckPointInsideck(self, point: np.ndarray, epsilon: float = 1e-6) -> bool:
-        # Barycentric technique
-        v0 = self.vertex2 - self.vertex1
-        v1 = self.vertex3 - self.vertex1
-        v2 = point - self.vertex1
+    def SignedDistance(self, point: np.ndarray) -> float:
+        """Unsigned distance to triangle (simplified: distance to closest edge/vertex)."""
+        # For exact signed distance, would need plane equation + edge tests
+        return self.GetDistance(point)
 
-        dot00 = np.dot(v0, v0)
-        dot01 = np.dot(v0, v1)
-        dot02 = np.dot(v0, v2)
-        dot11 = np.dot(v1, v1)
-        dot12 = np.dot(v1, v2)
+    def GetDistance(self, point: np.ndarray) -> float:
+        def point_to_segment_dist(p, a, b):
+            ab = b - a
+            ap = p - a
+            ab_sq = np.dot(ab, ab)
+            if ab_sq < 1e-10:
+                return np.linalg.norm(ap)
+            t = np.clip(np.dot(ap, ab) / ab_sq, 0, 1)
+            return np.linalg.norm(p - (a + t * ab))
+        
+        d1 = point_to_segment_dist(point, self.v1, self.v2)
+        d2 = point_to_segment_dist(point, self.v2, self.v3)
+        d3 = point_to_segment_dist(point, self.v3, self.v1)
+        return min(d1, d2, d3)
 
-        invDenom = 1 / (dot00 * dot11 - dot01 * dot01)
-        u = (dot11 * dot02 - dot01 * dot12) * invDenom
-        v = (dot00 * dot12 - dot01 * dot02) * invDenom
-
-        return (u >= -epsilon) and (v >= -epsilon) and (u + v <= 1 + epsilon)
-
-    def CheckRayIntersection(self, ray: Ray, epsilon: float = 1e-6) -> bool:
-        edge1 = self.vertex2 - self.vertex1
-        edge2 = self.vertex3 - self.vertex1
-        h = np.cross(ray.orientation , edge2)
+    def CheckRayIntersection(self, ray: "Ray") -> bool:
+        edge1 = self.v2 - self.v1
+        edge2 = self.v3 - self.v1
+        h = np.cross(ray.orientation, edge2)
         a = np.dot(edge1, h)
         
-        if -epsilon < a < epsilon:
-            return False  # Ray is parallel to triangle
+        if abs(a) < 1e-10:
+            return False
         
         f = 1.0 / a
-        s = ray.origin - self.vertex1
+        s = ray.origin - self.v1
         u = f * np.dot(s, h)
-        
-        if u < 0.0 or u > 1.0:
+        if u < 0 or u > 1:
             return False
         
         q = np.cross(s, edge1)
-        v = f * np.dot(ray.orientation , q)
-        
-        if v < 0.0 or u + v > 1.0:
+        v = f * np.dot(ray.orientation, q)
+        if v < 0 or u + v > 1:
             return False
         
         t = f * np.dot(edge2, q)
+        return t > 1e-10
+
+    def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
+        if not self.CheckRayIntersection(ray):
+            return []
         
-        if t > epsilon:  # Intersection with the triangle
-            return True
-        else:  # Line intersection but not a ray intersection
-            return False
-        
-    def GetRayIntersections(self, ray: Ray, epsilon: float = 1e-6) -> np.ndarray | None:
-        if not self.CheckIntersection(ray, epsilon):
-            return None
-        
-        edge1 = self.vertex2 - self.vertex1
-        edge2 = self.vertex3 - self.vertex1
-        h = np.cross(ray.orientation , edge2)
+        edge1 = self.v2 - self.v1
+        edge2 = self.v3 - self.v1
+        h = np.cross(ray.orientation, edge2)
         a = np.dot(edge1, h)
-        
         f = 1.0 / a
-        s = ray.origin - self.vertex1
+        s = ray.origin - self.v1
         u = f * np.dot(s, h)
-        
         q = np.cross(s, edge1)
-        v = f * np.dot(ray.orientation , q)
-        
+        v = f * np.dot(ray.orientation, q)
         t = f * np.dot(edge2, q)
         
-        if t > epsilon:
-            return ray.point_at(t)
-        else:
-            return None
+        return [ray.point_at(t)] if t > 1e-10 else []
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
-        if not self.CheckPoint(point):
-            raise ValueError("Point is not on the triangle")
-        edge1 = self.vertex2 - self.vertex1
-        edge2 = self.vertex3 - self.vertex1
-        return np.cross(edge1, edge2) / np.linalg.norm(np.cross(edge1, edge2))
+        edge1 = self.v2 - self.v1
+        edge2 = self.v3 - self.v1
+        normal = np.cross(edge1, edge2)
+        return normal / (np.linalg.norm(normal) + 1e-12)
 
     def GetTangent(self, point: np.ndarray) -> np.ndarray:
-        if not self.CheckPoint(point):
-            raise ValueError("Point is not on the triangle")
-        edge1 = self.vertex2 - self.vertex1
-        return edge1 / np.linalg.norm(edge1)
-    
-    def CheckPointOnEdge(self, point: np.ndarray, epsilon: float = 1e-6) -> bool:
-        def point_on_segment(p, v1, v2, eps):
-            d1 = np.linalg.norm(p - v1)
-            d2 = np.linalg.norm(p - v2)
-            segment_length = np.linalg.norm(v2 - v1)
-            return abs((d1 + d2) - segment_length) <= eps
-        
-        return (point_on_segment(point, self.vertex1, self.vertex2, epsilon) or
-                point_on_segment(point, self.vertex2, self.vertex3, epsilon) or
-                point_on_segment(point, self.vertex3, self.vertex1, epsilon))
-    
-    def GetDistance(self, point: np.ndarray) -> float:
-        # Distance to edges or vertices
-        def point_to_segment_distance(p, v1, v2):
-            seg_vec = v2 - v1
-            pt_vec = p - v1
-            seg_len_sq = np.dot(seg_vec, seg_vec)
-            if seg_len_sq == 0:
-                return np.linalg.norm(pt_vec)
-            t = max(0, min(1, np.dot(pt_vec, seg_vec) / seg_len_sq))
-            projection = v1 + t * seg_vec
-            return np.linalg.norm(p - projection)
-        
-        d1 = point_to_segment_distance(point, self.vertex1, self.vertex2)
-        d2 = point_to_segment_distance(point, self.vertex2, self.vertex3)
-        d3 = point_to_segment_distance(point, self.vertex3, self.vertex1)
-        return min(d1, d2, d3)
-    
-    def GetClosestPoint(self, point: np.ndarray) -> float:
-        # Closest point on edges or vertices
-        def point_to_segment_closest(p, v1, v2):
-            seg_vec = v2 - v1
-            pt_vec = p - v1
-            seg_len_sq = np.dot(seg_vec, seg_vec)
-            if seg_len_sq == 0:
-                return v1
-            t = max(0, min(1, np.dot(pt_vec, seg_vec) / seg_len_sq))
-            return v1 + t * seg_vec
-        
-        candidates = [
-            point_to_segment_closest(point, self.vertex1, self.vertex2),
-            point_to_segment_closest(point, self.vertex2, self.vertex3),
-            point_to_segment_closest(point, self.vertex3, self.vertex1)
-        ]
-        closest_point = min(candidates, key=lambda p: np.linalg.norm(point - p))
-        return closest_point
-    
-    @property
-    def normals(self) -> list[np.ndarray]:
-        normal = self.GetNormal((self.vertex1 + self.vertex2 + self.vertex3) / 3)
-        return [normal]
-    
-    @property
-    def tangents(self) -> list[np.ndarray]:
-        edge1 = self.vertex2 - self.vertex1
-        edge2 = self.vertex3 - self.vertex2
-        edge3 = self.vertex1 - self.vertex3
-        return [edge / np.linalg.norm(edge) for edge in [edge1, edge2, edge3]]
+        edge1 = self.v2 - self.v1
+        return edge1 / (np.linalg.norm(edge1) + 1e-12)
 
     @property
     def area(self) -> float:
-        # Heron's formula
-        a = np.linalg.norm(self.vertex1 - self.vertex2)
-        b = np.linalg.norm(self.vertex2 - self.vertex3)
-        c = np.linalg.norm(self.vertex3 - self.vertex1)
-        s = (a + b + c) / 2
-        from math import sqrt
-        return sqrt(max(s * (s - a) * (s - b) * (s - c), 0.0))
+        edge1 = self.v2 - self.v1
+        edge2 = self.v3 - self.v1
+        return 0.5 * np.linalg.norm(np.cross(edge1, edge2))
 
     @property
     def perimeter(self) -> float:
-        a = np.linalg.norm(self.vertex1 - self.vertex2)
-        b = np.linalg.norm(self.vertex2 - self.vertex3)
-        c = np.linalg.norm(self.vertex3 - self.vertex1)
-        return a + b + c
-
-    @property
-    def side_lengths(self) -> tuple[float, float, float]:
-        a = np.linalg.norm(self.vertex1 - self.vertex2)
-        b = np.linalg.norm(self.vertex2 - self.vertex3)
-        c = np.linalg.norm(self.vertex3 - self.vertex1)
-        return (a, b, c)
-    
-    @property
-    def dimensions(self) -> int:
-        return 2
-    
-    @property
-    def volume(self) -> float:
-        return 0.0
+        return (np.linalg.norm(self.v2 - self.v1) +
+                np.linalg.norm(self.v3 - self.v2) +
+                np.linalg.norm(self.v1 - self.v3))
 
     def __repr__(self):
-        return f"Triangle(vertex1={self.vertex1}, vertex2={self.vertex2}, vertex3={self.vertex3})"
+        return f"Triangle(v1={self.v1}, v2={self.v2}, v3={self.v3})"
 
-class Polygon(Shape):
-    def __init__(self, vertices: list[np.ndarray], name: str = "Polygon"):
-        super().__init__(name=name)
-        self.vertices = vertices
-        self.origin = np.mean(vertices, axis=0)
-    
-    def CheckPoint(self, point: np.ndarray, epsilon: float = 1e-6) -> bool:
-        pass
+class Polygon(Shape2D):
+    def __init__(self, vertices: List[np.ndarray], **kwargs):
+        super().__init__(**kwargs)
+        self.vertices = [np.asarray(v, dtype=float) for v in vertices]
+        if len(self.vertices) < 3:
+            raise ValueError("Polygon requires at least 3 vertices")
+        self.transform.position = np.mean(self.vertices, axis=0)
 
-    def CheckIntersection(self, ray: Ray) -> bool:
-        pass
+    def SignedDistance(self, point: np.ndarray) -> float:
+        return self.GetDistance(point)
+
+    def GetDistance(self, point: np.ndarray) -> float:
+        """Minimum distance to polygon edges or vertices."""
+        def point_to_segment_dist(p, a, b):
+            ab = b - a
+            ap = p - a
+            ab_sq = np.dot(ab, ab)
+            if ab_sq < 1e-10:
+                return np.linalg.norm(ap)
+            t = np.clip(np.dot(ap, ab) / ab_sq, 0, 1)
+            return np.linalg.norm(p - (a + t * ab))
+        
+        min_dist = float('inf')
+        for i in range(len(self.vertices)):
+            v1 = self.vertices[i]
+            v2 = self.vertices[(i + 1) % len(self.vertices)]
+            dist = point_to_segment_dist(point, v1, v2)
+            min_dist = min(min_dist, dist)
+        return min_dist
+
+    def CheckRayIntersection(self, ray: "Ray") -> bool:
+        return len(self.GetRayIntersections(ray)) > 0
+
+    def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
+        # Simplified: check ray against each triangle formed by first vertex + edge
+        intersections = []
+        for i in range(1, len(self.vertices) - 1):
+            tri = Triangle(self.vertices[0], self.vertices[i], self.vertices[i + 1])
+            intersections.extend(tri.GetRayIntersections(ray))
+        return intersections
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
-        pass
-    
+        # Polygon normal: cross product of two edges
+        edge1 = self.vertices[1] - self.vertices[0]
+        edge2 = self.vertices[2] - self.vertices[0]
+        normal = np.cross(edge1, edge2)
+        return normal / (np.linalg.norm(normal) + 1e-12)
+
     def GetTangent(self, point: np.ndarray) -> np.ndarray:
-        pass
+        edge = self.vertices[1] - self.vertices[0]
+        return edge / (np.linalg.norm(edge) + 1e-12)
 
     @property
-    def normals(self) -> list[np.ndarray]:
-        pass
+    def area(self) -> float:
+        """Shoelace formula for polygon area."""
+        area = 0
+        for i in range(len(self.vertices)):
+            v1 = self.vertices[i]
+            v2 = self.vertices[(i + 1) % len(self.vertices)]
+            area += np.cross(v1, v2)
+        return abs(area) / 2
 
     @property
-    def tangents(self) -> list[np.ndarray]:
-        pass
-
-    @property
-    def area(self) -> list[np.ndarray]:
-        pass
-    
-    @property
-    def perimeter(self) -> list[np.ndarray]:
-        pass
-
-    @property
-    def dimensions(self) -> int:
-        return 2
-
-    @property
-    def volume(self) -> float:
-        return 0.0
+    def perimeter(self) -> float:
+        perim = 0
+        for i in range(len(self.vertices)):
+            v1 = self.vertices[i]
+            v2 = self.vertices[(i + 1) % len(self.vertices)]
+            perim += np.linalg.norm(v2 - v1)
+        return perim
 
     def __repr__(self):
-        return f"Polygon(vertices={self.vertices})"
-    
-class Shape3D(Shape):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        return f"Polygon({len(self.vertices)} vertices)"
+
+# 3D Shapes
+
+class Shape3D(Shape, GeometryMixin, RayIntersectionMixin, SurfacePropertiesMixin):
+    """Base for 3D shapes."""
     
     @property
     def dimensions(self) -> int:
         return 3
-    
+
     @property
+    @abstractmethod
     def volume(self) -> float:
-        raise NotImplementedError("Volume property must be implemented in 3D shape subclasses")
-    
+        raise NotImplementedError
+
     @property
+    @abstractmethod
     def surface_area(self) -> float:
-        raise NotImplementedError("Surface area property must be implemented in 3D shape subclasses")
-    
+        raise NotImplementedError
+
     @property
-    def surface_normals(self) -> list[np.ndarray]:
-        raise NotImplementedError("Surface normals property must be implemented in 3D shape subclasses")
-    
-    @property
-    def surface_tangents(self) -> list[np.ndarray]:
-        raise NotImplementedError("Surface tangents property must be implemented in 3D shape subclasses")
+    def area(self) -> float:
+        return self.surface_area
 
-    def ConvexHull(self, resolution: Optional[int] = 100) -> list[np.ndarray]:
-        """Compute the vertices of the convex hull of the 3D shape.
-            Arguments:
-                resolution (int, optional): The number of points to use for approximating curved surfaces (points per face).
-            Returns:
-                list[np.ndarray]: A list of points representing the convex hull vertices.
-        """
-        raise NotImplementedError("ConvexHull method must be implemented in 3D shape subclasses")
+    def ConvexHull(self, resolution: int = 100) -> List[np.ndarray]:
+        """Approximate convex hull (override for exact implementations)."""
+        raise NotImplementedError
 
-    def __repr__(self):
-        return f"Shape3D()"
-    
-class Cube(Shape3D):
-    def __init__(self, center: np.ndarray, side_length: float, name: str = "Cube"):
-        super().__init__(name=name)
-        self.center = center
-        if side_length <= 0:
-            raise AttributeError("The side length of the Cube must be greater than 0")
-        self.side_length = side_length
-
-        self.origin = center
-        self.rotation = np.zeros(3)
-    
-    @property
-    def volume(self) -> float:
-        return self.side_length ** 3
-    
-    @property
-    def surface_area(self) -> float:
-        return 6 * (self.side_length ** 2)
-    
-    def CheckPoint(self, point: np.ndarray, epsilon: float = 1e-6) -> bool:
-        half_side = self.side_length / 2
-        return all(abs(point[i] - self.center[i]) <= half_side + epsilon for i in range(3))
-
-    def ConvexHull(self) -> list[np.ndarray]:
-        points = []
-        half_side = self.side_length / 2
-
-        for dx in [-half_side, half_side]:
-            for dy in [-half_side, half_side]:
-                for dz in [-half_side, half_side]:
-                    points.append(self.center + np.array([dx, dy, dz]))
-        
-        def transform():
-            pass  # Placeholder for transformation logic if needed in future
-
-        return points
-
-    def CheckRayIntersection(self, ray):
-        return super().CheckRayIntersection(ray)
-
-    def GetRayIntersections(self, ray: Ray) -> list[np.ndarray]:
-        return super().GetRayIntersections(ray)
-    
-    def GetNormal(self, point: np.ndarray) -> np.ndarray:
-        return super().GetNormal(point)
-    
-    def GetTangent(self, point: np.ndarray) -> np.ndarray:
-        return super().GetTangent(point)
-
-    def GetBinormal(self, point: np.ndarray) -> np.ndarray:
-        return super().GetBinormal(point)
-    
-    def CheckPointInside(self, point, epsilon):
-        return super().CheckPointInside(point, epsilon)
-    
-    def CheckPointOnEdge(self, point, epsilon):
-        return super().CheckPointOnEdge(point, epsilon)
-
-    def GetDistance(self, point: np.ndarray) -> float:
-        return super().GetDistance(point)
-    
-    def GetClosestPoint(self, point: np.ndarray) -> float:
-        return super().GetClosestPoint(point)
-
-    def ApplyTransform(self, transform: Transform) -> None:
-        self.center = transform.apply_to_point(self.center)
-        # Assuming uniform scaling for side length
-        uniform_scale = np.mean(transform.scale)
-        self.side_length *= uniform_scale
-        self.rotation += transform.rotation
-
-    def __repr__(self):
-        return f"Cube(center={self.center}, side_length={self.side_length})"
-    
 class Sphere(Shape3D):
-    def __init__(self, center: np.ndarray, radius: float, name: str = "Sphere"):
-        super().__init__(name=name)
-        self.center = center
+    def __init__(self, center: np.ndarray, radius: float, **kwargs):
+        super().__init__(**kwargs)
+        self.center = np.asarray(center, dtype=float)
         if radius <= 0:
-            raise AttributeError("The radius of the Sphere must be greater than 0")
-        self.radius = radius
+            raise ValueError("Radius must be > 0")
+        self.radius = float(radius)
+        self.transform.position = self.center
 
-        self.origin = center
-    
+    def SignedDistance(self, point: np.ndarray) -> float:
+        return np.linalg.norm(point - self.center) - self.radius
+
+    def CheckRayIntersection(self, ray: "Ray") -> bool:
+        d = ray.orientation
+        s = ray.origin - self.center
+        a = np.dot(d, d)
+        b = 2 * np.dot(d, s)
+        c = np.dot(s, s) - self.radius ** 2
+        return b ** 2 - 4 * a * c >= 0
+
+    def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
+        if not self.CheckRayIntersection(ray):
+            return []
+        
+        d = ray.orientation
+        s = ray.origin - self.center
+        a = np.dot(d, d)
+        b = 2 * np.dot(d, s)
+        c = np.dot(s, s) - self.radius ** 2
+        discriminant = b ** 2 - 4 * a * c
+        
+        if abs(discriminant) < 1e-10:
+            t = -b / (2 * a)
+            return [ray.point_at(t)] if t >= -1e-10 else []
+        
+        sqrt_disc = np.sqrt(discriminant)
+        t1 = (-b - sqrt_disc) / (2 * a)
+        t2 = (-b + sqrt_disc) / (2 * a)
+        ts = [t for t in [t1, t2] if t >= -1e-10]
+        return [ray.point_at(t) for t in sorted(ts)]
+
+    def GetNormal(self, point: np.ndarray) -> np.ndarray:
+        vec = point - self.center
+        return vec / (np.linalg.norm(vec) + 1e-12)
+
+    def GetTangent(self, point: np.ndarray) -> np.ndarray:
+        normal = self.GetNormal(point)
+        if abs(normal[0]) < 0.9:
+            arbitrary = np.array([1.0, 0.0, 0.0])
+        else:
+            arbitrary = np.array([0.0, 1.0, 0.0])
+        tangent = np.cross(normal, arbitrary)
+        return tangent / (np.linalg.norm(tangent) + 1e-12)
+
     @property
     def volume(self) -> float:
         from math import pi
         return (4/3) * pi * self.radius ** 3
-    
+
     @property
     def surface_area(self) -> float:
         from math import pi
         return 4 * pi * self.radius ** 2
-    
-    def CheckPoint(self, point: np.ndarray, epsilon: float = 1e-6) -> bool:
-        return abs(np.linalg.norm(point - self.center) - self.radius) <= epsilon
-    
-    def CheckRayIntersection(self, ray) -> bool:
-        d = ray.orientation 
-        s = ray.origin - self.center
-        a = np.dot(d, d)
-        b = 2 * np.dot(d, s)
-        c = np.dot(s, s) - self.radius ** 2
-        discriminant = b ** 2 - 4 * a * c
-        
-        return discriminant >= 0
 
-
-    def GetRayIntersections(self, ray: Ray) -> list[np.ndarray]:
-        d = ray.orientation 
-        s = ray.origin - self.center
-        a = np.dot(d, d)
-        b = 2 * np.dot(d, s)
-        c = np.dot(s, s) - self.radius ** 2
-        discriminant = b ** 2 - 4 * a * c
-        if discriminant < 0:
-            return []
-        elif discriminant == 0:
-            t = -b / (2 * a)
-            return np.array([ray.point_at(t)]) if t >= 0 else []
-        else:
-            sqrt_disc = discriminant ** 0.5
-            t1 = (-b + sqrt_disc) / (2 * a)
-            t2 = (-b - sqrt_disc) / (2 * a)
-            ts = [t for t in [t1, t2] if t >= 0]
-            return np.array([ray.point_at(t) for t in sorted(ts)])
-        
-    def CheckPointOnEdge(self, point, epsilon):
-        return abs(np.linalg.norm(point - self.center) - self.radius) <= epsilon
-    
-    def CheckPointInside(self, point, epsilon):
-        return np.linalg.norm(point - self.center) < self.radius - epsilon
-    
-    def GetDistance(self, point: np.ndarray) -> float:
-        return abs(np.linalg.norm(point - self.center) - self.radius)
-    
-    def GetClosestPoint(self, point: np.ndarray) -> float:
-        direction = point - self.center
-        direction_normalized = direction / np.linalg.norm(direction)
-        return self.center + direction_normalized * self.radius
-    
-    def GetNormal(self, point: np.ndarray) -> np.ndarray:
-        if not self.CheckPoint(point, 0.01):
-            raise ValueError("Point is not on the sphere")
-        vec = point - self.center
-        return vec / np.linalg.norm(vec)
-    
-    def GetTangent(self, point: np.ndarray) -> np.ndarray:
-        if not self.CheckPoint(point, 0.01):
-            raise ValueError("Point is not on the sphere")
-        normal = self.GetNormal(point)
-        # Find a vector not parallel to normal
-        if abs(normal[0]) < 0.9:
-            arbitrary = np.array([1, 0, 0])
-        else:
-            arbitrary = np.array([0, 1, 0])
-        tangent = np.cross(normal, arbitrary)
-        return tangent / np.linalg.norm(tangent)
-    
-    def ApplyTransform(self, transform: Transform) -> None:
-        self.center = transform.apply_to_point(self.center)
-        # Assuming uniform scaling for radius
-        uniform_scale = np.mean(transform.scale)
-        self.radius *= uniform_scale
-
-    def GetBinormal(self, point: np.ndarray) -> np.ndarray:
-        if not self.CheckPoint(point, 0.01):
-            raise ValueError("Point is not on the sphere")
-        normal = self.GetNormal(point)
-        tangent = self.GetTangent(point)
-        binormal = np.cross(normal, tangent)
-        return binormal / np.linalg.norm(binormal)
-
-    def ConvexHull(self, resolution: int = 100) -> list[np.ndarray]:
+    def ConvexHull(self, resolution: int = 100) -> List[np.ndarray]:
         points = []
-        phi = (1 + 5 ** 0.5) / 2  # golden ratio
+        phi = (1 + np.sqrt(5)) / 2
         for i in range(resolution):
             theta = 2 * np.pi * i / phi
-            y = 1 - (i / float(resolution - 1)) * 2  # y goes from 1 to -1
-            radius = (1 - y * y) ** 0.5  # radius at y
-
-            x = np.cos(theta) * radius
-            z = np.sin(theta) * radius
-
-            points.append(self.center + self.radius * np.array([x, y, z]))
+            y = 1 - (i / (resolution - 1)) * 2
+            r = np.sqrt(max(1 - y * y, 0))
+            points.append(self.center + self.radius * np.array([np.cos(theta) * r, y, np.sin(theta) * r]))
         return points
 
     def __repr__(self):
         return f"Sphere(center={self.center}, radius={self.radius})"
-    
-class Prisim(Shape3D):
-    def __init__(self, base_polygon: Polygon, height: float, name: str = "Prisim"):
-        super().__init__(name=name)
+
+class Cube(Shape3D):
+    def __init__(self, center: np.ndarray, side_length: float, **kwargs):
+        super().__init__(**kwargs)
+        self.center = np.asarray(center, dtype=float)
+        if side_length <= 0:
+            raise ValueError("Side length must be > 0")
+        self.side_length = float(side_length)
+        self.transform.position = self.center
+
+    def SignedDistance(self, point: np.ndarray) -> float:
+        """Cube SDF using absolute coordinates."""
+        p = np.abs(point - self.center)
+        q = p - self.side_length / 2
+        return np.linalg.norm(np.maximum(q, 0)) + min(np.max(q), 0)
+
+    def CheckRayIntersection(self, ray: "Ray") -> bool:
+        return len(self.GetRayIntersections(ray)) > 0
+
+    def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
+        """AABB ray intersection."""
+        half = self.side_length / 2
+        bounds_min = self.center - half
+        bounds_max = self.center + half
+        
+        t_min, t_max = 0, float('inf')
+        for i in range(3):
+            if abs(ray.orientation[i]) > 1e-10:
+                t1 = (bounds_min[i] - ray.origin[i]) / ray.orientation[i]
+                t2 = (bounds_max[i] - ray.origin[i]) / ray.orientation[i]
+                t_min = max(t_min, min(t1, t2))
+                t_max = min(t_max, max(t1, t2))
+            elif ray.origin[i] < bounds_min[i] or ray.origin[i] > bounds_max[i]:
+                return []
+        
+        if t_min <= t_max and t_max >= -1e-10:
+            result = []
+            if t_min >= -1e-10:
+                result.append(ray.point_at(t_min))
+            if t_max != t_min and t_max >= -1e-10:
+                result.append(ray.point_at(t_max))
+            return result
+        return []
+
+    def GetNormal(self, point: np.ndarray) -> np.ndarray:
+        """Normal pointing outward from closest face."""
+        p = point - self.center
+        half = self.side_length / 2
+        abs_p = np.abs(p)
+        dominant = np.argmax(abs_p)
+        normal = np.zeros(3)
+        normal[dominant] = np.sign(p[dominant])
+        return normal
+
+    def GetTangent(self, point: np.ndarray) -> np.ndarray:
+        normal = self.GetNormal(point)
+        if abs(normal[2]) < 0.9:
+            arbitrary = np.array([0.0, 0.0, 1.0])
+        else:
+            arbitrary = np.array([1.0, 0.0, 0.0])
+        tangent = np.cross(normal, arbitrary)
+        return tangent / (np.linalg.norm(tangent) + 1e-12)
+
+    @property
+    def volume(self) -> float:
+        return self.side_length ** 3
+
+    @property
+    def surface_area(self) -> float:
+        return 6 * (self.side_length ** 2)
+
+    def ConvexHull(self, resolution: int = 8) -> List[np.ndarray]:
+        half = self.side_length / 2
+        points = []
+        for dx in [-half, half]:
+            for dy in [-half, half]:
+                for dz in [-half, half]:
+                    points.append(self.center + np.array([dx, dy, dz]))
+        return points
+
+    def __repr__(self):
+        return f"Cube(center={self.center}, side_length={self.side_length})"
+
+class Prism(Shape3D):
+    def __init__(self, base_polygon: Polygon, height: float, **kwargs):
+        super().__init__(**kwargs)
         self.base_polygon = base_polygon
         if height <= 0:
-            raise AttributeError("The height of the Prisim must be greater than 0")
-        self.height = height
+            raise ValueError("Height must be > 0")
+        self.height = float(height)
+        self.transform.position = base_polygon.transform.position
 
-        self.origin = base_polygon.origin
-    
     @property
     def volume(self) -> float:
         return self.base_polygon.area * self.height
-    
+
     @property
     def surface_area(self) -> float:
-        # Placeholder implementation
         return 2 * self.base_polygon.area + self.base_polygon.perimeter * self.height
-    
-    def CheckPoint(self, point: np.ndarray, epsilon: float = 1e-6) -> bool:
-        pass
 
-    def ConvexHull(self) -> list[np.ndarray]:
-        pass
+    def SignedDistance(self, point: np.ndarray) -> float:
+        return self.GetDistance(point)
+
+    def CheckRayIntersection(self, ray: "Ray") -> bool:
+        return len(self.GetRayIntersections(ray)) > 0
+
+    def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
+        # Simplified: triangulate base and extrude
+        raise NotImplementedError("Prism ray intersection not yet implemented")
+
+    def GetNormal(self, point: np.ndarray) -> np.ndarray:
+        raise NotImplementedError("Prism normal not yet implemented")
+
+    def GetTangent(self, point: np.ndarray) -> np.ndarray:
+        raise NotImplementedError("Prism tangent not yet implemented")
+
+    def ConvexHull(self, resolution: int = 100) -> List[np.ndarray]:
+        raise NotImplementedError("Prism convex hull not yet implemented")
 
     def __repr__(self):
-        return f"Prisim(base_polygon={self.base_polygon}, height={self.height})"
-    
+        return f"Prism(base_polygon={self.base_polygon}, height={self.height})"
+
 class Pyramid(Shape3D):
-    def __init__(self, base_polygon: Polygon, height: float, name: str = "Pyramid"):
-        super().__init__(name=name)
+    def __init__(self, base_polygon: Polygon, height: float, **kwargs):
+        super().__init__(**kwargs)
         self.base_polygon = base_polygon
         if height <= 0:
-            raise AttributeError("The height of the Pyramid must be greater than 0")
-        self.height = height
+            raise ValueError("Height must be > 0")
+        self.height = float(height)
+        self.apex = base_polygon.transform.position + np.array([0, height, 0])
+        self.transform.position = base_polygon.transform.position
 
-        self.origin = base_polygon.origin
-    
     @property
     def volume(self) -> float:
         return (1/3) * self.base_polygon.area * self.height
-    
+
     @property
     def surface_area(self) -> float:
-        # Placeholder implementation
-        return self.base_polygon.area  # + lateral area calculation needed
-    
-    def CheckPoint(self, point: np.ndarray, epsilon: float = 1e-6) -> bool:
-        pass
+        return self.base_polygon.area  # + lateral faces (stub)
 
-    def ConvexHull(self) -> list[np.ndarray]:
-        pass
+    def SignedDistance(self, point: np.ndarray) -> float:
+        return self.GetDistance(point)
+
+    def CheckRayIntersection(self, ray: "Ray") -> bool:
+        return len(self.GetRayIntersections(ray)) > 0
+
+    def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
+        raise NotImplementedError("Pyramid ray intersection not yet implemented")
+
+    def GetNormal(self, point: np.ndarray) -> np.ndarray:
+        raise NotImplementedError("Pyramid normal not yet implemented")
+
+    def GetTangent(self, point: np.ndarray) -> np.ndarray:
+        raise NotImplementedError("Pyramid tangent not yet implemented")
+
+    def ConvexHull(self, resolution: int = 100) -> List[np.ndarray]:
+        raise NotImplementedError("Pyramid convex hull not yet implemented")
 
     def __repr__(self):
         return f"Pyramid(base_polygon={self.base_polygon}, height={self.height})"
 
 class Capsule(Shape3D):
-    def __init__(self, point1: np.ndarray, point2: np.ndarray, radius: float, name: str = "Capsule"):
-        super().__init__(name=name)
-        self.point1 = point1
-        self.point2 = point2
+    def __init__(self, point1: np.ndarray, point2: np.ndarray, radius: float, **kwargs):
+        super().__init__(**kwargs)
+        self.point1 = np.asarray(point1, dtype=float)
+        self.point2 = np.asarray(point2, dtype=float)
         if radius <= 0:
-            raise AttributeError("The radius of the Capsule must be greater than 0")
-        self.radius = radius
+            raise ValueError("Radius must be > 0")
+        self.radius = float(radius)
+        self.transform.position = (self.point1 + self.point2) / 2
 
-        self.origin = (point1 + point2) / 2
-    
+    def SignedDistance(self, point: np.ndarray) -> float:
+        """Distance from point to capsule surface."""
+        ab = self.point2 - self.point1
+        ap = point - self.point1
+        ab_sq = np.dot(ab, ab)
+        t = np.clip(np.dot(ap, ab) / max(ab_sq, 1e-10), 0, 1)
+        closest = self.point1 + t * ab
+        return np.linalg.norm(point - closest) - self.radius
+
+    def CheckRayIntersection(self, ray: "Ray") -> bool:
+        return len(self.GetRayIntersections(ray)) > 0
+
+    def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
+        raise NotImplementedError("Capsule ray intersection not yet implemented")
+
+    def GetNormal(self, point: np.ndarray) -> np.ndarray:
+        ab = self.point2 - self.point1
+        ap = point - self.point1
+        t = np.clip(np.dot(ap, ab) / max(np.dot(ab, ab), 1e-10), 0, 1)
+        closest = self.point1 + t * ab
+        vec = point - closest
+        return vec / (np.linalg.norm(vec) + 1e-12)
+
+    def GetTangent(self, point: np.ndarray) -> np.ndarray:
+        ab = self.point2 - self.point1
+        ab = ab / (np.linalg.norm(ab) + 1e-12)
+        normal = self.GetNormal(point)
+        tangent = np.cross(normal, ab)
+        return tangent / (np.linalg.norm(tangent) + 1e-12)
+
     @property
     def volume(self) -> float:
         from math import pi
         cylinder_height = np.linalg.norm(self.point2 - self.point1)
-        cylinder_volume = pi * self.radius ** 2 * cylinder_height
-        sphere_volume = (4/3) * pi * self.radius ** 3
-        return cylinder_volume + sphere_volume
-    
+        return pi * self.radius ** 2 * cylinder_height + (4/3) * pi * self.radius ** 3
+
     @property
     def surface_area(self) -> float:
         from math import pi
         cylinder_height = np.linalg.norm(self.point2 - self.point1)
-        cylinder_area = 2 * pi * self.radius * cylinder_height
-        sphere_area = 4 * pi * self.radius ** 2
-        return cylinder_area + sphere_area
-    
-    def CheckPoint(self, point: np.ndarray, epsilon: float = 1e-6) -> bool:
-        pass
+        return 2 * pi * self.radius * cylinder_height + 4 * pi * self.radius ** 2
 
-    def ConvexHull(self, resolution = 100) -> list[np.ndarray]:
-        pass
+    def ConvexHull(self, resolution: int = 100) -> List[np.ndarray]:
+        raise NotImplementedError("Capsule convex hull not yet implemented")
 
     def __repr__(self):
         return f"Capsule(point1={self.point1}, point2={self.point2}, radius={self.radius})"
 
+# VObject & Factories
 @dataclass
 class VObject:
+    """Visual object combining shape, transform, material, and name."""
+
     shape: Shape
-    transform: Optional["Transform"] = None  # from PrimaryStructures.Camera/Transform
-    material: Optional[Material] = None
+    transform: Optional["Transform"] = None
+    material: Optional["Material"] = None
     name: str = "VObject"
+
+    def __post_init__(self):
+        if self.transform is None:
+            self.transform = Transform(np.zeros(3), np.zeros(3), np.ones(3))
 
     @property
     def position(self) -> np.ndarray:
         return self.transform.position
+
     @position.setter
     def position(self, value: np.ndarray) -> None:
-        self.transform.position = value
-    @property
-    def rotation(self) -> np.ndarray:
-        return self.transform.rotation
-    @rotation.setter
-    def rotation(self, value: np.ndarray) -> None:
-        self.transform.rotation = value
-    @property
-    def scale(self) -> np.ndarray:
-        return self.transform.scale
-    @scale.setter
-    def scale(self, value: np.ndarray) -> None:
-        self.transform.scale = value
+        self.transform.position = np.asarray(value, dtype=float)
+        self.shape.transform.position = self.transform.position
 
-    def ApplyTransform(self) -> None:
-        self.shape.origin = self.position
-        # Note: For simplicity, only updating origin. Full implementation would transform all vertices/points.
-    
     def __repr__(self):
-        return f"VObject(name={self.name}, shape={self.shape}, transform={self.transform}, material={self.material})"
+        return f"VObject(name={self.name}, shape={self.shape})"
 
 class ShapeFactory(ABC):
+    """Abstract factory for creating shapes."""
     @abstractmethod
-    def create(self, **kwargs: Any) -> Shape:
-        return Shape(**kwargs)
-
-    def __repr__(self):
-        return f"ShapeFactory()"
+    def create(self, **kwargs) -> Shape:
+        raise NotImplementedError
 
 class CircleFactory(ShapeFactory):
-    def create(self, center: np.ndarray, radius: float, name: str = "Circle") -> Circle:
-        return Circle(center=center, radius=radius, name=name)
-    
-    def __repr__(self):
-        return f"CircleFactory()"
-    
-class SphereFactory(ShapeFactory):
-    def create(self, center: np.ndarray, radius: float, name: str = "Sphere") -> Sphere:
-        return Sphere(center=center, radius=radius, name=name)
-    
-    def __repr__(self):
-        return f"SphereFactory()"
-    
+    def create(self, center: np.ndarray, radius: float, **kwargs) -> Circle:
+        return Circle(center, radius, **kwargs)
+
 class TriangleFactory(ShapeFactory):
-    def create(self, vertex1: np.ndarray, vertex2: np.ndarray, vertex3: np.ndarray, name: str = "Triangle") -> Triangle:
-        return Triangle(vertex1=vertex1, vertex2=vertex2, vertex3=vertex3, name=name)
-    
-    def __repr__(self):
-        return f"TriangleFactory()"
-    
+    def create(self, v1: np.ndarray, v2: np.ndarray, v3: np.ndarray, **kwargs) -> Triangle:
+        return Triangle(v1, v2, v3, **kwargs)
+
 class PolygonFactory(ShapeFactory):
-    def create(self, *vertices) -> Polygon:
-        # If a single iterable of vertices was passed, handle that too.
-        if len(vertices) == 1 and hasattr(vertices[0], '__iter__') and not isinstance(vertices[0], (str, bytes)):
-            verts = vertices[0]
-        else:
-            verts = vertices
-        return Polygon(verts)
-    
+    def create(self, vertices: List[np.ndarray], **kwargs) -> Polygon:
+        return Polygon(vertices, **kwargs)
+
+class SphereFactory(ShapeFactory):
+    def create(self, center: np.ndarray, radius: float, **kwargs) -> Sphere:
+        return Sphere(center, radius, **kwargs)
+
 class CubeFactory(ShapeFactory):
-    def create(self, center: np.ndarray, side_length: float, name: str = "Cube") -> Cube:
-        return Cube(center=center, side_length=side_length, name=name)
-    
-    def __repr__(self):
-        return f"CubeFactory()"
-    
+    def create(self, center: np.ndarray, side_length: float, **kwargs) -> Cube:
+        return Cube(center, side_length, **kwargs)
+
 class PrismFactory(ShapeFactory):
-    def create(self, base_polygon: Polygon, height: float, name: str = "Prism") -> Prisim:
-        return Prisim(base_polygon=base_polygon, height=height, name=name)
-    
-    def __repr__(self):
-        return f"PrismFactory()"
-    
+    def create(self, base_polygon: Polygon, height: float, **kwargs) -> Prism:
+        return Prism(base_polygon, height, **kwargs)
+
 class PyramidFactory(ShapeFactory):
-    def create(self, base_polygon: Polygon, height: float, name: str = "Pyramid") -> Pyramid:
-        return Pyramid(base_polygon=base_polygon, height=height, name=name)
-    
-    def __repr__(self):
-        return f"PyramidFactory()"
-    
+    def create(self, base_polygon: Polygon, height: float, **kwargs) -> Pyramid:
+        return Pyramid(base_polygon, height, **kwargs)
+
 class CapsuleFactory(ShapeFactory):
-    def create(self, point1: np.ndarray, point2: np.ndarray, radius: float, name: str = "Capsule") -> Capsule:
-        return Capsule(point1=point1, point2=point2, radius=radius, name=name)
-    
-    def __repr__(self):
-        return f"CapsuleFactory()"
+    def create(self, point1: np.ndarray, point2: np.ndarray, radius: float, **kwargs) -> Capsule:
+        return Capsule(point1, point2, radius, **kwargs)
 
-# Simple Sphere SDF
-class Sphere(Shape):
-    def __init__(self, center: Tuple[float, float, float], radius: float):
-        self.center = np.array(center, dtype=float)
-        self.radius = float(radius)
+"""
+Geometry Module: Defines geometric shapes, their properties, and interactions.
+Provides base classes, mixins, and concrete implementations for 2D and 3D shapes,
+including ray intersection and surface property queries.
 
-    def signed_distance(self, point: np.ndarray) -> float:
-        return np.linalg.norm(point - self.center) - self.radius
-
-    def get_normal(self, point: np.ndarray) -> np.ndarray:
-        n = point - self.center
-        return n / (np.linalg.norm(n) + 1e-12)
+Classes:
+- Shape: Abstract base class for all shapes.
+- Shape2D, Shape3D: Base classes for 2D and 3D shapes.
+- Circle, Triangle, Polygon: Concrete 2D shape implementations.
+- Sphere, Cube, Prism, Pyramid, Capsule: Concrete 3D shape implementations.
+- GeometryMixin, RayIntersectionMixin, SurfacePropertiesMixin: Mixins for geometric queries.
+- VObject: Combines shape with transform and material for rendering.
+- ShapeFactory and its subclasses: Factories for creating shape instances. 
+"""
