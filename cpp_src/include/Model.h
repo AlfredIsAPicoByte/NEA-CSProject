@@ -1,8 +1,14 @@
 # pragma once
 
+#include <fstream>
+#include <cstring>
+#include <cmath>
+#include <stdexcept>
 #include <json.hpp>
+
 #include "Mesh.h"
-#include "Debug.h"
+#include "textureClass.h"
+#include "Debugger.h"
 
 using json = nlohmann::json;
 
@@ -14,6 +20,11 @@ public:
 	void Draw(Shader& shader, Camera& camera);
 
 	void CleanUp();
+
+	std::vector<Mesh>& GetMeshes();
+	glm::mat4 GetModelMatrixForMesh(unsigned int meshIndex) const;
+	void SetModelMatrixForMesh(unsigned int meshIndex, const glm::mat4& modelMatrix);
+	void SetModelMatricesForAllMeshes(const std::vector<glm::mat4>& modelMatrices);
 private:
 	// Variables for easy access
 	const char* file;

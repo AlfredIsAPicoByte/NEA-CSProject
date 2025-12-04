@@ -1,4 +1,4 @@
-#include "Debug.h"
+#include "Debugger.h"
 
 std::string debugLog;
 

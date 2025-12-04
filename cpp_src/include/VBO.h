@@ -7,24 +7,11 @@
 
 struct Vertex
 {
-	glm::vec3 position;
-	glm::vec3 normal;
+	glm::vec3 Position;
+	glm::vec3 Normal;
 	glm::vec3 color;
-	glm::vec2 texUV;
-	glm::vec3 tangent;
-
-	void calculateNormal(const glm::vec3& edge1, const glm::vec3& edge2)
-	{
-		normal = glm::normalize(glm::cross(edge1, edge2));
-	}
-	void calculateTangent(const glm::vec3& edge1, const glm::vec3& edge2, const glm::vec2& deltaUV1, const glm::vec2& deltaUV2)
-	{
-		float f = 1.0f;
-		float denom = (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
-		if (fabs(denom) > 1e-6f) f = 1.0f / denom;
-
-		tangent = f * (edge1 * deltaUV2.y - edge2 * deltaUV1.y);
-	}
+	glm::vec2 TexCoords;
+	glm::vec4 Tangent;
 };
 
 class VBO

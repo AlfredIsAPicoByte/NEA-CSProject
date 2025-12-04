@@ -9,8 +9,8 @@
 #include "pythonManager.h"
 #include "shaderClass.h"
 #include "Model.h"
-#include "Texture.h"
-#include "Camera.h"
+#include "textureClass.h"
+#include "cameraClass.h"
 #include "IRenderable.h"
 
 class Scene{
@@ -33,7 +33,6 @@ private:
     Camera* sceneCamera;
 
     std::vector<std::shared_ptr<IRenderable>> renderables;
-
 
     py::object pyCamera;
     py::object pySampler;

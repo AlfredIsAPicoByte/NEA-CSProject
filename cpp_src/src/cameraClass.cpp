@@ -1,4 +1,4 @@
-#include "Camera.h"
+#include "cameraClass.h"
 
 Camera::Camera(int width, int height, glm::vec3 position, glm::vec3 forward, glm::vec3 worldUp)
 {
@@ -35,10 +35,10 @@ void Camera::Resize(int width, int height)
 	aspectRatio = static_cast<float>(windowWidth) / static_cast<float>(windowHeight);
 }
 
-void Camera::Matrix(Shader& shader, const char* uniform)
+void Camera::SetModelMatrixUniform(Shader& shader, const char* uniform)
 {
 	// Exports camera matrix to the shader
-	glUniformMatrix4fv(glGetUniformLocation(shader.ID, uniform), 1, GL_FALSE, glm::value_ptr(cameraMatrix));
+	shader.setMat4(uniform, cameraMatrix);
 }
 
 void Camera::Move(GLFWwindow* window, double deltaTime)
