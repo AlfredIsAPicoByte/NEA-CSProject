@@ -45,19 +45,20 @@ def reflect_angle(normalAngle: float, incomingAngle: float) -> float:
 
     return outgoingAngle
 
-def reflect_ray(normal: np.ndarray, incomingRay: Ray) -> Ray:
+def reflect_ray(normal: np.ndarray, ray_direction: np.ndarray) -> np.ndarray:
     """
-    Calculate the outgoing orientation  of the reflected ray.
-
-    Attributes:
-        normal (ndarray): the normal of the surface of interaction
-        incoming_ray (Ray): the incoming ray
+    Compute reflected ray direction using law of reflection.
+    
+    Args:
+        normal: Surface normal (will be normalized)
+        ray_direction: Incoming ray direction (will be normalized)
+    
+    Returns:
+        Reflected ray direction (normalized)
     """
-    normal = normal / np.linalg.norm(normal)
-    incomingDirection = incomingRay.orientation  / np.linalg.norm(incomingRay.direction)
-
-    dot_product = np.dot(incomingDirection, normal)
-    reflectedDirection = incomingDirection - 2 * dot_product * normal
-    reflectedDirection = reflectedDirection / np.linalg.norm(reflectedDirection)
-
-    return Ray(origin=incomingRay.origin, orientation =reflectedDirection)
+    normal = normal / (np.linalg.norm(normal) + 1e-12)
+    direction = ray_direction / (np.linalg.norm(ray_direction) + 1e-12)
+    
+    dot_product = np.dot(direction, normal)
+    reflected = direction - 2 * dot_product * normal
+    return reflected / (np.linalg.norm(reflected) + 1e-12)

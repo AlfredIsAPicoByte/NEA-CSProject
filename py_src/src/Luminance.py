@@ -69,10 +69,19 @@ class Color:
 
     def __add__(self, other):
         return Color(self.red + other.red, self.green + other.green, self.blue + other.blue)
+    def __sub__(self, other):
+        """Subtract two colors (component-wise)."""
+        return Color(self.red - other.red, self.green - other.green, self.blue - other.blue, self.alpha)
     def __mul__(self, scalar):
         return Color(self.red * scalar, self.green * scalar, self.blue * scalar)
+    def __rmul__(self, scalar):
+        """Allow scalar * Color (reverse multiplication)."""
+        return Color(self.red * scalar, self.green * scalar, self.blue * scalar, self.alpha)
     def __truediv__(self, other):
         return Color(self.red / other.red, self.green / other.green, self.blue / other.blue)
+    def __neg__(self):
+        """Negate color (invert)."""
+        return Color(1.0 - self.red, 1.0 - self.green, 1.0 - self.blue, self.alpha)
     def __eq__(self, other):
         return np.array_equal(self.rgba, other.rgba)
     def __iter__(self):
@@ -140,25 +149,53 @@ class LightRay(Ray, Color):
         color = Color.from_rgb255(r, g, b, alpha)
         return cls(origin, orientation , color, intensity, name)
     
-    def Attenuate(self, distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0):
-        """Return a dimmed copy of the LightRay."""
-        factor = 1 / (a * (distance ** 2) + b * distance + c)
+    def AttenuateDistance(self, distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0) -> "LightRay":
+        """
+        Return a dimmed copy of the LightRay using quadratic distance attenuation.
+        factor = 1 / (a*d^2 + b*d + c)
+        """
+        if c == 0 and a == 0 and b == 0:
+            raise ValueError("Attenuation coefficients cannot all be zero")
+        factor = 1.0 / (a * (distance ** 2) + b * distance + c)
         return LightRay(
-            self.origin,
-            self.orientation,
-            self.rgba,
+            self.origin.copy(),
+            self.orientation.copy(),
+            self.base_color,
             intensity=self.intensity * factor,
-            name=self.name + f" (X{factor})"
+            name=self.name + f" (X{factor:.2f})"
         )
     
-    def Attenuate(self, factor: float):
-        """Return a dimmed copy of the LightRay."""
+    def AttenuateFactor(self, factor: float) -> "LightRay":
+        """Return a dimmed copy of the LightRay by a multiplicative factor."""
         return LightRay(
-            self.origin,
-            self.orientation,
-            self.rgba,
+            self.origin.copy(),
+            self.orientation.copy(),
+            self.base_color,
             intensity=self.intensity * factor,
-            name=self.name + f" (X{factor})"
+            name=self.name + f" (X{factor:.2f})"
+        )
+    
+    def Reflect(self, normal: np.ndarray) -> "LightRay":
+        """Return a reflected copy of this LightRay about the given normal."""
+        reflected_ray = reflect_ray(self.orientation, normal)
+        reflected_orientation = reflected_ray.orientation if hasattr(reflected_ray, 'orientation') else reflected_ray
+        return LightRay(
+            self.origin.copy(),
+            reflected_orientation,
+            self.base_color,
+            intensity=self.intensity,
+            name=f"{self.name} (reflected)"
+        )
+    
+    def Refract(self, normal: np.ndarray, eta: float = 1.0) -> "LightRay":
+        """Return a refracted copy of this LightRay about the given normal."""
+        refracted_orientation = refract_ray(self.orientation, normal)
+        return LightRay(
+            self.origin.copy(),
+            refracted_orientation,
+            self.base_color,
+            intensity=self.intensity,
+            name=f"{self.name} (refracted)"
         )
     
     @property
@@ -191,7 +228,7 @@ class LightRay(Ray, Color):
         )
 
 class Material:
-    def __init__(self, color: Color, roughness: float, glossiness: float):
+    def __init__(self, color: Color, emissive: Color, roughness: float, glossiness: float, metallic: float, **kwargs):
         """
         A simple material that reflects LightRay based on its color, roughness, and glossiness.
         
@@ -203,48 +240,79 @@ class Material:
                 how glossy the surface is. 0.0 = matte, 1.0 = perfectly glossy.
         """
         self.base_color = color
+        self.emissive = emissive
         self.roughness = clamp(roughness)
         self.glossiness = clamp(glossiness)
+        self.metallic = clamp(metallic)
+
         self.can_refract = False
         self.is_transparent = False
         self._rng = np.random.default_rng()
+        self.name = "Material"
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
             
     def AffectColor(self, color: Color) -> Color:
         """Apply material attributes to a color."""
-        return self.base_color * color * self.glossiness + color * (1 - self.glossiness) * (1 - self.roughness)
+        col = self.base_color * color * self.glossiness # Specular component
+        col += color * (1 - self.glossiness) * (1 - self.roughness) # Diffuse component
 
-    def RedirectLightRay(self, incoming_ray: LightRay, normal: np.ndarray):
+        col += self.emissive # Emissive component
+
+        if self.metallic > 0:
+            col *= (1 - self.metallic) + self.base_color * color * self.metallic # Metallic tint
+        
+        return col
+
+    def RedirectLightRay(self, incoming_ray: LightRay, normal: np.ndarray) -> LightRay:
         """
-        Compute the redirected (reflected) ray and its color after interaction with the material.
-        Returns a tuple: (LightRay, ColorData)
+        Compute the redirected (reflected or refracted) ray and its color after interaction with the material.
+        Returns a LightRay with updated direction and color.
         """
         # Decide between reflection and refraction based on material properties
         if self.can_refract and self.is_transparent:
-            # Assume refract_ray returns the refracted orientation 
-            refracted_ray = refract_ray(incoming_ray.orientation , normal)
-            reflected = refracted_ray.orientation 
+            # Refract the incoming ray orientation about the normal
+            refracted_orientation = refract_ray(incoming_ray.orientation, normal)
+            new_orientation = refracted_orientation
         else:
-            # Reflect the incoming ray orientation  about the normal
-            reflected_ray = reflect_ray(incoming_ray.orientation , normal)
-            reflected = reflected_ray.orientation 
+            # Reflect the incoming ray orientation about the normal
+            reflected_ray = reflect_ray(incoming_ray.orientation, normal)
+            new_orientation = reflected_ray.orientation if hasattr(reflected_ray, 'orientation') else reflected_ray
 
         # Calculate the new color after material effect
         new_color = self.AffectColor(incoming_ray.final_color)
 
         # Create the new LightRay
         redirected_ray = LightRay(
-            origin=reflected.origin,
-            orientation =reflected.orientation ,
+            origin=incoming_ray.origin.copy(),
+            orientation=new_orientation,
             color=new_color,
             intensity=incoming_ray.intensity,
             name=f"{incoming_ray.name} (reflected)"
         )
         return redirected_ray
 
+    def GetDiffuse(self, incoming_color: Color) -> Color:
+        """Get the diffuse component of the material response."""
+        return self.base_color * incoming_color * (1.0 - self.glossiness)
+    
+    def GetSpecular(self, incoming_color: Color) -> Color:
+        """Get the specular component of the material response."""
+        return incoming_color * self.glossiness * (1.0 - self.roughness)
+    
+    def GetEmissive(self) -> Color:
+        """Get the emissive color of the material."""
+        return self.emissive
+    
+    def GetMetallic(self, incoming_color: Color) -> Color:
+        """Get the metallic component of the material response."""
+        return (1 - self.metallic) + self.base_color * incoming_color * self.metallic
+
     def __repr__(self):
         return (
             f"Material(color={self.base_color}, "
-            f"roughness={self.roughness:.2f}, glossiness={self.glossiness:.2f})"
+            f"roughness={self.roughness:.2f}, glossiness={self.glossiness:.2f}, emissive={self.emissive}, metallic={self.metallic:.2f})"
         )
     
 class LightSource:
@@ -275,3 +343,12 @@ class LightSource:
             f"LightSource(position={np.round(self.position, 3)}, "
             f"color={self.color}, intensity={self.intensity:.2f})"
         )
+"""
+Luminance module: Provides classes for color representation, light rays, materials, and light sources.
+
+Provides:
+  - Color: RGBA color with conversions (hex, RGB255, array)
+  - LightRay: Ray + Color + intensity for light transport
+  - Material: Surface properties (roughness, glossiness) affecting light interaction
+  - LightSource: Point light emitting rays with color and intensity
+"""

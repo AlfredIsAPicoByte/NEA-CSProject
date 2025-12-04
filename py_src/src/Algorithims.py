@@ -3,9 +3,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Dict, Type, Any
 
-from Luminance import Color, SimpleMaterial
+from Scene import Scene
+from Luminance import Color, Material
 from PrimaryStructures import Ray
 from Camera import VCamera
+from Reflections import reflect_ray
+from Refractions import refract_ray
 
 @dataclass
 class RenderStats:

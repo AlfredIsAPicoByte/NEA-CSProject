@@ -1,13 +1,22 @@
 from typing import List, Tuple, Optional
 import numpy as np
-from Geometry import VObject
+from Geometry import VObject, Shape
 from Luminance import LightSource
+from Camera import VCamera
+from PrimaryStructures import Ray
+
 
 class Scene:
-    def __init__(self):
+    def __init__(self, name: str = "Scene", camera: Optional[VCamera] = None):
+        self.name = name
         self.objects: List[VObject] = []
-        self.lights: List[Light] = []
-
+        self.lights: List[LightSource] = []
+        self.camera: Optional[VCamera] = camera
+        self.background_color = np.array([0.5, 0.7, 1.0])
+    
+    def set_camera(self, camera: VCamera):
+        self.camera = camera
+    
     def add_object(self, obj: VObject):
         self.objects.append(obj)
 
@@ -23,7 +32,7 @@ class Scene:
         closest = None
         for obj in self.objects:
             try:
-                d = obj.distance_to(point)
+                d = obj.shape.SignedDistance(point)
             except Exception:
                 continue
             if d < min_d:

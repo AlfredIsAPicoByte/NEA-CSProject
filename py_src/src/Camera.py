@@ -29,31 +29,7 @@ class CameraMode (Enum):
 
 class VCamera:
     """
-    A Camera class that supports different projection types and movement modes.
-    Attributes:
-        transform (Transform): The camera's transform.
-        fov (float): Field of view for perspective projection or size for orthographic projection.
-        near (float): Near clipping plane.
-        far (float): Far clipping plane.
-        type (CameraType): The camera's projection type.
-        mode (CameraMode): The camera's movement mode.
-        width (float): Width of the viewport.
-        height (float): Height of the viewport.
-        aspect (Ratio): Aspect ratio of the viewport.
-        speed (float): Movement speed.
-        speed_multiplier (float): Speed multiplier when a modifier key is pressed.
-        sensitivity (float): Mouse sensitivity for looking around.
-        
-    Methods:
-        get_view_matrix(): Returns the view matrix.
-        get_projection_matrix(): Returns the projection matrix.
-        get_camera_matrix(): Returns the combined camera matrix (projection * view).
-        move(input: InputManager): Updates the camera's position and orientation based on input.
-        FirstPersonMovement(input: InputManager, delta_time: float): Handles first-person movement.
-        PlaneMovement(input: InputManager, delta_time: float): Handles plane movement.
-        OrbitMovement(input: InputManager, delta_time: float): Handles orbit movement.
-        look_at(target: Transform): Orients the camera to look at a target transform.
-        look_at_screen_coords(screen_x: float, screen_y: float, screen_width: float, screen_height: float): Orients the camera to look at a point in screen coordinates.
+    A virtual camera class used to store properties and process calculations.
     """
     def __init__ (self, transform: Transform, fov: float, near: float, far: float, width: int, height: int, camType: CameraType = CameraType.PERSPECTIVE, camMode: CameraMode = CameraMode.FIRST_PERSON, name: str = "Camera", id: int = 0):
         """
@@ -128,3 +104,113 @@ class VCamera:
         self.aspect = aspect
         self.width = int(aspect.width * scale)
         self.height = int(aspect.height * scale)
+
+    def look_at(self, target: Transform):
+        direction = target.position - self.transform.position
+        direction = direction / np.linalg.norm(direction)
+        # Assuming up vector is (0, 1, 0)
+        right = np.cross(np.array([0, 1, 0]), direction)
+        right = right / np.linalg.norm(right)
+        up = np.cross(direction, right)
+        rotation_matrix = np.array([
+            [right[0], right[1], right[2], 0],
+            [up[0], up[1], up[2], 0],
+            [-direction[0], -direction[1], -direction[2], 0],
+            [0, 0, 0, 1]
+        ])
+        self.transform.rotation = rotation_matrix
+
+    def get_frustum_planes(self) -> dict:
+        """
+        Compute the 6 frustum planes (left, right, top, bottom, near, far).
+        Useful for C++ culling and intersection tests.
+        Returns: {"left": (normal, d), "right": ..., etc.}
+        """
+        # Extract planes from combined matrix for frustum culling
+        M = self.get_camera_matrix()
+        planes = {}
+        
+        # Normalize and extract each plane
+        planes["left"] = (M[3] + M[0], M[3, 3] + M[0, 3])
+        planes["right"] = (M[3] - M[0], M[3, 3] - M[0, 3])
+        planes["top"] = (M[3] - M[1], M[3, 3] - M[1, 3])
+        planes["bottom"] = (M[3] + M[1], M[3, 3] + M[1, 3])
+        planes["near"] = (M[3] + M[2], M[3, 3] + M[2, 3])
+        planes["far"] = (M[3] - M[2], M[3, 3] - M[2, 3])
+        
+        return planes
+
+    def to_perspective(self) -> dict:
+        """
+        Export camera parameters in GLM/OpenGL-friendly format.
+        C++ can read this and call glm::perspective(fov, aspect, near, far).
+        """
+        return {
+            "fov_radians": np.radians(self.fov),
+            "fov_degrees": self.fov,
+            "aspect": float(self.aspect),
+            "near": float(self.near),
+            "far": float(self.far),
+        }
+
+    def to_matrices(self) -> dict:
+        """
+        Export matrices in OpenGL-friendly format (column-major, transposed if needed).
+        """
+        return {
+            "view": self.get_view_matrix().T.tolist(),  # Transpose for column-major
+            "projection": self.get_projection_matrix().T.tolist(),
+            "view_projection": (self.get_projection_matrix() @ self.get_view_matrix()).T.tolist(),
+        }
+
+    def get_ray_from_screen(self, screen_x: float, screen_y: float) -> tuple:
+        """
+        Convert screen coordinates (0-width, 0-height) to a world-space ray.
+        Useful for picking/raycasting.
+        Returns: (origin, direction) both as np.ndarray
+        """
+        # Normalized device coordinates
+        ndc_x = (2.0 * screen_x) / self.width - 1.0
+        ndc_y = 1.0 - (2.0 * screen_y) / self.height  # Flip Y for OpenGL
+        
+        # Inverse projection to get view-space coordinates
+        proj_inv = np.linalg.inv(self.get_projection_matrix())
+        view_x = ndc_x * np.tan(np.radians(self.fov / 2)) * float(self.aspect)
+        view_y = ndc_y * np.tan(np.radians(self.fov / 2))
+        
+        # View-space ray
+        ray_view = np.array([view_x, view_y, -1.0, 0.0])
+        
+        # Transform to world space
+        view_inv = np.linalg.inv(self.get_view_matrix())
+        ray_world = view_inv @ ray_view
+        
+        origin = self.transform.get_global_position()
+        direction = ray_world[:3] / np.linalg.norm(ray_world[:3])
+        
+        return origin, direction
+
+    def export_uniforms(self) -> str:
+        """
+        Generate GLSL uniform declarations for copy-paste into vertex/fragment shaders.
+        """
+        matrices = self.to_matrices()
+        return f"""
+// Camera uniforms (auto-generated from VCamera)
+uniform mat4 uView;           // View matrix
+uniform mat4 uProjection;     // Projection matrix
+uniform mat4 uViewProjection; // Combined VP matrix
+uniform vec3 uCameraPos;      // Camera position (world-space)
+uniform float uNear;          // Near plane
+uniform float uFar;           // Far plane
+uniform float uFOV;           // Field of view (radians)
+"""
+
+    def __repr__(self):
+        return (f"VCamera(name={self.name}, type={self.type.name}, mode={self.mode.name}, "
+                f"fov={self.fov}, aspect={self.aspect}, near={self.near}, far={self.far}, "
+                f"res={self.width}x{self.height})")
+
+"""
+Camera module: Providing the Camera class with properties, projection types and movement modes.
+"""

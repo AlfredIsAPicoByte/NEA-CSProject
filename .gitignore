@@ -53,3 +53,10 @@ cmake-build-*/
 # Compiled / build artifacts
 dist/
 build/
+
+# Github
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+CONTRIBUTING.md
