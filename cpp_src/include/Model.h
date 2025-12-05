@@ -1,13 +1,14 @@
 # pragma once
 
-#include <fstream>
-#include <cstring>
-#include <cmath>
-#include <stdexcept>
+#include <vector>
+#include <string>
+#include <filesystem>
+#include <glad/glad.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <json.hpp>
 
 #include "Mesh.h"
-#include "textureClass.h"
 #include "Debugger.h"
 
 using json = nlohmann::json;
@@ -22,21 +23,24 @@ public:
 	void CleanUp();
 
 	std::vector<Mesh>& GetMeshes();
+	void SetName(const std::string& modelName);
+	const std::string& GetName() const;
 	glm::mat4 GetModelMatrixForMesh(unsigned int meshIndex) const;
+	std::vector<glm::mat4> GetModelMatricesForAllMeshes() const;
 	void SetModelMatrixForMesh(unsigned int meshIndex, const glm::mat4& modelMatrix);
 	void SetModelMatricesForAllMeshes(const std::vector<glm::mat4>& modelMatrices);
 private:
+	std::string name;
+	int id;
+	
 	// Variables for easy access
 	const char* file;
 	std::vector<unsigned char> data;
 	json JSON;
 	std::filesystem::path modelPath;
 
-	// All the meshes and transformations
+	// All the meshes and model matrices in the model
 	std::vector<Mesh> meshes;
-	std::vector<glm::vec3> translationsMeshes;
-	std::vector<glm::quat> rotationsMeshes;
-	std::vector<glm::vec3> scalesMeshes;
 	std::vector<glm::mat4> matricesMeshes;
 
 	// Prevents textures from being loaded twice

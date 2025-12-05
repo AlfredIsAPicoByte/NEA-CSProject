@@ -1,8 +1,6 @@
 #include "Debugger.h"
 
-std::string debugLog;
-
-#include <sstream>
+std::vector<DebugMessage> debugLog;
 
 GLenum glCheckError_(const char* file, int line)
 {
@@ -135,97 +133,150 @@ void EnableOpenGLDebugger()
     glDebugMessageCallback(glDebugOutput, nullptr);
 }
 
-void AppendMessage(const std::string& msg) {
-    if (debugLog.size() + msg.size() > MAX_LOG_SIZE) {
-        debugLog.clear(); // Clear log if exceeding max size
-        debugLog += "[Debug Log Cleared Due to Size Limit]\n";
+// helper: compute approximate total size of the current debug log
+static size_t getTotalLogSize()
+{
+    size_t total = 0;
+    for (const auto &e : debugLog) {
+        total += static_cast<size_t>(e.getApproxSize());
     }
-    
-    debugLog += "[Message] " + msg + "\n";
-    std::cout << "[Message] " << msg << std::endl;
+    return total;
 }
-void AppendWarning(const std::string& warning) {
-    if (debugLog.size() + warning.size() > MAX_LOG_SIZE) {
-        debugLog.clear(); // Clear log if exceeding max size
-        debugLog += "[Debug Log Cleared Due to Size Limit]\n";
+
+void AppendDebugMessage(const DebugMessage& msg, bool saveWhenFull) {
+    // If the last entry is identical (same source/type/severity/message) -> increment its count
+    if (!debugLog.empty()) {
+        DebugMessage &last = debugLog.back();
+        if (last.source == msg.source &&
+            last.type == msg.type &&
+            last.severity == msg.severity &&
+            last.message == msg.message)
+        {
+            // estimate size after increment: conservative check using msg approx size
+            if (willEntryExceedMaxLogSize(msg.getApproxSize())) {
+                Time time;
+                time.update();
+                if (saveWhenFull) SaveDebugLogToFile("debug_log_" + std::to_string(time.lastFrame.time_since_epoch().count()) + ".txt");
+                ClearDebugLog();
+                AppendMessage("Debug Log Cleared Due to Size Limit");
+                if (saveWhenFull) AppendMessage("Debug Log Saved to debug_log_" + std::to_string(time.lastFrame.time_since_epoch().count()) + ".txt before clearing.");
+            }
+
+            last.count += 1;
+            return;
+        }
     }
 
-    debugLog += "[Warning] " + warning + "\n";
-    std::cout << "[Warning] " << warning << std::endl;
-}
-void AppendError(const std::string& error) {
-    if (debugLog.size() + error.size() > MAX_LOG_SIZE) {
-        debugLog.clear(); // Clear log if exceeding max size
-        debugLog += "[Debug Log Cleared Due to Size Limit]\n";
-    }
+    // non-duplicate entry: check size and rotate if needed
+    if (willEntryExceedMaxLogSize(msg.getApproxSize())) {
+        Time time;
+        time.update(); // Ensure time is updated for timestamping if needed
+        if (saveWhenFull) SaveDebugLogToFile("debug_log_" + std::to_string(time.lastFrame.time_since_epoch().count()) + ".txt");
 
-    debugLog += "[Error] " + error + "\n";
-    std::cerr << "[Error] " << error << std::endl;
-}
-void AppendOpenGLMessage(const std::string& msg) {
-    if (debugLog.size() + msg.size() > MAX_LOG_SIZE) {
-        debugLog.clear(); // Clear log if exceeding max size
-        debugLog += "[Debug Log Cleared Due to Size Limit]\n";
-    }
+        ClearDebugLog(); // Clear log if exceeding max size
+        AppendMessage("Debug Log Cleared Due to Size Limit");
 
-    debugLog += "[OpenGL Message] " + msg + "\n";
-    std::cout << "[OpenGL Message] " << msg << std::endl;
-}
-void AppendOpenGLWarning(const std::string& warning) {
-    if (debugLog.size() + warning.size() > MAX_LOG_SIZE) {
-        debugLog.clear(); // Clear log if exceeding max size
-        debugLog += "[Debug Log Cleared Due to Size Limit]\n";
+        if (saveWhenFull) AppendMessage("Debug Log Saved to debug_log_" + std::to_string(time.lastFrame.time_since_epoch().count()) + ".txt before clearing.");
     }
-
-    debugLog += "[OpenGL Warning] " + warning + "\n";
-    std::cout << "[OpenGL Warning] " << warning << std::endl;
+    debugLog.push_back(msg);
 }
-void AppendOpenGLError(const std::string& error) {
-    if (debugLog.size() + error.size() > MAX_LOG_SIZE) {
-        debugLog.clear(); // Clear log if exceeding max size
-        debugLog += "[Debug Log Cleared Due to Size Limit]\n";
-    }
-
-    debugLog += "[OpenGL Error] " + error + "\n";
-    std::cerr << "[OpenGL Error] " << error << std::endl;
+void AppendDebugMessage(const std::string& msg,DebugMessage::Source source, DebugMessage::Type type, DebugMessage::Severity severity) {
+    DebugMessage debugMsg(msg, source, type, severity);
+    AppendDebugMessage(debugMsg);
 }
-void AppendPythonMessage(const std::string& msg) {
-    if (debugLog.size() + msg.size() > MAX_LOG_SIZE) {
-        debugLog.clear(); // Clear log if exceeding max size
-        debugLog += "[Debug Log Cleared Due to Size Limit]\n";
-    }
 
-    debugLog += "[Python Message] " + msg + "\n";
-    std::cout << "[Python Message] " << msg << std::endl;
+void AppendMessage(const std::string& msg, DebugMessage::Severity severity) {
+    AppendDebugMessage(msg, DebugMessage::Source::APPLICATION, DebugMessage::Type::MESSAGE, severity);
 }
-void AppendPythonWarning(const std::string& warning) {
-    if (debugLog.size() + warning.size() > MAX_LOG_SIZE) {
-        debugLog.clear(); // Clear log if exceeding max size
-        debugLog += "[Debug Log Cleared Due to Size Limit]\n";
-    }
+void AppendWarning(const std::string& msg, DebugMessage::Severity severity) {
+    AppendDebugMessage(msg, DebugMessage::Source::APPLICATION, DebugMessage::Type::WARNING, severity);
+}
+void AppendError(const std::string& msg, DebugMessage::Severity severity) {
+    AppendDebugMessage(msg, DebugMessage::Source::APPLICATION, DebugMessage::Type::ERROR, severity);
+}
+void AppendOpenGLMessage(const std::string& msg, DebugMessage::Severity severity) {
+    AppendDebugMessage(msg, DebugMessage::Source::OPENGL, DebugMessage::Type::MESSAGE, severity);
+}
+void AppendOpenGLWarning(const std::string& msg, DebugMessage::Severity severity) {
+    AppendDebugMessage(msg, DebugMessage::Source::OPENGL, DebugMessage::Type::WARNING, severity);
+}
+void AppendOpenGLError(const std::string& msg, DebugMessage::Severity severity) {
+    AppendDebugMessage(msg, DebugMessage::Source::OPENGL, DebugMessage::Type::ERROR, severity);
+}
+void AppendPythonMessage(const std::string& msg, DebugMessage::Severity severity) {
+    AppendDebugMessage(msg, DebugMessage::Source::PYTHON, DebugMessage::Type::MESSAGE, severity);
+}
+void AppendPythonWarning(const std::string& msg, DebugMessage::Severity severity) {
+    AppendDebugMessage(msg, DebugMessage::Source::PYTHON, DebugMessage::Type::WARNING, severity);
+}
+void AppendPythonError(const std::string& msg, DebugMessage::Severity severity) {
+    AppendDebugMessage(msg, DebugMessage::Source::PYTHON, DebugMessage::Type::ERROR, severity);
+}
 
-    debugLog += "[Python Warning] " + warning + "\n";
-    std::cout << "[Python Warning] " << warning << std::endl;
-}
-void AppendPythonError(const std::string& error) {
-    if (debugLog.size() + error.size() > MAX_LOG_SIZE) {
-        debugLog.clear(); // Clear log if exceeding max size
-        debugLog += "[Debug Log Cleared Due to Size Limit]\n";
-    }
 
-    debugLog += "[Python Error] " + error + "\n";
-    std::cerr << "[Python Error] " << error << std::endl;
-}
-void PrintDebugLog() {
-    if (debugLog.empty()) {
+void PrintDebugLog(int truncateLength) {
+    if (isLogEmpty()) {
         std::cout << "[Debug Log is empty]" << std::endl;
         return;
     }
-    for (const auto& line : debugLog) {
-        std::cout << line;
+    for (const auto& entry : debugLog) {
+        std::string output = entry.ToString();
+        if (truncateLength > 0 && output.length() > static_cast<size_t>(truncateLength)) {
+            output = output.substr(0, truncateLength) + "...";
+        }
+        std::cout << output << std::endl;
+    }
+    if (isLogFull()) {
+        std::cout << "[Debug Log is full]" << std::endl;
     }
 }
 void ClearDebugLog() {
     debugLog.clear();
     std::cout << "[Debug Log cleared]" << std::endl;
+}
+
+bool isLogFull() {
+    return getTotalLogSize() >= static_cast<size_t>(MAX_LOG_SIZE);
+}
+bool willEntryExceedMaxLogSize(int entrySize) {
+    return (getTotalLogSize() + static_cast<size_t>(entrySize)) > static_cast<size_t>(MAX_LOG_SIZE);
+}
+bool isLogEmpty() {
+    return debugLog.empty();
+}
+
+bool SaveDebugLogToFile(const std::string& filename, const std::string& directory) {
+    std::filesystem::path dirPath(directory);
+    std::error_code ec;
+    if (!std::filesystem::create_directories(dirPath, ec) && ec) {
+        AppendError("Failed to create log directory: " + directory + " | " + ec.message());
+        return false;
+    }
+
+    std::filesystem::path filePath = dirPath / filename;
+    std::ofstream outFile(filePath.string(), std::ios::out | std::ios::trunc);
+    if (!outFile.is_open()) {
+        AppendError("Failed to open file for writing: " + filePath.string());
+        return false;
+    }
+    for (const auto& entry : debugLog) {
+        outFile << entry.ToString() << "\n";
+    }
+    outFile.close();
+    return true;
+}
+
+bool LoadDebugLogFromFile(const std::string& filename) {
+    std::ifstream inFile(filename);
+    if (!inFile.is_open()) {
+        AppendError("Failed to open file for reading: " + filename);
+        return false;
+    }
+    debugLog.clear();
+    std::string line;
+    while (std::getline(inFile, line)) {
+        AppendMessage(line);
+    }
+    inFile.close();
+    return true;
 }

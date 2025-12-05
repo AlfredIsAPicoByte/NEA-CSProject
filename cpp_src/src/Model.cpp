@@ -1,4 +1,4 @@
-#include"Model.h"
+#include "Model.h"
 
 Model::Model(const char* file)
 {
@@ -495,6 +495,14 @@ std::vector<Mesh>& Model::GetMeshes()
 	return meshes;
 }
 
+void Model::SetName(const std::string& modelName)
+{
+	name = modelName;
+}
+const std::string& Model::GetName() const
+{
+	return name;
+}
 glm::mat4 Model::GetModelMatrixForMesh(unsigned int meshIndex) const
 {
 	if (meshIndex >= matricesMeshes.size())
@@ -502,6 +510,11 @@ glm::mat4 Model::GetModelMatrixForMesh(unsigned int meshIndex) const
 		throw std::out_of_range("Mesh index out of range in GetModelMatrixForMesh");
 	}
 	return matricesMeshes[meshIndex];
+}
+
+std::vector<glm::mat4> Model::GetModelMatricesForAllMeshes() const
+{
+	return matricesMeshes;
 }
 
 void Model::SetModelMatrixForMesh(unsigned int meshIndex, const glm::mat4& modelMatrix)

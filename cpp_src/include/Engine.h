@@ -1,4 +1,5 @@
 #pragma once
+
 #include <iostream>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -11,18 +12,11 @@
 #include "Model.h"
 #include "shaderClass.h"
 #include "colorClass.h"
+#include "cameraClass.h"
+#include "Light.h"
 #include "Debugger.h"
 #include "InputManager.h"
 #include "PythonManager.h"
-#include "cameraClass.h"
-#include "Light.h"
-
-enum EngineState {
-    STARTING,
-    RUNNING,
-    PAUSED,
-    STOPPED
-};
 
 class Engine
 {
@@ -33,16 +27,22 @@ public:
         return instance;
     }
 
-    EngineState state = EngineState::STOPPED;
+    enum State {
+        STARTING,
+        RUNNING,
+        PAUSED,
+        STOPPED
+    } state = State::STOPPED;
 
     void Start();
     void PausePlay();
     void Update(GLFWwindow* window, std::function<void()> input, std::function<void()> render, std::function<void()> gui);
     void Exit();
     
-    void cleanUp(GLFWwindow* window);
     void applyClearColor(const Color& color);
     void setDepthTest(bool enable);
+    
+    void CleanUp(GLFWwindow* window);
 
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
