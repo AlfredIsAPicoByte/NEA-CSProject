@@ -1,7 +1,18 @@
 #pragma once
+
 #include <glm/glm.hpp>
+#include <glad/glad.h>
+
+static GLuint g_MaterialUBO = 0;
+static constexpr GLuint MATERIAL_UBO_BINDING_POINT = 1;
 
 // C++ side material representation (not the UBO layout exactly, just convenience)
+struct GPUMaterial {
+    glm::vec4 albedoColor;    // rgb + padding
+    glm::vec4 metaFlags;      // x = metallic, y = roughness, z = useAlbedoMap, w = useNormalMap (as floats)
+    glm::vec4 emissive;       // rgb + padding
+};
+
 struct Material {
     glm::vec3 albedo = glm::vec3(1.0f);
     float    padding1 = 0.0f;
