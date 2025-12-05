@@ -1,7 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
-#include <glad/glad.h>
+#include <glad/glad.h>#
 
 static GLuint g_MaterialUBO = 0;
 static constexpr GLuint MATERIAL_UBO_BINDING_POINT = 1;
