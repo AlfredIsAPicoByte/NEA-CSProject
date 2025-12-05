@@ -1,17 +1,17 @@
 #pragma once
 
-#include <string>
 #include <vector>
+#include <string>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <functional>
 
-#include "pythonManager.h"
 #include "shaderClass.h"
 #include "Model.h"
-#include "Texture.h"
-#include "Camera.h"
+#include "textureClasse.h"
+#include "cameraClass.h"
 #include "IRenderable.h"
+#include "PythonManager.h"
 
 class Scene{
 public:
@@ -22,22 +22,28 @@ public:
 
     int selectedMeshIndex = -1;
 
-    void initialize();
-    void render();
-    void update();
-    void cleanup();
-    void loadModel(const std::string& modelPath);
-    void setCamera(Camera* cam);
+    void Initialize();
+
+    void Render(std::function<void()> processing = nullptr, std::function<void()> renderStep = nullptr, std::function<void()> postProcessing = nullptr, std::function<void()> fallBack = nullptr);
+    void UpdateScene();
+
+    void LoadModel(const std::string& modelPath, Shader& shader);
+    void SetCamera(Camera* camera);
+    void SetOpenGLRenderFunction(std::shared_ptr<std::function<void()>> renderFunc);
+
+    void CleanUp();
 private:
-    Shader* shaderProgram;
     Camera* sceneCamera;
 
     std::vector<std::shared_ptr<IRenderable>> renderables;
 
+    py::object pyAlgorithimModule;
+    py::object pyRaytracingModule;
+    py::object pySamplerModule;
+    py::object pySceneModule;
+    py::object pyCameraModule;
+    py::object pyLuminanceModule;
+    py::object pyGeometryModule;
 
-    py::object pyCamera;
-    py::object pySampler;
-    py::object pyScene;
-    py::object pyBaseAlgorithm;
-    py::object pyRayTracer;
+    std::shared_ptr<std::function<void()>> openGLRenderFunction;
 };

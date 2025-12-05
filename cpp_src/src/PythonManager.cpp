@@ -1,16 +1,14 @@
-#include "pythonManager.h"
+#include "PythonManager.h"
 
-namespace fs = std::filesystem;
+PythonManager::PythonManager() { Initialize(); }
+PythonManager::~PythonManager() { Finalize(); }
 
-PythonManager::PythonManager() {
-    Initialize();
-}
-
+#ifdef USE_EMBEDDED_PYTHON
 void PythonManager::Initialize() {
     if (!Py_IsInitialized()) {
         py::initialize_interpreter();
         try {
-            fs::path scriptPath = fs::current_path() / "../py_src/src";
+            std::filesystem;::path scriptPath = std::filesystem;::current_path() / "../py_src/src";
             py::module_ sys = py::module_::import("sys");
             sys.attr("path").attr("append")(scriptPath.string());
             AppendPythonMessage(std::string("Added Python path: ") + scriptPath.string());
@@ -20,27 +18,19 @@ void PythonManager::Initialize() {
     }
 }
 
-PythonManager::~PythonManager() {
-    Finalize();
-}
-
 void PythonManager::Finalize() {
-    if (Py_IsInitialized()) {
-        py::finalize_interpreter();
-    }
+    if (Py_IsInitialized()) py::finalize_interpreter();
 }
 
 void PythonManager::InstallPackage(const std::string& packageName) {
     py::module_ sys = py::module_::import("sys");
     py::module_ subprocess = py::module_::import("subprocess");
-
     try {
         subprocess.attr("check_call")(py::make_tuple(sys.attr("executable"), "-m", "pip", "install", packageName));
         AppendPythonMessage("Successfully installed Python package: " + packageName);
     } catch (const py::error_already_set& error) {
         AppendPythonError("Failed to install Python package '" + packageName + "': " + error.what());
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         AppendPythonError("Exception during installation of package '" + packageName + "': " + e.what());
     }
 }
@@ -61,9 +51,7 @@ void PythonManager::ValidatePackageInstallation(const std::string& packageName) 
 }
 
 void PythonManager::EnsurePythonPackagesInstalled(const std::vector<std::string>& packages) {
-    for (const auto& package : packages) {
-        ValidatePackageInstallation(package);
-    }
+    for (const auto& package : packages) ValidatePackageInstallation(package);
 }
 
 void PythonManager::GetPackagesInstalledStatus(const std::vector<std::string>& packages) {
@@ -102,16 +90,46 @@ py::object PythonManager::CallFunction(const py::object& module, const std::stri
             AppendPythonError(std::string("Function '" + funcName + "' not found in module"));
             return py::none();
         }
-
         py::object func = module.attr(funcName.c_str());
-
-        if (args.empty()) {
-            return func();
-        } else {
-            return func(args);
-        }
+        if (args.empty()) return func();
+        return func(args);
     } catch (const py::error_already_set& error) {
         AppendPythonError(std::string("Error calling function '" + funcName + "': " + error.what()));
         return py::none();
     }
 }
+
+#else
+void PythonManager::Initialize() {
+    AppendPythonMessage("Python embedding is disabled. Initialize() is a no-op.");
+}
+void PythonManager::Finalize() {
+    AppendPythonMessage("Python embedding is disabled. Finalize() is a no-op.");
+}
+void PythonManager::InstallPackage(const std::string& packageName) {
+    AppendPythonMessage("Python embedding is disabled. InstallPackage() is a no-op for package: " + packageName);
+}
+void PythonManager::ImportModule(const std::string& moduleName) {
+    AppendPythonMessage("Python embedding is disabled. ImportModule() is a no-op for module: " + moduleName);
+}
+void PythonManager::ValidatePackageInstallation(const std::string& packageName) {
+    AppendPythonMessage("Python embedding is disabled. ValidatePackageInstallation() is a no-op for package: " + packageName);
+}
+void PythonManager::EnsurePythonPackagesInstalled(const std::vector<std::string>& packages) {
+    AppendPythonMessage("Python embedding is disabled. EnsurePythonPackagesInstalled() is a no-op.");
+}
+void PythonManager::GetPackagesInstalledStatus(const std::vector<std::string>& packages) {
+    AppendPythonMessage("Python embedding is disabled. GetPackagesInstalledStatus() is a no-op.");
+}
+void PythonManager::AddModulePath(const std::string& path) {
+    AppendPythonMessage("Python embedding is disabled. AddModulePath() is a no-op for path: " + path);
+}
+py::object PythonManager::LoadModule(const std::string& moduleName) {
+    AppendPythonMessage("Python embedding is disabled. LoadModule() is a no-op for module: " + moduleName);
+    return py::none();
+}
+py::object PythonManager::CallFunction(const py::object& module, const std::string& funcName, const std::vector<py::object>& args) {
+    AppendPythonMessage("Python embedding is disabled. CallFunction() is a no-op for function: " + funcName);
+    return py::none();
+}
+#endif

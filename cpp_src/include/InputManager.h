@@ -6,7 +6,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#include "Debug.h"
+#include "Debugger.h"
 
 struct ActionInput {
     GLuint key;

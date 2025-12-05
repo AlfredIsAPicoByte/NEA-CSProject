@@ -1,5 +1,4 @@
-#ifndef CAMERA_CLASS_H
-#define CAMERA_CLASS_H
+#pragma once
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -13,7 +12,7 @@
 
 #include "shaderClass.h"
 #include "timeClass.h"
-#include "Debug.h"
+#include "Debugger.h"
 #include "InputManager.h"
 
 enum CameraType {
@@ -48,7 +47,6 @@ public:
 	float aspectRatio;
 
 	std::string name = "";
-	int id;
 
 	CameraType type = PERSPECTIVE;
 	CamaraMovementMode mode = FIRST_PERSON;
@@ -98,7 +96,7 @@ public:
 	void Resize(int width, int height);
 
 	// Exports the camera matrix to a shader
-	void Matrix(Shader& shader, const char* uniform);
+	void SetModelMatrixUniform(Shader& shader, const char* uniform);
 
 	void Move(GLFWwindow* window, double deltaTime);
 
@@ -113,8 +111,9 @@ public:
 	void ResetPlane();
 	void Reset(glm::vec3 position, glm::vec3 forward, glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f));
 private:
+	int id;
+	
 	void FirstPersonMovement(GLFWwindow* window, double deltaTime);
 	void PlaneMovement(GLFWwindow* window, double deltaTime);
 	void OrbitMovement(GLFWwindow* window, double deltaTime);
 };
-#endif

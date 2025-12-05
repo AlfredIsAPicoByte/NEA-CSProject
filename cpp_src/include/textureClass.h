@@ -7,7 +7,7 @@
 #include <iostream>
 
 #include "shaderClass.h"
-#include "Debug.h"
+#include "Debugger.h"
 
 class Texture
 {

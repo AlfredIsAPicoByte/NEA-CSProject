@@ -1,116 +1,59 @@
 #version 460 core
 
-// Outputs colors in RGBA
+#define MAX_LIGHTS 64
+
+layout(std140, binding = 2) uniform LightBlock {
+    int    u_lightCount;
+    // pad to 16 bytes
+    vec3   _pad0;
+    // arrays of vec4 (xyz = pos/dir, w = radius/type/hint)
+    vec4   u_lightPosRadius[MAX_LIGHTS];      // xyz = position, w = radius (for point)
+    vec4   u_lightColorIntensity[MAX_LIGHTS]; // rgb = color, w = intensity
+    vec4   u_lightDirType[MAX_LIGHTS];        // xyz = direction (for dir/spot), w = type (0=point,1=dir,2=spot)
+};
+
+in vec3 FragPos;
+in vec3 Normal;
+in vec2 TexCoord;
+in vec3 VertColor;
+
+uniform float u_specularStrength;
+uniform float u_ambient;
+uniform sampler2D u_albedoMap;
+uniform bool u_hasAlbedo;
+
 out vec4 FragColor;
 
-// Imports the current position from the Vertex Shader
-in vec3 crntPos;
-// Imports the color from the Vertex Shader
-in vec3 color;
-// Imports the normal from the Vertex Shader
-in vec3 Normal;
-// Imports the texture coordinates from the Vertex Shader
-in vec2 texCoord;
-
-// Gets the Texture Units from the main function
-uniform sampler2D diffuse0;
-uniform sampler2D specular0;
-// Gets the color of the light from the main function
-uniform vec4 lightColor;
-// Gets the position of the light from the main function
-uniform vec3 lightPos;
-// Gets the position of the camera from the main function
-uniform vec3 camPos;
-
-uniform int lightType; // 0 = directional, 1 = point, 2 = spot
-
-vec4 pointLight()
-{	
-	// used in two variables so I calculate it here to not have to do it twice
-	vec3 lightVec = lightPos - crntPos;
-
-	// intensity of light with respect to distance
-	float dist = length(lightVec);
-	float a = 3.0;
-	float b = 0.7;
-	float inten = 1.0f / (a * dist * dist + b * dist + 1.0f);
-
-	// ambient lighting
-	float ambient = 0.20f;
-
-	// diffuse lighting
-	vec3 normal = normalize(Normal);
-	vec3 lightDirection = normalize(lightVec);
-	float diffuse = max(dot(normal, lightDirection), 0.0f);
-
-	// specular lighting
-	float specularLight = 0.50f;
-	vec3 viewDirection = normalize(camPos - crntPos);
-	vec3 reflectionDirection = reflect(-lightDirection, normal);
-	float specAmount = pow(max(dot(viewDirection, reflectionDirection), 0.0f), 16);
-	float specular = specAmount * specularLight;
-
-	return (texture(diffuse0, texCoord) * (diffuse * inten + ambient) + texture(specular0, texCoord).r * specular * inten) * lightColor;
+vec3 calcLight(int i, vec3 N, vec3 V, vec3 albedo) {
+    vec3 Lpos = u_lightPosRadius[i].xyz;
+    float radius = u_lightPosRadius[i].w;
+    int type = int(u_lightDirType[i].w + 0.5);
+    vec3 lightCol = u_lightColorIntensity[i].rgb * u_lightColorIntensity[i].w;
+    vec3 L;
+    float att = 1.0;
+    if (type == 1) { // directional
+        L = normalize(u_lightDirType[i].xyz);
+    } else { // point
+        L = normalize(Lpos - FragPos);
+        float dist = length(Lpos - FragPos);
+        att = clamp(1.0 - dist / max(radius, 0.0001), 0.0, 1.0);
+    }
+    float NdotL = max(dot(N, L), 0.0);
+    vec3 diffuse = albedo * lightCol * NdotL * att + albedo * u_ambient;
+    vec3 H = normalize(L + V);
+    float spec = pow(max(dot(N, H), 0.0), 32.0);
+    vec3 specular = lightCol * spec * att * u_specularStrength;
+    return diffuse + specular;
 }
 
-vec4 direcLight()
-{
-	// ambient lighting
-	float ambient = 0.20f;
+void main() {
+    vec3 albedo = u_hasAlbedo ? texture(u_albedoMap, TexCoord).rgb : VertColor;
+    vec3 N = normalize(Normal);
+    vec3 V = normalize(-FragPos); // replace with viewPos if available
 
-	// diffuse lighting
-	vec3 normal = normalize(Normal);
-	vec3 lightDirection = normalize(vec3(1.0f, 1.0f, 0.0f));
-	float diffuse = max(dot(normal, lightDirection), 0.0f);
-
-	// specular lighting
-	float specularLight = 0.50f;
-	vec3 viewDirection = normalize(camPos - crntPos);
-	vec3 reflectionDirection = reflect(-lightDirection, normal);
-	float specAmount = pow(max(dot(viewDirection, reflectionDirection), 0.0f), 16);
-	float specular = specAmount * specularLight;
-
-	return (texture(diffuse0, texCoord) * (diffuse + ambient) + texture(specular0, texCoord).r * specular) * lightColor;
-}
-
-vec4 spotLight()
-{
-	// controls how big the area that is lit up is
-	float outerCone = 0.90f;
-	float innerCone = 0.95f;
-
-	// ambient lighting
-	float ambient = 0.20f;
-
-	// diffuse lighting
-	vec3 normal = normalize(Normal);
-	vec3 lightDirection = normalize(lightPos - crntPos);
-	float diffuse = max(dot(normal, lightDirection), 0.0f);
-
-	// specular lighting
-	float specularLight = 0.50f;
-	vec3 viewDirection = normalize(camPos - crntPos);
-	vec3 reflectionDirection = reflect(-lightDirection, normal);
-	float specAmount = pow(max(dot(viewDirection, reflectionDirection), 0.0f), 16);
-	float specular = specAmount * specularLight;
-
-	// calculates the intensity of the crntPos based on its angle to the center of the light cone
-	float angle = dot(vec3(0.0f, -1.0f, 0.0f), -lightDirection);
-	float inten = clamp((angle - outerCone) / (innerCone - outerCone), 0.0f, 1.0f);
-
-	return (texture(diffuse0, texCoord) * (diffuse * inten + ambient) + texture(specular0, texCoord).r * specular * inten) * lightColor;
-}
-
-
-void main()
-{
-	// outputs final color
-   if (lightType == 0)
-      FragColor = direcLight();
-   else if (lightType == 1)
-      FragColor = pointLight();
-   else if (lightType == 2)
-	   FragColor = spotLight();
-   else
-      FragColor = direcLight();
+    vec3 color = vec3(0.0);
+    for (int i = 0; i < u_lightCount; ++i) {
+        color += calcLight(i, N, V, albedo);
+    }
+    FragColor = vec4(pow(color, vec3(1.0/2.2)), 1.0);
 }

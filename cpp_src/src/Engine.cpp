@@ -2,7 +2,7 @@
 
 void Engine::Start()
 {
-    state = EngineState::STARTING;
+    state = State::STARTING;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -13,10 +13,10 @@ void Engine::Start()
 
 void Engine::PausePlay()
 {
-    if (state == EngineState::RUNNING) {
-        state = EngineState::PAUSED;
-    } else if (state == EngineState::PAUSED) {
-        state = EngineState::RUNNING;
+    if (state == State::RUNNING) {
+        state = State::PAUSED;
+    } else if (state == State::PAUSED) {
+        state = State::RUNNING;
     }
 }
 
@@ -26,7 +26,7 @@ void Engine::Update(GLFWwindow* window, std::function<void()> processing, std::f
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
 
-    state = EngineState::RUNNING;
+    state = State::RUNNING;
 
     while (!glfwWindowShouldClose(window))
     {
@@ -40,7 +40,7 @@ void Engine::Update(GLFWwindow* window, std::function<void()> processing, std::f
             });
         }
 
-        if (state == EngineState::PAUSED) {
+        if (state == State::PAUSED) {
             continue;
         }
 
@@ -66,12 +66,12 @@ void Engine::Update(GLFWwindow* window, std::function<void()> processing, std::f
 
 void Engine::Exit()
 {
-    state = EngineState::STOPPED;
+    state = State::STOPPED;
 
 	AppendMessage("Engine Stopped.");
 }
 
-void Engine::cleanUp(GLFWwindow* window)
+void Engine::CleanUp(GLFWwindow* window)
 {
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -83,7 +83,6 @@ void Engine::cleanUp(GLFWwindow* window)
     glfwTerminate();
 
 	AppendMessage("Destroyed window and terminated GLFW.");
-    Exit();
 }
 
 void Engine::applyClearColor(const Color& color) {

@@ -1,38 +1,39 @@
-#ifndef MESH_CLASS_H
-#define MESH_CLASS_H
+#pragma once
 
 #include <string>
 #include <vector>
 
 #include "VAO.h"
 #include "EBO.h"
-#include "Camera.h"
-#include "Texture.h"
-#include "Debug.h"
+#include "cameraClass.h"
+#include "textureClass.h"
+#include "IRenderable.h"
+#include "Debugger.h"
 
-class Mesh
+class Mesh : public IRenderable
 {
 public:
 	std::vector <Vertex> vertices;
 	std::vector <GLuint> indices;
 	std::vector <Texture> textures;
+
+	glm::mat4 modelMatrix = glm::mat4(1.0f);
 	// Store VAO in public so it can be used in the Draw function
 	VAO VAO;
 
 	// Initializes the mesh
 	Mesh(std::vector <Vertex>& vertices, std::vector <GLuint>& indices, std::vector <Texture>& textures);
 
-	// Draws the mesh
-	void Draw
-	( 
-		Shader& shader, 
-		Camera& camera,
-		glm::mat4 matrix = glm::mat4(1.0f),
-		glm::vec3 translation = glm::vec3(0.0f, 0.0f, 0.0f),
-		glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-		glm::vec3 scale = glm::vec3(1.0f, 1.0f, 1.0f)
-	);
+	// Draws the mesh using the provided model matrix
+	void Draw(Shader& shader, Camera& camera) override;
 
 	void CleanUp();
+
+	void SetName(const std::string& meshName);
+	const std::string& GetName() const;
+	void SetModelMatrix(const glm::mat4& matrix);
+	glm::mat4 GetModelMatrix() const;
+private:
+	std::string name = "";
+	int id;
 };
-#endif

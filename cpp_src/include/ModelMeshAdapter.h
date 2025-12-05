@@ -1,6 +1,10 @@
 #pragma once
+
+#include <memory>
+
 #include "IRenderable.h"
 #include "Model.h"
+#include "Debugger.h"
 
 class ModelMeshAdapter : public IRenderable {
 public:
@@ -10,8 +14,8 @@ public:
     void Draw(Shader& shader, Camera& camera) override {
         model->Draw(shader, camera); // implement DrawMesh in Model
     }
-    const std::string& GetName() const override { return model->GetMeshName(index); }
-    glm::mat4 GetModelMatrix() const override { return model->GetMeshMatrix(index); }
+    const std::string& GetName() const override { return model->GetMeshes()[index].GetName(); }
+    glm::mat4 GetModelMatrix() const override { return model->GetModelMatrixForMesh(index); }
 
 private:
     std::shared_ptr<Model> model;

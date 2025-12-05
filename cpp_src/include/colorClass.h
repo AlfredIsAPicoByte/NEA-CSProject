@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glad/glad.h>
+#include <glm/glm.hpp>
 #include <string>
 #include <iostream>
 
@@ -21,6 +22,19 @@ public:
 
     static Color lerp(const Color& start, const Color& end, float t);
 
+    glm::vec3 toVec3() const {
+        return glm::vec3(r, g, b);
+    }
+    glm::vec4 toVec4() const {
+        return glm::vec4(r, g, b, a);
+    }
+
+    void normalize() {
+        r = clamp(r, 0.0f, 1.0f);
+        g = clamp(g, 0.0f, 1.0f);
+        b = clamp(b, 0.0f, 1.0f);
+        a = clamp(a, 0.0f, 1.0f);
+    }
 private:
     int hexToInt(char c) const
     {

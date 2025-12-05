@@ -1,19 +1,37 @@
 #pragma once
 
 #include <iostream>
-#include <filesystem>
-#include <string>
 #include <vector>
+#include <string>
+#include <filesystem>
+
+#include "Debugger.h"
+
+#ifdef USE_EMBEDDED_PYTHON
 #include <pybind11/embed.h>
 
-#include "Debug.h"
-
 namespace py = pybind11;
+
+#else
+// Stub mode: no pybind11 / Python available. Provide minimal placeholders
+// so files that reference py::object or the PythonManager API still compile.
+namespace py {
+    struct object {
+        object() {}
+        object attr(const std::string&) const { return object(); }
+        bool contains(const std::string&) const { return false; }
+        template<typename... Args>
+        object operator()(Args&&...) const { return object(); }
+    };
+    inline object none() { return object(); }
+}
+#endif
+
+
 
 const std::vector<std::string> requiredPythonPackages = {
     "numpy",
     "pybind11",
-    // add more as needed
 };
 
 class PythonManager {
@@ -33,12 +51,9 @@ public:
     void ImportModule(const std::string& moduleName);
     void ValidatePackageInstallation(const std::string& packageName);
     void EnsurePythonPackagesInstalled(const std::vector<std::string>& packages);
-    void EnsureRequiredPackagesInstalled() {
-        EnsurePythonPackagesInstalled(requiredPythonPackages);
-    }
+    void EnsureRequiredPackagesInstalled() { EnsurePythonPackagesInstalled(requiredPythonPackages); }
     void GetPackagesInstalledStatus(const std::vector<std::string>& packages);
 
-    // match the implementation: use pybind11::object
     void AddModulePath(const std::string& path);
     py::object LoadModule(const std::string& moduleName);
     py::object CallFunction(const py::object& module, const std::string& funcName, const std::vector<py::object>& args = {});
