@@ -1,5 +1,4 @@
-#ifndef MESH_CLASS_H
-#define MESH_CLASS_H
+#pragma once
 
 #include <string>
 #include <vector>
@@ -30,14 +29,11 @@ public:
 
 	void CleanUp();
 
-	const std::string& GetName() const {
-		return name;
-	}
-	glm::mat4 GetModelMatrix() const {
-		return modelMatrix;
-	}
+	void SetName(const std::string& meshName);
+	const std::string& GetName() const;
+	void SetModelMatrix(const glm::mat4& matrix);
+	glm::mat4 GetModelMatrix() const;
 private:
 	std::string name = "";
 	int id;
 };
-#endif
