@@ -8,7 +8,7 @@
 
 #include "shaderClass.h"
 #include "Model.h"
-#include "textureClasse.h"
+#include "textureClass.h"
 #include "cameraClass.h"
 #include "IRenderable.h"
 #include "PythonManager.h"
@@ -18,7 +18,6 @@ public:
     Scene();
     ~Scene();
 
-    bool pythonRenderingUsed = false;
 
     int selectedMeshIndex = -1;
 
@@ -45,5 +44,6 @@ private:
     py::object pyLuminanceModule;
     py::object pyGeometryModule;
 
+    bool pythonRenderingUsed = true;
     std::shared_ptr<std::function<void()>> openGLRenderFunction;
 };

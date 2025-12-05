@@ -77,7 +77,7 @@ void Model::Draw(Shader& shader, Camera& camera)
     // Go over all meshes and draw each one
     for (unsigned int i = 0; i < meshes.size(); i++)
     {
-        meshes[i].modelMatrix = matricesMeshes[i];
+        meshes[i].SetModelMatrix(matricesMeshes[i]);
         // call instance Draw to match Mesh API
         meshes[i].Draw(shader, camera);
     }
@@ -180,9 +180,6 @@ void Model::traverseNode(unsigned int nextNode, glm::mat4 matrix)
 	// Check if the node contains a mesh and if it does load it
 	if (node.find("mesh") != node.end())
 	{
-		translationsMeshes.push_back(translation);
-		rotationsMeshes.push_back(rotation);
-		scalesMeshes.push_back(scale);
 		matricesMeshes.push_back(matNextNode);
 
 		loadMesh(node["mesh"]);

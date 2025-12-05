@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include <glm/glm.hpp>
+
 #include "shaderClass.h"
 #include "cameraClass.h"
 
@@ -10,6 +11,28 @@ class IRenderable {
 public:
     virtual ~IRenderable() = default;
     virtual void Draw(Shader& shader, Camera& camera) = 0;
-    virtual const std::string& GetName() const = 0;
-    virtual glm::mat4 GetModelMatrix() const = 0;
+
+    void SetName(const std::string& name) 
+    {
+        this->name = name;
+    };
+    const std::string& GetName() const
+    {
+        return name;
+    };
+    void SetModelMatrix(const glm::mat4& matrix)
+    {
+        modelMatrix = matrix;
+    };
+    glm::mat4 GetModelMatrix() const
+    {
+        return modelMatrix ;
+    };
+
+    virtual void CleanUp() = 0;
+protected:
+    std::string name = "";
+    int id;
+
+    glm::mat4 modelMatrix = glm::mat4(1.0f);
 };

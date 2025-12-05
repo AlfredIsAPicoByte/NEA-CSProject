@@ -22,7 +22,7 @@ Mesh::Mesh(std::vector <Vertex>& vertices, std::vector <GLuint>& indices, std::v
 	VAO.Unbind();
 }
 
-void Mesh::Draw (Shader& shader, Camera& camera)
+void Mesh::Draw(Shader& shader, Camera& camera)
 {
 	// Bind shader to be able to access uniforms
 	shader.Activate();
@@ -37,60 +37,25 @@ void Mesh::Draw (Shader& shader, Camera& camera)
 	{
 		std::string num;
 		std::string type = textures[i].type;
-		switch (type)
-		{
-			case "diffuse":
-				num = std::to_string(numDiffuse++);
-				break;
-			case "specular":
-				num = std::to_string(numSpecular++);
-				break;
-			case "normal":
-				num = std::to_string(numNormal++);
-				break;
-			default:
-				num = "0";
-				break;
-		}
+		if (type == "diffuse")
+			num = std::to_string(numDiffuse++);
+		else if (type == "specular")
+			num = std::to_string(numSpecular++);
+		else if (type == "normal")
+			num = std::to_string(numNormal++);
+		
 		textures[i].texUnit(shader, (type + num).c_str(), i);
 		textures[i].Bind();
 	}
 	// Take care of the camera Matrix
 	glUniform3f(glGetUniformLocation(shader.ID, "camPos"), camera.Position.x, camera.Position.y, camera.Position.z);
-	camera.Matrix(shader, "camMatrix");
-
-	// Initialize matrices
-	glm::mat4 trans = glm::mat4(1.0f);
-	glm::mat4 rot = glm::mat4(1.0f);
-	glm::mat4 sca = glm::mat4(1.0f);
-
-	// Transform the matrices to their correct form
-	trans = glm::translate(trans, translation);
-	rot = glm::mat4_cast(rotation);
-	sca = glm::scale(sca, scale);
+	camera.SetModelMatrixUniform(shader, "camMatrix");
 
 	// Push the matrices to the vertex shader
 	glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(modelMatrix));
 
 	// Draw the actual mesh
 	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
-}
-
-void Mesh::SetName(const std::string& meshName)
-{
-	name = meshName;
-}
-const std::string& Mesh::GetName() const
-{
-	return name;
-}
-void Mesh::SetModelMatrix(const glm::mat4& matrix)
-{
-	modelMatrix = matrix;
-}
-glm::mat4 Mesh::GetModelMatrix() const
-{
-	return modelMatrix;
 }
 
 void Mesh::CleanUp()

@@ -180,7 +180,7 @@ void AppendDebugMessage(const DebugMessage& msg, bool saveWhenFull) {
     }
     debugLog.push_back(msg);
 }
-void AppendDebugMessage(const std::string& msg,DebugMessage::Source source, DebugMessage::Type type, DebugMessage::Severity severity) {
+void AppendDebugMessage(const std::string& msg, DebugMessage::Source source, DebugMessage::Type type, DebugMessage::Severity severity) {
     DebugMessage debugMsg(msg, source, type, severity);
     AppendDebugMessage(debugMsg);
 }
@@ -213,7 +213,6 @@ void AppendPythonError(const std::string& msg, DebugMessage::Severity severity) 
     AppendDebugMessage(msg, DebugMessage::Source::PYTHON, DebugMessage::Type::ERROR, severity);
 }
 
-
 void PrintDebugLog(int truncateLength) {
     if (isLogEmpty()) {
         std::cout << "[Debug Log is empty]" << std::endl;
@@ -233,6 +232,9 @@ void PrintDebugLog(int truncateLength) {
 void ClearDebugLog() {
     debugLog.clear();
     std::cout << "[Debug Log cleared]" << std::endl;
+}
+std::vector<DebugMessage> GetDebugLog() {
+    return debugLog;
 }
 
 bool isLogFull() {

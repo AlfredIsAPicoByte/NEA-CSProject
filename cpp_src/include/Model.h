@@ -9,7 +9,6 @@
 #include <json.hpp>
 
 #include "Mesh.h"
-#include "Debugger.h"
 
 using json = nlohmann::json;
 

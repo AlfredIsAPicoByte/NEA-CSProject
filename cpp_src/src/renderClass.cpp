@@ -24,7 +24,8 @@ void Scene::Initialize()
     pyGeometryModule = PythonManager::Instance().LoadModule("geometry");
 }
 
-void Scene::Render(std::function<void()> processing, std::function<void()> renderStep, std::function<void()> postProcessing, std::functional<void()> fallBack)
+
+void Scene::Render(std::function<void()> processing, std::function<void()> renderStep, std::function<void()> postProcessing, std::function<void()> fallBack)
 {
     if (pythonRenderingUsed) {
         // Call Python rendering functions here
@@ -32,7 +33,7 @@ void Scene::Render(std::function<void()> processing, std::function<void()> rende
             if (processing) processing();
             if (renderStep) renderStep();
             if (postProcessing) postProcessing();
-        } catch (const py::error_already_set& e) {
+        } catch (const std::exception& e) {
             AppendPythonError(std::string("Python rendering error: ") + e.what());
             if (fallBack) fallBack();
         }
@@ -47,7 +48,7 @@ void Scene::UpdateScene()
     // Update scene logic here
 }
 
-void Scene::LoadModel(const std::string& modelPath)
+void Scene::LoadModel(const std::string& modelPath, Shader& shader)
 {
     //
 }
@@ -62,7 +63,7 @@ void Scene::SetOpenGLRenderFunction(std::shared_ptr<std::function<void()>> rende
     openGLRenderFunction = renderFunc;
 }
 
-void Scene::Cleanup()
+void Scene::CleanUp()
 {
     renderables.clear();
 }
