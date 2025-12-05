@@ -1,6 +1,5 @@
 #include "Material.h"
 
-
 void CreateMaterialUBO()
 {
     if (g_MaterialUBO == 0) {
