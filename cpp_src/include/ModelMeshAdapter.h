@@ -1,6 +1,10 @@
 #pragma once
+
+#include <memory>
+
 #include "IRenderable.h"
 #include "Model.h"
+#include "Debugger.h"
 
 class ModelMeshAdapter : public IRenderable {
 public:

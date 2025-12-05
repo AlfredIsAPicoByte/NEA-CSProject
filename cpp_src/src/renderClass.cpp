@@ -7,49 +7,62 @@ Scene::Scene()
 
 Scene::~Scene()
 {
-    cleanup();
+    CleanUp();
     AppendMessage("Scene destroyed.");
 }
 
-void Scene::initialize()
+void Scene::Initialize()
 {
     PythonManager::Instance().AddModulePath("src");
-    pyCamera = PythonManager::Instance().LoadModule("Camera");
-    pySampler = PythonManager::Instance().LoadModule("Sampler");
-    pyScene = PythonManager::Instance().LoadModule("Scene");
-    PythonManager::Instance().AddModulePath("src/Algorithms");
-    pyBaseAlgorithm = PythonManager::Instance().LoadModule("Base");
-    pyRayTracer = PythonManager::Instance().LoadModule("Raytracer");
+
+    pyAlgorithimModule = PythonManager::Instance().LoadModule("baseAlgorithm");
+    pyRaytracingModule = PythonManager::Instance().LoadModule("raytracing");
+    pySamplerModule = PythonManager::Instance().LoadModule("sampler");
+    pySceneModule = PythonManager::Instance().LoadModule("scene");
+    pyCameraModule = PythonManager::Instance().LoadModule("camera");
+    pyLuminanceModule = PythonManager::Instance().LoadModule("luminance");
+    pyGeometryModule = PythonManager::Instance().LoadModule("geometry");
 }
 
-void Scene::render()
+void Scene::Render(std::function<void()> processing, std::function<void()> renderStep, std::function<void()> postProcessing, std::functional<void()> fallBack)
 {
     if (pythonRenderingUsed) {
-        pyScene.attr("render")(pyCamera, pySampler);
-    } else {
-        shaderProgram->Activate();
-        for (const auto& renderable : renderables) {
-            renderable->Draw(*shaderProgram, *sceneCamera);
+        // Call Python rendering functions here
+        try {
+            if (processing) processing();
+            if (renderStep) renderStep();
+            if (postProcessing) postProcessing();
+        } catch (const py::error_already_set& e) {
+            AppendPythonError(std::string("Python rendering error: ") + e.what());
+            if (fallBack) fallBack();
         }
+    } else {
+        // Use openGL rendering
+        if (openGLRenderFunction) (*openGLRenderFunction)();
     }
 }
 
-void Scene::update()
+void Scene::UpdateScene()
 {
-
+    // Update scene logic here
 }
 
-void Scene::cleanup()
+void Scene::LoadModel(const std::string& modelPath)
+{
+    //
+}
+
+void Scene::SetCamera(Camera* camera)
+{
+    sceneCamera = camera;
+}
+
+void Scene::SetOpenGLRenderFunction(std::shared_ptr<std::function<void()>> renderFunc)
+{
+    openGLRenderFunction = renderFunc;
+}
+
+void Scene::Cleanup()
 {
     renderables.clear();
-}
-
-void Scene::loadModel(const std::string& modelPath)
-{
-    
-}
-
-void Scene::setCamera(Camera* cam)
-{
-    sceneCamera = cam;
 }
