@@ -1,10 +1,12 @@
+// The implementation below requires pybind11 and the Python dev headers/lib.
+// Compile it only when embedding is enabled.
+#ifdef USE_EMBEDDED_PYTHON
+
 #include "pythonManager.h"
 
 namespace fs = std::filesystem;
 
-PythonManager::PythonManager() {
-    Initialize();
-}
+PythonManager::PythonManager() { Initialize(); }
 
 void PythonManager::Initialize() {
     if (!Py_IsInitialized()) {
@@ -20,27 +22,21 @@ void PythonManager::Initialize() {
     }
 }
 
-PythonManager::~PythonManager() {
-    Finalize();
-}
+PythonManager::~PythonManager() { Finalize(); }
 
 void PythonManager::Finalize() {
-    if (Py_IsInitialized()) {
-        py::finalize_interpreter();
-    }
+    if (Py_IsInitialized()) py::finalize_interpreter();
 }
 
 void PythonManager::InstallPackage(const std::string& packageName) {
     py::module_ sys = py::module_::import("sys");
     py::module_ subprocess = py::module_::import("subprocess");
-
     try {
         subprocess.attr("check_call")(py::make_tuple(sys.attr("executable"), "-m", "pip", "install", packageName));
         AppendPythonMessage("Successfully installed Python package: " + packageName);
     } catch (const py::error_already_set& error) {
         AppendPythonError("Failed to install Python package '" + packageName + "': " + error.what());
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         AppendPythonError("Exception during installation of package '" + packageName + "': " + e.what());
     }
 }
@@ -61,9 +57,7 @@ void PythonManager::ValidatePackageInstallation(const std::string& packageName) 
 }
 
 void PythonManager::EnsurePythonPackagesInstalled(const std::vector<std::string>& packages) {
-    for (const auto& package : packages) {
-        ValidatePackageInstallation(package);
-    }
+    for (const auto& package : packages) ValidatePackageInstallation(package);
 }
 
 void PythonManager::GetPackagesInstalledStatus(const std::vector<std::string>& packages) {
@@ -102,16 +96,16 @@ py::object PythonManager::CallFunction(const py::object& module, const std::stri
             AppendPythonError(std::string("Function '" + funcName + "' not found in module"));
             return py::none();
         }
-
         py::object func = module.attr(funcName.c_str());
-
-        if (args.empty()) {
-            return func();
-        } else {
-            return func(args);
-        }
+        if (args.empty()) return func();
+        return func(args);
     } catch (const py::error_already_set& error) {
         AppendPythonError(std::string("Error calling function '" + funcName + "': " + error.what()));
         return py::none();
     }
 }
+
+#else
+// When Python embedding is disabled the header provides stubbed inline
+// implementations. Nothing to compile here.
+#endif

@@ -1,10 +1,10 @@
 #pragma once
+
 #include <string>
 #include <memory>
 #include <glm/glm.hpp>
-
-class Shader;
-class Camera;
+#include "shaderClass.h"
+#include "cameraClass.h"
 
 class IRenderable {
 public:

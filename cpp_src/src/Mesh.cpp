@@ -7,77 +7,57 @@ Mesh::Mesh(std::vector <Vertex>& vertices, std::vector <GLuint>& indices, std::v
 	Mesh::textures = textures;
 
 	VAO.Bind();
-	// Generates Vertex Buffer Object and links it to vertices
-	VBO VBO(vertices);
-	// Generates Element Buffer Object and links it to indices
-	EBO EBO(indices);
-	// Links VBO attributes such as coordinates and colors to VAO
-	VAO.LinkAttrib(VBO, 0, 3, GL_FLOAT, sizeof(Vertex), (void*)0);
-	VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
-	VAO.LinkAttrib(VBO, 2, 3, GL_FLOAT, sizeof(Vertex), (void*)(6 * sizeof(float)));
-	VAO.LinkAttrib(VBO, 3, 2, GL_FLOAT, sizeof(Vertex), (void*)(9 * sizeof(float)));
-	
-	// Unbind all to prevent accidentally modifying them
+	VBO vbo(vertices);
+	EBO ebo(indices);
+
+	const GLsizei stride = static_cast<GLsizei>(sizeof(Vertex));
+	VAO.LinkAttrib(vbo, 0, 3, GL_FLOAT, stride, (void*)0);                             // aPos
+	VAO.LinkAttrib(vbo, 1, 3, GL_FLOAT, stride, (void*)(3 * sizeof(float)));          // aNormal
+	VAO.LinkAttrib(vbo, 2, 3, GL_FLOAT, stride, (void*)(6 * sizeof(float)));          // aColor (if used)
+	VAO.LinkAttrib(vbo, 3, 2, GL_FLOAT, stride, (void*)(9 * sizeof(float)));          // aTexCoord
+	VAO.LinkAttrib(vbo, 4, 4, GL_FLOAT, stride, (void*)(11 * sizeof(float)));         // aTangent
 	VAO.Unbind();
-	VBO.Unbind();
-	EBO.Unbind();
 }
 
-void Mesh::Draw
-(
-	Shader& shader, 
-	Camera& camera,
-	glm::mat4 matrix,
-	glm::vec3 translation, 
-	glm::quat rotation, 
-	glm::vec3 scale
-)
+void Mesh::Draw(Shader &shader, Camera &camera)
 {
-	// Bind shader to be able to access uniforms
-	shader.Activate();
-	VAO.Bind();
+    // Activate shader and set common uniforms
+    shader.Activate(); // safe: Activate should check program linked
+    shader.setMat4("view", camera.viewMatrix);
+    shader.setMat4("projection", camera.projectionMatrix);
 
-	// Keep track of how many of each type of textures we have
-	unsigned int numDiffuse = 0;
-	unsigned int numSpecular = 0;
+    // model & normal matrix
+    shader.setMat4("model", modelMatrix);
+    glm::mat3 normalMat = glm::transpose(glm::inverse(glm::mat3(modelMatrix)));
+    shader.setMat4("normalMatrix", glm::mat4(normalMat)); // or setMat3 if shader expects mat3
 
-	for (unsigned int i = 0; i < textures.size(); i++)
-	{
-		std::string num;
-		std::string type = textures[i].type;
-		if (type == "diffuse")
-		{
-			num = std::to_string(numDiffuse++);
-		}
-		else if (type == "specular")
-		{
-			num = std::to_string(numSpecular++);
-		}
-		textures[i].texUnit(shader, (type + num).c_str(), i);
-		textures[i].Bind();
-	}
-	// Take care of the camera Matrix
-	glUniform3f(glGetUniformLocation(shader.ID, "camPos"), camera.Position.x, camera.Position.y, camera.Position.z);
-	camera.Matrix(shader, "camMatrix");
+    // Bind textures: use texture slot = index in textures vector (or stored slot)
+    bool hasAlbedo = false;
+    for (size_t t = 0; t < textures.size(); ++t) {
+        const Texture &tex = textures[t];
+        if (tex.ID == 0) continue;
+        GLuint unit = static_cast<GLuint>(t); // texture unit
+        glActiveTexture(GL_TEXTURE0 + unit);
+        glBindTexture(GL_TEXTURE_2D, tex.ID);
 
-	// Initialize matrices
-	glm::mat4 trans = glm::mat4(1.0f);
-	glm::mat4 rot = glm::mat4(1.0f);
-	glm::mat4 sca = glm::mat4(1.0f);
+        if (tex.type == "diffuse" || tex.type == "albedo") {
+            shader.setInt("u_albedoMap", (int)unit);
+            hasAlbedo = true;
+        } else if (tex.type == "normal") {
+            shader.setInt("u_normalMap", (int)unit);
+        } else if (tex.type == "metallicRoughness" || tex.type == "specular") {
+            shader.setInt("u_metallicRoughnessMap", (int)unit);
+        }
+    }
+    shader.setBool("u_hasAlbedo", hasAlbedo ? 1 : 0);
 
-	// Transform the matrices to their correct form
-	trans = glm::translate(trans, translation);
-	rot = glm::mat4_cast(rotation);
-	sca = glm::scale(sca, scale);
+    // Draw
+    VAO.Bind();
+    glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(indices.size()), GL_UNSIGNED_INT, 0);
+    VAO.Unbind();
 
-	// Push the matrices to the vertex shader
-	glUniformMatrix4fv(glGetUniformLocation(shader.ID, "translation"), 1, GL_FALSE, glm::value_ptr(trans));
-	glUniformMatrix4fv(glGetUniformLocation(shader.ID, "rotation"), 1, GL_FALSE, glm::value_ptr(rot));
-	glUniformMatrix4fv(glGetUniformLocation(shader.ID, "scale"), 1, GL_FALSE, glm::value_ptr(sca));
-	glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(matrix));
-
-	// Draw the actual mesh
-	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+    // restore default
+    glActiveTexture(GL_TEXTURE0);
 }
 
 void Mesh::CleanUp()

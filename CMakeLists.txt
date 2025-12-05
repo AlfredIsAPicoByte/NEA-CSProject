@@ -33,7 +33,7 @@ list(APPEND CPP_SRC_FILES cpp_src/main.cpp)     # include main.cpp from cpp_src
 
 # ---- Executable ----
 add_executable(main ${CPP_SRC_FILES})
-target_include_directories(main PRIVATE ${STB_INCLUDE_DIRS} ${Python_INCLUDE_DIRS})
+target_include_directories(main PRIVATE ${STB_INCLUDE_DIRS})
 
 # ---- Libraries ----
 target_link_libraries(main PRIVATE
@@ -41,11 +41,8 @@ target_link_libraries(main PRIVATE
     glfw
     glad::glad
     glm::glm
-    pybind11::embed
     imgui::imgui
-    ${Python_LIBRARIES}
 )
-target_include_directories(main PRIVATE ${Python_INCLUDE_DIRS})
 
 # ---- stb_image ----
 find_path(STB_INCLUDE_DIRS "stb_image.h")
@@ -84,12 +81,17 @@ set_target_properties(main PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
-# ---- Python test runner executable ----
-add_executable(python_test_runner cpp_src/src/tester.cpp)
-target_link_libraries(python_test_runner PRIVATE pybind11::embed)
-set_target_properties(python_test_runner PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test_bin"
-)
+# ---- Python test runner executable (optional) ----
+# Only add this target if the tester source exists at the expected location.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/tester.cpp")
+    add_executable(python_test_runner cpp_src/tester.cpp)
+    target_link_libraries(python_test_runner PRIVATE pybind11::embed)
+    set_target_properties(python_test_runner PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test_bin"
+    )
+else()
+    message(STATUS "python_test_runner: cpp_src/tester.cpp not found; skipping target")
+endif()
 
 # remove or comment out this dependency so main does not try to recompile/link tester into itself
 # add_dependencies(main python_test_runner)

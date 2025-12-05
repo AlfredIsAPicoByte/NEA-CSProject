@@ -1,42 +1,53 @@
-# Project Requirements
+# Project Requirements (updated)
 
-## 🔷 System
+## System
+- Windows 10/11 (x64)
+- PowerShell 5.1+ or PowerShell Core 7+
 
-- Windows 11 (Build 22000+)
-- PowerShell Core 7.3+ or Windows PowerShell 5.1+
+## Tools (recommended)
+- CMake >= 3.20 (3.28+ recommended)
+- Visual Studio 2022 or newer (MSVC) or MSYS2 + MinGW for GCC
+- vcpkg for dependency management (recommended)
+- Python 3.11 or 3.12 (match installed interpreter with development files)
+- pybind11 (via vcpkg or pip; prefer vcpkg for C++ integration)
+- GLFW (via vcpkg or built)
+- glad (generated for your OpenGL version; include KHR_debug if using debug output)
+- glm (via vcpkg)
+- stb_image (header-only; included in repo)
 
-## 🔷 Tools
+## Python / pybind11 notes
+- If embedding or using pybind11 headers, you need Python development files (include dir with Python.h and pythonXY.lib for MSVC).
+- For CMake, prefer FindPython / Python3::Python. If using a virtualenv, set:
+  - -DPython3_ROOT_DIR="C:/path/to/venv"
+  - or set Python3_ROOT to the interpreter that contains dev files.
+- Install runtime deps for tester:
+  pip install -r py_src/requirements.txt
+  (create this file if needed; at minimum include numpy)
 
-| Tool         | Version  | Install Method |
-|--------------|----------|----------------|
-| CMake        | 3.28.1   | https://cmake.org/download/ |
-| g++ (MinGW)  | 12.2.0   | MSYS2 |
-| Python       | 3.11.4   | https://python.org |
-| Pybind11     | 2.11.1   | pip install pybind11 |
-| GLFW         | 3.3.8    | built from source |
-| OpenGL       | 4.6+    | via GPU drivers |
-| glad         | 0.1.36+  | [glad.dav1d.de](https://glad.dav1d.de/) (generated for OpenGL 4.6 Core, with KHR_debug) |
-| glm          | 0.9.9+   | vcpkg or built from source |
-| stb_image    | 0.3+   | header-only, included in project |
-
-## 🔷 Environment Variables
-
-- `PATH` includes:
-  - C:\msys64\mingw64\bin
+## Environment variables
+- PATH should include:
   - C:\Program Files\CMake\bin
-  - C:\Python311\Scripts
-- `Library` points to your external libraries folder (e.g., `C:\Libraries`)
+  - C:\Libraries\vcpkg\installed\x64-windows\bin (if needed)
+  - python Scripts path if using virtualenv
+- Ensure vcpkg toolchain path is available when configuring with CMake:
+  -DCMAKE_TOOLCHAIN_FILE=C:/Libraries/vcpkg/scripts/buildsystems/vcpkg.cmake
 
-## 🔷 OpenGL Requirements
+## OpenGL
+- GPU drivers must support the target OpenGL version used by glad.
+- For KHR_debug and modern features use OpenGL 4.3+, recommend 4.6.
 
-- **GPU and drivers must support OpenGL 4.3 or higher** for debugging features (KHR_debug).
-- If your GPU only supports OpenGL 3.3, advanced debugging will not be available.
+## Build (examples)
+PowerShell (recommended):
+````powershell
+# configure
+cmake -S . -B build\debug `
+  -DCMAKE_BUILD_TYPE=Debug `
+  -DCMAKE_TOOLCHAIN_FILE="C:/Libraries/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+  -DUSE_EMBEDDED_PYTHON=OFF
 
-## 🔷 Build Commands
+# build main
+cmake --build build\debug --config Debug --target main
 
-```bash
-cmake -S . -B Build
-cmake --build Build
-```
-
-\* Ensure your glad loader and CMake configuration match the OpenGL version supported by your GPU
+# build python test runner (if present)
+cmake --build build\debug --config Debug --target python_test_runner
+````

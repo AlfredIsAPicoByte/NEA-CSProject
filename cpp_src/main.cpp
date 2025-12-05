@@ -107,76 +107,35 @@ int main()
 		Texture("planks_specular.png", "specular", 1)
 	};
 
-	// Generates Shader object using shaders default.vert and default.frag
+	// Create shader programs
 	Shader shaderProgram("default.vert", "default.frag");
-	// Store mesh data in vectors for the mesh
-	std::vector <Vertex> verts(vertices, vertices + sizeof(vertices) / sizeof(Vertex));
-	std::vector <GLuint> ind(indices, indices + sizeof(indices) / sizeof(GLuint));
-	std::vector <Texture> tex(textures, textures + sizeof(textures) / sizeof(Texture));
-	// Create floor mesh
-	Mesh floor(verts, ind, tex);
-
-
-	// Shader for light cube
 	Shader lightShader("light.vert", "light.frag");
-	// Store mesh data in vectors for the mesh
-	std::vector <Vertex> lightVerts(lightVertices, lightVertices + sizeof(lightVertices) / sizeof(Vertex));
-	std::vector <GLuint> lightInd(lightIndices, lightIndices + sizeof(lightIndices) / sizeof(GLuint));
-	// Create light mesh
-	Mesh light(lightVerts, lightInd, tex);
 
-	
-	// Floor properties
-	glm::vec3 objectPos = glm::vec3(0.0f, 0.0f, 0.0f);
-	glm::mat4 objectModel = glm::mat4(1.0f);
-	objectModel = glm::translate(objectModel, objectPos);
+	std::vector<Vertex> floorVerts(vertices, vertices + sizeof(vertices) / sizeof(vertices[0]));
+	std::vector<GLuint> floorInd(indices, indices + sizeof(indices) / sizeof(indices[0]));
+	std::vector<Texture> floorTex(textures, textures + sizeof(textures) / sizeof(textures[0]));
+	Mesh floor(floorVerts, floorInd, floorTex);
+	glm::vec3 objectPos = glm::vec3(0.0f, -0.5f, 0.0f);
+	floor.modelMatrix = glm::translate(floor.modelMatrix, objectPos);
 
-	// Light properties
-	glm::vec4 lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	std::vector<Vertex> lightVerts(lightVertices, lightVertices + sizeof(lightVertices) / sizeof(lightVertices[0]));
+	std::vector<GLuint> lightInd(lightIndices, lightIndices + sizeof(lightIndices) / sizeof(lightIndices[0]));
+	std::vector<Texture> lightTex;
+	Mesh lightMesh(lightVerts, lightInd, lightTex);
 	glm::vec3 lightPos = glm::vec3(0.5f, 0.5f, 0.5f);
-	glm::mat4 lightModel = glm::mat4(1.0f);
-	lightModel = glm::translate(lightModel, lightPos);
+	lightMesh.modelMatrix = glm::translate(lightMesh.modelMatrix, lightPos);
+	Color lightColor("#f8ffcfff");
+	Light lightSource(lightPos, 3, lightColor, 0); // point light
 
-	lightShader.Activate();
-	glUniformMatrix4fv(glGetUniformLocation(lightShader.ID, "model"), 1, GL_FALSE, glm::value_ptr(lightModel));
-	glUniform4f(glGetUniformLocation(lightShader.ID, "lightColor"), lightColor.x, lightColor.y, lightColor.z, lightColor.w);
-	shaderProgram.Activate();
-	glUniformMatrix4fv(glGetUniformLocation(shaderProgram.ID, "model"), 1, GL_FALSE, glm::value_ptr(objectModel));
-	glUniform4f(glGetUniformLocation(shaderProgram.ID, "lightColor"), lightColor.x, lightColor.y, lightColor.z, lightColor.w);
-	glUniform3f(glGetUniformLocation(shaderProgram.ID, "lightPos"), lightPos.x, lightPos.y, lightPos.z);
-
-	// Load model
-	Shader bunnyShader("default.vert", "default.frag");
 	Model bunny("bunny/scene.gltf");
+	glm::vec3 bunnyPos = glm::vec3(-1.0f, 0.0f, 0.0f);
+	bunny.SetModelMatricesForAllMeshes(std::vector<glm::mat4>{ glm::translate(glm::mat4(1.0f), bunnyPos) });
 
-	// Bunny properties
-	glm::vec3 bunnyPos = glm::vec3(-5.0f, 5.0f, 0.0f);
-	glm::quat bunnyRot = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-	glm::vec3 bunnyScale = glm::vec3(1.0f, 1.0f, 1.0f);
-	glm::mat4 bunnyModel = glm::mat4(1.0f);
-	bunnyModel = glm::translate(bunnyModel, bunnyPos);
-	bunnyModel *= glm::mat4_cast(bunnyRot);
-	bunnyModel = glm::scale(bunnyModel, bunnyScale);
-
-	bunnyShader.Activate();
-	glUniformMatrix4fv(glGetUniformLocation(bunnyShader.ID, "model"), 1, GL_FALSE, glm::value_ptr(bunnyModel));
-	
-	// Load model
-	Shader swordShader("default.vert", "default.frag");
 	Model sword("sword/scene.gltf");
+	glm::vec3 swordPos = glm::vec3(2.0f, 0.0f, 0.0f);
+	sword.SetModelMatricesForAllMeshes(std::vector<glm::mat4>{ glm::translate(glm::mat4(1.0f), swordPos) });
 
-	// Sword properties
-	glm::vec3 swordPos = glm::vec3(5.0f, 0.0f, 0.0f);
-	glm::quat swordRot = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-	glm::vec3 swordScale = glm::vec3(0.05f, 0.05f, 0.05f);
-	glm::mat4 swordModel = glm::mat4(1.0f);
-	swordModel = glm::translate(swordModel, swordPos);
-	swordModel *= glm::mat4_cast(swordRot);
-	swordModel = glm::scale(swordModel, swordScale);
-
-	swordShader.Activate();
-	glUniformMatrix4fv(glGetUniformLocation(swordShader.ID, "model"), 1, GL_FALSE, glm::value_ptr(swordModel));
-
+	
 	// Enable depth (3D)
 	glEnable(GL_DEPTH_TEST);
 
@@ -186,10 +145,21 @@ int main()
 	camera.speed = 0.5f;
 	camera.speedFactor = 3.0f;
 
+	shaderProgram.Activate();
+	shaderProgram.setVec3("viewPos", camera.Position);
+	camera.SetModelMatrixUniform(shaderProgram, "camMatrix");
+	shaderProgram.setFloat("u_ambient", 0.1f);
+	shaderProgram.setFloat("u_specularStrength", 0.5f);
+		
+	lightShader.Activate();
+	camera.SetModelMatrixUniform(lightShader, "camMatrix");
+	lightShader.setVec3("lightColor", lightColor.toVec3());
+
 	int camMode = 1;
 	bool resetKeyPressed = false;
 	// Main loop
 	Engine::Instance().Start();
+	CreateLightsUBO();
 	Engine::Instance().applyClearColor(bgClolor);
 	Engine::Instance().Update(window,
 		// Procecing and input
@@ -263,11 +233,25 @@ int main()
 		[&]() {
 			Engine::Instance().applyClearColor(bgClolor);
 
+			UpdateLightsUBO(std::vector<Light>{ lightSource });
+
+			// update shader camera uniforms every frame
+			shaderProgram.Activate();
+			shaderProgram.setMat4("view", camera.viewMatrix);
+			shaderProgram.setMat4("projection", camera.projectionMatrix);
+			shaderProgram.setVec3("viewPos", camera.Position);
+			camera.SetModelMatrixUniform(shaderProgram, "camMatrix"); // keep if shader uses camMatrix
+
+			lightShader.Activate();
+			lightShader.setMat4("view", camera.viewMatrix);
+			lightShader.setMat4("projection", camera.projectionMatrix);
+			camera.SetModelMatrixUniform(lightShader, "camMatrix");
+			
 			// Draw objects
 			floor.Draw(shaderProgram, camera);
-			light.Draw(lightShader, camera);
-			bunny.Draw(bunnyShader, camera);
-			sword.Draw(swordShader, camera);
+			lightMesh.Draw(lightShader, camera);
+			bunny.Draw(shaderProgram, camera);
+			sword.Draw(shaderProgram, camera);
 			
 		},
 		// ImGui Objects
@@ -298,7 +282,7 @@ int main()
 	shaderProgram.Delete();
 	lightShader.Delete();
 	floor.CleanUp();
-	light.CleanUp();
+	lightMesh.CleanUp();
 	bunny.CleanUp();
 	sword.CleanUp();
 	Engine::Instance().cleanUp(window);

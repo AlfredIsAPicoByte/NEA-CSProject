@@ -11,9 +11,11 @@
 #include "Model.h"
 #include "shaderClass.h"
 #include "colorClass.h"
-#include "Debug.h"
+#include "Debugger.h"
 #include "InputManager.h"
-#include "pythonManager.h"
+#include "PythonManager.h"
+#include "cameraClass.h"
+#include "Light.h"
 
 enum EngineState {
     STARTING,
