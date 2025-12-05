@@ -22,7 +22,6 @@
 #endif
 
 const long MAX_LOG_SIZE = 1048576; // 1 MB
-extern std::vector<DebugMessage> debugLog;
 
 struct DebugMessage {
     enum Source {
@@ -43,7 +42,7 @@ struct DebugMessage {
     std::string message;
     int count;
 
-    DebugMessage(Source src, Type t, Severity sev, const std::string& msg)
+    DebugMessage( const std::string& msg, Source src, Type t, Severity sev)
         : source(src), type(t), severity(sev), message(msg), count(1) {}
 
     std::string ToString() const {
@@ -81,14 +80,15 @@ struct DebugMessage {
             case HIGH: return "High";
             default: return "Unknown";
         }
+    }
 
     // Approximate size including metadata
     int getApproxSize() const {
-        return message.size() + 
-               std::to_string(count).length() +
-               50; // overhead for formatting and enum values
+        return message.size() + std::to_string(count).length() + 50; // overhead for formatting and enum values
     }
 };
+
+extern std::vector<DebugMessage> debugLog;
 
 // Check for OpenGL errors
 GLenum glCheckError_(const char *file, int line);

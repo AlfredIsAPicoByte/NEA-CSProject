@@ -114,16 +114,16 @@ int main()
 	std::vector<Vertex> floorVerts(vertices, vertices + sizeof(vertices) / sizeof(vertices[0]));
 	std::vector<GLuint> floorInd(indices, indices + sizeof(indices) / sizeof(indices[0]));
 	std::vector<Texture> floorTex(textures, textures + sizeof(textures) / sizeof(textures[0]));
-	Mesh floor(floorVerts, floorInd, floorTex);
+	Mesh floorMesh(floorVerts, floorInd, floorTex);
 	glm::vec3 objectPos = glm::vec3(0.0f, -0.5f, 0.0f);
-	floor.modelMatrix = glm::translate(floor.modelMatrix, objectPos);
+	floorMesh.SetModelMatrix(glm::translate(floorMesh.GetModelMatrix(), objectPos));
 
 	std::vector<Vertex> lightVerts(lightVertices, lightVertices + sizeof(lightVertices) / sizeof(lightVertices[0]));
 	std::vector<GLuint> lightInd(lightIndices, lightIndices + sizeof(lightIndices) / sizeof(lightIndices[0]));
 	std::vector<Texture> lightTex;
 	Mesh lightMesh(lightVerts, lightInd, lightTex);
 	glm::vec3 lightPos = glm::vec3(0.5f, 0.5f, 0.5f);
-	lightMesh.modelMatrix = glm::translate(lightMesh.modelMatrix, lightPos);
+	lightMesh.SetModelMatrix(glm::translate(lightMesh.GetModelMatrix(), lightPos));
 	Color lightColor("#f8ffcfff");
 	Light lightSource(lightPos, 3, lightColor, 0); // point light
 
@@ -248,7 +248,7 @@ int main()
 			camera.SetModelMatrixUniform(lightShader, "camMatrix");
 			
 			// Draw objects
-			floor.Draw(shaderProgram, camera);
+			floorMesh.Draw(shaderProgram, camera);
 			lightMesh.Draw(lightShader, camera);
 			bunny.Draw(shaderProgram, camera);
 			sword.Draw(shaderProgram, camera);
@@ -281,11 +281,12 @@ int main()
 	// Clean up and exit
 	shaderProgram.Delete();
 	lightShader.Delete();
-	floor.CleanUp();
+	floorMesh.CleanUp();
 	lightMesh.CleanUp();
 	bunny.CleanUp();
 	sword.CleanUp();
-	Engine::Instance().cleanUp(window);
+	Engine::Instance().CleanUp(window);
+	Engine::Instance().Exit();
 
 	return 0;
 }
