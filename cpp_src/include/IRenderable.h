@@ -26,7 +26,7 @@ public:
     };
     glm::mat4 GetModelMatrix() const
     {
-        return modelMatrix ;
+        return modelMatrix;
     };
 
     virtual void CleanUp() = 0;

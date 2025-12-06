@@ -2,40 +2,52 @@
 
 #include <vector>
 #include <string>
+#include <functional>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <functional>
+#include <stb_image.h>
+#include <stb_image_write.h>
 
-#include "shaderClass.h"
 #include "Model.h"
-#include "textureClass.h"
-#include "cameraClass.h"
-#include "IRenderable.h"
+#include "Image.h"
 #include "PythonManager.h"
+
+struct RenderSettings {
+    int imageWidth = 800;
+    int imageHeight = 800;
+    int samplesPerPixel = 100;
+    int maxDepth = 50;
+    bool useBoundingVolumeHierarchy = true;
+    bool usePythonRendering = true;
+};
 
 class Scene{
 public:
     Scene();
     ~Scene();
 
-
+    Camera* sceneCamera;
+    std::vector<std::shared_ptr<IRenderable>> renderables;
     int selectedMeshIndex = -1;
+
+    bool pythonRenderingUsed = true;
+    std::shared_ptr<std::function<void()>> openGLRenderFunction;
+    RenderSettings renderSettings;
+    Image renderedImage = Image();
 
     void Initialize();
 
-    void Render(std::function<void()> processing = nullptr, std::function<void()> renderStep = nullptr, std::function<void()> postProcessing = nullptr, std::function<void()> fallBack = nullptr);
+    void Render(std::function<void()> processing = nullptr, std::function<Image()> renderStep = nullptr, std::function<void()> postProcessing = nullptr, std::function<void()> fallBack = nullptr);
     void UpdateScene();
+    bool SaveScene(const std::string& filePath);
+    bool LoadScene(const std::string& filePath);
+    bool SaveRenderedImage(const std::string& filePath);
 
     void LoadModel(const std::string& modelPath, Shader& shader);
     void SetCamera(Camera* camera);
+    void AddRenderable(std::shared_ptr<IRenderable> renderable);
     void SetOpenGLRenderFunction(std::shared_ptr<std::function<void()>> renderFunc);
-
-    void CleanUp();
-private:
-    Camera* sceneCamera;
-
-    std::vector<std::shared_ptr<IRenderable>> renderables;
-
+    
     py::object pyAlgorithimModule;
     py::object pyRaytracingModule;
     py::object pySamplerModule;
@@ -44,6 +56,5 @@ private:
     py::object pyLuminanceModule;
     py::object pyGeometryModule;
 
-    bool pythonRenderingUsed = true;
-    std::shared_ptr<std::function<void()>> openGLRenderFunction;
+    void CleanUp();
 };

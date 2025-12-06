@@ -25,13 +25,13 @@ void Scene::Initialize()
 }
 
 
-void Scene::Render(std::function<void()> processing, std::function<void()> renderStep, std::function<void()> postProcessing, std::function<void()> fallBack)
+void Scene::Render(std::function<void()> processing, std::function<Image()> renderStep, std::function<void()> postProcessing, std::function<void()> fallBack)
 {
     if (pythonRenderingUsed) {
         // Call Python rendering functions here
         try {
             if (processing) processing();
-            if (renderStep) renderStep();
+            if (renderStep) renderedImage = renderStep();
             if (postProcessing) postProcessing();
         } catch (const std::exception& e) {
             AppendPythonError(std::string("Python rendering error: ") + e.what());
@@ -61,6 +61,32 @@ void Scene::SetCamera(Camera* camera)
 void Scene::SetOpenGLRenderFunction(std::shared_ptr<std::function<void()>> renderFunc)
 {
     openGLRenderFunction = renderFunc;
+}
+
+bool Scene::SaveScene(const std::string& filePath)
+{
+    // Implement scene saving logic here
+    return false;
+}
+
+bool Scene::LoadScene(const std::string& filePath)
+{
+    // Implement scene loading logic here
+    return false;
+}
+
+bool Scene::SaveRenderedImage(const std::string& filePath)
+{
+    std::vector<uint8_t> pixels(renderSettings.imageWidth * renderSettings.imageHeight * 3);
+    glReadPixels(0, 0, renderSettings.imageWidth , renderSettings.imageHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    // flip rows if needed
+    stbi_write_png(filePath.c_str(), renderSettings.imageWidth , renderSettings.imageHeight, 3, pixels.data(), renderSettings.imageWidth  * 3);
+    return true;
+}
+
+void Scene::AddRenderable(std::shared_ptr<IRenderable> renderable)
+{
+    renderables.push_back(renderable);
 }
 
 void Scene::CleanUp()

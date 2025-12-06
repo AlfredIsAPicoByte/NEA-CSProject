@@ -44,10 +44,16 @@ target_link_libraries(main PRIVATE
     imgui::imgui
 )
 
-# ---- stb_image ----
-find_path(STB_INCLUDE_DIRS "stb_image.h")
-if(STB_INCLUDE_DIRS)
-    target_include_directories(main PRIVATE ${STB_INCLUDE_DIRS})
+# ---- STB ----
+set(STB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/stb")
+if(EXISTS "${STB_DIR}/stb_image.h")
+    target_include_directories(main PRIVATE "${STB_DIR}")
+else()
+    # try to find stb in system/vcpkg includes
+    find_path(STB_INCLUDE_DIRS NAMES stb_image.h PATHS ${CMAKE_CURRENT_SOURCE_DIR} ENV PATH NO_DEFAULT_PATH)
+    if(STB_INCLUDE_DIRS)
+        target_include_directories(main PRIVATE ${STB_INCLUDE_DIRS})
+    endif()
 endif()
 
 # ---- ImGui ----
