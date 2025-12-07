@@ -11,7 +11,7 @@ uniform int u_lightCount;
 
 in vec3 FragPos;
 in vec3 Normal;
-in vec2 TexCoord;
+in vec2 TexCoords;
 in vec3 VertColor;
 in vec3 Tangent;
 in vec3 Bitangent;

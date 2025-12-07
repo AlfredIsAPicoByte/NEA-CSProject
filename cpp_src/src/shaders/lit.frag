@@ -2,7 +2,7 @@
 
 in vec3 FragPos;
 in vec3 Normal;
-in vec2 TexCoord;
+in vec2 TexCoords;
 in vec3 VertColor;
 
 uniform sampler2D u_albedoMap;
@@ -59,7 +59,7 @@ vec3 calcLight(vec3 normal, vec3 viewDir, vec3 albedo) {
 }
 
 void main() {
-    vec3 albedo = u_hasAlbedo ? texture(u_albedoMap, TexCoord).rgb : VertColor;
+    vec3 albedo = u_hasAlbedo ? texture(u_albedoMap, TexCoords).rgb : VertColor;
     vec3 N = normalize(Normal);
 
     // compute view direction (from fragment to view/camera)

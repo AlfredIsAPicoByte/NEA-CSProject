@@ -14,7 +14,7 @@ layout(std140, binding = 2) uniform LightBlock {
 
 in vec3 FragPos;
 in vec3 Normal;
-in vec2 TexCoord;
+in vec2 TexCoords;
 in vec3 VertColor;
 
 uniform float u_specularStrength;
@@ -47,7 +47,7 @@ vec3 calcLight(int i, vec3 N, vec3 V, vec3 albedo) {
 }
 
 void main() {
-    vec3 albedo = u_hasAlbedo ? texture(u_albedoMap, TexCoord).rgb : VertColor;
+    vec3 albedo = u_hasAlbedo ? texture(u_albedoMap, TexCoords).rgb : VertColor;
     vec3 N = normalize(Normal);
     vec3 V = normalize(-FragPos); // replace with viewPos if available
 
