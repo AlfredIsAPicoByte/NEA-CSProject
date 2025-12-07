@@ -31,65 +31,48 @@ void APIENTRY glDebugOutput(GLenum source,
                             const char *message, 
                             const void *userParam)
 {
-    if(id == 131169 || id == 131185 || id == 131218 || id == 131204) return; 
+    if(id == 131169 || id == 131185 || id == 131218 || id == 131204) return;
 
-    std::string msgStr = message ? message : "";
-    std::string out;
-    out += "---------------\n";
-    {
-        std::ostringstream oss;
-        oss << "Debug message (" << id << "): " << msgStr << "\n";
-        out += oss.str();
-    }
-
-    std::string src;
+    DebugMessage::Source src;
     switch (source)
     {
-        case GL_DEBUG_SOURCE_API:             src = "Source: API"; break;
-        case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   src = "Source: Window System"; break;
-        case GL_DEBUG_SOURCE_SHADER_COMPILER: src = "Source: Shader Compiler"; break;
-        case GL_DEBUG_SOURCE_THIRD_PARTY:     src = "Source: Third Party"; break;
-        case GL_DEBUG_SOURCE_APPLICATION:     src = "Source: Application"; break;
-        case GL_DEBUG_SOURCE_OTHER:           src = "Source: Other"; break;
-        default:                              src = "Source: Unknown"; break;
+        case GL_DEBUG_SOURCE_API:             src = DebugMessage::API; break;
+        case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   src = DebugMessage::WIN_SYS; break;
+        case GL_DEBUG_SOURCE_SHADER_COMPILER: src = DebugMessage::SHADER; break;
+        case GL_DEBUG_SOURCE_THIRD_PARTY:     src = DebugMessage::THIRD_PARTY; break;
+        case GL_DEBUG_SOURCE_APPLICATION:     src = DebugMessage::APPLICATION; break;
+        case GL_DEBUG_SOURCE_OTHER:           src = DebugMessage::OTHER_SRC; break;
+        default:                              src = DebugMessage::UNKNOWN_SRC; break;
     }
-    out += src + "\n";
 
-    std::string typ;
+    DebugMessage::Type typ;
     switch (type)
     {
-        case GL_DEBUG_TYPE_ERROR:               typ = "Type: Error"; break;
-        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: typ = "Type: Deprecated Behaviour"; break;
-        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  typ = "Type: Undefined Behaviour"; break;
-        case GL_DEBUG_TYPE_PORTABILITY:         typ = "Type: Portability"; break;
-        case GL_DEBUG_TYPE_PERFORMANCE:         typ = "Type: Performance"; break;
-        case GL_DEBUG_TYPE_MARKER:              typ = "Type: Marker"; break;
-        case GL_DEBUG_TYPE_PUSH_GROUP:          typ = "Type: Push Group"; break;
-        case GL_DEBUG_TYPE_POP_GROUP:           typ = "Type: Pop Group"; break;
-        case GL_DEBUG_TYPE_OTHER:               typ = "Type: Other"; break;
-        default:                                typ = "Type: Unknown"; break;
+        case GL_DEBUG_TYPE_ERROR:               typ = DebugMessage::ERROR; break;
+        // case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: typ = "Deprecated Behaviour"; break;
+        // case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  typ = "Undefined Behaviour"; break;
+        // case GL_DEBUG_TYPE_PORTABILITY:         typ = "Portability"; break;
+        // case GL_DEBUG_TYPE_PERFORMANCE:         typ = "Performance"; break;
+        // case GL_DEBUG_TYPE_MARKER:              typ = "Marker"; break;
+        // case GL_DEBUG_TYPE_PUSH_GROUP:          typ = "Push Group"; break;
+        // case GL_DEBUG_TYPE_POP_GROUP:           typ = "Pop Group"; break;
+        case GL_DEBUG_TYPE_OTHER:               typ = DebugMessage::OTHER_TYP; break;
+        default:                                typ = DebugMessage::UNKNOWN_TYP; break;
     }
-    out += typ + "\n";
 
-    std::string sev;
+    DebugMessage::Severity sev;
     switch (severity)
     {
-        case GL_DEBUG_SEVERITY_HIGH:         sev = "Severity: high"; break;
-        case GL_DEBUG_SEVERITY_MEDIUM:       sev = "Severity: medium"; break;
-        case GL_DEBUG_SEVERITY_LOW:          sev = "Severity: low"; break;
-        case GL_DEBUG_SEVERITY_NOTIFICATION: sev = "Severity: notification"; break;
-        default:                             sev = "Severity: unknown"; break;
+        case GL_DEBUG_SEVERITY_HIGH:         sev = DebugMessage::HIGH; break;
+        case GL_DEBUG_SEVERITY_MEDIUM:       sev = DebugMessage::MEDIUM; break;
+        case GL_DEBUG_SEVERITY_LOW:          sev = DebugMessage::LOW; break;
+        case GL_DEBUG_SEVERITY_NOTIFICATION: sev = DebugMessage::NOTIFICATION; break;
+        default:                             sev = DebugMessage::UNKNOWN_SEV; break;
     }
-    out += sev + "\n\n";
+    
+    DebugMessage msg(message, src, typ, sev);
 
-    // Choose appropriate append function based on severity/type
-    if (severity == GL_DEBUG_SEVERITY_HIGH || type == GL_DEBUG_TYPE_ERROR) {
-        AppendGraphicsError(out);
-    } else if (severity == GL_DEBUG_SEVERITY_MEDIUM || severity == GL_DEBUG_SEVERITY_LOW) {
-        AppendGraphicsWarning(out);
-    } else {
-        AppendGraphicsMessage(out);
-    }
+    AppendDebugMessage(msg, true);
 }
 
 void EnableOpenGLDebugger()
@@ -173,7 +156,7 @@ void AppendDebugMessage(const DebugMessage& msg, bool saveWhenFull) {
         time.update(); // Ensure time is updated for timestamping if needed
         if (saveWhenFull) SaveDebugLogToFile("debug_log_" + std::to_string(time.lastFrame.time_since_epoch().count()) + ".txt");
 
-        ClearDebugLog(); // Clear log if exceeding max size
+        ClearDebugLog(false); // Clear log if exceeding max size
         AppendMessage("Debug Log Cleared Due to Size Limit");
 
         if (saveWhenFull) AppendMessage("Debug Log Saved to debug_log_" + std::to_string(time.lastFrame.time_since_epoch().count()) + ".txt before clearing.");
@@ -229,7 +212,11 @@ void PrintDebugLog(int truncateLength) {
         std::cout << "[Debug Log is full]" << std::endl;
     }
 }
-void ClearDebugLog() {
+void ClearDebugLog(bool saveBeforeClear) {
+    Time time;
+    time.update(); // Ensure time is updated for timestamping if needed
+    if (saveBeforeClear) SaveDebugLogToFile("debug_log_" + std::to_string(time.lastFrame.time_since_epoch().count()) + ".txt");
+
     debugLog.clear();
     std::cout << "[Debug Log cleared]" << std::endl;
 }

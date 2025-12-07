@@ -341,7 +341,7 @@ int main()
 				// Controls
 				ImGui::BeginChild("LogControls", ImVec2(0, 28), false);
 				if (ImGui::Button("Clear")) {
-					debugLog.clear();
+					ClearDebugLog();
 				}
 				ImGui::SameLine();
 				if (ImGui::Button("Copy")) {

@@ -27,17 +27,27 @@ struct DebugMessage {
     enum Source {
         APPLICATION,
         GRAPHICS,
-        PYTHON
+        PYTHON,
+        API,
+        WIN_SYS,
+        SHADER,
+        THIRD_PARTY,
+        OTHER_SRC,
+        UNKNOWN_SRC
     } source;
     enum Type {
         MESSAGE,
         WARNING,
-        ERROR
+        ERROR,
+        OTHER_TYP,
+        UNKNOWN_TYP
     } type;
     enum Severity {
         LOW,
         MEDIUM,
-        HIGH
+        HIGH,
+        NOTIFICATION,
+        UNKNOWN_SEV
     } severity;
     std::string message;
     int count;
@@ -52,7 +62,7 @@ struct DebugMessage {
             << "(Severity: " << SeverityToString(severity) << "): "
             << message;
         if (count > 1) {
-            oss << " [X" << count << "]";
+            oss << " [" << count << " times]";
         }
         return oss.str();
     }
@@ -111,7 +121,7 @@ void AppendPythonWarning(const std::string& warning, DebugMessage::Severity seve
 void AppendPythonError(const std::string& error, DebugMessage::Severity severity = DebugMessage::HIGH);
 
 void PrintDebugLog(int truncateLength = 1000);
-void ClearDebugLog();
+void ClearDebugLog(bool saveBeforeClear = true);
 
 bool isLogFull();
 bool willEntryExceedMaxLogSize(int entrySize);
