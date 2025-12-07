@@ -1,31 +1,30 @@
 #version 330 core
-// Designed for a sword model. Expects tangents/bitangents provided by the vertex shader.
+// Designed for a model. Expects tangents/bitangents provided by the vertex shader.
 
-in vec2 TexCoords;
-in vec3 FragPos;
-in vec3 Normal;
-in vec3 Tangent;
-in vec3 Bitangent;
-
-out vec4 FragColor;
-
-// Material textures
-uniform sampler2D albedoMap;              // RGB albedo (sRGB)
-uniform sampler2D normalMap;              // normal in tangent space (RGB)
-uniform sampler2D metallicRoughnessMap;   // R = metallic, G = roughness (linear)
-uniform sampler2D aoMap;                  // ambient occlusion (linear)
-uniform sampler2D emissiveMap;            // optional emissive (sRGB)
-
-// Camera
-uniform vec3 camPos;
+#define PI 3.14159265359;
 
 // Lights (support up to 4)
-uniform vec3 lightPositions[4];
-uniform vec3 lightColors[4];
-uniform int lightCount;
+#define MAX_LIGHTS 4
+uniform vec3 u_lightPositions[MAX_LIGHTS];
+uniform vec3 u_lightColors[MAX_LIGHTS];
+uniform int u_lightCount;
 
-// constants
-const float PI = 3.14159265359;
+in vec3 FragPos;
+in vec3 Normal;
+in vec2 TexCoord;
+in vec3 VertColor;
+in vec3 Tangent;
+in vec3 Bitangent;
+in vec3 ViewDir;
+
+// Material textures
+uniform sampler2D u_albedoMap;              // RGB albedo (sRGB)
+uniform sampler2D u_normalMap;              // normal in tangent space (RGB)
+uniform sampler2D u_metallicRoughnessMap;   // R = metallic, G = roughness (linear)
+uniform sampler2D u_aoMap;                  // ambient occlusion (linear)
+uniform sampler2D u_emissiveMap;            // optional emissive (sRGB)
+
+out vec4 FragColor;
 
 // --- helpers ---
 vec3 SRGBToLinear(vec3 c) {
@@ -38,7 +37,7 @@ vec3 LinearToSRGB(vec3 c) {
 // get normal from normal map, reconstruct in world space using TBN
 vec3 getNormalFromMap()
 {
-    vec3 tangentNormal = texture(normalMap, TexCoords).rgb;
+    vec3 tangentNormal = texture(u_normalMap, TexCoords).rgb;
     tangentNormal = tangentNormal * 2.0 - 1.0;
 
     vec3 T = normalize(Tangent);
@@ -87,30 +86,30 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 void main()
 {
     // Material fetch
-    vec3 albedo = SRGBToLinear(texture(albedoMap, TexCoords).rgb);
-    vec3 emissive = SRGBToLinear(texture(emissiveMap, TexCoords).rgb);
-    float ao = texture(aoMap, TexCoords).r;
-    vec2 mr = texture(metallicRoughnessMap, TexCoords).rg;
+    vec3 albedo = SRGBToLinear(texture(u_albedoMap, TexCoords).rgb);
+    vec3 emissive = SRGBToLinear(texture(u_emissiveMap, TexCoords).rgb);
+    float ao = texture(u_aoMap, TexCoords).r;
+    vec2 mr = texture(u_metallicRoughnessMap, TexCoords).rg;
     float metallic = clamp(mr.r, 0.0, 1.0);
     float roughness = clamp(mr.g, 0.04, 1.0); // min roughness to avoid singularities
 
     // Normal (world)
     vec3 N = getNormalFromMap();
-    vec3 V = normalize(camPos - FragPos);
+    vec3 V = normalize(ViewDir);
 
     // Calculate reflectance at normal incidence; metals use albedo as F0
     vec3 F0 = vec3(0.04); 
     F0 = mix(F0, albedo, metallic);
 
     // Accumulate lighting
-    vec3 Lo = vec3(0.0);
-    for (int i = 0; i < lightCount; ++i)
+    vec3 Lo = VertColor;
+    for (int i = 0; i < u_lightCount; ++i)
     {
-        vec3 L = normalize(lightPositions[i] - FragPos);
+        vec3 L = normalize(u_lightPositions[i] - FragPos);
         vec3 H = normalize(V + L);
-        float distance = length(lightPositions[i] - FragPos);
+        float distance = length(u_lightPositions[i] - FragPos);
         float attenuation = 1.0 / (distance * distance);
-        vec3 radiance = lightColors[i] * attenuation;
+        vec3 radiance = u_lightColors[i] * attenuation;
 
         // Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);

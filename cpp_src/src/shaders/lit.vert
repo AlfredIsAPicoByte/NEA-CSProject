@@ -14,18 +14,18 @@ out vec2 TexCoord;
 out vec3 VertColor;
 
 // Imports the camera matrix from the main function
-uniform mat4 camMatrix;
+uniform mat4 u_camMatrix;
 // Imports the model matrix from the main function
-uniform mat4 model;
+uniform mat4 u_model;
 
 void main()
 {
 	// Compute world-space position
-	vec4 worldPos = model * vec4(aPos, 1.0);
+	vec4 worldPos = u_model * vec4(aPos, 1.0);
 	FragPos = worldPos.xyz;
 
 	// Transform normal to world space
-	Normal = mat3(transpose(inverse(model))) * aNormal;
+	Normal = mat3(transpose(inverse(u_model))) * aNormal;
 
 	// Pass through texture coordinates
 	TexCoord = aTexCoord;
@@ -33,5 +33,5 @@ void main()
 	// Pass through vertex color
 	VertColor = aColor;
 	// Final clip-space position
-	gl_Position = camMatrix * worldPos;
+	gl_Position = u_camMatrix * worldPos;
 }
