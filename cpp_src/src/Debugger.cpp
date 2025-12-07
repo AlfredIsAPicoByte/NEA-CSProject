@@ -18,7 +18,7 @@ GLenum glCheckError_(const char* file, int line)
             case GL_OUT_OF_MEMORY:                 error = "OUT_OF_MEMORY"; break;
             case GL_INVALID_FRAMEBUFFER_OPERATION: error = "INVALID_FRAMEBUFFER_OPERATION"; break;
         }
-        AppendOpenGLError(error + " | " + std::string(file) + " (" + std::to_string(line) + ")");
+        AppendGraphicsError(error + " | " + std::string(file) + " (" + std::to_string(line) + ")");
     }
     return errorCode;
 }
@@ -84,18 +84,18 @@ void APIENTRY glDebugOutput(GLenum source,
 
     // Choose appropriate append function based on severity/type
     if (severity == GL_DEBUG_SEVERITY_HIGH || type == GL_DEBUG_TYPE_ERROR) {
-        AppendOpenGLError(out);
+        AppendGraphicsError(out);
     } else if (severity == GL_DEBUG_SEVERITY_MEDIUM || severity == GL_DEBUG_SEVERITY_LOW) {
-        AppendOpenGLWarning(out);
+        AppendGraphicsWarning(out);
     } else {
-        AppendOpenGLMessage(out);
+        AppendGraphicsMessage(out);
     }
 }
 
 void EnableOpenGLDebugger()
 {
     if (!glGetStringi) {
-        AppendOpenGLWarning("glGetStringi not available! Ensure GLAD was initialized properly.");
+        AppendGraphicsWarning("glGetStringi not available! Ensure GLAD was initialized properly.");
         return;
     }
 
@@ -111,23 +111,23 @@ void EnableOpenGLDebugger()
         }
     }
     if (!hasKHRDebug) {
-        AppendOpenGLError("GL_KHR_debug extension not available!");
+        AppendGraphicsError("GL_KHR_debug extension not available!");
         return;
     }
 
     const GLubyte* versionStr = glGetString(GL_VERSION);
     if (versionStr) {
-        AppendOpenGLMessage(std::string("OpenGL version string: ") + reinterpret_cast<const char*>(versionStr));
+        AppendGraphicsMessage(std::string("OpenGL version string: ") + reinterpret_cast<const char*>(versionStr));
     } else {
-        AppendOpenGLError("glGetString(GL_VERSION) returned NULL");
+        AppendGraphicsError("glGetString(GL_VERSION) returned NULL");
     }
 
     if (!glDebugMessageCallback) {
-        AppendOpenGLError("glDebugMessageCallback not available (maybe GLAD not built with GL_KHR_debug).");
+        AppendGraphicsError("glDebugMessageCallback not available (maybe GLAD not built with GL_KHR_debug).");
         return;
     }
 
-    AppendOpenGLMessage("Enabling OpenGL debug output...");
+    AppendGraphicsMessage("Enabling OpenGL debug output...");
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(glDebugOutput, nullptr);
@@ -194,14 +194,14 @@ void AppendWarning(const std::string& msg, DebugMessage::Severity severity) {
 void AppendError(const std::string& msg, DebugMessage::Severity severity) {
     AppendDebugMessage(msg, DebugMessage::Source::APPLICATION, DebugMessage::Type::ERROR, severity);
 }
-void AppendOpenGLMessage(const std::string& msg, DebugMessage::Severity severity) {
-    AppendDebugMessage(msg, DebugMessage::Source::OPENGL, DebugMessage::Type::MESSAGE, severity);
+void AppendGraphicsMessage(const std::string& msg, DebugMessage::Severity severity) {
+    AppendDebugMessage(msg, DebugMessage::Source::GRAPHICS, DebugMessage::Type::MESSAGE, severity);
 }
-void AppendOpenGLWarning(const std::string& msg, DebugMessage::Severity severity) {
-    AppendDebugMessage(msg, DebugMessage::Source::OPENGL, DebugMessage::Type::WARNING, severity);
+void AppendGraphicsWarning(const std::string& msg, DebugMessage::Severity severity) {
+    AppendDebugMessage(msg, DebugMessage::Source::GRAPHICS, DebugMessage::Type::WARNING, severity);
 }
-void AppendOpenGLError(const std::string& msg, DebugMessage::Severity severity) {
-    AppendDebugMessage(msg, DebugMessage::Source::OPENGL, DebugMessage::Type::ERROR, severity);
+void AppendGraphicsError(const std::string& msg, DebugMessage::Severity severity) {
+    AppendDebugMessage(msg, DebugMessage::Source::GRAPHICS, DebugMessage::Type::ERROR, severity);
 }
 void AppendPythonMessage(const std::string& msg, DebugMessage::Severity severity) {
     AppendDebugMessage(msg, DebugMessage::Source::PYTHON, DebugMessage::Type::MESSAGE, severity);

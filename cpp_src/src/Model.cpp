@@ -71,6 +71,21 @@ Model::Model(const char* file)
         throw; // rethrow to be handled by caller
     }
 }
+ 
+Model::Model(Model&& other) noexcept
+	: name(std::move(other.name)),
+	  id(other.id),
+	  file(other.file),
+	  data(std::move(other.data)),
+	  JSON(std::move(other.JSON)),
+	  modelPath(std::move(other.modelPath)),
+	  meshes(std::move(other.meshes)),
+	  matricesMeshes(std::move(other.matricesMeshes)),
+	  loadedTexName(std::move(other.loadedTexName)),
+	  loadedTex(std::move(other.loadedTex))
+{
+	other.id = 0;
+}
 
 void Model::Draw(Shader& shader, Camera& camera)
 {

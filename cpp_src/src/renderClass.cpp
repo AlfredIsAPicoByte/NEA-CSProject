@@ -25,12 +25,12 @@ void Scene::Initialize()
 }
 
 
-void Scene::Render(std::function<void()> processing, std::function<Image()> renderStep, std::function<void()> postProcessing, std::function<void()> fallBack)
+void Scene::Render(std::function<void()> preProcessing, std::function<Image()> renderStep, std::function<void()> postProcessing, std::function<void()> fallBack)
 {
     if (pythonRenderingUsed) {
         // Call Python rendering functions here
         try {
-            if (processing) processing();
+            if (preProcessing) preProcessing();
             if (renderStep) renderedImage = renderStep();
             if (postProcessing) postProcessing();
         } catch (const std::exception& e) {

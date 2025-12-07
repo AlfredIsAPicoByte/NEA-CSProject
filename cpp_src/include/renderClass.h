@@ -37,7 +37,7 @@ public:
 
     void Initialize();
 
-    void Render(std::function<void()> processing = nullptr, std::function<Image()> renderStep = nullptr, std::function<void()> postProcessing = nullptr, std::function<void()> fallBack = nullptr);
+    void Render(std::function<void()> preProcessing = nullptr, std::function<Image()> renderStep = nullptr, std::function<void()> postProcessing = nullptr, std::function<void()> fallBack = nullptr);
     void UpdateScene();
     bool SaveScene(const std::string& filePath);
     bool LoadScene(const std::string& filePath);
