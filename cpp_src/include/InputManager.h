@@ -10,7 +10,6 @@
 
 struct ActionInput {
     GLuint key;
-    bool isMouse;
     bool isPressed;
     std::function<void()> action;
 };
@@ -24,8 +23,10 @@ public:
     }
 
     void processInputs(std::vector<ActionInput> inputs);
-    void doWhenKey(GLint key, bool isMouse, bool isPressed, std::function<void()> action);
+    void doWhenKey(GLint key, bool isPressed, std::function<void()> action);
     void doWhenKey(ActionInput input);
+    void doWhenMouseKey(GLint key, bool isPressed, std::function<void()> action);
+    void doWhenMouseKey(ActionInput input);
     void getMousePosition(double& xpos, double& ypos);
     void setMousePosition(double xpos, double ypos);
     void setCursorVisibility(bool isVisible);

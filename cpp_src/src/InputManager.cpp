@@ -8,10 +8,18 @@ void InputManager::processInputs(std::vector<ActionInput> inputs)
     }
 }
 
-void InputManager::doWhenKey(GLint key, bool isMouse, bool isPressed, std::function<void()> action)
+void InputManager::doWhenKey(GLint key, bool isPressed, std::function<void()> action)
 {
     int state = glfwGetKey(m_window, key);
-    if (isMouse) state = glfwGetMouseButton(m_window, key);
+
+    if ((isPressed && state == GLFW_PRESS) || (!isPressed && state == GLFW_RELEASE)) {
+        action();
+    }
+}
+
+void InputManager::doWhenMouseKey(GLint key, bool isPressed, std::function<void()> action)
+{
+    int state = glfwGetMouseButton(m_window, key);
 
     if ((isPressed && state == GLFW_PRESS) || (!isPressed && state == GLFW_RELEASE)) {
         action();
@@ -20,7 +28,11 @@ void InputManager::doWhenKey(GLint key, bool isMouse, bool isPressed, std::funct
 
 void InputManager::doWhenKey(ActionInput input)
 {
-    doWhenKey(input.key, input.isMouse, input.isPressed, input.action);
+    doWhenKey(input.key, input.isPressed, input.action);
+}
+void InputManager::doWhenMouseKey(ActionInput input)
+{
+    doWhenMouseKey(input.key, input.isPressed, input.action);
 }
 
 void InputManager::getMousePosition(double& xpos, double& ypos)

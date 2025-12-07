@@ -39,7 +39,6 @@ public:
 
 	// Prevents the camera from jumping around when first clicking left click
 	bool firstClick = true;
-	bool cursorHidden = false;
 
 	// Stores the width and height of the window
 	int windowWidth;

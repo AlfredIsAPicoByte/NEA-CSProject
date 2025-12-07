@@ -63,40 +63,37 @@ void Camera::FirstPersonMovement(GLFWwindow* window, double deltaTime)
 {
     float _speed = speed * static_cast<float>(deltaTime);
 	
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_SHIFT, false, true, [&]() {
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_SHIFT, true, [&]() {
 		_speed *= speedFactor;
 	});
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_CONTROL, false, true, [&]() {
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_CONTROL, true, [&]() {
 		_speed /= speedFactor;
 	});
 
 	// Handles key inputs
-    InputManager::Instance(window).doWhenKey(GLFW_KEY_W, false, true, [&]() {
+    InputManager::Instance(window).doWhenKey(GLFW_KEY_W, true, [&]() {
         Position += _speed * Forward;
 	});
-    InputManager::Instance(window).doWhenKey(GLFW_KEY_S, false, true, [&]() {
+    InputManager::Instance(window).doWhenKey(GLFW_KEY_S, true, [&]() {
         Position -= _speed * Forward;
 	});
-    InputManager::Instance(window).doWhenKey(GLFW_KEY_A, false, true, [&]() {
+    InputManager::Instance(window).doWhenKey(GLFW_KEY_A, true, [&]() {
         Position -= _speed * Right;
 	});
-    InputManager::Instance(window).doWhenKey(GLFW_KEY_D, false, true, [&]() {
+    InputManager::Instance(window).doWhenKey(GLFW_KEY_D, true, [&]() {
         Position += _speed * Right;
 	});
-    InputManager::Instance(window).doWhenKey(GLFW_KEY_E, false, true, [&]() {
+    InputManager::Instance(window).doWhenKey(GLFW_KEY_E, true, [&]() {
         Position += _speed * Up;
 	});
-    InputManager::Instance(window).doWhenKey(GLFW_KEY_Q, false, true, [&]() {
+    InputManager::Instance(window).doWhenKey(GLFW_KEY_Q, true, [&]() {
         Position -= _speed * Up;
 	});
 
 	// Handles mouse inputs
-	InputManager::Instance(window).doWhenKey(GLFW_MOUSE_BUTTON_RIGHT, true, true, [&]() {
+	InputManager::Instance(window).doWhenMouseKey(GLFW_MOUSE_BUTTON_RIGHT, true, [&]() {
 		// Hides mouse cursor
-		if (!cursorHidden) {
-			InputManager::Instance(window).setCursorVisibility(false);
-			cursorHidden = true;
-		}
+		InputManager::Instance(window).setCursorVisibility(false);
 
 		// Prevents camera from jumping on the first click
 		if (firstClick)
@@ -135,12 +132,9 @@ void Camera::FirstPersonMovement(GLFWwindow* window, double deltaTime)
 		InputManager::Instance(window).setMousePosition(windowWidth / 2, windowHeight / 2);
 	});
 	
-	InputManager::Instance(window).doWhenKey(GLFW_MOUSE_BUTTON_RIGHT, true, false, [&]() {
+	InputManager::Instance(window).doWhenMouseKey(GLFW_MOUSE_BUTTON_RIGHT, false, [&]() {
 		// Unhides cursor since camera is not looking around anymore
-		if (cursorHidden) {
-			InputManager::Instance(window).setCursorVisibility(true);
-			cursorHidden = false;
-		}
+		InputManager::Instance(window).setCursorVisibility(true);
 
 		// Makes sure the next time the camera looks around it doesn't jump
 		firstClick = true;
@@ -159,32 +153,32 @@ void Camera::PlaneMovement(GLFWwindow* window, double deltaTime)
 	float rotationSpeed = planeRotateSpeed * static_cast<float>(deltaTime); // Rotation speed
 
 	// Handles key inputs
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_W, false, true, [&]() {
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_W, true, [&]() {
 		planePitch -= rotationSpeed * 10.0f * (invertY ? -1.0f : 1.0f);
 		if (planePitch < -89.0f) planePitch = -89.0f;
 	});
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_S, false, true, [&]() {
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_S, true, [&]() {
 		planePitch += rotationSpeed * 10.0f * (invertY ? -1.0f : 1.0f);
 		if (planePitch > 89.0f) planePitch = 89.0f;
 	});
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_D, false, true, [&]() {
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_D, true, [&]() {
 		if (planeYaw < -180.0f) planeYaw += 360.0f;
 		planeYaw -= rotationSpeed * 10.0f * (invertX ? -1.0f : 1.0f);
 	});
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_A, false, true, [&]() {
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_A, true, [&]() {
 		if (planeYaw > 180.0f) planeYaw -= 360.0f;
 		planeYaw += rotationSpeed * 10.0f * (invertX ? -1.0f : 1.0f);
 	});
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_Q, false, true, [&]() {
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_Q, true, [&]() {
 		if (planeRoll < -180.0f) planeRoll += 360.0f;
 		planeRoll -= rotationSpeed * 10.0f;
 	});
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_E, false, true, [&]() {
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_E, true, [&]() {
 		if (planeRoll > 180.0f) planeRoll -= 360.0f;
 		planeRoll += rotationSpeed * 10.0f;
 	});
 	
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_SHIFT, false, true, [&]() {
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_SHIFT, true, [&]() {
 		if (!isPlanePowerIncreasing) {
 			isPlanePowerIncreasing = true;
 			return;
@@ -192,7 +186,7 @@ void Camera::PlaneMovement(GLFWwindow* window, double deltaTime)
 
 		planePower += planePowerIncrement * static_cast<float>(deltaTime);
 	});
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_CONTROL, false, true, [&]() {
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_CONTROL, true, [&]() {
 		if (isPlanePowerIncreasing) {
 			isPlanePowerIncreasing = false;
 			return;
@@ -200,7 +194,7 @@ void Camera::PlaneMovement(GLFWwindow* window, double deltaTime)
 		
 		planePower -= planePowerIncrement * static_cast<float>(deltaTime);
 	});
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_ALT, false, true, [&]() {
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_ALT, true, [&]() {
 		if (!isPlaneActivelyStoping) {
 			isPlaneActivelyStoping = true;
 			return;
@@ -217,7 +211,7 @@ void Camera::PlaneMovement(GLFWwindow* window, double deltaTime)
 			planePower = 0.0f;
 		}
 	});
-	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_ALT, false, false, [&]() {
+	InputManager::Instance(window).doWhenKey(GLFW_KEY_LEFT_ALT, false, [&]() {
 		if (isPlaneActivelyStoping) {
 			isPlaneActivelyStoping = false;
 			return;
@@ -276,11 +270,8 @@ void Camera::OrbitMovement(GLFWwindow* window, double deltaTime)
 	// set the scroll callback to the static Camera method
 	glfwSetScrollCallback(window, Camera::scroll_callback);
 	
-	InputManager::Instance(window).doWhenKey(GLFW_MOUSE_BUTTON_RIGHT, true, true, [&]() {
-		if (!cursorHidden) {
-			InputManager::Instance(window).setCursorVisibility(false);
-			cursorHidden = true;
-		}
+	InputManager::Instance(window).doWhenMouseKey(GLFW_MOUSE_BUTTON_RIGHT, true, [&]() {
+		InputManager::Instance(window).setCursorVisibility(false);
 
 		if (firstClick) {
 			InputManager::Instance(window).setMousePosition(windowWidth / 2, windowHeight / 2);
@@ -325,10 +316,10 @@ void Camera::OrbitMovement(GLFWwindow* window, double deltaTime)
 
 		// Apply roll as a rotation around the camera-target axis (i.e., local to the camera orientation).
 		// This makes roll affect the overall motion of the orbit rather than being a global/world Z rotation.
-		InputManager::Instance(window).doWhenKey(GLFW_KEY_Q, false, true, [&]() {
+		InputManager::Instance(window).doWhenKey(GLFW_KEY_Q, true, [&]() {
 			orbitRoll -= orbitSpeed;
 		});
-		InputManager::Instance(window).doWhenKey(GLFW_KEY_E, false, true, [&]() {
+		InputManager::Instance(window).doWhenKey(GLFW_KEY_E, true, [&]() {
 			orbitRoll += orbitSpeed;
 		});
 
@@ -348,12 +339,9 @@ void Camera::OrbitMovement(GLFWwindow* window, double deltaTime)
 		InputManager::Instance(window).setMousePosition(windowWidth / 2, windowHeight / 2);
 	});
 	
-	InputManager::Instance(window).doWhenKey(GLFW_MOUSE_BUTTON_RIGHT, true, false, [&]() {
+	InputManager::Instance(window).doWhenMouseKey(GLFW_MOUSE_BUTTON_RIGHT, false, [&]() {
 		// Unhides cursor since camera is not looking around anymore
-		if (cursorHidden) {
-			InputManager::Instance(window).setCursorVisibility(true);
-			cursorHidden = false;
-		}
+		InputManager::Instance(window).setCursorVisibility(true);
 
 		// Makes sure the next time the camera looks around it doesn't jump
 		firstClick = true;

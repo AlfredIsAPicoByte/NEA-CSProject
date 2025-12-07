@@ -4,19 +4,17 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <functional>
+#include <utility>
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-#include "Mesh.h"
-#include "Model.h"
-#include "shaderClass.h"
+#include "renderClass.h"
 #include "colorClass.h"
-#include "cameraClass.h"
+#include "ModelMeshAdapter.h"
 #include "Light.h"
-#include "Debugger.h"
+#include "Material.h"
 #include "InputManager.h"
-#include "PythonManager.h"
 
 class Engine
 {
@@ -36,7 +34,7 @@ public:
 
     void Start();
     void PausePlay();
-    void Update(GLFWwindow* window, std::function<void()> input, std::function<void()> render, std::function<void()> gui);
+    void Update(GLFWwindow* window, std::function<void()> preProcessing = nullptr, std::function<Image()> renderStep = nullptr,  std::function<void()> postProcessing = nullptr, std::function<void()> gui = nullptr, std::function<void()> fallBack = nullptr);
     void Exit();
     
     void applyClearColor(const Color& color);
