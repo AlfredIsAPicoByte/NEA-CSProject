@@ -26,7 +26,7 @@ const long MAX_LOG_SIZE = 1048576; // 1 MB
 struct DebugMessage {
     enum Source {
         APPLICATION,
-        OPENGL,
+        GRAPHICS,
         PYTHON
     } source;
     enum Type {
@@ -60,7 +60,7 @@ struct DebugMessage {
     static std::string SourceToString(Source src) {
         switch (src) {
             case APPLICATION: return "Application";
-            case OPENGL: return "OpenGL";
+            case GRAPHICS: return "Graphics";
             case PYTHON: return "Python";
             default: return "Unknown";
         }
@@ -103,9 +103,9 @@ void AppendDebugMessage(const std::string& msg,DebugMessage::Source source, Debu
 void AppendMessage(const std::string& msg, DebugMessage::Severity severity = DebugMessage::LOW);
 void AppendWarning(const std::string& warning, DebugMessage::Severity severity = DebugMessage::MEDIUM);
 void AppendError(const std::string& error, DebugMessage::Severity severity = DebugMessage::HIGH);
-void AppendOpenGLMessage(const std::string& msg, DebugMessage::Severity severity = DebugMessage::LOW);
-void AppendOpenGLWarning(const std::string& warning, DebugMessage::Severity severity = DebugMessage::MEDIUM);
-void AppendOpenGLError(const std::string& error, DebugMessage::Severity severity = DebugMessage::HIGH);
+void AppendGraphicsMessage(const std::string& msg, DebugMessage::Severity severity = DebugMessage::LOW);
+void AppendGraphicsWarning(const std::string& warning, DebugMessage::Severity severity = DebugMessage::MEDIUM);
+void AppendGraphicsError(const std::string& error, DebugMessage::Severity severity = DebugMessage::HIGH);
 void AppendPythonMessage(const std::string& msg, DebugMessage::Severity severity = DebugMessage::LOW);
 void AppendPythonWarning(const std::string& warning, DebugMessage::Severity severity = DebugMessage::MEDIUM);
 void AppendPythonError(const std::string& error, DebugMessage::Severity severity = DebugMessage::HIGH);
