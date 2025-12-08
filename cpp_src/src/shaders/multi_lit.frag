@@ -3,13 +3,14 @@
 #define MAX_LIGHTS 64
 
 layout(std140, binding = 2) uniform LightBlock {
-    int    u_lightCount;
-    // pad to 16 bytes
-    vec3   _pad0;
+    int u_lightCount;
+    // padding to vec4 alignment
+    vec4 _pad0;
     // arrays of vec4 (xyz = pos/dir, w = radius/type/hint)
-    vec4   u_lightPosRadius[MAX_LIGHTS];      // xyz = position, w = radius (for point)
-    vec4   u_lightColorIntensity[MAX_LIGHTS]; // rgb = color, w = intensity
-    vec4   u_lightDirType[MAX_LIGHTS];        // xyz = direction (for dir/spot), w = type (0=point,1=dir,2=spot)
+    vec4 u_lightPosType[MAX_LIGHTS];          // w = type: 0=point,1=dir,2=spot
+    vec4 u_lightDirType[MAX_LIGHTS];          // w = type redundant for convenience
+    vec4 u_lightColorIntensity[MAX_LIGHTS];   // w = intensity
+    vec4 u_lightRadius[MAX_LIGHTS];           // w = unused
 };
 
 in vec3 FragPos;

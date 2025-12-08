@@ -1,7 +1,7 @@
 #version 330 core
 // Designed for a model. Expects tangents/bitangents provided by the vertex shader.
 
-#define PI 3.14159265359;
+#define PI 3.14159265359
 
 // Lights (support up to 4)
 #define MAX_LIGHTS 4
