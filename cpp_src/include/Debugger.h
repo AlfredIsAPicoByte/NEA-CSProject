@@ -39,6 +39,13 @@ struct DebugMessage {
         MESSAGE,
         WARNING,
         ERROR,
+        DEPRECATED_BEHAVIOR,
+        UNDEFINED_BEHAVIOR,
+        PORTABILITY,
+        PERFORMANCE,
+        MARKER,
+        PUSH_GROUP,
+        POP_GROUP,
         OTHER_TYP,
         UNKNOWN_TYP
     } type;
@@ -72,6 +79,11 @@ struct DebugMessage {
             case APPLICATION: return "Application";
             case GRAPHICS: return "Graphics";
             case PYTHON: return "Python";
+            case API: return "API";
+            case WIN_SYS: return "Window System";
+            case SHADER: return "Shader";
+            case THIRD_PARTY: return "Third Party";
+            case OTHER_SRC: return "Other";
             default: return "Unknown";
         }
     }
@@ -80,6 +92,14 @@ struct DebugMessage {
             case MESSAGE: return "Message";
             case WARNING: return "Warning";
             case ERROR: return "Error";
+            case DEPRECATED_BEHAVIOR: return "Deprecated Behavior";
+            case UNDEFINED_BEHAVIOR: return "Undefined Behavior";
+            case PORTABILITY: return "Portability";
+            case PERFORMANCE: return "Performance";
+            case MARKER: return "Marker";
+            case PUSH_GROUP: return "Push Group";
+            case POP_GROUP: return "Pop Group";
+            case OTHER_TYP: return "Other";
             default: return "Unknown";
         }
     }
@@ -88,6 +108,7 @@ struct DebugMessage {
             case LOW: return "Low";
             case MEDIUM: return "Medium";
             case HIGH: return "High";
+            case NOTIFICATION: return "Notification";
             default: return "Unknown";
         }
     }

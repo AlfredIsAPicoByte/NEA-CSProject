@@ -49,13 +49,13 @@ void APIENTRY glDebugOutput(GLenum source,
     switch (type)
     {
         case GL_DEBUG_TYPE_ERROR:               typ = DebugMessage::ERROR; break;
-        // case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: typ = "Deprecated Behaviour"; break;
-        // case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  typ = "Undefined Behaviour"; break;
-        // case GL_DEBUG_TYPE_PORTABILITY:         typ = "Portability"; break;
-        // case GL_DEBUG_TYPE_PERFORMANCE:         typ = "Performance"; break;
-        // case GL_DEBUG_TYPE_MARKER:              typ = "Marker"; break;
-        // case GL_DEBUG_TYPE_PUSH_GROUP:          typ = "Push Group"; break;
-        // case GL_DEBUG_TYPE_POP_GROUP:           typ = "Pop Group"; break;
+        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: typ = DebugMessage::DEPRECATED_BEHAVIOR; break;
+        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  typ = DebugMessage::UNDEFINED_BEHAVIOR; break;
+        case GL_DEBUG_TYPE_PORTABILITY:         typ = DebugMessage::PORTABILITY; break;
+        case GL_DEBUG_TYPE_PERFORMANCE:         typ = DebugMessage::PERFORMANCE; break;
+        case GL_DEBUG_TYPE_MARKER:              typ = DebugMessage::MARKER; break;
+        case GL_DEBUG_TYPE_PUSH_GROUP:          typ = DebugMessage::PUSH_GROUP; break;
+        case GL_DEBUG_TYPE_POP_GROUP:           typ = DebugMessage::POP_GROUP; break;
         case GL_DEBUG_TYPE_OTHER:               typ = DebugMessage::OTHER_TYP; break;
         default:                                typ = DebugMessage::UNKNOWN_TYP; break;
     }

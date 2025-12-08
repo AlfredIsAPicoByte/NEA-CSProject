@@ -34,7 +34,7 @@ public:
 
     void Start();
     void PausePlay();
-    void Update(GLFWwindow* window, std::function<void()> preProcessing = nullptr, std::function<Image()> renderStep = nullptr,  std::function<void()> postProcessing = nullptr, std::function<void()> gui = nullptr, std::function<void()> fallBack = nullptr);
+    void Update(GLFWwindow* window, std::function<void()> preProcessing = nullptr, std::function<void()> renderStep = nullptr,  std::function<void()> postProcessing = nullptr, std::function<void()> gui = nullptr, std::function<void()> fallBack = nullptr);
     void Exit();
     
     void applyClearColor(const Color& color);
