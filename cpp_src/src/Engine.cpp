@@ -20,7 +20,7 @@ void Engine::PausePlay()
     }
 }
 
-void Engine::Update(GLFWwindow* window, std::function<void()> preProcessing, std::function<Image()> renderStep,  std::function<void()> postProcessing, std::function<void()> gui, std::function<void()> fallBack)
+void Engine::Update(GLFWwindow* window, std::function<void()> preProcessing, std::function<void()> renderStep,  std::function<void()> postProcessing, std::function<void()> gui, std::function<void()> fallBack)
 {
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     ImGui_ImplGlfw_InitForOpenGL(window, true);
