@@ -23,7 +23,9 @@ public:
 	Mesh(std::vector <Vertex>& vertices, std::vector <GLuint>& indices, std::vector <Texture>& textures);
 
 	// Draws the mesh
-	void Draw(Shader& shader, Camera& camera);
+	void Draw(Shader& shader, Camera& camera) override;
 
-	void CleanUp();
+	void CleanUp() override;
+	json ToJSON() const override;
+	void FromJSON(const json& j) override;
 };

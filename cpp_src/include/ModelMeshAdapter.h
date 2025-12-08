@@ -33,9 +33,16 @@ public:
         }
     }
 
+    const std::shared_ptr<Model>& GetModel() const { return model; }
+    size_t GetMeshIndex() const { return index; }
+
+    void SetName(const std::string& name) { model->GetMeshes()[index].SetName(name); }
     const std::string& GetName() const { return model->GetMeshes()[index].GetName(); }
+    void SetModelMatrix(const glm::mat4& matrix) { model->SetModelMatrixForMesh((unsigned int)index, matrix); }
     glm::mat4 GetModelMatrix() const { return model->GetModelMatrixForMesh((unsigned int)index); }
 
+	json ToJSON() const override { return model->GetMeshes()[index].ToJSON(); }
+	void FromJSON(const json& j) override { model->GetMeshes()[index].FromJSON(j); }
 private:
     std::shared_ptr<Model> model;
     size_t index;

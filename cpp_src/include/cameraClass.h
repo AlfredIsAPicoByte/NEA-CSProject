@@ -12,8 +12,9 @@
 
 #include "shaderClass.h"
 #include "timeClass.h"
-#include "Debugger.h"
+#include "IVirtualObject.h"
 #include "InputManager.h"
+#include "Debugger.h"
 
 enum CameraType {
 	PERSPECTIVE,
@@ -26,7 +27,7 @@ enum CamaraMovementMode {
 	ORBIT
 };
 
-class Camera
+class Camera: public IVirtualObject
 {
 public:
 	// Stores the main vectors of the camera
@@ -53,7 +54,6 @@ public:
 	float fov = 45.0f;
 	float nearPlane = 0.1f;
 	float farPlane = 100.0f;
-
 
 	// Adjust the speed of the camera and it's sensitivity when looking around
 	float speed = 0.1f;
@@ -109,6 +109,11 @@ public:
 	void ResetOrbit();
 	void ResetPlane();
 	void Reset(glm::vec3 position, glm::vec3 forward, glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f));
+
+	void CleanUp() override {} // Nothing to clean up for now
+
+	json ToJSON() const override;
+	void FromJSON(const json& j) override;
 private:
 	int id;
 	

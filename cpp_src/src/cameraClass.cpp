@@ -377,3 +377,53 @@ void Camera::Reset(glm::vec3 position, glm::vec3 forward, glm::vec3 worldUp)
 	Right = glm::normalize(glm::cross(Forward, WorldUp));
 	Up = glm::normalize(glm::cross(Right, Forward));
 }
+
+json Camera::ToJSON() const
+{
+	json j;
+	j["Position"] = { Position.x, Position.y, Position.z };
+	j["WorldUp"] = { WorldUp.x, WorldUp.y, WorldUp.z };
+	j["Up"] = { Up.x, Up.y, Up.z };
+	j["Forward"] = { Forward.x, Forward.y, Forward.z };
+	j["Right"] = { Right.x, Right.y, Right.z };
+	j["windowWidth"] = windowWidth;
+	j["windowHeight"] = windowHeight;
+	j["aspectRatio"] = aspectRatio;
+	j["name"] = name;
+	j["type"] = static_cast<int>(type);
+	j["mode"] = static_cast<int>(mode);
+	j["fov"] = fov;
+	j["nearPlane"] = nearPlane;
+	j["farPlane"] = farPlane;
+	j["speed"] = speed;
+	j["speedFactor"] = speedFactor;
+	j["mouseSensitivity"] = mouseSensitivity;
+	j["invertY"] = invertY;
+	j["invertX"] = invertX;
+	// Add other members as needed
+	return j;
+}
+
+void Camera::FromJSON(const json& j)
+{
+	Position = glm::vec3(j["Position"][0], j["Position"][1], j["Position"][2]);
+	WorldUp = glm::vec3(j["WorldUp"][0], j["WorldUp"][1], j["WorldUp"][2]);
+	Up = glm::vec3(j["Up"][0], j["Up"][1], j["Up"][2]);
+	Forward = glm::vec3(j["Forward"][0], j["Forward"][1], j["Forward"][2]);
+	Right = glm::vec3(j["Right"][0], j["Right"][1], j["Right"][2]);
+	windowWidth = j["windowWidth"];
+	windowHeight = j["windowHeight"];
+	aspectRatio = j["aspectRatio"];
+	name = j["name"];
+	type = static_cast<CameraType>(j["type"]);
+	mode = static_cast<CamaraMovementMode>(j["mode"]);
+	fov = j["fov"];
+	nearPlane = j["nearPlane"];
+	farPlane = j["farPlane"];
+	speed = j["speed"];
+	speedFactor = j["speedFactor"];
+	mouseSensitivity = j["mouseSensitivity"];
+	invertY = j["invertY"];
+	invertX = j["invertX"];
+	// Load other members as needed
+}

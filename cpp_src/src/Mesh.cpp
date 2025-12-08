@@ -68,7 +68,7 @@ void Mesh::Draw(Shader& shader, Camera& camera)
     // Take care of the camera Matrix: upload camera position (if needed) and cam/model matrices
     // Some shaders expect u_viewPos (fragment shader) while others might use camPos; we set u_viewPos from main as well.
 	shader.setVec3("u_viewPos", camera.Position);
-	// shader.setVec3("u_viewDir", camera.viewMatrix);
+	shader.setVec3("u_viewDir", camera.Forward);
     camera.SetModelMatrixUniform(shader, "u_camMatrix");
 
     // Push the model matrix to the vertex shader (must match the vertex shader's uniform name)
@@ -81,4 +81,52 @@ void Mesh::Draw(Shader& shader, Camera& camera)
 void Mesh::CleanUp()
 {
     VAO.Delete();
+}
+
+json Mesh::ToJSON() const
+{
+    json j;
+    j["vertices"] = json::array();
+    for (const auto& v : vertices) {
+        json jv;
+        jv["Position"] = { v.Position.x, v.Position.y, v.Position.z };
+        jv["Normal"] = { v.Normal.x, v.Normal.y, v.Normal.z };
+        jv["color"] = { v.color.x, v.color.y, v.color.z };
+        jv["TexCoords"] = { v.TexCoords.x, v.TexCoords.y };
+        jv["Tangent"] = { v.Tangent.x, v.Tangent.y, v.Tangent.z, v.Tangent.w };
+        j["vertices"].push_back(jv);
+    }
+    j["indices"] = indices;
+    j["textures"] = json::array();
+    for (const auto& t : textures) {
+        json jt;
+        jt["ID"] = t.ID;
+        jt["type"] = t.type;
+        jt["unit"] = t.unit;
+        j["textures"].push_back(jt);
+    }
+    return j;
+}
+
+void Mesh::FromJSON(const json& j)
+{
+    vertices.clear();
+    for (const auto& jv : j["vertices"]) {
+        Vertex v;
+        v.Position = glm::vec3(jv["Position"][0], jv["Position"][1], jv["Position"][2]);
+        v.Normal = glm::vec3(jv["Normal"][0], jv["Normal"][1], jv["Normal"][2]);
+        v.color = glm::vec3(jv["color"][0], jv["color"][1], jv["color"][2]);
+        v.TexCoords = glm::vec2(jv["TexCoords"][0], jv["TexCoords"][1]);
+        v.Tangent = glm::vec4(jv["Tangent"][0], jv["Tangent"][1], jv["Tangent"][2], jv["Tangent"][3]);
+        vertices.push_back(v);
+    }
+    indices = j["indices"].get<std::vector<GLuint>>();
+    textures.clear();
+    for (const auto& jt : j["textures"]) {
+        Texture t("", "", 0); // dummy initialization
+        t.ID = jt["ID"];
+        t.type = jt["type"].get<std::string>().c_str();
+        t.unit = jt["unit"];
+        textures.push_back(t);
+    }
 }

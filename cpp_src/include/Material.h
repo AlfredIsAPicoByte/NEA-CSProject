@@ -3,6 +3,9 @@
 #include <glm/glm.hpp>
 #include <glad/glad.h>
 
+#include "IVirtualObject.h"
+#include "Debugger.h"
+
 static GLuint g_MaterialUBO = 0;
 static constexpr GLuint MATERIAL_UBO_BINDING_POINT = 1;
 
@@ -13,7 +16,7 @@ struct GPUMaterial {
     glm::vec4 emissive;       // rgb + padding
 };
 
-struct Material {
+struct Material: public IVirtualObject {
     glm::vec3 albedo = glm::vec3(1.0f);
     float    padding1 = 0.0f;
     float    metallic = 0.0f;
@@ -24,4 +27,7 @@ struct Material {
     float    padding2 = 0.0f;
     glm::vec3 emissive = glm::vec3(0.0f);
     float     padding3 = 0.0f;
+
+    json ToJSON() const override;
+    void FromJSON(const json& j) override;
 };

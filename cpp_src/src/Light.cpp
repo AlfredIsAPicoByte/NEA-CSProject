@@ -1,6 +1,28 @@
 #include "Light.h"
 
-/// @brief Create the lights UBO
+json Light::ToJSON() const
+{
+    json j;
+    j["position"] = { position.x, position.y, position.z };
+    j["radius"] = radius;
+    j["coneAngles"] = { coneAngles.x, coneAngles.y };
+    j["color"] = { color.x, color.y, color.z };
+    j["intensity"] = intensity;
+    j["direction"] = { direction.x, direction.y, direction.z };
+    j["type"] = type;
+    return j;
+}
+void Light::FromJSON(const json& j)
+{
+    position = glm::vec3(j["position"][0], j["position"][1], j["position"][2]);
+    radius = j["radius"];
+    coneAngles = glm::vec2(j["coneAngles"][0], j["coneAngles"][1]);
+    color = glm::vec3(j["color"][0], j["color"][1], j["color"][2]);
+    intensity = j["intensity"];
+    direction = glm::vec3(j["direction"][0], j["direction"][1], j["direction"][2]);
+    type = j["type"];
+}
+
 void CreateLightsUBO()
 {
     if (g_LightsUBO != 0) return;
@@ -14,8 +36,6 @@ void CreateLightsUBO()
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
-/// @brief Update the lights UBO with the provided lights
-/// @param lights Vector of Light structures
 void UpdateLightsUBO(const std::vector<Light>& lights)
 {
     if (g_LightsUBO == 0) CreateLightsUBO();
@@ -24,9 +44,10 @@ void UpdateLightsUBO(const std::vector<Light>& lights)
     std::vector<GPULight> gpu(MAX_LIGHTS);
 
     for (int i = 0; i < count; ++i) {
-        gpu[i].posRadius = glm::vec4(lights[i].position, lights[i].radius);
-        gpu[i].colorIntensity = glm::vec4(lights[i].color, lights[i].intensity);
+        gpu[i].posType = glm::vec4(lights[i].position, static_cast<float>(lights[i].type));
         gpu[i].dirType = glm::vec4(lights[i].direction, static_cast<float>(lights[i].type));
+        gpu[i].colorIntensity = glm::vec4(lights[i].color, lights[i].intensity);
+        gpu[i].radius = glm::vec4(lights[i].radius, lights[i].coneAngles.x, lights[i].coneAngles.y, 0.0f); // z unused for now
     }
 
     glBindBuffer(GL_UNIFORM_BUFFER, g_LightsUBO);
@@ -36,9 +57,10 @@ void UpdateLightsUBO(const std::vector<Light>& lights)
     GLsizeiptr vec4Size = sizeof(float) * 4;
     GLsizeiptr baseOffset = 16; // after padded u_lightCount
 
-    glBufferSubData(GL_UNIFORM_BUFFER, baseOffset + vec4Size * MAX_LIGHTS * 0, vec4Size * MAX_LIGHTS, (void*)(&gpu[0].posRadius));
-    glBufferSubData(GL_UNIFORM_BUFFER, baseOffset + vec4Size * MAX_LIGHTS * 1, vec4Size * MAX_LIGHTS, (void*)(&gpu[0].colorIntensity));
-    glBufferSubData(GL_UNIFORM_BUFFER, baseOffset + vec4Size * MAX_LIGHTS * 2, vec4Size * MAX_LIGHTS, (void*)(&gpu[0].dirType));
+    glBufferSubData(GL_UNIFORM_BUFFER, baseOffset + vec4Size * MAX_LIGHTS * 0, vec4Size * MAX_LIGHTS, (void*)(&gpu[0].posType));
+    glBufferSubData(GL_UNIFORM_BUFFER, baseOffset + vec4Size * MAX_LIGHTS * 1, vec4Size * MAX_LIGHTS, (void*)(&gpu[0].dirType));
+    glBufferSubData(GL_UNIFORM_BUFFER, baseOffset + vec4Size * MAX_LIGHTS * 2, vec4Size * MAX_LIGHTS, (void*)(&gpu[0].colorIntensity));
+    glBufferSubData(GL_UNIFORM_BUFFER, baseOffset + vec4Size * MAX_LIGHTS * 3, vec4Size * MAX_LIGHTS, (void*)(&gpu[0].radius));
 
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }

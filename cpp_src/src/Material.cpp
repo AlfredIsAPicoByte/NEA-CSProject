@@ -1,5 +1,28 @@
 #include "Material.h"
 
+json Material::ToJSON() const
+{
+    json j;
+    j["albedo"] = { albedo.x, albedo.y, albedo.z };
+    j["metallic"] = metallic;
+    j["roughness"] = roughness;
+    j["useAlbedoMap"] = useAlbedoMap;
+    j["useNormalMap"] = useNormalMap;
+    j["useMRMap"] = useMRMap;
+    j["emissive"] = { emissive.x, emissive.y, emissive.z };
+    return j;
+}
+void Material::FromJSON(const json& j)
+{
+    albedo = glm::vec3(j["albedo"][0], j["albedo"][1], j["albedo"][2]);
+    metallic = j["metallic"];
+    roughness = j["roughness"];
+    useAlbedoMap = j["useAlbedoMap"];
+    useNormalMap = j["useNormalMap"];
+    useMRMap = j["useMRMap"];
+    emissive = glm::vec3(j["emissive"][0], j["emissive"][1], j["emissive"][2]);
+}
+
 void CreateMaterialUBO()
 {
     if (g_MaterialUBO == 0) {
@@ -11,7 +34,6 @@ void CreateMaterialUBO()
     }
 }
 
-// Call before drawing an object with its material
 void UpdateMaterialUBO(const Material& mat)
 {
     GPUMaterial data;

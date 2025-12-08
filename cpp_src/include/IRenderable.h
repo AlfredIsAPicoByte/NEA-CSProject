@@ -6,8 +6,10 @@
 
 #include "shaderClass.h"
 #include "cameraClass.h"
+#include "IVirtualObject.h"
 
-class IRenderable {
+class IRenderable: public IVirtualObject
+{
 public:
     virtual ~IRenderable() = default;
     virtual void Draw(Shader& shader, Camera& camera) = 0;
@@ -28,11 +30,8 @@ public:
     {
         return modelMatrix;
     };
-
-    virtual void CleanUp() = 0;
 protected:
     std::string name = "";
-    int id;
 
     glm::mat4 modelMatrix = glm::mat4(1.0f);
 };

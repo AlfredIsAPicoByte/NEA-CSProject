@@ -6,33 +6,30 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
-#include <json.hpp>
 
 #include "Mesh.h"
-
-using json = nlohmann::json;
+#include "IVirtualObject.h"
 
 class Model {
 public:
 	// Loads in a model from a file and stores tha information in 'data', 'JSON', and 'file'
 	Model(const char* file);
-	Model(Model&& other) noexcept;
-
-	void Draw(Shader& shader, Camera& camera);
-
-	void CleanUp();
+	Model(Model&& other) noexcept:
+		file(other.file),
+		data(std::move(other.data)),
+		JSON(std::move(other.JSON)),
+		modelPath(std::move(other.modelPath)),
+		meshes(std::move(other.meshes)),
+		matricesMeshes(std::move(other.matricesMeshes)),
+		loadedTexName(std::move(other.loadedTexName)),
+		loadedTex(std::move(other.loadedTex)) {}
 
 	std::vector<Mesh>& GetMeshes();
-	void SetName(const std::string& modelName);
-	const std::string& GetName() const;
 	glm::mat4 GetModelMatrixForMesh(unsigned int meshIndex) const;
 	std::vector<glm::mat4> GetModelMatricesForAllMeshes() const;
 	void SetModelMatrixForMesh(unsigned int meshIndex, const glm::mat4& modelMatrix);
 	void SetModelMatricesForAllMeshes(const std::vector<glm::mat4>& modelMatrices);
 private:
-	std::string name;
-	int id;
-	
 	// Variables for easy access
 	const char* file;
 	std::vector<unsigned char> data;

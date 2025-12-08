@@ -71,32 +71,6 @@ Model::Model(const char* file)
         throw; // rethrow to be handled by caller
     }
 }
- 
-Model::Model(Model&& other) noexcept
-	: name(std::move(other.name)),
-	  id(other.id),
-	  file(other.file),
-	  data(std::move(other.data)),
-	  JSON(std::move(other.JSON)),
-	  modelPath(std::move(other.modelPath)),
-	  meshes(std::move(other.meshes)),
-	  matricesMeshes(std::move(other.matricesMeshes)),
-	  loadedTexName(std::move(other.loadedTexName)),
-	  loadedTex(std::move(other.loadedTex))
-{
-	other.id = 0;
-}
-
-void Model::Draw(Shader& shader, Camera& camera)
-{
-    // Go over all meshes and draw each one
-    for (unsigned int i = 0; i < meshes.size(); i++)
-    {
-        meshes[i].SetModelMatrix(matricesMeshes[i]);
-        // call instance Draw to match Mesh API
-        meshes[i].Draw(shader, camera);
-    }
-}
 
 void Model::loadMesh(unsigned int indMesh)
 {
@@ -494,27 +468,11 @@ std::vector<glm::vec4> Model::groupFloatsVec4(std::vector<float> floatVec)
     return vectors;
 }
 
-void Model::CleanUp()
-{
-	for (auto& mesh : meshes)
-	{
-		mesh.CleanUp();
-	}
-}
-
 std::vector<Mesh>& Model::GetMeshes()
 {
 	return meshes;
 }
 
-void Model::SetName(const std::string& modelName)
-{
-	name = modelName;
-}
-const std::string& Model::GetName() const
-{
-	return name;
-}
 glm::mat4 Model::GetModelMatrixForMesh(unsigned int meshIndex) const
 {
 	if (meshIndex >= matricesMeshes.size())
