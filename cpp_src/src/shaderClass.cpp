@@ -180,6 +180,11 @@ void Shader::Activate()
         AppendError("Attempted to Activate a shader program with ID = 0");
         return;
     }
+    // Ensure this is a valid GL program
+    if (!glIsProgram(ID)) {
+        AppendError("Attempted to Activate an invalid shader program (not a GL program): ID=" + std::to_string(ID));
+        return;
+    }
     GLint linked = 0;
     glGetProgramiv(ID, GL_LINK_STATUS, &linked);
     if (!linked) {
@@ -202,14 +207,24 @@ GLint Shader::GetUniformLocation(const std::string& name) const
         return -1;
     }
 
+    if (ID == 0) {
+        AppendError("Shader::GetUniformLocation called on shader with ID = 0 (name=" + name + ")");
+        return -1;
+    }
+
+    if (!glIsProgram(ID)) {
+        AppendError("Shader::GetUniformLocation called on invalid program (ID=" + std::to_string(ID) + ", name=" + name + ")");
+        return -1;
+    }
+
     GLint linked = 0;
     glGetProgramiv(ID, GL_LINK_STATUS, &linked);
     if (!linked) {
-		GLint logLen = 0;
-		glGetProgramiv(ID, GL_INFO_LOG_LENGTH, &logLen);
-		std::string log((logLen>0)?logLen:1, '\0');
-		glGetProgramInfoLog(ID, logLen, nullptr, &log[0]);
-		AppendError("Shader link error: " + log);
+        GLint logLen = 0;
+        glGetProgramiv(ID, GL_INFO_LOG_LENGTH, &logLen);
+        std::string log((logLen>0)?logLen:1, '\0');
+        glGetProgramInfoLog(ID, logLen, nullptr, &log[0]);
+        AppendError("Shader link error: " + log);
         return -1;
     }
 

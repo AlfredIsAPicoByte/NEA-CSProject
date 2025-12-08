@@ -89,6 +89,100 @@ void Scene::AddRenderable(std::shared_ptr<IRenderable> renderable)
     renderables.push_back(renderable);
 }
 
+std::shared_ptr<IRenderable> Scene::GetRenderable(const std::string& name)
+{
+    for (auto &r : renderables) {
+        if (r && r->GetName() == name) return r;
+    }
+    return nullptr;
+}
+
+std::shared_ptr<IRenderable> Scene::GetRenderable(int index)
+{
+    if (index >= 0 && index < static_cast<int>(renderables.size()))
+        return renderables[index];
+    return nullptr;
+}
+
+void Scene::RemoveRenderable(const std::string& name)
+{
+    for (auto it = renderables.begin(); it != renderables.end(); ++it) {
+        if (*it && (*it)->GetName() == name) {
+            renderables.erase(it);
+            selectedRenderable = -1;
+            return;
+        }
+    }
+}
+
+void Scene::RemoveRenderable(int index)
+{
+    if (index >= 0 && index < static_cast<int>(renderables.size())) {
+        renderables.erase(renderables.begin() + index);
+        selectedRenderable = -1;
+    }
+}
+
+void Scene::ClearRenderables()
+{
+    renderables.clear();
+    selectedRenderable = -1;
+}
+
+void Scene::AddObject(std::shared_ptr<IVirtualObject> object)
+{
+    if (object) sceneObjects.push_back(object);
+}
+
+std::shared_ptr<IVirtualObject> Scene::GetObject(const std::string& name)
+{
+    for (auto &obj : sceneObjects) {
+        if (!obj) continue;
+        try {
+            auto j = obj->ToJSON();
+            if (j.contains("name") && j["name"].is_string() && j["name"].get<std::string>() == name)
+                return obj;
+        } catch (...) {
+            // ignore objects that can't serialize
+        }
+    }
+    return nullptr;
+}
+
+std::shared_ptr<IVirtualObject> Scene::GetObject(int index)
+{
+    if (index >= 0 && index < static_cast<int>(sceneObjects.size()))
+        return sceneObjects[index];
+    return nullptr;
+}
+
+void Scene::RemoveObject(const std::string& name)
+{
+    for (auto it = sceneObjects.begin(); it != sceneObjects.end(); ++it) {
+        if (!*it) continue;
+        try {
+            auto j = (*it)->ToJSON();
+            if (j.contains("name") && j["name"].is_string() && j["name"].get<std::string>() == name) {
+                sceneObjects.erase(it);
+                return;
+            }
+        } catch (...) {
+            // ignore and continue
+        }
+    }
+}
+
+void Scene::RemoveObject(int index)
+{
+    if (index >= 0 && index < static_cast<int>(sceneObjects.size()))
+        sceneObjects.erase(sceneObjects.begin() + index);
+}
+
+void Scene::ClearObjects()
+{
+    sceneObjects.clear();
+}
+
 void Scene::CleanUp()
 {
     renderables.clear();
