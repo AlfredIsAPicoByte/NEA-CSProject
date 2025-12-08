@@ -7,11 +7,11 @@ Color bgClolor("#454749ff");
 
 // Vertices coordinates
 Vertex vertices[] =
-{ //               COORDINATES           /            COLORS          /           NORMALS         /       TEXTURE COORDINATES    //
-	Vertex{glm::vec3( 1.0f, 0.0f,  1.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec2(0.0f, 0.0f)},
-	Vertex{glm::vec3( 1.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec2(0.0f, 1.0f)},
-	Vertex{glm::vec3(-1.0f, 0.0f, -1.0f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec2(1.0f, 1.0f)},
-	Vertex{glm::vec3(-1.0f, 0.0f,  1.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec2(1.0f, 0.0f)}
+{ //               POSITION             /       	 NORMAL          /            COLOR           /       TEXCOORDS      //
+    Vertex{glm::vec3( 1.0f, 0.0f,  1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
+    Vertex{glm::vec3( 1.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
+    Vertex{glm::vec3(-1.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(1.0f, 1.0f)},
+    Vertex{glm::vec3(-1.0f, 0.0f,  1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec2(1.0f, 0.0f)}
 };
 
 // Indices for vertices order
@@ -129,18 +129,29 @@ int main()
 	lightMesh.SetModelMatrix(glm::translate(lightMesh.GetModelMatrix(), lightPos));
 	Color lightColor("#f8ffcfff");
 
-	Model bunny("bunny/scene.gltf");
-	bunny.SetName("Bunny");
-	glm::vec3 bunnyPos = glm::vec3(-1.0f, 0.0f, 0.0f);
-	bunny.SetModelMatricesForAllMeshes(std::vector<glm::mat4>{ glm::translate(glm::mat4(1.0f), bunnyPos) });
+	auto bunnyPtr = std::make_shared<Model>("bunny/scene.gltf");
+	glm::vec3 bunnyPos = glm::vec3(0.0f, -0.5f, 0.0f);
+	glm::vec3 bunnyRot = glm::vec3(90.0f, -90.0f, 50.0f);
+	glm::vec3 bunnyScale = glm::vec3(2.0f);
+	glm::mat4 bunnyModelMatrix = glm::mat4(1.0f);
+	bunnyModelMatrix = glm::translate(bunnyModelMatrix, bunnyPos);
+	bunnyModelMatrix = glm::rotate(bunnyModelMatrix, glm::radians(bunnyRot.y), glm::vec3(0.0f, 1.0f, 0.0f));
+	bunnyModelMatrix = glm::rotate(bunnyModelMatrix, glm::radians(bunnyRot.x), glm::vec3(1.0f, 0.0f, 0.0f));
+	bunnyModelMatrix = glm::rotate(bunnyModelMatrix, glm::radians(bunnyRot.z), glm::vec3(0.0f, 0.0f, 1.0f));	
+	bunnyModelMatrix = glm::scale(bunnyModelMatrix, bunnyScale);
+	bunnyPtr->SetModelMatricesForAllMeshes(std::vector<glm::mat4>{ bunnyModelMatrix });
+	auto bunny = std::make_shared<ModelMeshAdapter>(bunnyPtr, 0);
+	bunny->SetName("Bunny");
 
-	Model sword("sword/scene.gltf");
-	sword.SetName("Sword");
-	glm::vec3 swordPos = glm::vec3(2.0f, 0.0f, 0.0f);
-	sword.SetModelMatricesForAllMeshes(std::vector<glm::mat4>{ glm::translate(glm::mat4(1.0f), swordPos) });
-	
-	// Enable depth (3D)
-	glEnable(GL_DEPTH_TEST);
+	auto swordPtr = std::make_shared<Model>("sword/scene.gltf");
+	glm::vec3 swordPos = glm::vec3(0.0f, 0.0f, -2.0f);
+	glm::vec3 swordScale = glm::vec3(0.05f);
+	glm::mat4 swordModelMatrix = glm::mat4(1.0f);
+	swordModelMatrix = glm::translate(swordModelMatrix, swordPos);
+	swordModelMatrix = glm::scale(swordModelMatrix, swordScale);
+	swordPtr->SetModelMatricesForAllMeshes(std::vector<glm::mat4>{ swordModelMatrix });
+	auto sword = std::make_shared<ModelMeshAdapter>(swordPtr, 0);
+	sword->SetName("Sword");
 
 	Time time;
 	Camera camera(windowWidth, windowHeight, glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, -1.0f));
@@ -152,13 +163,14 @@ int main()
 	litShaderProgram.setVec3("u_lightPos", lightPos);
 	litShaderProgram.setVec3("u_lightColor", lightColor.toVec3());
 	litShaderProgram.setVec3("u_viewPos", camera.Position);
+	litShaderProgram.setVec2("u_lightRadius", glm::vec2(10.0f));
 	litShaderProgram.setInt("u_lightType", 0);
 	litShaderProgram.setFloat("u_specularStrength", 1.0f);
 	litShaderProgram.setFloat("u_ambient", 0.05f);
 
 	modelProgram.Activate();
 	camera.SetModelMatrixUniform(modelProgram, "u_camMatrix");
-	// litShaderProgram.setVec3("u_viewDir", camera.viewMatrix);
+	litShaderProgram.setVec3("u_viewDir", camera.Forward);
 
 	unlitShaderProgram.Activate();
 	camera.SetModelMatrixUniform(unlitShaderProgram, "u_camMatrix");
@@ -178,24 +190,24 @@ int main()
 		
 		modelProgram.Activate();
 		camera.SetModelMatrixUniform(modelProgram, "u_camMatrix");
-		// litShaderProgram.setVec3("u_viewDir", camera.viewMatrix);
+		litShaderProgram.setVec3("u_viewDir", camera.Forward);
 
 		unlitShaderProgram.Activate();
 		camera.SetModelMatrixUniform(unlitShaderProgram, "u_camMatrix");
 		
 		// Draw objects
 		floorMesh.Draw(litShaderProgram, camera);
-		bunny.Draw(litShaderProgram, camera);
-		sword.Draw(litShaderProgram, camera);
+		bunny->Draw(litShaderProgram, camera);
+		sword->Draw(litShaderProgram, camera);
 		lightMesh.Draw(unlitShaderProgram, camera);
 	}));
 	testScene.AddRenderable(std::make_shared<Mesh>(floorMesh));
 	testScene.AddRenderable(std::make_shared<Mesh>(lightMesh));
 
-	// testScene.AddRenderable(std::make_shared<ModelMeshAdapter>(std::make_shared<Model>(bunny), 0));
-	// testScene.AddRenderable(std::make_shared<ModelMeshAdapter>(std::make_shared<Model>(sword), 0));
+	testScene.AddRenderable(bunny);
+	testScene.AddRenderable(sword);
 
-	testScene.selectedMeshIndex = 0;
+	testScene.selectedRenderable = 0;
 	testScene.pythonRenderingUsed = false;
 
 	// Main loop
@@ -229,8 +241,8 @@ int main()
 					if (camMode != 3) {
 						camera.mode = ORBIT;
 						camMode = 3;
-						if (testScene.selectedMeshIndex > -1) {
-							auto selected = testScene.renderables[testScene.selectedMeshIndex];
+						if (testScene.selectedRenderable > -1) {
+							auto selected = testScene.renderables[testScene.selectedRenderable];
 							// TODO: get selected pos
 						} else {
 							camera.SelectOrbitTarget(glm::vec3(0.0f));
@@ -277,13 +289,15 @@ int main()
 			}
 		},
 		// Render
-		[&]() -> Image {
+		[&]() {
 			testScene.Render(
 				// Pre-processing
 				[]() {
 				},
 				// Rendering step
 				[]() -> Image {
+
+
 					return Image();
 				},
 				// Post-processing
@@ -294,8 +308,6 @@ int main()
 					AppendGraphicsError("Rendering failed, executing fallback function for scene rendering.");
 				}
 			);
-
-			return Image();
 		},
 		// Post-processing
 		[]() {},
@@ -468,14 +480,13 @@ int main()
 				ImGui::Text("Renderables in Scene:");
 				for (size_t i = 0; i < testScene.renderables.size(); ++i) {
 					std::string label = testScene.renderables[i]->GetName().empty() ? "Renderable " + std::to_string(i) : testScene.renderables[i]->GetName();
-					if (ImGui::Selectable(label.c_str(), testScene.selectedMeshIndex == static_cast<int>(i))) {
-						testScene.selectedMeshIndex = static_cast<int>(i);
+					if (ImGui::Selectable(label.c_str(), testScene.selectedRenderable == static_cast<int>(i))) {
+						testScene.selectedRenderable = static_cast<int>(i);
 					}
 				}
 				if (ImGui::Button("Print Selected Renderable Info")) {
-					if (testScene.selectedMeshIndex >= 0 && testScene.selectedMeshIndex < static_cast<int>(testScene.renderables.size())) {
-						AppendMessage("Selected Renderable Index: " + std::to_string(testScene.selectedMeshIndex));
-						testScene.renderables[testScene.selectedMeshIndex]->GetName();
+					if (testScene.selectedRenderable >= 0 && testScene.selectedRenderable < static_cast<int>(testScene.renderables.size())) {
+						AppendMessage("Selected Renderable: " +	testScene.renderables[testScene.selectedRenderable]->GetName());
 					}
 					else {
 						AppendMessage("No renderable selected.");
@@ -496,8 +507,6 @@ int main()
 	
 	floorMesh.CleanUp();
 	lightMesh.CleanUp();
-	bunny.CleanUp();
-	sword.CleanUp();
 	testScene.CleanUp();
 	
 	Engine::Instance().CleanUp(window);
