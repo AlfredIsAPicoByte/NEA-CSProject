@@ -64,6 +64,10 @@ class Sampler(ABC):
             out.append(Sample(u, v))
         return out
 
+    # Alias expected by other parts of the code (renderer checks this name)
+    def get_samples_for_pixel(self, x: int, y: int) -> list[Sample]:
+        return self.get_samples_per_pixel(x, y)
+
 class RandomSampler(Sampler):
     """Independent RNG sampler, deterministic with base seed + pixel coords."""
     def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
@@ -228,6 +232,32 @@ class SamplingManager:
         if count <= 0:
             return self.samples[offset:]
         return self.samples[offset:offset + count]
+
+    # Provide the interface the renderer expects: get_samples_for_pixel(x,y) -> List[Sample]
+    def get_samples_for_pixel(self, x: int, y: int) -> List[Sample]:
+        # If precomputed, slice out samples for this pixel
+        if self._precompute:
+            start = (y * self.sample_settings.width + x) * self._spp
+            slice_uv = self.samples[start:start + self._spp]
+            return [Sample(u, v) for (u, v) in slice_uv]
+
+        # Otherwise generate on-demand from the underlying sampler (clone per-call for safety)
+        sampler = self._sampler.clone(self.seed) if hasattr(self._sampler, "clone") else self._sampler
+        try:
+            sampler.start_pixel(x, y)
+        except Exception:
+            # best-effort
+            pass
+
+        out: List[Sample] = []
+        for _ in range(self._spp):
+            try:
+                u, v = sampler.next_2d()
+            except Exception:
+                u = random.random()
+                v = random.random()
+            out.append(Sample(u, v))
+        return out
 
     def __repr__(self):
         return f"SamplingManager(sampler={self.sampler_name}, spp={self._spp}, settings={self.sample_settings})"

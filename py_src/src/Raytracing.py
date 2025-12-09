@@ -79,6 +79,8 @@ class CameraJitterRayGenerator(RayGenerator):
                             color=Color(1.0, 1.0, 1.0, 1.0),
                             name=f"Camera Ray ({x},{y}) #{r}"
                         )
+                        ray.pixel_x = x
+                        ray.pixel_y = y
                         rays.append(ray)
                     continue
 
@@ -155,7 +157,7 @@ class RayMarchingIntersection(IntersectionStrategy):
             if distance_to_closest <= self.epsilon:
                 return closest_object, distance_traveled
             
-            ray.Attenuate(distance_to_closest, self.attenuation)  # simple attenuation
+            ray = ray.AttenuateFactor(self.attenuation / distance_traveled if distance_traveled > 0 else 1.0)
 
             distance_traveled += distance_to_closest
             if distance_traveled >= self.max_distance:
@@ -186,23 +188,30 @@ class BasicLambertShading(ShadingStrategy):
             light_dist = np.linalg.norm(light_dir)
             if light_dist > 0:
                 light_dir = light_dir / light_dist
-            # simple lambert + no shadow check
             intensity = max(0.0, np.dot(normal, light_dir))
-            # assume hit_object.material.color and light.color exist
-            base_color = getattr(hit_object, "material", None)
-            if base_color is not None and hasattr(base_color, "color"):
-                mat_color = base_color.color
+
+            # Support material stored on the VObject or on its Shape
+            base = getattr(hit_object, "material", None)
+            if base is None and hasattr(hit_object, "shape"):
+                base = getattr(hit_object.shape, "material", None)
+
+            if isinstance(base, Color):
+                mat_color = base
+            elif base is not None and hasattr(base, "base_color"):
+                mat_color = base.base_color
+            elif base is not None and hasattr(base, "color"):
+                mat_color = base.color
             else:
-                # default white if material missing
                 mat_color = Color(1.0, 1.0, 1.0, 1.0)
-            # accumulate
+
+            light_int = getattr(light, "intensity", 1.0)
             color = Color(
-                color.r + mat_color.r * light.color.r * intensity,
-                color.g + mat_color.g * light.color.g * intensity,
-                color.b + mat_color.b * light.color.b * intensity,
+                color.red + mat_color.red * light.color.red * intensity * light_int,
+                color.green + mat_color.green * light.color.green * intensity * light_int,
+                color.blue + mat_color.blue * light.color.blue * intensity * light_int,
                 1.0,
             )
-        return color
+        return color.clamp()
 
 # Raytracer using strategies
 @register_algorithm("raytracer")
@@ -227,39 +236,51 @@ class Raytracer(Algorithm):
         cam_w, cam_h = camera.width, camera.height
         output_rays: List[LightRay] = []
         hits: list[Tuple[LightRay, VObject, float]] = []
+        all_rays: List[LightRay] = []
 
         if tile_size is None:
             # full-image generation (existing behaviour)
             rays = self.ray_generator.generate(camera, self.rays_per_pixel, seed, region=None, sampler=sampler)
+            all_rays = rays
+            print(f"Generated {len(rays)} rays for full image.")
             for ray in rays:
                 hit_obj, dist = self.intersector.find_hit(scene, ray)
                 if hit_obj is None:
                     output_rays.append(ray)
+                    print(f"No hit for ray {ray.name}")
                     continue
                 hits.append((ray, hit_obj, dist))
                 shaded = self.shader.shade(scene, ray, hit_obj, dist)
                 ray.color = shaded
                 output_rays.append(ray)
-            return rays, hits, output_rays
+                print(f"Hit {hit_obj.name} at distance {dist:.4f} for ray {ray.name}")
+
+            print(f"Completed rendering full image with {len(hits)} hits.")
+            return all_rays, hits, output_rays
 
         # Tile-based processing
         tile_w, tile_h = tile_size
+        print(f"Rendering in tiles of size {tile_w}x{tile_h}...")
         for y0 in range(0, cam_h, tile_h):
             for x0 in range(0, cam_w, tile_w):
                 w = min(tile_w, cam_w - x0)
                 h = min(tile_h, cam_h - y0)
                 region = (x0, y0, w, h)
                 rays = self.ray_generator.generate(camera, self.rays_per_pixel, seed, region=region, sampler=sampler)
+                all_rays.extend(rays)
+                print(f"Generated {len(rays)} rays for tile at ({x0},{y0}) size {w}x{h}.")
                 for ray in rays:
                     hit_obj, dist = self.intersector.find_hit(scene, ray)
                     if hit_obj is None:
                         output_rays.append(ray)
+                        print(f"No hit for ray {ray.name}")
                         continue
                     hits.append((ray, hit_obj, dist))
                     shaded = self.shader.shade(scene, ray, hit_obj, dist)
-                    ray.color = shaded
+                    ray = LightRay.from_ray(ray, shaded, ray.intensity)
                     output_rays.append(ray)
-        return None, hits, output_rays
+                    print(f"Hit {hit_obj.name} at distance {dist:.4f} for ray {ray.name}")
+        return all_rays, hits, output_rays
 
     def __repr__(self):
         return f"Raytracer(rays_per_pixel={self.rays_per_pixel}, intersector={self.intersector}, shader={self.shader})"
