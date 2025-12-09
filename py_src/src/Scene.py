@@ -3,7 +3,7 @@ import re
 import numpy as np
 from PIL import Image
 from Geometry import VObject, Shape
-from Luminance import LightSource
+from Luminance import LightSource, Color
 from Camera import VCamera
 from PrimaryStructures import Ray
 
@@ -69,7 +69,7 @@ class Scene:
                 m = rx.search(r.name)
                 if not m: continue
                 x = int(m.group(1)); y = int(m.group(2))
-            c = getattr(r, "final_color", None) or getattr(r, "color", None) or getattr(r, "base_color", None)
+            c: Color = getattr(r, "final_color", None) or getattr(r, "color", None) or getattr(r, "base_color", None)
             if c is None: continue
             arr = np.asarray(c.rgba if hasattr(c, "rgba") else c)
             accum[y, x, :] += arr[:3]
@@ -84,16 +84,10 @@ class Scene:
         accum[~mask] = bg
 
         # Convert to uint8 and save
-        img8 = np.clip(accum, 0, 255).astype(np.uint8)
+        # Colors are represented in [0.0, 1.0]; scale to 0-255 before clamping/conversion.
+        img8 = np.clip(accum * 255.0, 0, 255).astype(np.uint8)
         im = Image.fromarray(img8, mode="RGB")
 
-        r_str = "["
-        h_str = "["
-        for r in rays:
-            r_str += f"{str(r)}"
-        r_str += "]"
-        for h in hits:
-            h_str += f"{str(h)}"
-        h_str += "]"
-        print("Rays: " + r_str)
+        print("Number of Rays: " + len(rays).__str__() + ", Number of Hits: " + len(hits).__str__())
+        
         return im

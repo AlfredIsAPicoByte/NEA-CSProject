@@ -108,7 +108,7 @@ class Ray:
         return angle
 
     def __repr__(self):
-        return f"Ray(origin={self.origin}, orientation ={self.orientation })"
+        return f"{self.name if self.name else "Ray"}(origin={self.origin}, orientation ={self.orientation })"
 
 class Transform:
     """

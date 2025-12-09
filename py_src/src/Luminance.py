@@ -68,17 +68,39 @@ class Color:
     def alpha(self, value): self.rgba[3] = clamp(value)
 
     def __add__(self, other):
-        return Color(self.red + other.red, self.green + other.green, self.blue + other.blue)
+        if type(other).__name__ == 'Color' or isinstance(other, Color):
+             return Color(self.red + other.red, self.green + other.green, self.blue + other.blue, self.alpha + other.alpha)
+        elif isinstance(other, (int, float, np.floating)):
+             return Color(self.red + other, self.green + other, self.blue + other, self.alpha)
+        raise TypeError("Unsupported operand type(s) for +: 'Color' and '{}'".format(type(other)))
     def __sub__(self, other):
-        """Subtract two colors (component-wise)."""
-        return Color(self.red - other.red, self.green - other.green, self.blue - other.blue, self.alpha)
-    def __mul__(self, scalar):
-        return Color(self.red * scalar, self.green * scalar, self.blue * scalar)
-    def __rmul__(self, scalar):
-        """Allow scalar * Color (reverse multiplication)."""
-        return Color(self.red * scalar, self.green * scalar, self.blue * scalar, self.alpha)
+        if type(other).__name__ == 'Color' or isinstance(other, Color):
+             return Color(self.red - other.red, self.green - other.green, self.blue + other.blue, self.alpha + other.alpha)
+        elif isinstance(other, (int, float, np.floating)):
+             return Color(self.red - other, self.green - other, self.blue - other, self.alpha)
+        raise TypeError("Unsupported operand type(s) for +: 'Color' and '{}'".format(type(other)))
+    def __mul__(self, other):
+        if type(other).__name__ == 'Color' or isinstance(other, Color):
+            return Color(self.red * other.red, self.green * other.green, self.blue * other.blue, self.alpha * other.alpha)
+        # Color * scalar -> scale all channels
+        elif isinstance(other, (int, float, np.floating)):
+            return Color(self.red * other, self.green * other, self.blue * other, self.alpha * other)
+        raise TypeError("Unsupported operand type(s) for *: 'Color' and '{}'".format(type(other)))
+    def __rmul__(self, other):
+        if type(other).__name__ == 'Color' or isinstance(other, Color):
+            return Color(self.red * other, self.green * other, self.blue * other, self.alpha * other)
+        # allow Color * Color via commutativity (should be handled by __mul__ already)
+        if isinstance(other, Color):
+            return other.__mul__(self)
+        raise TypeError("Unsupported operand type(s) for *: '{}' and 'Color'".format(type(other)))
     def __truediv__(self, other):
-        return Color(self.red / other.red, self.green / other.green, self.blue / other.blue)
+        # Color / scalar
+        if isinstance(other, (int, float, np.floating)):
+            return Color(self.red / other, self.green / other, self.blue / other, self.alpha / other)
+        # Color / Color -> component-wise
+        if isinstance(other, Color):
+            return Color(self.red / other.red, self.green / other.green, self.blue / other.blue, self.alpha / other.alpha)
+        raise TypeError("Unsupported operand type(s) for /: 'Color' and '{}'".format(type(other)))
     def __neg__(self):
         """Negate color (invert)."""
         return Color(1.0 - self.red, 1.0 - self.green, 1.0 - self.blue, self.alpha)

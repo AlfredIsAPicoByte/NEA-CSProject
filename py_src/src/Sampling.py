@@ -79,8 +79,16 @@ class RandomSampler(Sampler):
 
     def start_pixel(self, x: int, y: int) -> None:
         self._x = x; self._y = y
-        # combine seed with pixel coords for reproducibility
-        self._rng.seed((self._base_seed, x, y))
+        # Build a deterministic integer seed from base_seed and pixel coords.
+        # random.seed only accepts None, int, float, str, bytes, bytearray.
+        # Use a simple integer hashing with primes and mask to 32-bit to keep it stable.
+        try:
+            base = int(self._base_seed)
+        except Exception:
+            base = 0
+        seed_val = (base * 73856093) ^ (x * 19349663) ^ (y * 83492791)
+        seed_val &= 0xFFFFFFFF
+        self._rng.seed(seed_val)
 
     def next_1d(self) -> float:
         return self._rng.random()

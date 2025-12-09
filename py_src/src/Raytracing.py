@@ -1,7 +1,7 @@
 from Scene import Scene
 from Camera import VCamera
 from Geometry import VObject
-from Luminance import LightRay, Color
+from Luminance import LightRay, Color, Material
 from Algorithims import Algorithm, register_algorithm
 from Sampling import Sampler
 
@@ -172,46 +172,56 @@ class ShadingStrategy(ABC):
 class BasicLambertShading(ShadingStrategy):
     def shade(self, scene: Scene, ray: LightRay, hit_object: VObject, distance: float) -> Color:
         point = ray.point_at(distance)
-
-        # try common method names for normal
-        if hasattr(hit_object.shape, "get_normal"):
-            normal = hit_object.shape.get_normal(point)
-        elif hasattr(hit_object.shape, "GetNormal"):
-            normal = hit_object.shape.GetNormal(point)
-        else:
-            # fallback normal
-            normal = np.array([0.0, 1.0, 0.0])
-
-        color = Color(0.0, 0.0, 0.0, 1.0)
-        for light in scene.get_lights():
-            light_dir = light.position - point
-            light_dist = np.linalg.norm(light_dir)
-            if light_dist > 0:
-                light_dir = light_dir / light_dist
-            intensity = max(0.0, np.dot(normal, light_dir))
-
-            # Support material stored on the VObject or on its Shape
-            base = getattr(hit_object, "material", None)
-            if base is None and hasattr(hit_object, "shape"):
-                base = getattr(hit_object.shape, "material", None)
-
-            if isinstance(base, Color):
-                mat_color = base
-            elif base is not None and hasattr(base, "base_color"):
-                mat_color = base.base_color
-            elif base is not None and hasattr(base, "color"):
-                mat_color = base.color
-            else:
-                mat_color = Color(1.0, 1.0, 1.0, 1.0)
-
-            light_int = getattr(light, "intensity", 1.0)
-            color = Color(
-                color.red + mat_color.red * light.color.red * intensity * light_int,
-                color.green + mat_color.green * light.color.green * intensity * light_int,
-                color.blue + mat_color.blue * light.color.blue * intensity * light_int,
-                1.0,
-            )
-        return color.clamp()
+        material = getattr(hit_object.shape, "material", None)
+        
+        # Emissive surfaces return their color
+        if material and hasattr(material, "emissive"):
+            emissive_color = material.emissive
+            # print(f"[Shade] Emissive surface at {point}: color={emissive_color}")
+            return emissive_color
+        
+        color = Color(0, 0, 0)  # Start with black
+        
+        if not material:
+            print(f"[Shade] No material at {point}; returning black")
+            return color
+        
+        mat_color = material.color
+        print(f"[Shade] Hit at point {point}")
+        print(f"  Material color: {mat_color}")
+        print(f"  Number of lights in scene: {len(scene.lights)}")
+        
+        # Direct lighting: process each light
+        for light_idx, light in enumerate(scene.lights):
+            print(f"  Light {light_idx}: {light.name}")
+            print(f"    Position: {light.position}")
+            print(f"    Color: {light.color}")
+            print(f"    Intensity: {light.intensity}")
+            
+            # Light direction from hit point to light
+            light_vec = light.position - point
+            light_dist = np.linalg.norm(light_vec)
+            light_dir = light_vec / light_dist if light_dist > 0 else np.array([0, 0, 0])
+            
+            print(f"    Distance to light: {light_dist}")
+            print(f"    Light direction (normalized): {light_dir}")
+            
+            # Get surface normal (approximation; requires shape to provide normal_at)
+            normal = np.array([0, 1, 0])  # TODO: compute from hit_object.shape.normal_at(point)
+            print(f"    Surface normal (placeholder): {normal}")
+            
+            # Lambert's cosine law
+            cos_theta = max(0.0, np.dot(normal, light_dir))
+            print(f"    cos(theta) = {cos_theta}")
+            
+            # Contribution = material_color * light_color * intensity * cos_theta
+            light_contrib = mat_color * light.color * light.intensity * cos_theta
+            print(f"    Contribution: {mat_color} * {light.color} * {light.intensity} * {cos_theta} = {light_contrib}")
+            
+            color += light_contrib
+        
+        print(f"  Final shaded color: {color}")
+        return color
 
 # Raytracer using strategies
 @register_algorithm("raytracer")
@@ -246,14 +256,25 @@ class Raytracer(Algorithm):
             for ray in rays:
                 hit_obj, dist = self.intersector.find_hit(scene, ray)
                 if hit_obj is None:
+                    # Mark ray with scene background color so Scene.render fills correctly
+                    try:
+                        bg = Color.use_array(scene.background_color)
+                        ray.red = bg.red
+                        ray.green = bg.green
+                        ray.blue = bg.blue
+                        ray.alpha = bg.alpha
+                    except Exception:
+                        # fallback to white if background_color malformed
+                        ray.red = 1.0
+                        ray.green = 1.0
+                        ray.blue = 1.0
+                        ray.alpha = 1.0
                     output_rays.append(ray)
-                    print(f"No hit for ray {ray.name}")
                     continue
-                hits.append((ray, hit_obj, dist))
                 shaded = self.shader.shade(scene, ray, hit_obj, dist)
                 ray.color = shaded
                 output_rays.append(ray)
-                print(f"Hit {hit_obj.name} at distance {dist:.4f} for ray {ray.name}")
+                hits.append((ray, hit_obj, dist))
 
             print(f"Completed rendering full image with {len(hits)} hits.")
             return all_rays, hits, output_rays
@@ -272,14 +293,30 @@ class Raytracer(Algorithm):
                 for ray in rays:
                     hit_obj, dist = self.intersector.find_hit(scene, ray)
                     if hit_obj is None:
+                        # Ray missed; use background color for this pixel
+                        try:
+                            bg = Color.use_array(scene.background_color)
+                            pixel_color = bg
+                        except Exception:
+                            pixel_color = Color(1.0, 1.0, 1.0, 1.0)
                         output_rays.append(ray)
-                        print(f"No hit for ray {ray.name}")
                         continue
-                    hits.append((ray, hit_obj, dist))
+                    
+                    # Ray hit; compute shaded color (do NOT modify ray.color)
                     shaded = self.shader.shade(scene, ray, hit_obj, dist)
-                    ray = LightRay.from_ray(ray, shaded, ray.intensity)
-                    output_rays.append(ray)
-                    print(f"Hit {hit_obj.name} at distance {dist:.4f} for ray {ray.name}")
+                    
+                    # Create a new output ray with the shaded color (for accumulation into pixel)
+                    output_ray = LightRay(
+                        origin=ray.origin,
+                        orientation=ray.orientation,
+                        color=shaded,  # ← Use shaded result, not original ray color
+                        intensity=ray.intensity,
+                        name=ray.name
+                    )
+                    output_ray.pixel_x = ray.pixel_x
+                    output_ray.pixel_y = ray.pixel_y
+                    output_rays.append(output_ray)
+                    hits.append((ray, hit_obj, dist))
         return all_rays, hits, output_rays
 
     def __repr__(self):
