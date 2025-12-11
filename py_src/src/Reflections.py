@@ -1,7 +1,4 @@
 import numpy as np
-import math
-
-from PrimaryStructures import *
 
 """
 

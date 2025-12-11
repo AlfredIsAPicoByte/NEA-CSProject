@@ -1,18 +1,43 @@
 from Scene import Scene
 from Camera import VCamera
 from Geometry import VObject
-from Luminance import LightRay, Color, Material
+from Luminance import Color, Material
 from Algorithims import Algorithm, register_algorithm
 from PrimaryStructures import Ray
 from Sampling import Sampler
 
 import numpy as np
 import random
-from typing import Any, Optional, List, Tuple
+from typing import Any, Optional, List, Tuple, Callable
 from abc import ABC, abstractmethod
+
+# Define a ray that holds the ray and data
+class TracingRay(Ray):
+    def __init__(self, origin: np.ndarray, orientation: np.ndarray, name: str = "Ray", **kwargs):
+        super().__init__(origin, orientation, name)
+        
+        for k, v in kwargs.items():
+            if hasattr(self, k):
+                setattr(self, k, v)
+    
+    def set_interaction_function(self, func: Callable[["TracingRay", VObject, np.ndarray], Tuple[Optional["TracingRay"], Optional["TracingRay"]]]) -> None:
+        self.interaction_function = func
+
+    def interact(self, hit_object: VObject, hit_point: np.ndarray) -> Tuple[Optional["TracingRay"], Optional["TracingRay"]]:
+        """Invoke the interaction function if set.
+           Returns a tuple of (reflected_ray, refracted_ray).
+        """
+        if hasattr(self, "interaction_function") and callable(self.interaction_function):
+            return self.interaction_function(self, hit_object, hit_point)
+        return None, None
+
+    def __repr__(self):
+        return f"TracingRay(name={self.name}, origin={self.origin}, orientation={self.orientation})"
+    pass
 
 # Strategy interfaces and simple implementations
 class RayGenerator(ABC):
+    """Abstract base class for ray generation strategies."""
     @abstractmethod
     def generate(
         self,
@@ -21,8 +46,40 @@ class RayGenerator(ABC):
         seed: Optional[int] = None,
         region: Optional[Tuple[int, int, int, int]] = None,  # (x, y, width, height)
         sampler: Optional[Any] = None,  # SamplingManager or Sampler-compatible
-    ) -> List[LightRay]:
+    ) -> List[TracingRay]:
         ...
+
+class BasicRayGenerator(RayGenerator):
+    def generate(
+        self,
+        camera: "VCamera",
+        rays_per_pixel: int,
+        seed: Optional[int] = None,
+        region: Optional[Tuple[int, int, int, int]] = None,
+        sampler: Optional[Sampler] = None,
+    ) -> List[TracingRay]:
+        # Simple implementation that generates one ray per pixel without jitter
+        rays: List[TracingRay] = []
+        cam_width, cam_height = camera.width, camera.height
+        
+        for y in range(cam_height):
+            for x in range(cam_width):
+                for r in range(max(1, rays_per_pixel)):
+                    u = (x + 0.5) / cam_width
+                    v = (y + 0.5) / cam_height
+
+                    orientation = camera.transform.forward + (u - 0.5) * camera.transform.right + (v - 0.5) * camera.transform.up
+                    orientation = orientation / np.linalg.norm(orientation)
+                    ray = TracingRay(
+                        origin=camera.transform.position,
+                        orientation=orientation,
+                        pixel_x=x,
+                        pixel_y=y,
+                        color=Color(1.0, 1.0, 1.0, 1.0),
+                        name=f"Camera Ray ({x},{y}) #{r}"
+                    )
+                    rays.append(ray)
+        return rays
 
 class CameraJitterRayGenerator(RayGenerator):
     """Generate camera rays with per-pixel jitter (anti-aliasing).
@@ -31,18 +88,21 @@ class CameraJitterRayGenerator(RayGenerator):
        stratified or quasi-random sample positions per pixel (useful for tiles).
     """
     def generate(
-    self,
-    camera: "VCamera",
-    rays_per_pixel: int,
-    seed: Optional[int] = None,
-    region: Optional[Tuple[int, int, int, int]] = None,
-    sampler: Optional[Sampler] = None,
-    ) -> List[LightRay]:
+        self,
+        camera: "VCamera",
+        rays_per_pixel: int,
+        seed: Optional[int] = None,
+        region: Optional[Tuple[int, int, int, int]] = None,
+        sampler: Optional[Sampler] = None,
+    ) -> List[TracingRay]:
         if seed is not None:
             rand = random.Random(seed)
         else:
             rand = random.Random()
         
+        if rays_per_pixel < 1:
+            rays_per_pixel = 1
+
         cam_width, cam_height = camera.width, camera.height
         # default to full image
         if region is None:
@@ -55,7 +115,7 @@ class CameraJitterRayGenerator(RayGenerator):
             region_w = max(0, min(region_w, cam_width - x_start))
             region_h = max(0, min(region_h, cam_height - y_start))
 
-        rays: List[LightRay] = []
+        rays: List[TracingRay] = []
         for y in range(y_start, y_start + region_h):
             for x in range(x_start, x_start + region_w):
                 # If sampler is a SamplingManager, prefer its precomputed/per-pixel list
@@ -67,21 +127,18 @@ class CameraJitterRayGenerator(RayGenerator):
                             u = (x + s.u) / cam_width
                             v = (y + s.v) / cam_height
                         else:
-                            jitter_u = rand.uniform(-0.5, 0.5) / cam_width
-                            jitter_v = rand.uniform(-0.5, 0.5) / cam_height
-                            u = (x + 0.5 + jitter_u) / cam_width
-                            v = (y + 0.5 + jitter_v) / cam_height
+                            u, v = self.jitter_within_pixel(rand, x, y, cam_width, cam_height)
 
                         orientation = camera.transform.forward + (u - 0.5) * camera.transform.right + (v - 0.5) * camera.transform.up
                         orientation = orientation / np.linalg.norm(orientation)
-                        ray = LightRay(
+                        ray = TracingRay(
                             origin=camera.transform.position,
                             orientation=orientation,
+                            pixel_x=x,
+                            pixel_y=y,
                             color=Color(1.0, 1.0, 1.0, 1.0),
                             name=f"Camera Ray ({x},{y}) #{r}"
                         )
-                        ray.pixel_x = x
-                        ray.pixel_y = y
                         rays.append(ray)
                     continue
 
@@ -97,54 +154,62 @@ class CameraJitterRayGenerator(RayGenerator):
                             u = (x + off_u) / cam_width
                             v = (y + off_v) / cam_height
                         except Exception:
-                            jitter_u = rand.uniform(-0.5, 0.5) / cam_width
-                            jitter_v = rand.uniform(-0.5, 0.5) / cam_height
-                            u = (x + 0.5 + jitter_u) / cam_width
-                            v = (y + 0.5 + jitter_v) / cam_height
+                            u, v = self.jitter_within_pixel(rand, x, y, cam_width, cam_height)
 
                         orientation = camera.transform.forward + (u - 0.5) * camera.transform.right + (v - 0.5) * camera.transform.up
                         orientation = orientation / np.linalg.norm(orientation)
-                        ray = LightRay(
+                        ray = TracingRay(
                             origin=camera.transform.position,
                             orientation=orientation,
+                            pixel_x=x,
+                            pixel_y=y,
                             color=Color(1.0, 1.0, 1.0, 1.0),
                             name=f"Camera Ray ({x},{y}) #{r}"
                         )
                         rays.append(ray)
                     continue
-
-                # fallback: random jitter as before
-                for r in range(max(1, rays_per_pixel)):
-                    jitter_u = rand.uniform(-0.5, 0.5) / cam_width
-                    jitter_v = rand.uniform(-0.5, 0.5) / cam_height
-                    u = (x + 0.5 + jitter_u) / cam_width
-                    v = (y + 0.5 + jitter_v) / cam_height
-                    orientation = camera.transform.forward + (u - 0.5) * camera.transform.right + (v - 0.5) * camera.transform.up
-                    orientation = orientation / np.linalg.norm(orientation)
-                    ray = LightRay(
-                        origin=camera.transform.position,
-                        orientation=orientation,
-                        color=Color(1.0, 1.0, 1.0, 1.0),
-                        name=f"Camera Ray ({x},{y}) #{r}"
-                    )
-                    rays.append(ray)
+                break  # fallback to basic jitter
+            break
         return rays
+    
+    def jitter_within_pixel(self, rand: random.Random, x: int, y: int, cam_width: int, cam_height: int) -> Tuple[float, float]:
+        jitter_u = rand.uniform(-0.5, 0.5) / cam_width
+        jitter_v = rand.uniform(-0.5, 0.5) / cam_height
+        u = (x + 0.5 + jitter_u) / cam_width
+        v = (y + 0.5 + jitter_v) / cam_height
+        return u, v
 
 class IntersectionStrategy(ABC):
     @abstractmethod
-    def find_hit(self, scene: Any, ray: LightRay) -> Tuple[Optional[VObject], float]:
+    def find_hit(self, scene: Any, ray: TracingRay) -> Tuple[Optional[VObject], float]:
         ...
 
+class BasicRayIntersection(IntersectionStrategy):
+    def find_hit(self, scene: Scene, ray: TracingRay) -> Tuple[Optional[VObject], float]:
+        closest_object = None
+        closest_distance = float("inf")
+
+        for obj in scene.objects:
+            try:
+                distance = obj.shape.intersect(ray)
+                if distance is not None and 0 < distance < closest_distance:
+                    closest_distance = distance
+                    closest_object = obj
+            except Exception:
+                continue
+
+        if closest_object is not None:
+            return closest_object, closest_distance
+        else:
+            return None, float("inf")
+
 class RayMarchingIntersection(IntersectionStrategy):
-    def __init__(self, epsilon: float = 1e-4, max_distance: float = 100.0, max_steps: int = 256, attenuation: float = 0.9):
+    def __init__(self, epsilon: float = 1e-4, max_distance: float = 100.0, max_steps: int = 256):
         self.epsilon = epsilon
         self.max_distance = max_distance
         self.max_steps = max_steps
 
-        self.attenuation = attenuation
-        
-
-    def find_hit(self, scene: Scene, ray: LightRay) -> Tuple[Optional[VObject], float]:
+    def find_hit(self, scene: Scene, ray: TracingRay) -> Tuple[Optional[VObject], float]:
         distance_traveled = 0.0
 
         for _ in range(self.max_steps):
@@ -158,8 +223,9 @@ class RayMarchingIntersection(IntersectionStrategy):
             if distance_to_closest <= self.epsilon:
                 return closest_object, distance_traveled
             
-            ray = ray.AttenuateFactor(self.attenuation / distance_traveled if distance_traveled > 0 else 1.0)
-
+            if hasattr(ray, "color"):
+                ray.color = Color.attenuate_diatance_max(ray.color, distance_traveled, self.max_distance)
+            
             distance_traveled += distance_to_closest
             if distance_traveled >= self.max_distance:
                 return None, float("inf")
@@ -167,12 +233,16 @@ class RayMarchingIntersection(IntersectionStrategy):
 
 class ShadingStrategy(ABC):
     @abstractmethod
-    def shade(self, scene: Scene, ray: LightRay, hit_object: VObject, distance: float) -> Color:
+    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float) -> Color:
         ...
 
 class BasicLambertShading(ShadingStrategy):
-    def shade(self, scene: Scene, ray: LightRay, hit_object: VObject, distance: float) -> Color:
+    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float) -> Color:
         point = ray.point_at(distance)
+
+        if hit_object is None:
+            return Color(0, 0, 0, 1)
+            
         material = getattr(hit_object.shape, "material", None)
         
         # Emissive surfaces return their color
@@ -224,15 +294,6 @@ class BasicLambertShading(ShadingStrategy):
         print(f"  Final shaded color: {color}")
         return color
 
-class TracingRay(Ray):
-    def __init__(self, origin: np.ndarray, orientation: np.ndarray, name: str = "Ray", **kwargs):
-        super().__init__(self, origin, orientation, name)
-        
-        for k, v in kwargs.items():
-            if hasattr(self, k):
-                setattr(self, k, v)
-    pass
-
 # Raytracer using strategies
 @register_algorithm("raytracer")
 class Raytracer(Algorithm):
@@ -270,12 +331,14 @@ class Raytracer(Algorithm):
             
             for ray in rays:
                 hit_obj, dist = self.intersector.find_hit(scene, ray)
-                x, y = ray.pixel_x, ray.pixel_y
+
+                if hasattr(ray, "pixel_x") and hasattr(ray, "pixel_y"):
+                    x, y = ray.pixel_x, ray.pixel_y
                 
                 if hit_obj is None:
                     # Ray missed; use background color
                     try:
-                        bg = Color.use_array(scene.background_color)
+                        bg = Color.from_array(scene.background_color)
                     except Exception:
                         bg = Color(0.0, 0.0, 0.0, 1.0)
                     pixel_accum[(x, y)].append(bg)
@@ -304,7 +367,7 @@ class Raytracer(Algorithm):
                         
                         if hit_obj is None:
                             try:
-                                bg = Color.use_array(scene.background_color)
+                                bg = Color.from_array(scene.background_color)
                             except Exception:
                                 bg = Color(0.0, 0.0, 0.0, 1.0)
                             pixel_accum[(x, y)].append(bg)
@@ -325,7 +388,7 @@ class Raytracer(Algorithm):
                 else:
                     # Fallback: background color
                     try:
-                        avg_color = Color.use_array(scene.background_color)
+                        avg_color = Color.from_array(scene.background_color)
                     except Exception:
                         avg_color = Color(0.0, 0.0, 0.0, 1.0)
                 pixel_colors.append(avg_color)

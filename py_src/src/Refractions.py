@@ -1,8 +1,6 @@
 import numpy as np
 import math
 
-from PrimaryStructures import Ray
-
 """
 
 """
@@ -183,7 +181,7 @@ def refract_angle(normalAngle: float, incomingAngle: float, refractiveIndexIncid
 
     return outgoingAngle
 
-def refract_ray(normal: np.ndarray, incomingRay: Ray, refractiveIndexIncident: float, refractiveIndex: float) -> Ray:
+def refract_ray(normal: np.ndarray, origin: np.ndarray, direction: np.ndarray, refractiveIndexIncident: float, refractiveIndex: float) -> tuple[np.ndarray, np.ndarray]:
     """
     Calculate the outgoing angle of the refracted ray.
 
@@ -192,7 +190,7 @@ def refract_ray(normal: np.ndarray, incomingRay: Ray, refractiveIndexIncident: f
         incoming_ray (Ray): the incoming ray
     """
     normal = normal / np.linalg.norm(normal)
-    incomingDirection = incomingRay.orientation / np.linalg.norm(incomingRay.orientation)
+    incomingDirection = direction / np.linalg.norm(direction)
 
     cos_theta_i = -np.dot(normal, incomingDirection)
     sin_theta_i2 = 1.0 - cos_theta_i ** 2
@@ -207,4 +205,4 @@ def refract_ray(normal: np.ndarray, incomingRay: Ray, refractiveIndexIncident: f
     refractedDirection = n_ratio * incomingDirection + (n_ratio * cos_theta_i - cos_theta_t) * normal
     refractedDirection = refractedDirection / np.linalg.norm(refractedDirection)
 
-    return Ray(origin=incomingRay.origin, direction=refractedDirection)
+    return (origin, refractedDirection)

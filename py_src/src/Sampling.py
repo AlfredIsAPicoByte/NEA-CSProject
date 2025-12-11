@@ -33,8 +33,8 @@ class Sampler(ABC):
     - next_1d/next_2d: supply samples in [0,1)
     - clone: produce independent sampler for thread/worker
     """
-    def __init__(self, samples_per_pixel: int = 1):
-        self.samples_per_pixel = samples_per_pixel
+    def __init__(self, rays_per_pixel: int = 1):
+        self.rays_per_pixel = rays_per_pixel
 
     @abstractmethod
     def start_pixel(self, x: int, y: int) -> None:
@@ -52,26 +52,26 @@ class Sampler(ABC):
     def clone(self, seed: Optional[int] = None) -> "Sampler":
         ...
 
-    def set_samples_per_pixel(self, spp: int) -> None:
-        self.samples_per_pixel = spp
+    def set_rays_per_pixel(self, rpp: int) -> None:
+        self.rays_per_pixel = rpp
 
-    def get_samples_per_pixel(self, x: int, y:int) -> list[Sample]:
+    def get_rays_per_pixel(self, x: int, y:int) -> list[Sample]:
         """Utility to get all samples for a pixel as Sample(u,v) list."""
         self.start_pixel(x, y)
         out: list[Sample] = []
-        for _ in range(self.samples_per_pixel):
+        for _ in range(self.rays_per_pixel):
             u, v = self.next_2d()
             out.append(Sample(u, v))
         return out
 
     # Alias expected by other parts of the code (renderer checks this name)
     def get_samples_for_pixel(self, x: int, y: int) -> list[Sample]:
-        return self.get_samples_per_pixel(x, y)
+        return self.get_rays_per_pixel(x, y)
 
 class RandomSampler(Sampler):
     """Independent RNG sampler, deterministic with base seed + pixel coords."""
-    def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
-        super().__init__(samples_per_pixel)
+    def __init__(self, rays_per_pixel: int = 1, seed: Optional[int] = None):
+        super().__init__(rays_per_pixel)
         self._base_seed = 0 if seed is None else int(seed)
         self._rng = random.Random(self._base_seed)
         self._x = 0
@@ -97,12 +97,12 @@ class RandomSampler(Sampler):
         return (self._rng.random(), self._rng.random())
 
     def clone(self, seed: Optional[int] = None) -> "RandomSampler":
-        return RandomSampler(self.samples_per_pixel, seed if seed is not None else self._base_seed)
+        return RandomSampler(self.rays_per_pixel, seed if seed is not None else self._base_seed)
 
 class StratifiedSampler(Sampler):
     """Stratified 2D sampler (square grid) with per-cell jitter."""
-    def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
-        super().__init__(samples_per_pixel)
+    def __init__(self, rays_per_pixel: int = 1, seed: Optional[int] = None):
+        super().__init__(rays_per_pixel)
         self._base_seed = 0 if seed is None else int(seed)
         self._rng = random.Random(self._base_seed)
         self._x = 0
@@ -111,12 +111,12 @@ class StratifiedSampler(Sampler):
         self._rebuild_grid()
 
     def _rebuild_grid(self):
-        n = max(1, int(math.ceil(math.sqrt(self.samples_per_pixel))))
+        n = max(1, int(math.ceil(math.sqrt(self.rays_per_pixel))))
         self._nx = n
         self._ny = n
 
-    def set_samples_per_pixel(self, spp: int) -> None:
-        super().set_samples_per_pixel(spp)
+    def set_rays_per_pixel(self, rpp: int) -> None:
+        super().set_rays_per_pixel(rpp)
         self._rebuild_grid()
 
     def start_pixel(self, x: int, y: int) -> None:
@@ -139,12 +139,12 @@ class StratifiedSampler(Sampler):
         return (u, v)
 
     def clone(self, seed: Optional[int] = None) -> "StratifiedSampler":
-        return StratifiedSampler(self.samples_per_pixel, seed if seed is not None else self._base_seed)
+        return StratifiedSampler(self.rays_per_pixel, seed if seed is not None else self._base_seed)
 
 # Simple quasi-random (Halton) generator for demonstration
 class HaltonSampler(Sampler):
-    def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
-        super().__init__(samples_per_pixel)
+    def __init__(self, rays_per_pixel: int = 1, seed: Optional[int] = None):
+        super().__init__(rays_per_pixel)
         self._index = 0
         self._base_seed = 0 if seed is None else int(seed)
 
@@ -174,12 +174,12 @@ class HaltonSampler(Sampler):
         return v
 
     def clone(self, seed: Optional[int] = None) -> "HaltonSampler":
-        return HaltonSampler(self.samples_per_pixel, seed if seed is not None else self._base_seed)
+        return HaltonSampler(self.rays_per_pixel, seed if seed is not None else self._base_seed)
 
 class AdaptiveSampler(Sampler):
     """Placeholder for an adaptive sampler implementation."""
-    def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
-        super().__init__(samples_per_pixel)
+    def __init__(self, rays_per_pixel: int = 1, seed: Optional[int] = None):
+        super().__init__(rays_per_pixel)
         # Implementation would go here
 
     def start_pixel(self, x: int, y: int) -> None:
@@ -192,7 +192,7 @@ class AdaptiveSampler(Sampler):
         return (random.random(), random.random())
 
     def clone(self, seed: Optional[int] = None) -> "AdaptiveSampler":
-        return AdaptiveSampler(self.samples_per_pixel, seed)
+        return AdaptiveSampler(self.rays_per_pixel, seed)
 
 # Registry and factory
 _SAMPLER_REGISTRY: dict[str, type[Sampler]] = {
@@ -202,11 +202,11 @@ _SAMPLER_REGISTRY: dict[str, type[Sampler]] = {
     "adaptive": AdaptiveSampler,
 }
 
-def create_sampler(name: str, samples_per_pixel: int = 1, seed: Optional[int] = None) -> Sampler:
+def create_sampler(name: str, rays_per_pixel: int = 1, seed: Optional[int] = None) -> Sampler:
     cls = _SAMPLER_REGISTRY.get(name.lower())
     if cls is None:
         raise ValueError(f"Unknown sampler: {name}")
-    return cls(samples_per_pixel, seed)
+    return cls(rays_per_pixel, seed)
 
 class SamplingManager:
     """
@@ -217,8 +217,8 @@ class SamplingManager:
         self.sample_settings = sample_settings
         self.seed = seed
         self.sampler_name = sampler_name if sampler_name is not None else "random"
-        self._spp = max(1, self.sample_settings.size)
-        self._sampler = create_sampler(self.sampler_name, self._spp, seed)
+        self._rpp = max(1, self.sample_settings.size)
+        self._sampler = create_sampler(self.sampler_name, self._rpp, seed)
         # Precompute samples if requested (disabled by default to save memory)
         self.samples: List[Tuple[float, float]] = []
         self._precompute = bool(precompute)
@@ -231,7 +231,7 @@ class SamplingManager:
         for y in range(self.sample_settings.height):
             for x in range(self.sample_settings.width):
                 sampler.start_pixel(x, y)
-                for _ in range(self._spp):
+                for _ in range(self._rpp):
                     u, v = sampler.next_2d()
                     self.samples.append((u, v))
 
@@ -245,8 +245,8 @@ class SamplingManager:
     def get_samples_for_pixel(self, x: int, y: int) -> List[Sample]:
         # If precomputed, slice out samples for this pixel
         if self._precompute:
-            start = (y * self.sample_settings.width + x) * self._spp
-            slice_uv = self.samples[start:start + self._spp]
+            start = (y * self.sample_settings.width + x) * self._rpp
+            slice_uv = self.samples[start:start + self._rpp]
             return [Sample(u, v) for (u, v) in slice_uv]
 
         # Otherwise generate on-demand from the underlying sampler (clone per-call for safety)
@@ -258,7 +258,7 @@ class SamplingManager:
             pass
 
         out: List[Sample] = []
-        for _ in range(self._spp):
+        for _ in range(self._rpp):
             try:
                 u, v = sampler.next_2d()
             except Exception:
@@ -268,4 +268,4 @@ class SamplingManager:
         return out
 
     def __repr__(self):
-        return f"SamplingManager(sampler={self.sampler_name}, spp={self._spp}, settings={self.sample_settings})"
+        return f"SamplingManager(sampler={self.sampler_name}, rpp={self._rpp}, settings={self.sample_settings})"

@@ -1,5 +1,4 @@
 import numpy as np
-
 from PrimaryStructures import Ray
 from Reflections import reflect_ray
 from Refractions import refract_ray
@@ -22,7 +21,7 @@ class Color:
         return self
     
     @classmethod
-    def use_hex(cls, hex_str: str):
+    def from_hex(cls, hex_str: str):
         """Create a Color object from a hex string."""
         hex_str = hex_str.strip().lstrip('#')
         if len(hex_str) not in (6, 8):
@@ -37,7 +36,7 @@ class Color:
         return cls(*rgba)
 
     @classmethod
-    def use_array(cls, arr):
+    def from_array(cls, arr):
         """Create a Color object from an array-like input."""
         if len(arr) not in (3, 4):
             raise ValueError("Array must have 3 (RGB) or 4 (RGBA) elements.")
@@ -66,6 +65,38 @@ class Color:
     def alpha(self): return self.rgba[3]
     @alpha.setter
     def alpha(self, value): self.rgba[3] = clamp(value)
+
+    @classmethod
+    def attenuate(cls, factor: float):
+        """Return a new Color attenuated by the given factor."""
+        return Color(
+            clamp(cls.red * factor),
+            clamp(cls.green * factor),
+            clamp(cls.blue * factor),
+            cls.alpha
+        )
+    
+    @classmethod
+    def attenuate_distance_cof(cls, distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0):
+        """
+        Return a new Color attenuated by distance using quadratic attenuation.
+        factor = 1 / (a*d^2 + b*d + c)
+        """
+        if c == 0 and a == 0 and b == 0:
+            raise ValueError("Attenuation coefficients cannot all be zero")
+        factor = 1.0 / (a * (distance ** 2) + b * distance + c)
+        return cls.attenuate(factor)
+    
+    @classmethod
+    def attenuate_diatance_max(cls, distance: float, max_distance: float):
+        """
+        Return a new Color attenuated linearly based on distance and max distance.
+        factor = max(0, 1 - (distance / max_distance))
+        """
+        if max_distance <= 0:
+            raise ValueError("max_distance must be greater than zero")
+        factor = max(0.0, 1.0 - (distance / max_distance))
+        return cls.attenuate(factor)
 
     def __add__(self, other):
         if type(other).__name__ == 'Color' or isinstance(other, Color):
@@ -116,146 +147,6 @@ class Color:
         r, g, b, a = self.rgba
         return f"Color(r={r:.3f}, g={g:.3f}, b={b:.3f}, a={a:.3f})"
 
-class LightRay(Ray, Color):
-    def __init__(
-        self,
-        origin: np.ndarray,
-        orientation : np.ndarray,
-        color: Color,
-        intensity: float = 1.0,
-        name: str = "Light Ray"
-    ):
-        # Normalize orientation  safely
-        norm = np.linalg.norm(orientation)
-        if norm == 0:
-            raise ValueError("Orientation vector cannot be zero-length.")
-        orient  = orientation  / norm
-
-        # Initialize both parent classes
-        Ray.__init__(self, origin, orient , name)
-        Color.__init__(self, color.red, color.green, color.blue, color.alpha)
-
-        self.intensity = float(intensity)
-        self.name = name  # keep name stored directly
-    
-
-    @classmethod
-    def from_ray(cls, ray: Ray, color: "Color", intensity: float):
-        """
-        Helper constructor that preserves the Ray and ColorData instances passed in.
-        Accepts signature used by tests: from_ray(ray, color, intensity)
-        """
-        # Ensure intensity is numeric and color is passed through
-        try:
-            intensity_f = float(intensity)
-        except Exception as exc:
-            raise TypeError(f"Invalid intensity value: {intensity}") from exc
-        # Construct from an existing Ray and Color
-        return cls(ray.origin.copy(), ray.orientation.copy(), color, intensity_f, ray.name)
-    
-    @classmethod
-    def from_components(cls, origin, orientation , r, g, b, alpha=1.0, intensity=1.0, name="Light Ray"):
-        """Create a LightRay from individual components."""
-        color = Color(r, g, b, alpha)
-        return cls(origin, orientation , color, intensity, name)
-    
-    @classmethod
-    def from_hex(cls, origin, orientation , hex_str, intensity=1.0, name="Light Ray"):
-        """Create a LightRay from a hex color string."""
-        color = Color.use_hex(hex_str)
-        return cls(origin, orientation , color, intensity, name)
-    
-    @classmethod
-    def from_rgb255(cls, origin, orientation , r, g, b, alpha=255, intensity=1.0, name="Light Ray"):
-        """Create a LightRay from 0-255 RGB(A) values."""
-        color = Color.from_rgb255(r, g, b, alpha)
-        return cls(origin, orientation , color, intensity, name)
-    
-    def AttenuateDistance(self, distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0) -> "LightRay":
-        """
-        Return a dimmed copy of the LightRay using quadratic distance attenuation.
-        factor = 1 / (a*d^2 + b*d + c)
-        """
-        if c == 0 and a == 0 and b == 0:
-            raise ValueError("Attenuation coefficients cannot all be zero")
-        factor = 1.0 / (a * (distance ** 2) + b * distance + c)
-        return LightRay(
-            self.origin.copy(),
-            self.orientation.copy(),
-            self.base_color,
-            intensity=self.intensity * factor,
-            name=self.name + f" (X{factor:.2f})"
-        )
-    
-    def AttenuateFactor(self, factor: float) -> "LightRay":
-        """Return a dimmed copy of the LightRay by a multiplicative factor."""
-        return LightRay(
-            self.origin.copy(),
-            self.orientation.copy(),
-            self.base_color,
-            intensity=self.intensity * factor,
-            name=self.name + f" (X{factor:.2f})"
-        )
-    
-    def Reflect(self, normal: np.ndarray) -> "LightRay":
-        """Return a reflected copy of this LightRay about the given normal."""
-        reflected_ray = reflect_ray(self.orientation, normal)
-        reflected_orientation = reflected_ray.orientation if hasattr(reflected_ray, 'orientation') else reflected_ray
-        return LightRay(
-            self.origin.copy(),
-            reflected_orientation,
-            self.base_color,
-            intensity=self.intensity,
-            name=f"{self.name} (reflected)"
-        )
-    
-    def Refract(self, normal: np.ndarray, eta: float = 1.0) -> "LightRay":
-        """Return a refracted copy of this LightRay about the given normal."""
-        refracted_orientation = refract_ray(self.orientation, normal)
-        return LightRay(
-            self.origin.copy(),
-            refracted_orientation,
-            self.base_color,
-            intensity=self.intensity,
-            name=f"{self.name} (refracted)"
-        )
-    
-    @property
-    def ray(self) -> Ray:
-        """Return an independent Ray copy of this LightRay's geometric component."""
-        return Ray(self.origin.copy(), self.orientation .copy(), self.name)
-    
-    @property
-    def base_color(self) -> Color:
-        """Return the color data of this LightRay without intensity scaling."""
-        return Color(self.red, self.green, self.blue, self.alpha)
-    
-    @base_color.setter
-    def base_color(self, col: Color):
-        self.red = col.red
-        self.blue = col.blue
-        self.green = col.green
-        self.alpha = col.alpha
-    
-    @property
-    def final_color(self) -> Color:
-        """Return the effective color of this LightRay after intensity scaling."""
-        return Color(
-            clamp(self.red * self.intensity),
-            clamp(self.green * self.intensity),
-            clamp(self.blue * self.intensity),
-            self.alpha
-        )
-
-    def __repr__(self):
-        return (
-            f"LightRay("
-            f"origin={np.round(self.origin, 3)}, "
-            f"orientation ={np.round(self.orientation , 3)}, "
-            f"color={self.base_color}, "
-            f"intensity={self.intensity:.2f})"
-        )
-
 class Material:
     def __init__(self, color: Color, emissive: Color, roughness: float, glossiness: float, metallic: float, **kwargs):
         """
@@ -281,20 +172,18 @@ class Material:
 
         for key, value in kwargs.items():
             setattr(self, key, value)
-            
-    def AffectColor(self, color: Color) -> Color:
-        """Apply material attributes to a color."""
-        col = self.base_color * color * self.glossiness # Specular component
-        col += color * (1 - self.glossiness) * (1 - self.roughness) # Diffuse component
 
-        col += self.emissive # Emissive component
+    def manipulate_color(self, color: Color) -> Color:
+        """Manipulate the input color based on material properties."""
+        # Combine diffuse, specular, emissive, and metallic components
+        diffuse = self.get_diffuse_component(color)
+        specular = self.get_specular_component(color)
+        emissive = self.get_emissive_component()
+        metallic = self.get_metallic_component(color)
+        col = diffuse + specular + emissive + metallic
+        return col.clamp()
 
-        if self.metallic > 0:
-            col *= (1 - self.metallic) + self.base_color * color * self.metallic # Metallic tint
-        
-        return col
-
-    def RedirectLightRay(self, incoming_ray: LightRay, normal: np.ndarray) -> LightRay:
+    def calculate_optical_redirection(self, incoming_ray: Ray, surface_normal: np.ndarray, incoming_color: Color, new_origin: np.ndarray) -> tuple[Ray, Color]:
         """
         Compute the redirected (reflected or refracted) ray and its color after interaction with the material.
         Returns a LightRay with updated direction and color.
@@ -302,39 +191,37 @@ class Material:
         # Decide between reflection and refraction based on material properties
         if self.can_refract and self.is_transparent:
             # Refract the incoming ray orientation about the normal
-            refracted_orientation = refract_ray(incoming_ray.orientation, normal)
+            refracted_orientation = refract_ray(incoming_ray.orientation, surface_normal)
             new_orientation = refracted_orientation
         else:
             # Reflect the incoming ray orientation about the normal
-            reflected_ray = reflect_ray(incoming_ray.orientation, normal)
+            reflected_ray = Ray(*reflect_ray(surface_normal, incoming_ray.origin, incoming_ray.orientation))
             new_orientation = reflected_ray.orientation if hasattr(reflected_ray, 'orientation') else reflected_ray
 
         # Calculate the new color after material effect
-        new_color = self.AffectColor(incoming_ray.final_color)
+        new_color = self.manipulate_color(incoming_color)
 
         # Create the new LightRay
-        redirected_ray = LightRay(
-            origin=incoming_ray.origin.copy(),
+        redirected_ray = Ray(
+            origin=new_origin,
             orientation=new_orientation,
-            color=new_color,
-            intensity=incoming_ray.intensity,
             name=f"{incoming_ray.name} (reflected)"
         )
-        return redirected_ray
+        return redirected_ray, new_color
 
-    def GetDiffuse(self, incoming_color: Color) -> Color:
+    def get_diffuse_component(self, incoming_color: Color) -> Color:
         """Get the diffuse component of the material response."""
         return self.base_color * incoming_color * (1.0 - self.glossiness)
     
-    def GetSpecular(self, incoming_color: Color) -> Color:
+    def get_specular_component(self, incoming_color: Color) -> Color:
         """Get the specular component of the material response."""
         return incoming_color * self.glossiness * (1.0 - self.roughness)
     
-    def GetEmissive(self) -> Color:
+    def get_emissive_component(self) -> Color:
         """Get the emissive color of the material."""
         return self.emissive
     
-    def GetMetallic(self, incoming_color: Color) -> Color:
+    def get_metallic_component(self, incoming_color: Color) -> Color:
         """Get the metallic component of the material response."""
         return (1 - self.metallic) + self.base_color * incoming_color * self.metallic
 
@@ -350,22 +237,6 @@ class LightSource:
         self.color = color
         self.intensity = intensity
         self.name = name
-    
-    def LightRayReturn(self, incoming_ray: Ray) -> LightRay:
-        """Generate a LightRay from this light source towards the incoming ray's origin."""
-        direction = incoming_ray.origin - self.position
-        norm = np.linalg.norm(direction)
-        if norm == 0:
-            raise ValueError("Incoming ray origin cannot be the same as light source position.")
-        orientation  = direction / norm
-
-        return LightRay(
-            origin=self.position.copy(),
-            orientation=orientation ,
-            color=self.color,
-            intensity=self.intensity,
-            name=f"{self.name} to {incoming_ray.name}"
-        )
 
     def __repr__(self):
         return (
@@ -377,7 +248,6 @@ Luminance module: Provides classes for color representation, light rays, materia
 
 Provides:
   - Color: RGBA color with conversions (hex, RGB255, array)
-  - LightRay: Ray + Color + intensity for light transport
   - Material: Surface properties (roughness, glossiness) affecting light interaction
   - LightSource: Point light emitting rays with color and intensity
 """

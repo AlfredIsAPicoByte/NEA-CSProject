@@ -23,27 +23,27 @@ def build_a_scene(width=200, height=200):
     # Geometry: Sphere at origin
     sphere_shape = Sphere(center=np.array([0.0, 0.0, 0.0]), radius=0.5, name="Ball")
     # Material (optional) - Luminance.Material expects Color, roughness, etc.
-    mat = Material(color=Color.use_hex("#4E70E0"), emissive=Color(1,1,1), roughness=0.5, glossiness=0.2, metallic=0.0)
+    mat = Material(color=Color.from_hex("#4E70E0"), emissive=Color(.5,.5,1), roughness=0.5, glossiness=0.2, metallic=0.0)
     sphere_shape.material = mat
     vobj = VObject(shape=sphere_shape, name="SphereObject")
     scene.add_object(vobj)
 
     # Ground approximated with a large sphere (simple trick)
     ground = Sphere(center=np.array([0.0, 100.5, 0.0]), radius=100.0, name="Ground")
-    mat = Material(color=Color.use_hex("#8FBF7F"), emissive=Color(0,0,0), roughness=1.0, glossiness=0.0, metallic=0.0)
+    mat = Material(color=Color.from_hex("#8FBF7F"), emissive=Color.from_hex("#8FBF7F"), roughness=1.0, glossiness=0.0, metallic=0.0)
     ground.material = mat
     ground_obj = VObject(shape=ground, name="GroundObject")
     scene.add_object(ground_obj)
 
     box = Cube(center=np.array([-1, 4, 5]), side_length=2, name="Box")
     box.Rotate(10, [0, 1, 0])
-    mat = Material(color=Color.use_hex("#A38A5A"), emissive=Color(0,0,0), roughness=0, glossiness=0.0, metallic=0.5)
+    mat = Material(color=Color.from_hex("#A38A5A"), emissive=Color(0,0,0), roughness=0, glossiness=0.0, metallic=0.5)
     box.material = mat
     box_obj = VObject(shape=box, name="BoxObject")
     scene.add_object(box_obj)
 
     # Light source
-    light = LightSource(position=np.array([2.0, 3.0, -1.0]), color=Color.use_hex("#FFFFFF"), intensity=1.5, name="Sun")
+    light = LightSource(position=np.array([2.0, 3.0, -1.0]), color=Color.from_hex("#FFFFFF"), intensity=1.5, name="Sun")
     scene.add_light(light)
 
     return scene
@@ -54,7 +54,8 @@ def render_and_save(scene, algorithim: Algorithm, out_path="render_out_strat.png
     # Convert to numpy to inspect pixel range (works for PIL Image or array)
     try:
         arr = np.array(im)
-        print("Render pixel range:", "(" + str(arr.min()) + str(arr.max()) + ")", "dtype:", arr.dtype, "shape:", arr.shape)
+        print(f"Render pixel range: min={arr.min()}, max={arr.max()}, "
+              f"shape={arr.shape}, dtype={arr.dtype}")
     except Exception as e:
         print("Could not convert render to numpy array:", e)
     
