@@ -51,43 +51,31 @@ class Scene:
         self.objects.clear()
         self.lights.clear()
 
-    def render(self, algorithim, sampler = None) -> Image:
-        rays, hits, output_rays = algorithim.render(self, self.camera, sampler = sampler)
-
-        # Ray names are "Camera Ray (x,y) #r"
-        rx = re.compile(r'Camera Ray \((\d+),(\d+)\)')
-
-        # Prepare accumulation buffers (float)
-        W, H = self.camera.width, self.camera.height
-        accum = np.zeros((H, W, 3), dtype=np.float64)
-        counts = np.zeros((H, W), dtype=int)
-        for r in output_rays:
-            x = getattr(r, "pixel_x", None)
-            y = getattr(r, "pixel_y", None)
-            if x is None or y is None:
-                # fallback: parse name as "Camera Ray (x,y) #r"
-                m = rx.search(r.name)
-                if not m: continue
-                x = int(m.group(1)); y = int(m.group(2))
-            c: Color = getattr(r, "final_color", None) or getattr(r, "color", None) or getattr(r, "base_color", None)
-            if c is None: continue
-            arr = np.asarray(c.rgba if hasattr(c, "rgba") else c)
-            accum[y, x, :] += arr[:3]
-            counts[y, x] += 1
+    def render(self, algorithim, sampler=None) -> Image:
+        """Render the scene using the given algorithm and return a PIL Image."""
+        pixel_colors = algorithim.render(self, self.camera, sampler=sampler)
         
-        # Avoid division by zero; where no samples, use background color from scene
-        mask = counts > 0
-        accum[mask] = accum[mask] / counts[mask][:, None]
-
-        # Fill empty pixels with background color
-        bg = np.asarray(self.background_color, dtype=np.float64)
-        accum[~mask] = bg
-
-        # Convert to uint8 and save
-        # Colors are represented in [0.0, 1.0]; scale to 0-255 before clamping/conversion.
-        img8 = np.clip(accum * 255.0, 0, 255).astype(np.uint8)
-        im = Image.fromarray(img8, mode="RGB")
-
-        print("Number of Rays: " + len(rays).__str__() + ", Number of Hits: " + len(hits).__str__())
+        W, H = self.camera.width, self.camera.height
+        
+        # Convert flat pixel_colors list (row-major) to 2D array
+        img_array = np.zeros((H, W, 3), dtype=np.uint8)
+        for idx, color in enumerate(pixel_colors):
+            y = idx // W
+            x = idx % W
+            
+            # Extract RGB from Color object
+            if hasattr(color, "rgba"):
+                rgb = color.rgba[:3]
+            elif hasattr(color, "to_array"):
+                rgb = color.to_array()[:3]
+            else:
+                rgb = [0.0, 0.0, 0.0]
+            
+            # Clamp to [0, 1] and convert to [0, 255]
+            rgb = np.clip(np.asarray(rgb, dtype=np.float64) * 255.0, 0, 255).astype(np.uint8)
+            img_array[y, x, :] = rgb
+        
+        im = Image.fromarray(img_array, mode="RGB")
+        print(f"Rendered image: {W}x{H}, {len(pixel_colors)} pixel colors")
         
         return im

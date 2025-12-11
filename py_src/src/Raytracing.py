@@ -3,6 +3,7 @@ from Camera import VCamera
 from Geometry import VObject
 from Luminance import LightRay, Color, Material
 from Algorithims import Algorithm, register_algorithm
+from PrimaryStructures import Ray
 from Sampling import Sampler
 
 import numpy as np
@@ -223,6 +224,15 @@ class BasicLambertShading(ShadingStrategy):
         print(f"  Final shaded color: {color}")
         return color
 
+class TracingRay(Ray):
+    def __init__(self, origin: np.ndarray, orientation: np.ndarray, name: str = "Ray", **kwargs):
+        super().__init__(self, origin, orientation, name)
+        
+        for k, v in kwargs.items():
+            if hasattr(self, k):
+                setattr(self, k, v)
+    pass
+
 # Raytracer using strategies
 @register_algorithm("raytracer")
 class Raytracer(Algorithm):
@@ -239,85 +249,88 @@ class Raytracer(Algorithm):
         self.intersector = intersection_strategy if intersection_strategy is not None else RayMarchingIntersection()
         self.shader = shading_strategy if shading_strategy is not None else BasicLambertShading()
 
-    def render(self, scene: Scene, camera: "VCamera", seed: Optional[int] = None, tile_size: Optional[Tuple[int,int]] = None, sampler: Optional[Sampler] = None) -> Any:
+    def render(self, scene: Scene, camera: "VCamera", seed: Optional[int] = None, tile_size: Optional[Tuple[int,int]] = None, sampler: Optional[Sampler] = None) -> List[Color]:
         """
-        Render the scene. Accepts optional sampler (SamplingManager or Sampler) and optional tile_size.
+        Render the scene and return pixel colors as a flat list (row-major order).
+        Index: pixel_colors[y * camera.width + x] is the color at pixel (x, y).
         """
         cam_w, cam_h = camera.width, camera.height
-        output_rays: List[LightRay] = []
-        hits: list[Tuple[LightRay, VObject, float]] = []
-        all_rays: List[LightRay] = []
+        
+        # Accumulation buffers: per-pixel color sum and sample count
+        pixel_accum = {}  # (x, y) -> list of Color values
+        
+        for y in range(cam_h):
+            for x in range(cam_w):
+                pixel_accum[(x, y)] = []
 
         if tile_size is None:
-            # full-image generation (existing behaviour)
+            # Full-image generation
             rays = self.ray_generator.generate(camera, self.rays_per_pixel, seed, region=None, sampler=sampler)
-            all_rays = rays
             print(f"Generated {len(rays)} rays for full image.")
+            
             for ray in rays:
                 hit_obj, dist = self.intersector.find_hit(scene, ray)
+                x, y = ray.pixel_x, ray.pixel_y
+                
                 if hit_obj is None:
-                    # Mark ray with scene background color so Scene.render fills correctly
+                    # Ray missed; use background color
                     try:
                         bg = Color.use_array(scene.background_color)
-                        ray.red = bg.red
-                        ray.green = bg.green
-                        ray.blue = bg.blue
-                        ray.alpha = bg.alpha
                     except Exception:
-                        # fallback to white if background_color malformed
-                        ray.red = 1.0
-                        ray.green = 1.0
-                        ray.blue = 1.0
-                        ray.alpha = 1.0
-                    output_rays.append(ray)
-                    continue
-                shaded = self.shader.shade(scene, ray, hit_obj, dist)
-                ray.color = shaded
-                output_rays.append(ray)
-                hits.append((ray, hit_obj, dist))
-
-            print(f"Completed rendering full image with {len(hits)} hits.")
-            return all_rays, hits, output_rays
-
-        # Tile-based processing
-        tile_w, tile_h = tile_size
-        print(f"Rendering in tiles of size {tile_w}x{tile_h}...")
-        for y0 in range(0, cam_h, tile_h):
-            for x0 in range(0, cam_w, tile_w):
-                w = min(tile_w, cam_w - x0)
-                h = min(tile_h, cam_h - y0)
-                region = (x0, y0, w, h)
-                rays = self.ray_generator.generate(camera, self.rays_per_pixel, seed, region=region, sampler=sampler)
-                all_rays.extend(rays)
-                print(f"Generated {len(rays)} rays for tile at ({x0},{y0}) size {w}x{h}.")
-                for ray in rays:
-                    hit_obj, dist = self.intersector.find_hit(scene, ray)
-                    if hit_obj is None:
-                        # Ray missed; use background color for this pixel
-                        try:
-                            bg = Color.use_array(scene.background_color)
-                            pixel_color = bg
-                        except Exception:
-                            pixel_color = Color(1.0, 1.0, 1.0, 1.0)
-                        output_rays.append(ray)
-                        continue
-                    
-                    # Ray hit; compute shaded color (do NOT modify ray.color)
+                        bg = Color(0.0, 0.0, 0.0, 1.0)
+                    pixel_accum[(x, y)].append(bg)
+                else:
+                    # Ray hit; compute shaded color
                     shaded = self.shader.shade(scene, ray, hit_obj, dist)
+                    pixel_accum[(x, y)].append(shaded)
+            
+            print(f"Completed rendering full image.")
+        else:
+            # Tile-based processing
+            tile_w, tile_h = tile_size
+            print(f"Rendering in tiles of size {tile_w}x{tile_h}...")
+            
+            for y0 in range(0, cam_h, tile_h):
+                for x0 in range(0, cam_w, tile_w):
+                    w = min(tile_w, cam_w - x0)
+                    h = min(tile_h, cam_h - y0)
+                    region = (x0, y0, w, h)
+                    rays = self.ray_generator.generate(camera, self.rays_per_pixel, seed, region=region, sampler=sampler)
+                    print(f"Generated {len(rays)} rays for tile at ({x0},{y0}) size {w}x{h}.")
                     
-                    # Create a new output ray with the shaded color (for accumulation into pixel)
-                    output_ray = LightRay(
-                        origin=ray.origin,
-                        orientation=ray.orientation,
-                        color=shaded,  # ← Use shaded result, not original ray color
-                        intensity=ray.intensity,
-                        name=ray.name
-                    )
-                    output_ray.pixel_x = ray.pixel_x
-                    output_ray.pixel_y = ray.pixel_y
-                    output_rays.append(output_ray)
-                    hits.append((ray, hit_obj, dist))
-        return all_rays, hits, output_rays
+                    for ray in rays:
+                        hit_obj, dist = self.intersector.find_hit(scene, ray)
+                        x, y = ray.pixel_x, ray.pixel_y
+                        
+                        if hit_obj is None:
+                            try:
+                                bg = Color.use_array(scene.background_color)
+                            except Exception:
+                                bg = Color(0.0, 0.0, 0.0, 1.0)
+                            pixel_accum[(x, y)].append(bg)
+                        else:
+                            shaded = self.shader.shade(scene, ray, hit_obj, dist)
+                            pixel_accum[(x, y)].append(shaded)
+        
+        # Average accumulated colors per pixel and build flat list (row-major)
+        pixel_colors: List[Color] = []
+        for y in range(cam_h):
+            for x in range(cam_w):
+                colors = pixel_accum[(x, y)]
+                if colors:
+                    avg_color = colors[0]
+                    for c in colors[1:]:
+                        avg_color = avg_color + c
+                    avg_color = avg_color * (1.0 / len(colors))
+                else:
+                    # Fallback: background color
+                    try:
+                        avg_color = Color.use_array(scene.background_color)
+                    except Exception:
+                        avg_color = Color(0.0, 0.0, 0.0, 1.0)
+                pixel_colors.append(avg_color)
+        
+        return pixel_colors
 
     def __repr__(self):
         return f"Raytracer(rays_per_pixel={self.rays_per_pixel}, intersector={self.intersector}, shader={self.shader})"

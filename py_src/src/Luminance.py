@@ -230,6 +230,13 @@ class LightRay(Ray, Color):
         """Return the color data of this LightRay without intensity scaling."""
         return Color(self.red, self.green, self.blue, self.alpha)
     
+    @base_color.setter
+    def base_color(self, col: Color):
+        self.red = col.red
+        self.blue = col.blue
+        self.green = col.green
+        self.alpha = col.alpha
+    
     @property
     def final_color(self) -> Color:
         """Return the effective color of this LightRay after intensity scaling."""
