@@ -59,6 +59,63 @@ def render_and_save(scene, algorithim: Algorithm, sampler: Sampler, out_path="re
     im.save(out_path)
     print(f"Saved render to {out_path}")
 
+def get_test_scene() -> tuple[int, int, Scene]:
+    # --- GLOBAL SETTINGS ---
+    width, height = 50, 50  # Increased resolution for better viewing
+
+    # --- 1. CAMERA & SCENE SETUP (Enhanced Depth) ---
+    # Camera: Moved back to Z = -6.0 for a wider, more composed view
+    cam_transform = Transform(np.array([0.0, 1.5, -6.0]), np.array([-10.0, 0.0, 0.0]), np.ones(3)) # Tilted down slightly
+    cam = VCamera(cam_transform, fov=60.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
+
+    # Background Gradient: Richer sunset/dusk sky for dramatic lighting
+    sky_colors = [
+        Color.from_hex("#000033"),  # Deep navy at the bottom
+        Color.from_hex("#14408A"),  # Dark blue in the middle
+        Color.from_hex("#C13584"),  # Magenta/pink at the top (zenith)
+    ]
+    sky_positions = [0.0, 0.5, 1.0] 
+    scene = Scene(name="InterestingScene", camera=cam, background_color=ColorGradient(sky_colors, sky_positions)) 
+
+    # --- 2. LIGHTING (Dramatic Side Light + Ambient) ---
+    
+    # Primary Key Light (Sharp, slightly yellow, placed high and to the left for side lighting)
+    key_light = LightSource(position=np.array([4.0, 5.0, 0.0]), color=Color.from_hex("#FFEDC7"), intensity=2.5, name="Key Light")
+    scene.add_light(key_light)
+    
+    # Soft Fill Light (Simulates general ambient light or bounce light)
+    fill_light = LightSource(position=np.array([-5.0, 2.0, -5.0]), color=Color.from_hex("#C7E5FF"), intensity=0.3, name="Fill Light")
+    scene.add_light(fill_light)
+    
+    # --- 3. GEOMETRY AND MATERIALS (Contrast and Realism) ---
+
+    # Main Sphere (Mid-Ground): Highly Reflective Metal
+    sphere_shape_1 = Sphere(center=np.array([0.0, 0.5, 0.0]), radius=0.5, name="MainReflectiveBall")
+    mat_metal = Material(color=Color.from_hex("#E0E0E0"), emissive=Color(0, 0, 0), roughness=0.05, glossiness=0.9, metallic=1.0) # Highly reflective metal
+    sphere_shape_1.material = mat_metal
+    scene.add_object(VObject(shape=sphere_shape_1, name="ReflectiveSphere"))
+
+    # Ground: Darker, slightly reflective floor for showing reflections
+    ground = Sphere(center=np.array([0.0, -100.0, 0.0]), radius=100.0, name="FloorPlane")
+    mat_floor = Material(color=Color.from_hex("#4B5320"), emissive=Color(0.01, 0.01, 0.01), roughness=0.3, glossiness=0.6, metallic=0.0)
+    ground.material = mat_floor
+    scene.add_object(VObject(shape=ground, name="GroundObject"))
+
+    # Additional Object 1: Cube (Background/Visual Anchor) - Matte and Rough
+    box_shape = Cube(center=np.array([-2.5, 1.0, 4.0]), side_length=2.5, name="BackgroundBox")
+    box_shape.transform.rotate(15, np.array([0, 1, 0])) # Simple rotation for visual interest
+    mat_matte = Material(color=Color.from_hex("#C27A23"), emissive=Color(0, 0, 0), roughness=0.8, glossiness=0.1, metallic=0.0) # Rough, terracotta-like
+    box_shape.material = mat_matte
+    scene.add_object(VObject(shape=box_shape, name="MatteBoxObject"))
+    
+    # Additional Object 2: Small Emissive Sphere (Light Source Helper) - Floating in air
+    sphere_shape_2 = Sphere(center=np.array([2.0, 2.5, 2.0]), radius=0.3, name="EmissiveOrb")
+    mat_glow = Material(color=Color(0, 0, 0), emissive=Color(0.8, 0.1, 0.8), roughness=0.0, glossiness=0.0, metallic=0.0) # Pure glow
+    sphere_shape_2.material = mat_glow
+    scene.add_object(VObject(shape=sphere_shape_2, name="EmissiveOrbObject"))
+
+    return width, height, scene
+
 if __name__ == "__main__":    # For a quick test, use small resolution; change to 320 X 180 for final
     width, height = 64, 64
 

@@ -78,7 +78,7 @@ class Scene:
                 self.background_gradient_type = BackgroundType.SOLID_COLOR  # Default type
 
             # --- 1. Determine the 't' value based on the gradient type ---
-            if isinstance(self.background_color, ColorGradient):
+            if isinstance(self.background_color, ColorGradient) and not self.background_gradient_type == BackgroundType.SOLID_COLOR:
                 # Use the direction vector components (Dx, Dy, Dz)
                 Dx, Dy, Dz = direction[0], direction[1], direction[2]
                 
@@ -90,27 +90,44 @@ class Scene:
                     value = Dy # TODO: More complex mapping can be applied here
                 else:
                     # Default to vertical if type is unrecognized
-                    value = Dy 
-                
-                # --- 2. Map the value [-1, 1] to the gradient parameter t [0, 1] ---
+                    value = Dy
                 
                 # Ensures 'value' is strictly [-1, 1] (though ray_direction should be unit length)
-                value = np.clip(value, -1.0, 1.0) 
+                value = np.clip(value, -1.0, 1.0)
                 
                 t = 0.5 * (value + 1.0)
                 
                 return self.background_color.get_color(t)
-            
-            # --- 3. Handle solid color backgrounds ---
-            
+
+            # --- 2. Handle Array-Like Texture/Environment Map ---
+            elif isinstance(self.background_color, np.ndarray) or (isinstance(self.background_color, (list, tuple)) and isinstance(self.background_color[0], (list, tuple, np.ndarray))):
+                
+                # If the structure is array-like (a list of lists or a 2D/3D NumPy array)
+                self.background_gradient_type = BackgroundType.TEXTURE
+                
+                # The core mechanism for texture/map lookups:
+                try:
+                    # The 'sample_texture' function must map the 3D 'direction' vector 
+                    # to 2D UV coordinates to read the color from the texture array.
+                    # 
+                    color = self.sample_texture(self.background_color, direction)
+                    return color
+                except Exception as e:
+                    # Fallback if texture sampling fails
+                    print(f"Error sampling background texture: {e}. Defaulting to black.")
+                    return Color()
+
+            # --- 3. Handle Solid Color / Simple Tuple Fallback ---
             elif isinstance(self.background_color, Color):
                 self.background_gradient_type = BackgroundType.SOLID_COLOR
                 return self.background_color
-            elif isinstance(self.background_color, tuple) and len(self.background_color) == 3:
+            elif isinstance(self.background_color, (tuple, list)) and len(self.background_color) == 3:
                 self.background_gradient_type = BackgroundType.SOLID_COLOR
                 r, g, b = self.background_color
                 return Color(r, g, b)
             else:
+                self.background_gradient_type = BackgroundType.SOLID_COLOR
+                print("Setting background color to black due to unknown value type.")
                 return Color()
     
     def clear_objects(self):

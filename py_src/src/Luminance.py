@@ -48,6 +48,27 @@ class Color:
     def from_rgb255(cls, r: int, g: int, b: int, alpha: int = 255):
         """Create a Color object from 0-255 RGB(A) values."""
         return cls(r / 255.0, g / 255.0, b / 255.0, alpha / 255.0)
+    
+    @staticmethod
+    def average_colors(colors: list['Color']) -> 'Color':
+        if not colors:
+            return Color() # Return black if list is empty
+            
+        sum_r, sum_g, sum_b, sum_a = 0.0, 0.0, 0.0, 0.0
+        
+        for c in colors:
+            sum_r += c.red
+            sum_g += c.green
+            sum_b += c.blue
+            sum_a += c.alpha
+            
+        N = len(colors)
+        return Color(
+            sum_r / N, 
+            sum_g / N, 
+            sum_b / N, 
+            sum_a / N
+        )
 
     @property
     def red(self): return self.rgba[0]

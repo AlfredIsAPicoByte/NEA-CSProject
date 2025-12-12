@@ -17,8 +17,7 @@ class TracingRay(Ray):
         super().__init__(origin, orientation, name)
         
         for k, v in kwargs.items():
-            if hasattr(self, k):
-                setattr(self, k, v)
+            setattr(self, k, v)
     
     def set_interaction_function(self, func: Callable[["TracingRay", VObject, np.ndarray], Tuple[Optional["TracingRay"], Optional["TracingRay"]]]) -> None:
         self.interaction_function = func
@@ -43,9 +42,9 @@ class RayGenerator(ABC):
         self,
         camera: "VCamera",
         rays_per_pixel: int,
-        seed: Optional[int] = None,
         region: Optional[Tuple[int, int, int, int]] = None,  # (x, y, width, height)
         sampler: Optional[Any] = None,  # SamplingManager or Sampler-compatible
+        seed: Optional[int] = None,
     ) -> List[TracingRay]:
         ...
 
@@ -54,16 +53,27 @@ class BasicRayGenerator(RayGenerator):
         self,
         camera: "VCamera",
         rays_per_pixel: int,
-        seed: Optional[int] = None,
         region: Optional[Tuple[int, int, int, int]] = None,
         sampler: Optional[Sampler] = None,
+        seed: Optional[int] = None,
     ) -> List[TracingRay]:
         # Simple implementation that generates one ray per pixel without jitter
-        rays: List[TracingRay] = []
         cam_width, cam_height = camera.width, camera.height
+
+        # default to full image
+        if region is None:
+            x_start, y_start, region_w, region_h = 0, 0, cam_width, cam_height
+        else:
+            x_start, y_start, region_w, region_h = region
+            # clamp region to camera dimensions
+            x_start = max(0, x_start)
+            y_start = max(0, y_start)
+            region_w = max(0, min(region_w, cam_width - x_start))
+            region_h = max(0, min(region_h, cam_height - y_start))
         
-        for y in range(cam_height):
-            for x in range(cam_width):
+        rays: List[TracingRay] = []
+        for y in range(y_start, y_start + region_h):
+            for x in range(x_start, x_start + region_w):
                 for r in range(max(1, rays_per_pixel)):
                     u = (x + 0.5) / cam_width
                     v = (y + 0.5) / cam_height
@@ -91,17 +101,14 @@ class JitterRayGenerator(RayGenerator):
         self,
         camera: "VCamera",
         rays_per_pixel: int,
-        seed: Optional[int] = None,
         region: Optional[Tuple[int, int, int, int]] = None,
         sampler: Optional[Sampler] = None,
+        seed: Optional[int] = None,
     ) -> List[TracingRay]:
         if seed is not None:
             rand = random.Random(seed)
         else:
             rand = random.Random()
-        
-        if rays_per_pixel < 1:
-            rays_per_pixel = 1
 
         cam_width, cam_height = camera.width, camera.height
         # default to full image
@@ -223,9 +230,6 @@ class RayMarchingIntersection(IntersectionStrategy):
             if distance_to_closest <= self.epsilon:
                 return closest_object, distance_traveled
             
-            if hasattr(ray, "color"):
-                ray.color = Color.attenuate_diatance_max(ray.color, distance_traveled, self.max_distance)
-            
             distance_traveled += distance_to_closest
             if distance_traveled >= self.max_distance:
                 return None, float("inf")
@@ -326,7 +330,7 @@ class Raytracer(Algorithm):
 
         if tile_size is None:
             # Full-image generation
-            rays = self.ray_generator.generate(scene.camera, self.rays_per_pixel, seed, region=None, sampler=sampler)
+            rays = self.ray_generator.generate(scene.camera, self.rays_per_pixel, region=None, sampler=sampler, seed=seed)
 
             print(f"Generated {len(rays)} rays for full image.")
             
@@ -335,11 +339,13 @@ class Raytracer(Algorithm):
 
                 if hasattr(ray, "pixel_x") and hasattr(ray, "pixel_y"):
                     x, y = ray.pixel_x, ray.pixel_y
+                else:
+                    raise AttributeError("Ray object is missing 'pixel_x' or 'pixel_y' attributes.")
                 
                 if hit_obj is None:
                     # Ray missed; use background color
                     try:
-                        bg = scene.get_background_color(ray.orientation)
+                        bg = scene.get_background_color(ray.orientation.tolist())
                     except Exception:
                         print("Error getting background color; using black. [full image]")
                         bg = Color()
@@ -365,11 +371,15 @@ class Raytracer(Algorithm):
                     
                     for ray in rays:
                         hit_obj, dist = self.intersector.find_hit(scene, ray)
-                        x, y = ray.pixel_x, ray.pixel_y
+                        
+                        if hasattr(ray, "pixel_x") and hasattr(ray, "pixel_y"):
+                            x, y = ray.pixel_x, ray.pixel_y
+                        else:
+                            raise AttributeError("Ray object is missing 'pixel_x' or 'pixel_y' attributes.")
                         
                         if hit_obj is None:
                             try:
-                                bg = scene.get_background_color(ray.orientation)
+                                bg = scene.get_background_color(ray.orientation.tolist())
                             except Exception:
                                 print("Error getting background color; using black. [tile]")
                                 bg = Color()
@@ -384,14 +394,11 @@ class Raytracer(Algorithm):
             for x in range(cam_w):
                 colors = pixel_accum[(x, y)]
                 if colors:
-                    avg_color = colors[0]
-                    for c in colors[1:]:
-                        avg_color = avg_color + c
-                    avg_color = avg_color * (1.0 / len(colors))
+                    avg_color = Color.average_colors(colors)
                 else:
                     # Fallback: background color
                     try:
-                        avg_color = scene.get_background_color(ray.orientation)
+                        avg_color = scene.get_background_color(scene.camera.transform.rotation)
                     except Exception:
                         print("Error getting background color; using black. [accumilation fallback]")
                         avg_color = Color()
