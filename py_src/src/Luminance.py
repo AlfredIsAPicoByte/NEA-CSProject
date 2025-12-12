@@ -66,38 +66,6 @@ class Color:
     @alpha.setter
     def alpha(self, value): self.rgba[3] = clamp(value)
 
-    @classmethod
-    def attenuate(cls, factor: float):
-        """Return a new Color attenuated by the given factor."""
-        return Color(
-            clamp(cls.red * factor),
-            clamp(cls.green * factor),
-            clamp(cls.blue * factor),
-            cls.alpha
-        )
-    
-    @classmethod
-    def attenuate_distance_cof(cls, distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0):
-        """
-        Return a new Color attenuated by distance using quadratic attenuation.
-        factor = 1 / (a*d^2 + b*d + c)
-        """
-        if c == 0 and a == 0 and b == 0:
-            raise ValueError("Attenuation coefficients cannot all be zero")
-        factor = 1.0 / (a * (distance ** 2) + b * distance + c)
-        return cls.attenuate(factor)
-    
-    @classmethod
-    def attenuate_diatance_max(cls, distance: float, max_distance: float):
-        """
-        Return a new Color attenuated linearly based on distance and max distance.
-        factor = max(0, 1 - (distance / max_distance))
-        """
-        if max_distance <= 0:
-            raise ValueError("max_distance must be greater than zero")
-        factor = max(0.0, 1.0 - (distance / max_distance))
-        return cls.attenuate(factor)
-
     def __add__(self, other):
         if type(other).__name__ == 'Color' or isinstance(other, Color):
              return Color(self.red + other.red, self.green + other.green, self.blue + other.blue, self.alpha + other.alpha)
@@ -143,9 +111,42 @@ class Color:
     def to_hex(self, include_alpha=True):
         r, g, b, a = (self.rgba * 255).astype(int)
         return f"#{r:02X}{g:02X}{b:02X}{a:02X}" if include_alpha else f"#{r:02X}{g:02X}{b:02X}"
+    def to_array(self):
+        return self.rgba.copy()
+    def to_rgb255(self):
+        r, g, b, a = (self.rgba * 255).astype(int)
+        return (r, g, b)
+    
     def __repr__(self):
         r, g, b, a = self.rgba
         return f"Color(r={r:.3f}, g={g:.3f}, b={b:.3f}, a={a:.3f})"
+
+class ColorGradient:
+    def __init__(self, colors: list[Color], positions: list[float]):
+        if len(colors) != len(positions):
+            raise ValueError("Colors and positions must have the same length.")
+        if any(p < 0.0 or p > 1.0 for p in positions):
+            raise ValueError("Positions must be in the range [0.0, 1.0].")
+        if sorted(positions) != positions:
+            raise ValueError("Positions must be in ascending order.")
+        
+        self.colors = colors
+        self.positions = positions
+    
+    def get_color(self, t: float) -> Color:
+        """Get interpolated color at position t in [0.0, 1.0]."""
+        t = clamp(t)
+        for i in range(1, len(self.positions)):
+            if t <= self.positions[i]:
+                t0, t1 = self.positions[i-1], self.positions[i]
+                c0, c1 = self.colors[i-1], self.colors[i]
+                factor = (t - t0) / (t1 - t0) if t1 > t0 else 0.0
+                r = c0.red + factor * (c1.red - c0.red)
+                g = c0.green + factor * (c1.green - c0.green)
+                b = c0.blue + factor * (c1.blue - c0.blue)
+                a = c0.alpha + factor * (c1.alpha - c0.alpha)
+                return Color(r, g, b, a)
+        return self.colors[-1]
 
 class Material:
     def __init__(self, color: Color, emissive: Color, roughness: float, glossiness: float, metallic: float, **kwargs):
@@ -191,17 +192,15 @@ class Material:
         # Decide between reflection and refraction based on material properties
         if self.can_refract and self.is_transparent:
             # Refract the incoming ray orientation about the normal
-            refracted_orientation = refract_ray(incoming_ray.orientation, surface_normal)
-            new_orientation = refracted_orientation
+            new_orientation = refract_ray(incoming_ray.orientation, surface_normal)
         else:
             # Reflect the incoming ray orientation about the normal
-            reflected_ray = Ray(*reflect_ray(surface_normal, incoming_ray.origin, incoming_ray.orientation))
-            new_orientation = reflected_ray.orientation if hasattr(reflected_ray, 'orientation') else reflected_ray
+            new_orientation = reflect_ray(surface_normal, incoming_ray.origin, incoming_ray.orientation)
 
         # Calculate the new color after material effect
         new_color = self.manipulate_color(incoming_color)
 
-        # Create the new LightRay
+        # Create the new ray
         redirected_ray = Ray(
             origin=new_origin,
             orientation=new_orientation,
@@ -237,6 +236,56 @@ class LightSource:
         self.color = color
         self.intensity = intensity
         self.name = name
+
+    def get_light_direction(self, hit_point: np.ndarray) -> np.ndarray:
+        """Return the normalized direction vector from the light source to the hit point."""
+        direction = hit_point - self.position
+        norm = np.linalg.norm(direction)
+        if norm == 0:
+            return direction  # Zero vector if at the same point
+        return direction / norm
+    
+    @classmethod
+    def attenuate(cls, color, factor: float):
+        """Return a new Color attenuated by the given factor."""
+        # Note: 'color' is used to access the specific instance properties
+        return cls(
+            clamp(color.red * factor),
+            clamp(color.green * factor),
+            clamp(color.blue * factor),
+            color.alpha
+        )
+    
+    @classmethod
+    def attenuate_distance_cof(cls, color: Color, distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0):
+        """
+        Return a new Color attenuated by distance using quadratic attenuation.
+        factor = 1 / (a*d^2 + b*d + c)
+        """
+        if c == 0 and a == 0 and b == 0:
+            raise ValueError("Attenuation coefficients cannot all be zero")
+        factor = 1.0 / (a * (distance ** 2) + b * distance + c)
+        return cls.attenuate(color, factor)
+    
+    @classmethod
+    def attenuate_diatance_max(cls, color: Color, distance: float, max_distance: float):
+        """
+        Return a new Color attenuated linearly based on distance and max distance.
+        factor = max(0, 1 - (distance / max_distance))
+        """
+        if max_distance <= 0:
+            raise ValueError("max_distance must be greater than zero")
+        factor = max(0.0, 1.0 - (distance / max_distance))
+        return cls.attenuate(color, factor)
+
+    def get_final_color(self, distance: float, attenuation_type: str = "distance_cof", **kwargs) -> Color:
+        """Return the final color of the light source after applying attenuation based on distance."""
+        if attenuation_type == "distance_cof":
+            return self.attenuate_distance_cof(self.color, distance, **kwargs)
+        elif attenuation_type == "distance_max":
+            return self.attenuate_diatance_max(self.color, distance, **kwargs)
+        else:
+            raise ValueError(f"Unknown attenuation type: {attenuation_type}")
 
     def __repr__(self):
         return (

@@ -242,6 +242,7 @@ class Transform:
         """
         Rotate this transform by a small Euler-like delta constructed from angle * normalized(axis).
         space: "global" updates the public/base rotation, "local" updates the local_rotation.
+        angle is in radians.
         """
         axis = np.asarray(axis, dtype=float)
         if axis.shape != (3,):

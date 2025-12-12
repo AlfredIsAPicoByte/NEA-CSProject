@@ -75,13 +75,13 @@ class BasicRayGenerator(RayGenerator):
                         orientation=orientation,
                         pixel_x=x,
                         pixel_y=y,
-                        color=Color(1.0, 1.0, 1.0, 1.0),
+                        color=Color(),
                         name=f"Camera Ray ({x},{y}) #{r}"
                     )
                     rays.append(ray)
         return rays
 
-class CameraJitterRayGenerator(RayGenerator):
+class JitterRayGenerator(RayGenerator):
     """Generate camera rays with per-pixel jitter (anti-aliasing).
        Supports optional region/tile to generate rays for a chunk of the image.
        Accepts an optional sampler or SamplingManager to produce deterministic,
@@ -136,7 +136,7 @@ class CameraJitterRayGenerator(RayGenerator):
                             orientation=orientation,
                             pixel_x=x,
                             pixel_y=y,
-                            color=Color(1.0, 1.0, 1.0, 1.0),
+                            color=Color(),
                             name=f"Camera Ray ({x},{y}) #{r}"
                         )
                         rays.append(ray)
@@ -163,7 +163,7 @@ class CameraJitterRayGenerator(RayGenerator):
                             orientation=orientation,
                             pixel_x=x,
                             pixel_y=y,
-                            color=Color(1.0, 1.0, 1.0, 1.0),
+                            color=Color(),
                             name=f"Camera Ray ({x},{y}) #{r}"
                         )
                         rays.append(ray)
@@ -241,7 +241,7 @@ class BasicLambertShading(ShadingStrategy):
         point = ray.point_at(distance)
 
         if hit_object is None:
-            return Color(0, 0, 0, 1)
+            return Color()
             
         material = getattr(hit_object.shape, "material", None)
         
@@ -251,7 +251,7 @@ class BasicLambertShading(ShadingStrategy):
             # print(f"[Shade] Emissive surface at {point}: color={emissive_color}")
             return emissive_color
         
-        color = Color(0, 0, 0)  # Start with black
+        color = Color()  # Start with black
         
         if not material:
             print(f"[Shade] No material at {point}; returning black")
@@ -306,16 +306,16 @@ class Raytracer(Algorithm):
     ):
         super().__init__()
         self.rays_per_pixel = max(1, rays_per_pixel)
-        self.ray_generator = ray_generator if ray_generator is not None else CameraJitterRayGenerator()
+        self.ray_generator = ray_generator if ray_generator is not None else BasicRayGenerator()
         self.intersector = intersection_strategy if intersection_strategy is not None else RayMarchingIntersection()
         self.shader = shading_strategy if shading_strategy is not None else BasicLambertShading()
 
-    def render(self, scene: Scene, camera: "VCamera", seed: Optional[int] = None, tile_size: Optional[Tuple[int,int]] = None, sampler: Optional[Sampler] = None) -> List[Color]:
+    def render(self, scene: Scene, seed: Optional[int] = None, tile_size: Optional[Tuple[int,int]] = None, sampler: Optional[Sampler] = None) -> List[Color]:
         """
         Render the scene and return pixel colors as a flat list (row-major order).
         Index: pixel_colors[y * camera.width + x] is the color at pixel (x, y).
         """
-        cam_w, cam_h = camera.width, camera.height
+        cam_w, cam_h = scene.camera.width, scene.camera.height
         
         # Accumulation buffers: per-pixel color sum and sample count
         pixel_accum = {}  # (x, y) -> list of Color values
@@ -326,7 +326,8 @@ class Raytracer(Algorithm):
 
         if tile_size is None:
             # Full-image generation
-            rays = self.ray_generator.generate(camera, self.rays_per_pixel, seed, region=None, sampler=sampler)
+            rays = self.ray_generator.generate(scene.camera, self.rays_per_pixel, seed, region=None, sampler=sampler)
+
             print(f"Generated {len(rays)} rays for full image.")
             
             for ray in rays:
@@ -338,9 +339,10 @@ class Raytracer(Algorithm):
                 if hit_obj is None:
                     # Ray missed; use background color
                     try:
-                        bg = Color.from_array(scene.background_color)
+                        bg = scene.get_background_color(ray.orientation)
                     except Exception:
-                        bg = Color(0.0, 0.0, 0.0, 1.0)
+                        print("Error getting background color; using black. [full image]")
+                        bg = Color()
                     pixel_accum[(x, y)].append(bg)
                 else:
                     # Ray hit; compute shaded color
@@ -358,7 +360,7 @@ class Raytracer(Algorithm):
                     w = min(tile_w, cam_w - x0)
                     h = min(tile_h, cam_h - y0)
                     region = (x0, y0, w, h)
-                    rays = self.ray_generator.generate(camera, self.rays_per_pixel, seed, region=region, sampler=sampler)
+                    rays = self.ray_generator.generate(scene.camera, self.rays_per_pixel, seed, region=region, sampler=sampler)
                     print(f"Generated {len(rays)} rays for tile at ({x0},{y0}) size {w}x{h}.")
                     
                     for ray in rays:
@@ -367,9 +369,10 @@ class Raytracer(Algorithm):
                         
                         if hit_obj is None:
                             try:
-                                bg = Color.from_array(scene.background_color)
+                                bg = scene.get_background_color(ray.orientation)
                             except Exception:
-                                bg = Color(0.0, 0.0, 0.0, 1.0)
+                                print("Error getting background color; using black. [tile]")
+                                bg = Color()
                             pixel_accum[(x, y)].append(bg)
                         else:
                             shaded = self.shader.shade(scene, ray, hit_obj, dist)
@@ -388,9 +391,10 @@ class Raytracer(Algorithm):
                 else:
                     # Fallback: background color
                     try:
-                        avg_color = Color.from_array(scene.background_color)
+                        avg_color = scene.get_background_color(ray.orientation)
                     except Exception:
-                        avg_color = Color(0.0, 0.0, 0.0, 1.0)
+                        print("Error getting background color; using black. [accumilation fallback]")
+                        avg_color = Color()
                 pixel_colors.append(avg_color)
         
         return pixel_colors
