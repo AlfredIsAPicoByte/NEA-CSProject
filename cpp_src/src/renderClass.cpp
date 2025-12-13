@@ -27,7 +27,7 @@ void Scene::Initialize()
 
 void Scene::Render(std::function<void()> preProcessing, std::function<Image()> renderStep, std::function<void()> postProcessing, std::function<void()> fallBack)
 {
-    if (pythonRenderingUsed) {
+    if (renderSettings.usePythonRendering) {
         // Call Python rendering functions here
         try {
             if (preProcessing) preProcessing();

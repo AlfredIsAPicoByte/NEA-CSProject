@@ -30,8 +30,7 @@ public:
     std::vector<std::shared_ptr<IVirtualObject>> sceneObjects;
     std::vector<std::shared_ptr<IRenderable>> renderables;
     int selectedRenderable = -1;
-
-    bool pythonRenderingUsed = true;
+    
     std::shared_ptr<std::function<void()>> openGLRenderFunction;
     RenderSettings renderSettings;
     Image renderedImage = Image();

@@ -210,7 +210,7 @@ int main()
 	testScene.AddRenderable(sword);
 
 	testScene.selectedRenderable = 0;
-	testScene.pythonRenderingUsed = false;
+	testScene.renderSettings.usePythonRendering = false;
 
 	// Main loop
 	Engine::Instance().Start();
@@ -311,8 +311,9 @@ int main()
 				[]() {
 				},
 				// Fallback
-				[]() {
-					AppendGraphicsError("Rendering failed, executing fallback function for scene rendering.");
+				[&]() {
+					AppendGraphicsError("Python Rendering failed, switching to opengl for now.");
+					testScene.renderSettings.usePythonRendering = false;
 				}
 			);
 		},
@@ -482,7 +483,7 @@ int main()
 				ImGui::Text("Camera Orientation: (%.2f, %.2f, %.2f)", camera.Forward.x, camera.Forward.y, camera.Forward.z);
 				ImGui::Text("Camera Up: (%.2f, %.2f, %.2f)", camera.Up.x, camera.Up.y, camera.Up.z);
 				ImGui::Text("Camera Mode: %s", camera.mode == FIRST_PERSON ? "FIRST_PERSON" : camera.mode == PLANE ? "PLANE" : "ORBIT");
-				ImGui::Checkbox("Use Python Rendering", &testScene.pythonRenderingUsed);
+				ImGui::Checkbox("Use Python Rendering", &testScene.renderSettings.usePythonRendering);
 				ImGui::Separator();
 				ImGui::Text("Renderables in Scene:");
 				for (size_t i = 0; i < testScene.renderables.size(); ++i) {
