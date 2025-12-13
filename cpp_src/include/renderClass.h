@@ -16,9 +16,6 @@
 struct RenderSettings {
     int imageWidth = 800;
     int imageHeight = 800;
-    int samplesPerPixel = 100;
-    int maxDepth = 50;
-    bool useBoundingVolumeHierarchy = true;
     bool usePythonRendering = true;
 };
 
