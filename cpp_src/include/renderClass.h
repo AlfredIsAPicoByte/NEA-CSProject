@@ -24,8 +24,10 @@ struct RenderSettings {
 
 class Scene{
 public:
-    Scene();
+    Scene(std::string name);
     ~Scene();
+
+    std::string name;
 
     Camera* sceneCamera;
     std::vector<std::shared_ptr<IVirtualObject>> sceneObjects;

@@ -95,6 +95,8 @@ int main()
     // In this case the viewport goes from x = 0, y = 0, to x = width, y = height
     glViewport(0, 0, windowWidth, windowHeight);
 
+	glfwSetWindowTitle(window, "A level NEA Rendering Engine");
+
 #if DEBUG_MODE
 	EnableOpenGLDebugger();
 	std::cout << "Debugger On!" << std::endl;
@@ -218,6 +220,9 @@ int main()
 		// PreProcecing and input
 		[&]() {
 			time.update();
+
+			std::string newTitle = "A level NEA Rendering Engine - (" + testScene.name.c_str() + ") - " + time.frameRate.c_str() + "FPS, " + time.deltaTime.c_str() + "ms";
+			glfwSetWindowTitle(window, newTitle.c_str());
 
 			camera.Move(window, time.deltaTime);
 			camera.updateMatrix();
