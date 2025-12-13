@@ -302,8 +302,10 @@ int main()
 				[]() {
 				},
 				// Rendering step
-				[]() {
-					
+				[]() -> Image {
+
+
+					return Image();
 				},
 				// Post-processing
 				[]() {
