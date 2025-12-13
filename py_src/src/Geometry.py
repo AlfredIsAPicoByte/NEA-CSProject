@@ -712,6 +712,7 @@ class VObject:
     shape: Shape
     transform: Optional["Transform"] = None
     material: Optional["Material"] = None
+    texture: Optional[str] = None
     name: str = "VObject"
 
     def __post_init__(self):

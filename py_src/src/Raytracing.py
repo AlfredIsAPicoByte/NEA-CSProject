@@ -8,6 +8,7 @@ from Sampling import Sampler
 
 import numpy as np
 import random
+import math
 from typing import Any, Optional, List, Tuple, Callable
 from abc import ABC, abstractmethod
 
@@ -175,8 +176,21 @@ class JitterRayGenerator(RayGenerator):
                         )
                         rays.append(ray)
                     continue
-                break  # fallback to basic jitter
-            break
+
+                # fallback: no sampler provided; produce jittered rays per pixel
+                for r in range(max(1, rays_per_pixel)):
+                    u, v = self.jitter_within_pixel(rand, x, y, cam_width, cam_height)
+                    orientation = camera.transform.forward + (u - 0.5) * camera.transform.right + (v - 0.5) * camera.transform.up
+                    orientation = orientation / np.linalg.norm(orientation)
+                    ray = TracingRay(
+                        origin=camera.transform.position,
+                        orientation=orientation,
+                        pixel_x=x,
+                        pixel_y=y,
+                        color=Color(),
+                        name=f"Camera Ray ({x},{y}) #{r}"
+                    )
+                    rays.append(ray)
         return rays
     
     def jitter_within_pixel(self, rand: random.Random, x: int, y: int, cam_width: int, cam_height: int) -> Tuple[float, float]:
@@ -241,62 +255,90 @@ class ShadingStrategy(ABC):
         ...
 
 class BasicLambertShading(ShadingStrategy):
+    def __init__(self, enable_shadows: bool = True, shadow_samples: int = 8, shadow_bias: float = 1e-4):
+        self.enable_shadows = enable_shadows
+        self.shadow_samples = max(1, int(shadow_samples))
+        self.shadow_bias = float(shadow_bias)
+
+    def _random_point_on_disc(self, center: np.ndarray, normal: np.ndarray, radius: float, seed: Optional[int] = None,) -> np.ndarray:
+        if seed is not None:
+            rand = random.Random(seed)
+        else:
+            rand = random.Random()
+
+        # build orthonormal basis around normal
+        up = np.array([0.0, 1.0, 0.0])
+        if abs(np.dot(normal, up)) > 0.999:
+            up = np.array([1.0, 0.0, 0.0])
+        tangent = np.cross(up, normal)
+        tangent = tangent / np.linalg.norm(tangent)
+        bitangent = np.cross(normal, tangent)
+        # sample uniformly on disk
+        r = math.sqrt(random.random()) * radius
+        theta = random.random() * 2.0 * math.pi
+        offset = tangent * (r * math.cos(theta)) + bitangent * (r * math.sin(theta))
+        return center + offset
+
     def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float) -> Color:
         point = ray.point_at(distance)
 
-        if hit_object is None:
-            return Color()
-            
-        material = getattr(hit_object.shape, "material", None)
-        
-        # Emissive surfaces return their color
-        if material and hasattr(material, "emissive"):
-            emissive_color = material.emissive
-            # print(f"[Shade] Emissive surface at {point}: color={emissive_color}")
-            return emissive_color
-        
-        color = Color()  # Start with black
-        
-        if not material:
-            print(f"[Shade] No material at {point}; returning black")
-            return color
-        
-        mat_color = material.color
-        print(f"[Shade] Hit at point {point}")
-        print(f"  Material color: {mat_color}")
-        print(f"  Number of lights in scene: {len(scene.lights)}")
-        
-        # Direct lighting: process each light
-        for light_idx, light in enumerate(scene.lights):
-            print(f"  Light {light_idx}: {light.name}")
-            print(f"    Position: {light.position}")
-            print(f"    Color: {light.color}")
-            print(f"    Intensity: {light.intensity}")
-            
-            # Light direction from hit point to light
+        if hasattr(hit_object.shape, "GetNormal"):
+            normal = hit_object.shape.GetNormal(point)
+        else:
+            normal = np.array([0.0, 1.0, 0.0])
+
+        # Resolve material color
+        base = getattr(hit_object, "material", None)
+        if base is None and hasattr(hit_object, "shape"):
+            base = getattr(hit_object.shape, "material", None)
+
+        if isinstance(base, Color):
+            mat_color = base
+        elif base is not None and hasattr(base, "color"):
+            mat_color = base.color
+        else:
+            mat_color = Color(1.0, 1.0, 1.0, 1.0)
+
+        out_color = Color(0.0, 0.0, 0.0, 1.0)
+
+        for light in scene.get_lights():
             light_vec = light.position - point
             light_dist = np.linalg.norm(light_vec)
-            light_dir = light_vec / light_dist if light_dist > 0 else np.array([0, 0, 0])
-            
-            print(f"    Distance to light: {light_dist}")
-            print(f"    Light direction (normalized): {light_dir}")
-            
-            # Get surface normal (approximation; requires shape to provide normal_at)
-            normal = np.array([0, 1, 0])  # TODO: compute from hit_object.shape.normal_at(point)
-            print(f"    Surface normal (placeholder): {normal}")
-            
-            # Lambert's cosine law
+            if light_dist <= 0.0:
+                continue
+            light_dir = light_vec / light_dist
             cos_theta = max(0.0, np.dot(normal, light_dir))
-            print(f"    cos(theta) = {cos_theta}")
-            
-            # Contribution = material_color * light_color * intensity * cos_theta
-            light_contrib = mat_color * light.color * light.intensity * cos_theta
-            print(f"    Contribution: {mat_color} * {light.color} * {light.intensity} * {cos_theta} = {light_contrib}")
-            
-            color += light_contrib
-        
-        print(f"  Final shaded color: {color}")
-        return color
+            if cos_theta <= 0.0:
+                continue
+
+            # Shadow visibility check
+            visibility = 1.0
+            if self.enable_shadows:
+                # Hard shadow if no radius property
+                radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
+                if not radius or self.shadow_samples == 1:
+                    # single test for occlusion
+                    occluded = scene.is_occluded(point, light.position, bias=self.shadow_bias)
+                    visibility = 0.0 if occluded else 1.0
+                else:
+                    # soft shadow by sampling area light
+                    visible_count = 0
+                    for _ in range(self.shadow_samples):
+                        sample_pos = self._random_point_on_disc(light.position, -light_dir, float(radius))
+                        if not scene.is_occluded(point, sample_pos, bias=self.shadow_bias):
+                            visible_count += 1
+                    visibility = visible_count / float(self.shadow_samples)
+
+                if visibility <= 0.0:
+                    # fully shadowed for this light
+                    continue
+
+            # Compute contribution
+            light_int = getattr(light, "intensity", 1.0)
+            contrib = mat_color * light.color * light_int * cos_theta * visibility
+            out_color = out_color + contrib
+
+        return out_color.clamp()
 
 # Raytracer using strategies
 @register_algorithm("raytracer")
@@ -314,96 +356,119 @@ class Raytracer(Algorithm):
         self.intersector = intersection_strategy if intersection_strategy is not None else RayMarchingIntersection()
         self.shader = shading_strategy if shading_strategy is not None else BasicLambertShading()
 
-    def render(self, scene: Scene, seed: Optional[int] = None, tile_size: Optional[Tuple[int,int]] = None, sampler: Optional[Sampler] = None) -> List[Color]:
+    def render(self, scene: Scene, camera: Optional[VCamera] = None, seed: Optional[int] = None, tile_size: Optional[Tuple[int,int]] = None, sampler: Optional[Sampler] = None) -> List[Color]:
         """
         Render the scene and return pixel colors as a flat list (row-major order).
-        Index: pixel_colors[y * camera.width + x] is the color at pixel (x, y).
+        Backward compatible: If the second positional argument passed is a VCamera instance,
+        it will be used; otherwise we treat the second arg as the seed (legacy calls).
         """
-        cam_w, cam_h = scene.camera.width, scene.camera.height
-        
-        # Accumulation buffers: per-pixel color sum and sample count
-        pixel_accum = {}  # (x, y) -> list of Color values
-        
-        for y in range(cam_h):
-            for x in range(cam_w):
-                pixel_accum[(x, y)] = []
+        # Backwards-compatible camera/seed handling:
+        if isinstance(camera, VCamera):
+            cam = camera
+        elif camera is None:
+            cam = scene.camera
+        else:
+            # camera param actually used as seed in old call signature: render(scene, camera_as_seed, ...)
+            seed = camera
+            cam = scene.camera
+
+        if cam is None:
+            raise ValueError("No camera provided to Raytracer.render and scene.camera is None")
+
+        cam_w, cam_h = cam.width, cam.height
+
+        # Use a flat list for accum: index = y * cam_w + x
+        total_pixels = cam_w * cam_h
+        pixel_accum: List[List[Color]] = [[] for _ in range(total_pixels)]
+
+        # Helper to push a color for pixel coordinates (x,y) if valid
+        def push_pixel_color(x: int, y: int, color: Color) -> None:
+            if x is None or y is None:
+                return
+            if x < 0 or x >= cam_w or y < 0 or y >= cam_h:
+                return
+            pixel_accum[y * cam_w + x].append(color)
+
+        # Adjust ray generation call to pass the actual 'cam' camera
+        def _gen_rays_for_region(region):
+            return self.ray_generator.generate(cam, self.rays_per_pixel, region=region, sampler=sampler, seed=seed)
 
         if tile_size is None:
-            # Full-image generation
-            rays = self.ray_generator.generate(scene.camera, self.rays_per_pixel, region=None, sampler=sampler, seed=seed)
-
+            rays = _gen_rays_for_region(None)
             print(f"Generated {len(rays)} rays for full image.")
-            
             for ray in rays:
                 hit_obj, dist = self.intersector.find_hit(scene, ray)
 
-                if hasattr(ray, "pixel_x") and hasattr(ray, "pixel_y"):
-                    x, y = ray.pixel_x, ray.pixel_y
-                else:
-                    raise AttributeError("Ray object is missing 'pixel_x' or 'pixel_y' attributes.")
-                
+                x = getattr(ray, "pixel_x", None)
+                y = getattr(ray, "pixel_y", None)
+
+                # Skip if pixel coordinates missing/out of bounds
+                if x is None or y is None or x < 0 or x >= cam_w or y < 0 or y >= cam_h:
+                    continue
+
                 if hit_obj is None:
-                    # Ray missed; use background color
                     try:
-                        bg = scene.get_background_color(ray.orientation.tolist())
+                        bg = scene.get_background_color(np.asarray(ray.orientation))
                     except Exception:
-                        print("Error getting background color; using black. [full image]")
                         bg = Color()
-                    pixel_accum[(x, y)].append(bg)
+                    push_pixel_color(x, y, bg)
                 else:
-                    # Ray hit; compute shaded color
                     shaded = self.shader.shade(scene, ray, hit_obj, dist)
-                    pixel_accum[(x, y)].append(shaded)
-            
-            print(f"Completed rendering full image.")
+                    push_pixel_color(x, y, shaded)
+
+            print("Completed rendering full image.")
         else:
             # Tile-based processing
             tile_w, tile_h = tile_size
             print(f"Rendering in tiles of size {tile_w}x{tile_h}...")
-            
             for y0 in range(0, cam_h, tile_h):
                 for x0 in range(0, cam_w, tile_w):
                     w = min(tile_w, cam_w - x0)
                     h = min(tile_h, cam_h - y0)
                     region = (x0, y0, w, h)
-                    rays = self.ray_generator.generate(scene.camera, self.rays_per_pixel, seed, region=region, sampler=sampler)
+                    rays = _gen_rays_for_region(region)
                     print(f"Generated {len(rays)} rays for tile at ({x0},{y0}) size {w}x{h}.")
-                    
                     for ray in rays:
                         hit_obj, dist = self.intersector.find_hit(scene, ray)
-                        
-                        if hasattr(ray, "pixel_x") and hasattr(ray, "pixel_y"):
-                            x, y = ray.pixel_x, ray.pixel_y
-                        else:
-                            raise AttributeError("Ray object is missing 'pixel_x' or 'pixel_y' attributes.")
-                        
+                        x = getattr(ray, "pixel_x", None)
+                        y = getattr(ray, "pixel_y", None)
+                        if x is None or y is None or x < 0 or x >= cam_w or y < 0 or y >= cam_h:
+                            continue
                         if hit_obj is None:
                             try:
-                                bg = scene.get_background_color(ray.orientation.tolist())
+                                bg = scene.get_background_color(np.asarray(ray.orientation))
                             except Exception:
-                                print("Error getting background color; using black. [tile]")
                                 bg = Color()
-                            pixel_accum[(x, y)].append(bg)
+                            push_pixel_color(x, y, bg)
                         else:
                             shaded = self.shader.shade(scene, ray, hit_obj, dist)
-                            pixel_accum[(x, y)].append(shaded)
-        
-        # Average accumulated colors per pixel and build flat list (row-major)
+                            push_pixel_color(x, y, shaded)
+
+        # Build final colors (row-major), use background where empty
         pixel_colors: List[Color] = []
         for y in range(cam_h):
             for x in range(cam_w):
-                colors = pixel_accum[(x, y)]
+                idx = y * cam_w + x
+                colors = pixel_accum[idx]
                 if colors:
                     avg_color = Color.average_colors(colors)
                 else:
-                    # Fallback: background color
                     try:
-                        avg_color = scene.get_background_color(scene.camera.transform.rotation)
+                        avg_color = scene.get_background_color(cam.transform.forward)
                     except Exception:
-                        print("Error getting background color; using black. [accumilation fallback]")
                         avg_color = Color()
                 pixel_colors.append(avg_color)
-        
+
+        # Sanity check and pad if missing (very unlikely with above logic)
+        if len(pixel_colors) != total_pixels:
+            print(f"Warning: pixel_colors length {len(pixel_colors)} != expected {total_pixels}, padding with background color.")
+            while len(pixel_colors) < total_pixels:
+                try:
+                    bg = scene.get_background_color(cam.transform.forward)
+                except Exception:
+                    bg = Color()
+                pixel_colors.append(bg)
+
         return pixel_colors
 
     def __repr__(self):

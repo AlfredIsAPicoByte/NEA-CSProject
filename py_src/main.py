@@ -13,7 +13,13 @@ from src.Sampling import Sampler, RandomSampler
 
 def render_and_save(scene, algorithim: Algorithm, sampler: Sampler, out_path="render_out_strat.png"):
     """Render the scene using the given algorithm and return a PIL Image."""
-    pixel_colors = algorithim.render(scene, scene.camera, sampler=sampler)
+    # Ensure parent directory exists for out_path
+    out_dir = os.path.dirname(out_path)
+    if out_dir and not os.path.exists(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+
+    # Use named argument for sampler - do not pass camera as a positional value (legacy behavior)
+    pixel_colors = algorithim.render(scene, sampler=sampler)
     
     W, H = scene.camera.width, scene.camera.height
     
@@ -59,10 +65,7 @@ def render_and_save(scene, algorithim: Algorithm, sampler: Sampler, out_path="re
     im.save(out_path)
     print(f"Saved render to {out_path}")
 
-def get_test_scene() -> tuple[int, int, Scene]:
-    # --- GLOBAL SETTINGS ---
-    width, height = 50, 50  # Increased resolution for better viewing
-
+def get_gradient_scene(width: int = 50, height: int = 50) -> tuple[int, int, Scene]:
     # --- 1. CAMERA & SCENE SETUP (Enhanced Depth) ---
     # Camera: Moved back to Z = -6.0 for a wider, more composed view
     cam_transform = Transform(np.array([0.0, 1.5, -6.0]), np.array([-10.0, 0.0, 0.0]), np.ones(3)) # Tilted down slightly
@@ -75,7 +78,7 @@ def get_test_scene() -> tuple[int, int, Scene]:
         Color.from_hex("#C13584"),  # Magenta/pink at the top (zenith)
     ]
     sky_positions = [0.0, 0.5, 1.0] 
-    scene = Scene(name="InterestingScene", camera=cam, background_color=ColorGradient(sky_colors, sky_positions)) 
+    scene = Scene(name="gradient_scene", camera=cam, background_color=ColorGradient(sky_colors, sky_positions)) 
 
     # --- 2. LIGHTING (Dramatic Side Light + Ambient) ---
     
@@ -116,47 +119,120 @@ def get_test_scene() -> tuple[int, int, Scene]:
 
     return width, height, scene
 
-if __name__ == "__main__":    # For a quick test, use small resolution; change to 320 X 180 for final
-    width, height = 64, 64
-
-    # Camera: positioned at z = -3 looking toward +z (default Transform rotation => forward = +z)
+# New: minimal scene - single sphere on ground with a single directional light
+def get_minimal_scene(width: int = 64, height: int = 64) -> tuple[int, int, Scene]:
     cam_transform = Transform(np.array([0.0, 0.0, -3.0]), np.zeros(3), np.ones(3))
     cam = VCamera(cam_transform, fov=60.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
+    scene = Scene(name="minimal_scene", camera=cam, background_color=ColorGradient([Color.from_hex("#a0c8ff"), Color.from_hex("#ffffff")], [0, 1]))
 
-    # Scene
-    scene = Scene(name="SimpleScene", camera=cam, background_color=ColorGradient([Color.from_hex("#87CEEB"), Color.from_hex("#6678DF")], [0, 1]))  # Light blue background
-
-    # Geometry: Sphere at origin
-    sphere_shape = Sphere(center=np.array([0.0, 0.0, 0.0]), radius=0.5, name="Ball")
-    # Material (optional) - Luminance.Material expects Color, roughness, etc.
-    mat = Material(color=Color.from_hex("#4E70E0"), emissive=Color(0.5, 0.5, 1), roughness=0.5, glossiness=0.2, metallic=0.0)
+    # Sphere at origin
+    sphere_shape = Sphere(center=np.array([0.0, 0.0, 0.0]), radius=0.5, name="BallMin")
+    mat = Material(color=Color.from_hex("#44A1FF"), emissive=Color(0, 0, 0), roughness=0.5, glossiness=0.1, metallic=0.0)
     sphere_shape.material = mat
+    scene.add_object(VObject(shape=sphere_shape, name="SphereMin"))
 
-    # Ground approximated with a large sphere (simple trick)
-    ground = Sphere(center=np.array([0.0, -100.5, 0.0]), radius=100.0, name="Ground")
-    mat = Material(color=Color.from_hex("#8FBF7F"), emissive=Color.from_hex("#8FBF7F"), roughness=1.0, glossiness=0.0, metallic=0.0)
-    ground.material = mat
+    # Ground
+    ground = Sphere(center=np.array([0.0, -100.5, 0.0]), radius=100.0, name="GroundMin")
+    matg = Material(color=Color.from_hex("#808080"), emissive=Color(0, 0, 0), roughness=1.0, glossiness=0.0, metallic=0.0)
+    ground.material = matg
+    scene.add_object(VObject(shape=ground, name="GroundMin"))
 
-    # Light source
-    light = LightSource(position=np.array([2.0, 3.0, -1.0]), color=Color.from_hex("#FFFFFF"), intensity=1.5, name="Sun")
+    # Single light
+    light = LightSource(position=np.array([2.0, 3.0, -1.0]), color=Color.from_hex("#FFFFFF"), intensity=1.5, name="SunMin")
     scene.add_light(light)
 
-    # Additional object: rotated cube
-    box = Cube(center=np.array([-1, 4, 5]), side_length=2, name="Box")
-    box.Rotate(1, [0, 1, 0])
-    mat = Material(color=Color.from_hex("#A38A5A"), emissive=Color(0, 0, 0), roughness=0, glossiness=0.0, metallic=0.5)
-    box.material = mat
+    return width, height, scene
 
-    vobj = VObject(shape=sphere_shape, name="SphereObject")
-    ground_obj = VObject(shape=ground, name="GroundObject")
-    box_obj = VObject(shape=box, name="BoxObject")
+# New: Emissive scene - emission as lighting (emissive sphere and simple fill light)
+def get_emissive_scene(width: int = 64, height: int = 64) -> tuple[int, int, Scene]:
+    cam_transform = Transform(np.array([0.0, 0.5, -3.5]), np.zeros(3), np.ones(3))
+    cam = VCamera(cam_transform, fov=55.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
+    scene = Scene(name="emissive_scene", camera=cam, background_color=ColorGradient([Color.from_hex("#101020"), Color.from_hex("#402050")], [0, 1]))
 
-    scene.add_object(vobj)
-    scene.add_object(ground_obj)
-    scene.add_object(box_obj)
+    # Emissive sphere
+    emissive = Sphere(center=np.array([0.8, 1.0, 0.0]), radius=0.3, name="EmissiveOrb")
+    mat_glow = Material(color=Color(0,0,0), emissive=Color(0.9, 0.3, 0.9), roughness=0.0, glossiness=0.0, metallic=0.0)
+    emissive.material = mat_glow
+    scene.add_object(VObject(shape=emissive, name="GlowingSphere"))
 
-    rpp = 1  # Rays per pixel
-    spp = 1  # Samples per pixel for sampling
+    # Reflective sphere
+    mirror = Sphere(center=np.array([-0.5, 0.5, 0.0]), radius=0.5, name="Mirror")
+    mat_reflect = Material(color=Color.from_hex("#EDEDED"), emissive=Color(0, 0, 0), roughness=0.05, glossiness=0.9, metallic=1.0)
+    mirror.material = mat_reflect
+    scene.add_object(VObject(shape=mirror, name="MirrorSphere"))
+
+    # Ground
+    ground = Sphere(center=np.array([0.0, -100.5, 0.0]), radius=100.0, name="GroundEmissive")
+    matg = Material(color=Color.from_hex("#202020"), emissive=Color(0,0,0), roughness=0.8, glossiness=0.0, metallic=0.0)
+    ground.material = matg
+    scene.add_object(VObject(shape=ground, name="GroundEmissive"))
+
+    # Small ambient fill light
+    fill = LightSource(position=np.array([-4.0, 2.0, -3.0]), color=Color.from_hex("#AAAACC"), intensity=0.3, name="FillEmiss")
+    scene.add_light(fill)
+
+    return width, height, scene
+
+# New: studio / many lights scene to show shadows and complex shading
+def get_lit_studio_scene(width: int = 96, height: int = 96) -> tuple[int, int, Scene]:
+    cam_transform = Transform(np.array([0.0, 1.0, -4.0]), np.array([-0.15, 0.0, 0.0]), np.ones(3))
+    cam = VCamera(cam_transform, fov=50.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
+    scene = Scene(name="lit_studio", camera=cam, background_color=ColorGradient([Color.from_hex("#ffffff"), Color.from_hex("#dfe7ff")], [0.0, 1.0]))
+
+    # Objects: two spheres and box as background
+    s1 = Sphere(center=np.array([-0.6, 0.4, 0.5]), radius=0.4, name="StudioBallA")
+    mat1 = Material(color=Color.from_hex("#FFB86B"), emissive=Color(0,0,0), roughness=0.3, glossiness=0.2, metallic=0.0)
+    s1.material = mat1
+    scene.add_object(VObject(shape=s1, name="StudioBallA"))
+
+    s2 = Sphere(center=np.array([0.8, 0.45, 0.2]), radius=0.45, name="StudioBallB")
+    mat2 = Material(color=Color.from_hex("#6B9BFF"), emissive=Color(0,0,0), roughness=0.15, glossiness=0.6, metallic=0.2)
+    s2.material = mat2
+    scene.add_object(VObject(shape=s2, name="StudioBallB"))
+
+    # Background box
+    box_shape = Cube(center=np.array([0.0, 0.5, 3.0]), side_length=4.0, name="StudioBack")
+    mat_box = Material(color=Color.from_hex("#DDDDDD"), emissive=Color(0,0,0), roughness=1.0, glossiness=0.0, metallic=0.0)
+    box_shape.material = mat_box
+    scene.add_object(VObject(shape=box_shape, name="StudioBox"))
+
+    # Lights
+    key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#FFF6E0"), intensity=2.0, name="StudioKey")
+    key.radius = 0.3  # area light radius (for soft shadows)
+    scene.add_light(key)
+    rim = LightSource(position=np.array([-3.0, 2.0, 1.0]), color=Color.from_hex("#FFD6F0"), intensity=0.6, name="StudioRim")
+    rim.radius = 0.2
+    scene.add_light(rim)
+    fill = LightSource(position=np.array([0.0, -2.5, -2.0]), color=Color.from_hex("#FFFFFF"), intensity=0.15, name="StudioFill")
+    scene.add_light(fill)
+
+    return width, height, scene
+
+# Add orchestrator to render and save a set of scenes
+if __name__ == "__main__":
+    # where to save outputs (repo root / benchmark / simple_scene)
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
+    os.makedirs(OUT_DIR, exist_ok=True)
+
+    # list of scenes to render
+    all_scenes = [
+        get_minimal_scene(100, 100),
+        get_gradient_scene(128, 128),  # existing
+        get_emissive_scene(128, 128),
+        get_lit_studio_scene(200, 200),
+    ]
+
+    rpp = 1  # rays per pixel
+    spp = 1  # samples per pixel
     raytracer = Raytracer(rays_per_pixel=rpp)
     sampler = RandomSampler(samples_per_pixel=spp)
-    render_and_save(scene, raytracer, sampler, out_path="render_out.png")
+
+    for _, _, scene in all_scenes:
+        sanitized_name = scene.name.replace(" ", "_").lower()
+        out_path = os.path.join(OUT_DIR, f"{sanitized_name}.png")
+        print(f"Rendering '{scene.name}' -> {out_path} ({scene.camera.width}x{scene.camera.height})")
+        try:
+            render_and_save(scene, raytracer, sampler, out_path=out_path)
+        except Exception as e:
+            print(f"Failed to render '{scene.name}': {e}")

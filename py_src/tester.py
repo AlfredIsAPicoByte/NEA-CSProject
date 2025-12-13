@@ -1,15 +1,7 @@
 import sys
-import os
-
-# Make local package importable when run from C++ or directly
-ROOT = os.path.dirname(__file__)
-SRC = os.path.join(ROOT, "src")
-if SRC not in sys.path:
-    sys.path.insert(0, SRC)
-
 import numpy as np
-from Geometry import Sphere, VObject
-from Scene import Scene
+from src.Geometry import Sphere, VObject
+from src.Scene import Scene
 
 def run_unit_tests() -> bool:
     """
@@ -21,7 +13,7 @@ def run_unit_tests() -> bool:
     try:
         s = Sphere((0.0, 0.0, 0.0), 1.0)
         p = np.array([0.0, 0.0, 2.0], dtype=float)
-        d = s.signed_distance(p)
+        d = s.SignedDistance(p)
         print(f"[tester] Sphere distance @ {p.tolist()} = {d}")
         if not np.isclose(d, 1.0, atol=1e-6):
             print("[tester][ERROR] Sphere distance mismatch")
@@ -377,6 +369,68 @@ def test_ray_shape_intersection() -> bool:
 
     return True
 
+def test_background_gradient() -> bool:
+    """
+    Construct a scene with a ColorGradient background and ensure
+    get_background_color returns non-magenta colors and varies with direction.
+    """
+    try:
+        from src.Scene import Scene
+        from src.Luminance import Color, ColorGradient
+        from src.PrimaryStructures import Transform
+        from src.Camera import VCamera, CameraType
+        import numpy as np
+
+        # Simple small camera for the scene (used if code falls back to camera forward)
+        transform = Transform(np.array([0.0, 0.0, -3.0]), np.zeros(3), np.ones(3))
+        cam = VCamera(transform, fov=60.0, near=0.1, far=100.0, width=8, height=8, camType=CameraType.PERSPECTIVE)
+
+        # Gradient from dark blue to pale sky
+        grad = ColorGradient([Color.from_hex("#000033"), Color.from_hex("#87CEEB")], [0.0, 1.0])
+        scene = Scene(name="bg_test_scene", camera=cam, background_color=grad)
+
+        # Ensure scene doesn't have an explicit gradient type (let function choose default)
+        if hasattr(scene, "background_gradient_type"):
+            delattr(scene, "background_gradient_type")
+
+        up_dir = np.array([0.0, 1.0, 0.0])
+        down_dir = np.array([0.0, -1.0, 0.0])
+
+        up_color = scene.get_background_color(up_dir)
+        down_color = scene.get_background_color(down_dir)
+
+        def color_to_tuple(c):
+            # Try a couple of likely attributes/methods
+            if hasattr(c, "rgba"):
+                arr = c.rgba[:3]
+            elif hasattr(c, "to_array"):
+                arr = c.to_array()[:3]
+            elif all(hasattr(c, a) for a in ("red", "green", "blue")):
+                arr = (c.red, c.green, c.blue)
+            else:
+                # Not a Color object or unknown layout
+                return None
+            return tuple(float(x) for x in arr)
+
+        uc = color_to_tuple(up_color)
+        dc = color_to_tuple(down_color)
+
+        if uc is None or dc is None:
+            return False, "Returned background color is not a Color with usable components"
+
+        # magenta fallback used previously indicates a problem
+        magenta = (1.0, 0.0, 1.0)
+        if np.allclose(uc, magenta) or np.allclose(dc, magenta):
+            return False, "Background returned magenta fallback; gradient not applied"
+
+        # Colors should differ for up vs down with our gradient
+        if np.allclose(uc, dc):
+            return False, "Gradient did not vary with direction (up and down same color)"
+
+        return True
+    except Exception as e:
+        return False, str(e)
+
 available_tests: dict[str, Callable[[], Tuple[bool, str|None] | bool]] = {
     "Ray Structure Test": test_ray,
     "Shape Creation Test": test_shapes,
@@ -390,6 +444,7 @@ available_tests: dict[str, Callable[[], Tuple[bool, str|None] | bool]] = {
     "LightRay Structure Test": test_light_ray,
     "LightSource Structure Test": test_light_source,
     "Ray-Shape Intersection Test": test_ray_shape_intersection,
+    "Background Gradient Test": test_background_gradient,
 }
 
 # --- Final run_tests Implementation ---
