@@ -1,6 +1,6 @@
 #include "renderClass.h"
 
-Scene::Scene(std::string name): name(name)
+Scene::Scene()
 {
     AppendMessage("Scene created.");
 }

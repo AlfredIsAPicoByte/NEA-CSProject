@@ -217,13 +217,15 @@ int main()
 	Engine::Instance().applyClearColor(bgClolor);
 	Engine::Instance().setDepthTest(true);
 	Engine::Instance().Update(window,
-		// PreProcecing and input
+		// PreProcecing 
 		[&]() {
 			time.update();
 
-			std::string newTitle = "A level NEA Rendering Engine - (" + testScene.name.c_str() + ") - " + time.frameRate.c_str() + "FPS, " + time.deltaTime.c_str() + "ms";
+			std::string newTitle = "A level NEA Rendering Engine - (" + testScene.name + ") - " + std::to_string(time.frameRate) + "FPS, " + std::to_string(time.deltaTime * 1000.0f) + "ms";
 			glfwSetWindowTitle(window, newTitle.c_str());
-
+		},
+		// Input handling
+		[&]() {
 			camera.Move(window, time.deltaTime);
 			camera.updateMatrix();
 			{
