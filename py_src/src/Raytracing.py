@@ -255,10 +255,16 @@ class ShadingStrategy(ABC):
         ...
 
 class BasicLambertShading(ShadingStrategy):
-    def __init__(self, enable_shadows: bool = True, shadow_samples: int = 8, shadow_bias: float = 1e-4):
+    def __init__(self, enable_shadows: bool = False, shadow_samples: int = 8, shadow_bias: float = 1e-4,
+                 ambient_enabled: bool = True, ambient_color: Color | None = None, ambient_intensity: float | None = None):
         self.enable_shadows = enable_shadows
         self.shadow_samples = max(1, int(shadow_samples))
         self.shadow_bias = float(shadow_bias)
+
+        # Ambient handling: if ambient_color/intensity None, shader will query scene defaults
+        self.ambient_enabled = bool(ambient_enabled)
+        self.ambient_color = ambient_color
+        self.ambient_intensity = float(ambient_intensity) if ambient_intensity is not None else None
 
     def _random_point_on_disc(self, center: np.ndarray, normal: np.ndarray, radius: float, seed: Optional[int] = None,) -> np.ndarray:
         if seed is not None:
@@ -286,7 +292,7 @@ class BasicLambertShading(ShadingStrategy):
             normal = np.array([0.0, 1.0, 0.0])
 
         # Resolve material color
-        base = getattr(hit_object, "material", None)
+        base: Material = getattr(hit_object, "material", None)
         if base is None and hasattr(hit_object, "shape"):
             base = getattr(hit_object.shape, "material", None)
 
@@ -298,6 +304,24 @@ class BasicLambertShading(ShadingStrategy):
             mat_color = Color(1.0, 1.0, 1.0, 1.0)
 
         out_color = Color(0.0, 0.0, 0.0, 1.0)
+
+        # Handle emmissive materials
+        if base is not None and hasattr(base, "emissive") and isinstance(base.emissive, Color):
+            out_color = out_color + base.emissive
+        elif base is not None and hasattr(base, "emissive_intensity") and isinstance(base.emissive_intensity, (float, int)):
+            emissive_int = float(base.emissive_intensity)
+            emissive_col = getattr(base, "emissive_color", Color(1.0, 1.0, 1.0))
+            out_color = out_color + (emissive_col * emissive_int)
+
+        # Ambient contribution (applied before direct lights)
+        if self.ambient_enabled:
+            amb_col = self.ambient_color if self.ambient_color is not None else getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03))
+            amb_int = self.ambient_intensity if self.ambient_intensity is not None else getattr(scene, "ambient_intensity", 0.1)
+            try:
+                out_color = out_color + (mat_color * amb_col * amb_int)
+            except Exception:
+                # best-effort: scalar fallback
+                out_color = out_color + (mat_color * amb_int)
 
         for light in scene.get_lights():
             light_vec = light.position - point
