@@ -268,8 +268,6 @@ class BasicLambertShading(ShadingStrategy):
 
         # build orthonormal basis around normal
         up = np.array([0.0, 1.0, 0.0])
-        if abs(np.dot(normal, up)) > 0.999:
-            up = np.array([1.0, 0.0, 0.0])
         tangent = np.cross(up, normal)
         tangent = tangent / np.linalg.norm(tangent)
         bitangent = np.cross(normal, tangent)
