@@ -1,5 +1,7 @@
 from typing import List, Tuple, Optional
 import numpy as np
+from math import atan2, asin, pi, floor
+
 from PrimaryStructures import Ray
 from Camera import VCamera
 from Geometry import VObject
@@ -70,78 +72,89 @@ class Scene:
         return closest_obj, closest_hit
     
     def get_background_color(self, direction) -> Color:
-            """
-            Return the background color based on the ray's direction vector.
-            Accepts:
-              - direction: sequence/np.ndarray of length 3 (direction vector or euler rotation)
-            """
-            if not hasattr(self, 'background_color'):
-                return Color()  # Default to black if no background_color defined
+        """
+        Return the background color based on the ray's direction vector.
+        Handles Solid Color, ColorGradient (Skybox), or Texture Map (Equirectangular).
+        """
+        # 1. Safe Access to Background Property
+        bg = getattr(self, 'background_color', None)
+        if bg is None:
+            return Color(0.0, 0.0, 0.0) # Default Black
 
-            # Normalize/resolve direction input: accept np arrays, lists, or Euler rotation fallback
-            try:
-                dir_arr = np.asarray(direction, dtype=float)
-            except Exception:
-                # fallback to camera forward if available
-                dir_arr = None
-
-            if dir_arr is None or dir_arr.size != 3:
-                # If caller passed rotation Euler angles or invalid data, try camera forward
-                dir_vec = getattr(getattr(self, "camera", None), "transform", None)
-                if dir_vec is not None:
-                    dir_vec = getattr(self.camera.transform, "forward", np.array([0.0, 0.0, 1.0]))
-                else:
-                    dir_vec = np.array([0.0, 0.0, 1.0])
+        # 2. Resolve Direction Vector
+        # We need a normalized numpy array direction vector
+        try:
+            dir_vec = np.array(direction, dtype=float)
+            if dir_vec.shape != (3,):
+                 raise ValueError("Invalid shape")
+        except (ValueError, TypeError):
+            # Fallback: If direction is invalid (e.g. None), use Camera Forward
+            camera = getattr(self, "camera", None)
+            if camera and hasattr(camera, "transform"):
+                dir_vec = camera.transform.forward
             else:
-                dir_vec = dir_arr
+                dir_vec = np.array([0.0, 0.0, 1.0]) # Absolute Z forward fallback
 
-            # ensure unit length and safe numeric handling
-            if np.linalg.norm(dir_vec) > 0:
-                dir_vec = dir_vec / np.linalg.norm(dir_vec)
-            else:
-                dir_vec = np.array([0.0, 0.0, 1.0])
+        # Normalize logic (safeguard against zero-length vectors)
+        norm = np.linalg.norm(dir_vec)
+        if norm > 1e-6:
+            dir_vec = dir_vec / norm
+        else:
+            dir_vec = np.array([0.0, 1.0, 0.0]) # Default UP if zero vector
 
-            if not hasattr(self, 'background_gradient_type'):
-                # choose a reasonable default; if background_color is a ColorGradient prefer GRADIENT
-                if isinstance(self.background_color, ColorGradient):
-                    self.background_gradient_type = BackgroundType.GRADIENT
-                else:
-                    self.background_gradient_type = BackgroundType.SOLID_COLOR
+        # 3. Handle ColorGradient (Skybox / Vertical Gradient)
+        # Using type name string check avoids circular import issues if they exist
+        if type(bg).__name__ == 'ColorGradient' or hasattr(bg, 'get_color'):
+            # Calculate 't' for vertical gradient mapping
+            # Map Y (Up) from [-1, 1] to [0, 1]
+            t = 0.5 * (dir_vec[1] + 1.0)
+            return bg.get_color(t)
 
-            # --- 1. Determine the 't' value based on the gradient type ---
-            if isinstance(self.background_color, ColorGradient):
-                # Determine parameter 't' based on chosen gradient type (default=vertical)
-                if self.background_gradient_type == BackgroundType.GRADIENT:
-                    value = dir_vec[1]  # vertical (Y)
-                elif self.background_gradient_type == BackgroundType.SHPERE_MAP:
-                    value = dir_vec[1]  # simple dome mapping; can be enhanced
-                else:
-                    value = dir_vec[1]
-                value = np.clip(value, -1.0, 1.0)
-                t = 0.5 * (value + 1.0)
-                return self.background_color.get_color(t)
- 
-            # --- 2. Handle Array-Like Texture/Environment Map ---
-            elif isinstance(self.background_color, np.ndarray) or (isinstance(self.background_color, (list, tuple)) and isinstance(self.background_color[0], (list, tuple, np.ndarray))):
-                self.background_gradient_type = BackgroundType.TEXTURE
-                try:
-                    color = self.sample_texture(self.background_color, dir_vec)
-                    return color
-                except Exception as e:
-                    print(f"Error sampling background texture: {e}. Defaulting to black.")
-                    return Color()
- 
-            # --- 3. Handle Solid Color / Simple Tuple Fallback ---
-            elif isinstance(self.background_color, Color):
-                self.background_gradient_type = BackgroundType.SOLID_COLOR
-                return self.background_color
-            elif isinstance(self.background_color, (tuple, list)) and len(self.background_color) == 3:
-                self.background_gradient_type = BackgroundType.SOLID_COLOR
-                r, g, b = self.background_color
-                return Color(r, g, b)
-            else:
-                self.background_gradient_type = BackgroundType.SOLID_COLOR
-                return Color(1.0, 0.0, 1.0)
+        # 4. Handle Texture Map (Environment / HDRI Map)
+        # Checks if it's a numpy array (image data)
+        elif isinstance(bg, np.ndarray):
+            return self._sample_equirectangular_map(bg, dir_vec)
+
+        # 5. Handle Solid Color (Color Object)
+        elif isinstance(bg, Color):
+            return bg
+
+        # 6. Handle Solid Color (Tuple/List fallback)
+        elif isinstance(bg, (tuple, list)) and len(bg) == 3:
+            return Color(bg[0], bg[1], bg[2])
+
+        # Default fallback
+        return Color(0.0, 0.0, 0.0)
+
+    def _sample_equirectangular_map(self, texture: np.ndarray, direction: np.ndarray) -> Color:
+        """
+        Samples a 2D texture using Spherical (Equirectangular) mapping.
+        Texture is assumed to be a numpy array of shape (H, W, 3).
+        """
+        # Convert 3D Direction -> 2D UV Coordinates
+        # u = atan2(z, x) / 2pi + 0.5
+        # v = asin(y) / pi + 0.5
+        x, y, z = direction
+        
+        u = atan2(z, x) / (2 * pi) + 0.5
+        v = asin(y) / pi + 0.5
+        
+        # Map UV to Pixel Coordinates
+        height, width, _ = texture.shape
+        
+        # Clamp coordinates and convert to integer indices
+        u_idx = int(floor(u * width)) % width
+        v_idx = int(floor(v * height))
+        v_idx = max(0, min(height - 1, v_idx)) # Clamp vertical to avoid out of bounds
+        
+        # Retrieve pixel (assume float 0-1 or uint8 0-255)
+        pixel = texture[v_idx, u_idx]
+        
+        # Normalize if the texture is 0-255 (integers)
+        if texture.dtype.kind in 'iu': # int or uint
+            pixel = pixel / 255.0
+            
+        return Color(pixel[0], pixel[1], pixel[2])
     
     def clear_objects(self):
         self.objects.clear()
