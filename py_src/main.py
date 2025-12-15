@@ -2,6 +2,7 @@ import numpy as np
 from PIL import Image
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+
 from src.Algorithims import Algorithm
 from src.Raytracing import Raytracer
 from src.Camera import VCamera, CameraType
@@ -102,7 +103,7 @@ def get_gradient_scene(width: int = 50, height: int = 50) -> tuple[int, int, Sce
     ground = Sphere(center=np.array([0.0, -100.0, 0.0]), radius=100.0, name="FloorPlane")
     mat_floor = Material(color=Color.from_hex("#4B5320"), emissive=Color(0.01, 0.01, 0.01), roughness=0.3, glossiness=0.6, metallic=0.0)
     ground.material = mat_floor
-    scene.add_object(VObject(shape=ground, name="GroundObject"))
+    # scene.add_object(VObject(shape=ground, name="GroundObject"))
 
     # Additional Object 1: Cube (Background/Visual Anchor) - Matte and Rough
     box_shape = Cube(center=np.array([-2.5, 1.0, 4.0]), side_length=2.5, name="BackgroundBox")
@@ -123,7 +124,7 @@ def get_gradient_scene(width: int = 50, height: int = 50) -> tuple[int, int, Sce
 def get_minimal_scene(width: int = 64, height: int = 64) -> tuple[int, int, Scene]:
     cam_transform = Transform(np.array([0.0, 0.0, -3.0]), np.zeros(3), np.ones(3))
     cam = VCamera(cam_transform, fov=60.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
-    scene = Scene(name="minimal_scene", camera=cam, background_color=ColorGradient([Color.from_hex("#a0c8ff"), Color.from_hex("#ffffff")], [0, 1]))
+    scene = Scene(name="minimal_scene", camera=cam, background_color=Color.from_hex("#a0c8ff"))
 
     # Sphere at origin
     sphere_shape = Sphere(center=np.array([0.0, 0.0, 0.0]), radius=0.5, name="BallMin")
@@ -138,7 +139,7 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> tuple[int, int, Scen
     scene.add_object(VObject(shape=ground, name="GroundMin"))
 
     # Single light
-    light = LightSource(position=np.array([2.0, 3.0, -1.0]), color=Color.from_hex("#FFFFFF"), intensity=1.5, name="SunMin")
+    light = LightSource(position=np.array([2.0, 3.0, -1.0]), color=Color.from_hex("#FFFFFF"), intensity=10.0, name="SunMin")
     scene.add_light(light)
 
     return width, height, scene
@@ -147,11 +148,11 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> tuple[int, int, Scen
 def get_emissive_scene(width: int = 64, height: int = 64) -> tuple[int, int, Scene]:
     cam_transform = Transform(np.array([0.0, 0.5, -3.5]), np.zeros(3), np.ones(3))
     cam = VCamera(cam_transform, fov=55.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
-    scene = Scene(name="emissive_scene", camera=cam, background_color=ColorGradient([Color.from_hex("#101020"), Color.from_hex("#402050")], [0, 1]))
+    scene = Scene(name="emissive_scene", camera=cam, background_color=Color.from_hex("#402050"))
 
     # Emissive sphere
     emissive = Sphere(center=np.array([0.8, 1.0, 0.0]), radius=0.3, name="EmissiveOrb")
-    mat_glow = Material(color=Color(0,0,0), emissive=Color(0.9, 0.3, 0.9), roughness=0.0, glossiness=0.0, metallic=0.0)
+    mat_glow = Material(color=Color(0,0,0), emissive=Color(0.3, 0.3, 0.9), roughness=0.0, glossiness=0.0, metallic=0.0)
     emissive.material = mat_glow
     scene.add_object(VObject(shape=emissive, name="GlowingSphere"))
 
@@ -168,7 +169,7 @@ def get_emissive_scene(width: int = 64, height: int = 64) -> tuple[int, int, Sce
     scene.add_object(VObject(shape=ground, name="GroundEmissive"))
 
     # Small ambient fill light
-    fill = LightSource(position=np.array([-4.0, 2.0, -3.0]), color=Color.from_hex("#AAAACC"), intensity=0.3, name="FillEmiss")
+    fill = LightSource(position=np.array([-4.0, 2.0, -3.0]), color=Color.from_hex("#AAAACC"), intensity=4.0, name="FillEmiss")
     scene.add_light(fill)
 
     return width, height, scene
@@ -177,7 +178,7 @@ def get_emissive_scene(width: int = 64, height: int = 64) -> tuple[int, int, Sce
 def get_lit_studio_scene(width: int = 96, height: int = 96) -> tuple[int, int, Scene]:
     cam_transform = Transform(np.array([0.0, 1.0, -4.0]), np.array([-0.15, 0.0, 0.0]), np.ones(3))
     cam = VCamera(cam_transform, fov=50.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
-    scene = Scene(name="lit_studio", camera=cam, background_color=ColorGradient([Color.from_hex("#ffffff"), Color.from_hex("#dfe7ff")], [0.0, 1.0]))
+    scene = Scene(name="lit_studio", camera=cam, background_color=Color.from_hex("#dfe7ff"))
 
     # Objects: two spheres and box as background
     s1 = Sphere(center=np.array([-0.6, 0.4, 0.5]), radius=0.4, name="StudioBallA")
@@ -197,13 +198,13 @@ def get_lit_studio_scene(width: int = 96, height: int = 96) -> tuple[int, int, S
     scene.add_object(VObject(shape=box_shape, name="StudioBox"))
 
     # Lights
-    key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#FFF6E0"), intensity=2.0, name="StudioKey")
+    key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#FFF6E0"), intensity=200.0, name="StudioKey")
     key.radius = 0.3  # area light radius (for soft shadows)
     scene.add_light(key)
-    rim = LightSource(position=np.array([-3.0, 2.0, 1.0]), color=Color.from_hex("#FFD6F0"), intensity=0.6, name="StudioRim")
+    rim = LightSource(position=np.array([-3.0, 2.0, 1.0]), color=Color.from_hex("#FFD6F0"), intensity=6.0, name="StudioRim")
     rim.radius = 0.2
     scene.add_light(rim)
-    fill = LightSource(position=np.array([0.0, -2.5, -2.0]), color=Color.from_hex("#FFFFFF"), intensity=0.15, name="StudioFill")
+    fill = LightSource(position=np.array([0.0, -2.5, -2.0]), color=Color.from_hex("#FFFFFF"), intensity=15.0, name="StudioFill")
     scene.add_light(fill)
 
     return width, height, scene

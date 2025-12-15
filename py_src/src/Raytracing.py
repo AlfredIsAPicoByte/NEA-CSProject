@@ -1,16 +1,16 @@
-from Scene import Scene
-from Camera import VCamera
-from Geometry import VObject
-from Luminance import Color, Material
-from Algorithims import Algorithm, register_algorithm
-from PrimaryStructures import Ray
-from Sampling import Sampler
-
 import numpy as np
 import random
 import math
 from typing import Any, Optional, List, Tuple, Callable
 from abc import ABC, abstractmethod
+
+from Scene import Scene
+from Camera import VCamera
+from Geometry import VObject
+from Luminance import Color, Material, LightSource
+from Algorithims import Algorithm, register_algorithm
+from PrimaryStructures import Ray
+from Sampling import Sampler
 
 # Define a ray that holds the ray and data
 class TracingRay(Ray):
@@ -276,67 +276,54 @@ class BasicLambertShading(ShadingStrategy):
         theta = random.random() * 2.0 * math.pi
         offset = tangent * (r * math.cos(theta)) + bitangent * (r * math.sin(theta))
         return center + offset
+    
+    def _calulate_shadow_visibility(self, scene: Scene, point: np.ndarray, light: LightSource, light_dir: np.ndarray):
+        visibility = 1.0
+        if self.enable_shadows:
+            # ... (Existing Hard/Soft Shadow Calculation Logic goes here) ...
+                
+            # Placeholder for your complex shadow logic:
+            # visibility = self._calculate_shadow_visibility(scene, point, light, light_dir)
+            
+            # --- START Existing Shadow Logic ---
+            radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
+            if not radius or self.shadow_samples == 1:
+                # single test for occlusion
+                occluded = scene.is_occluded(point, light.position, bias=self.shadow_bias)
+                visibility = 0.0 if occluded else 1.0
+            else:
+                # soft shadow by sampling area light
+                visible_count = 0
+                for _ in range(self.shadow_samples):
+                    sample_pos = self._random_point_on_disc(light.position, -light_dir, float(radius))
+                    if not scene.is_occluded(point, sample_pos, bias=self.shadow_bias):
+                        visible_count += 1
+                visibility = visible_count / float(self.shadow_samples)
+
+        return visibility
+        
 
     def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float) -> Color:
+        # 1. Geometry Context
         point = ray.point_at(distance)
+        normal = hit_object.shape.GetNormal(point)
+        view_dir = -ray.orientation
+        
+        # 2. Resolve Material
+        material: Material | None = getattr(hit_object, "material", None) or getattr(hit_object.shape, "material", None)
+        
+        if material is None:
+            return Color(1,0,1) # Or fallback color
 
-        if hasattr(hit_object.shape, "GetNormal"):
-            normal = hit_object.shape.GetNormal(point)
-        else:
-            normal = np.array([0.0, 1.0, 0.0])
+        # 3. Define the Visibility Callback
+        # The Material calls this to ask "Is this light visible?"
+        def check_visibility(light, light_dir, light_dist):
+            if not self.enable_shadows: return 1.0
+            return self._calculate_shadow_visibility(scene, point, light, light_dir)
 
-        # Resolve material color
-        base = getattr(hit_object, "material", None)
-        if base is None and hasattr(hit_object, "shape"):
-            base = getattr(hit_object.shape, "material", None)
-
-        if isinstance(base, Color):
-            mat_color = base
-        elif base is not None and hasattr(base, "color"):
-            mat_color = base.color
-        else:
-            mat_color = Color(1.0, 1.0, 1.0, 1.0)
-
-        out_color = Color(0.0, 0.0, 0.0, 1.0)
-
-        for light in scene.get_lights():
-            light_vec = light.position - point
-            light_dist = np.linalg.norm(light_vec)
-            if light_dist <= 0.0:
-                continue
-            light_dir = light_vec / light_dist
-            cos_theta = max(0.0, np.dot(normal, light_dir))
-            if cos_theta <= 0.0:
-                continue
-
-            # Shadow visibility check
-            visibility = 1.0
-            if self.enable_shadows:
-                # Hard shadow if no radius property
-                radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
-                if not radius or self.shadow_samples == 1:
-                    # single test for occlusion
-                    occluded = scene.is_occluded(point, light.position, bias=self.shadow_bias)
-                    visibility = 0.0 if occluded else 1.0
-                else:
-                    # soft shadow by sampling area light
-                    visible_count = 0
-                    for _ in range(self.shadow_samples):
-                        sample_pos = self._random_point_on_disc(light.position, -light_dir, float(radius))
-                        if not scene.is_occluded(point, sample_pos, bias=self.shadow_bias):
-                            visible_count += 1
-                    visibility = visible_count / float(self.shadow_samples)
-
-                if visibility <= 0.0:
-                    # fully shadowed for this light
-                    continue
-
-            # Compute contribution
-            light_int = getattr(light, "intensity", 1.0)
-            contrib = mat_color * light.color * light_int * cos_theta * visibility
-            out_color = out_color + contrib
-
-        return out_color.clamp()
+        # 4. Delegate to Material
+        # The loop happens inside here!
+        return material.apply_material_color(scene.get_lights(), point, normal, view_dir, Color(), check_visibility)
 
 # Raytracer using strategies
 @register_algorithm("raytracer")
