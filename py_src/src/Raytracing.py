@@ -255,7 +255,7 @@ class ShadingStrategy(ABC):
         ...
 
 class BasicLambertShading(ShadingStrategy):
-    def __init__(self, enable_shadows: bool = True, shadow_samples: int = 8, shadow_bias: float = 1e-4):
+    def __init__(self, enable_shadows: bool = False, shadow_samples: int = 8, shadow_bias: float = 1e-4):
         self.enable_shadows = enable_shadows
         self.shadow_samples = max(1, int(shadow_samples))
         self.shadow_bias = float(shadow_bias)
@@ -272,8 +272,8 @@ class BasicLambertShading(ShadingStrategy):
         tangent = tangent / np.linalg.norm(tangent)
         bitangent = np.cross(normal, tangent)
         # sample uniformly on disk
-        r = math.sqrt(random.random()) * radius
-        theta = random.random() * 2.0 * math.pi
+        r = math.sqrt(rand) * radius
+        theta = rand * 2.0 * math.pi
         offset = tangent * (r * math.cos(theta)) + bitangent * (r * math.sin(theta))
         return center + offset
     

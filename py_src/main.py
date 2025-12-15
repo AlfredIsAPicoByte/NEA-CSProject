@@ -12,7 +12,7 @@ from src.Luminance import LightSource, Color, ColorGradient, Material
 from src.PrimaryStructures import Transform
 from src.Sampling import Sampler, RandomSampler
 
-def render_and_save(scene, algorithim: Algorithm, sampler: Sampler, out_path="render_out_strat.png"):
+def render_and_save(image_width: float, image_height: float, scene: Scene, algorithim: Algorithm, sampler: Sampler, out_path="render_out_strat.png"):
     """Render the scene using the given algorithm and return a PIL Image."""
     # Ensure parent directory exists for out_path
     out_dir = os.path.dirname(out_path)
@@ -22,7 +22,7 @@ def render_and_save(scene, algorithim: Algorithm, sampler: Sampler, out_path="re
     # Use named argument for sampler - do not pass camera as a positional value (legacy behavior)
     pixel_colors = algorithim.render(scene, sampler=sampler)
     
-    W, H = scene.camera.width, scene.camera.height
+    W, H = image_width, image_height
     
     # Convert flat pixel_colors list (row-major, likely bottom-up) to 2D array
     img_array = np.zeros((H, W, 3), dtype=np.uint8)
@@ -103,7 +103,7 @@ def get_gradient_scene(width: int = 50, height: int = 50) -> tuple[int, int, Sce
     ground = Sphere(center=np.array([0.0, -100.0, 0.0]), radius=100.0, name="FloorPlane")
     mat_floor = Material(color=Color.from_hex("#4B5320"), emissive=Color(0.01, 0.01, 0.01), roughness=0.3, glossiness=0.6, metallic=0.0)
     ground.material = mat_floor
-    # scene.add_object(VObject(shape=ground, name="GroundObject"))
+    scene.add_object(VObject(shape=ground, name="GroundObject"))
 
     # Additional Object 1: Cube (Background/Visual Anchor) - Matte and Rough
     box_shape = Cube(center=np.array([-2.5, 1.0, 4.0]), side_length=2.5, name="BackgroundBox")
@@ -139,7 +139,7 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> tuple[int, int, Scen
     scene.add_object(VObject(shape=ground, name="GroundMin"))
 
     # Single light
-    light = LightSource(position=np.array([2.0, 3.0, -1.0]), color=Color.from_hex("#FFFFFF"), intensity=10.0, name="SunMin")
+    light = LightSource(position=np.array([2.0, 3.0, -1.0]), color=Color.from_hex("#FFFFFF"), intensity=15.0, radius=50.0, name="SunMin")
     scene.add_light(light)
 
     return width, height, scene
@@ -169,7 +169,7 @@ def get_emissive_scene(width: int = 64, height: int = 64) -> tuple[int, int, Sce
     scene.add_object(VObject(shape=ground, name="GroundEmissive"))
 
     # Small ambient fill light
-    fill = LightSource(position=np.array([-4.0, 2.0, -3.0]), color=Color.from_hex("#AAAACC"), intensity=4.0, name="FillEmiss")
+    fill = LightSource(position=np.array([-4.0, 2.0, -3.0]), color=Color.from_hex("#AAAACC"), intensity=15.0, radius=6.0, name="FillEmiss")
     scene.add_light(fill)
 
     return width, height, scene
@@ -198,7 +198,7 @@ def get_lit_studio_scene(width: int = 96, height: int = 96) -> tuple[int, int, S
     scene.add_object(VObject(shape=box_shape, name="StudioBox"))
 
     # Lights
-    key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#FFF6E0"), intensity=200.0, name="StudioKey")
+    key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#FFF6E0"), intensity=150.0, name="StudioKey")
     key.radius = 0.3  # area light radius (for soft shadows)
     scene.add_light(key)
     rim = LightSource(position=np.array([-3.0, 2.0, 1.0]), color=Color.from_hex("#FFD6F0"), intensity=6.0, name="StudioRim")
@@ -229,11 +229,11 @@ if __name__ == "__main__":
     raytracer = Raytracer(rays_per_pixel=rpp)
     sampler = RandomSampler(samples_per_pixel=spp)
 
-    for _, _, scene in all_scenes:
+    for w, h, scene in all_scenes:
         sanitized_name = scene.name.replace(" ", "_").lower()
         out_path = os.path.join(OUT_DIR, f"{sanitized_name}.png")
         print(f"Rendering '{scene.name}' -> {out_path} ({scene.camera.width}x{scene.camera.height})")
         try:
-            render_and_save(scene, raytracer, sampler, out_path=out_path)
+            render_and_save(w, h, scene, raytracer, sampler, out_path=out_path)
         except Exception as e:
             print(f"Failed to render '{scene.name}': {e}")

@@ -201,10 +201,11 @@ class ColorGradient:
         return self.colors[-1]
         
 class LightSource:
-    def __init__(self, position: np.ndarray, color: Color, intensity: float = 1.0, name: str = "Light Source"):
+    def __init__(self, position: np.ndarray, color: Color, intensity: float = 1.0, radius: float = 1.0, name: str = "Light Source"):
         self.position = position
         self.color = color
         self.intensity = intensity
+        self.radius = radius
         self.name = name
 
     def get_light_direction(self, hit_point: np.ndarray) -> np.ndarray:
