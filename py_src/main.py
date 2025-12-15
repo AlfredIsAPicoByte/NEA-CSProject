@@ -66,7 +66,7 @@ def render_and_save(scene: Scene, algorithim: Algorithm, sampler: Sampler, out_p
     im.save(out_path)
     print(f"Saved render to {out_path}")
 
-def get_gradient_scene(width: int = 50, height: int = 50) -> tuple[int, int, Scene]:
+def get_gradient_scene(width: int = 50, height: int = 50) -> Scene:
     # --- 1. CAMERA & SCENE SETUP (Enhanced Depth) ---
     # Camera: Moved back to Z = -6.0 for a wider, more composed view
     cam_transform = Transform(np.array([0.0, 1.5, -6.0]), np.array([-10.0, 0.0, 0.0]), np.ones(3)) # Tilted down slightly
@@ -118,7 +118,7 @@ def get_gradient_scene(width: int = 50, height: int = 50) -> tuple[int, int, Sce
     sphere_shape_2.material = mat_glow
     scene.add_object(VObject(shape=sphere_shape_2, name="EmissiveOrbObject"))
 
-    return width, height, scene
+    return scene
 
 # New: minimal scene - single sphere on ground with a single directional light
 def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
@@ -139,7 +139,7 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
     scene.add_object(VObject(shape=ground, name="GroundMin"))
 
     # Single light
-    light = LightSource(position=np.array([2.0, 3.0, -1.0]), color=Color.from_hex("#FFFFFF"), intensity=15.0, radius=50.0, name="SunMin")
+    light = LightSource(position=np.array([2.0, 3.0, -1.0]), color=Color.from_hex("#FFFFFF"), intensity=15.0, radius=2.0, name="SunMin")
     scene.add_light(light)
 
     return scene
@@ -221,10 +221,10 @@ if __name__ == "__main__":
 
     # list of scenes to render
     all_scenes = [
-        get_minimal_scene(128, 128),
-        get_gradient_scene(256, 256),
-        get_emissive_scene(256, 256),
-        get_lit_studio_scene(512, 512),
+        get_minimal_scene(64, 64),
+        get_gradient_scene(128, 128),
+        get_emissive_scene(128, 128),
+        get_lit_studio_scene(256, 256),
     ]
 
     rpp = 1  # rays per pixel

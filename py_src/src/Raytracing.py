@@ -258,7 +258,7 @@ class ShadingStrategy(ABC):
         ...
 
 class BasicLambertShading(ShadingStrategy):
-    def __init__(self, ambient_col: Color = Color(), enable_shadows: bool = False, shadow_samples: int = 8, shadow_bias: float = 1e-4):
+    def __init__(self, ambient_col: Color = Color(), enable_shadows: bool = True, shadow_samples: int = 8, shadow_bias: float = 1e-3):
         super().__init__(ambient_col)
         self.enable_shadows = enable_shadows
         self.shadow_samples = max(1, int(shadow_samples))
@@ -266,19 +266,29 @@ class BasicLambertShading(ShadingStrategy):
 
     def _random_point_on_disc(self, center: np.ndarray, normal: np.ndarray, radius: float, seed: Optional[int] = None,) -> np.ndarray:
         if seed is not None:
-            rand = random.Random(seed)
+            rand_gen = random.Random(seed)
         else:
-            rand = random.Random()
+            rand_gen = random.Random()
 
-        # build orthonormal basis around normal
-        up = np.array([0.0, 1.0, 0.0])
-        tangent = np.cross(up, normal)
+        # Fix: If normal is parallel to World Up (0,1,0), use X-axis instead to avoid Zero Vector crash.
+        if abs(normal[1]) > 0.99:
+            helper_axis = np.array([1.0, 0.0, 0.0])
+        else:
+            helper_axis = np.array([0.0, 1.0, 0.0])
+            
+        tangent = np.cross(helper_axis, normal)
         tangent = tangent / np.linalg.norm(tangent)
         bitangent = np.cross(normal, tangent)
-        # sample uniformly on disk
-        r = math.sqrt(rand) * radius
-        theta = rand * 2.0 * math.pi
+
+        u1 = rand_gen.random() 
+        u2 = rand_gen.random()
+
+        # We use sqrt(u1) to distribute points evenly by area (prevents clustering in the center)
+        r = math.sqrt(u1) * radius
+        theta = u2 * 2.0 * math.pi
+        
         offset = tangent * (r * math.cos(theta)) + bitangent * (r * math.sin(theta))
+        
         return center + offset
     
     def _calculate_shadow_visibility(self, scene: Scene, point: np.ndarray, light: LightSource, light_dir: np.ndarray):
