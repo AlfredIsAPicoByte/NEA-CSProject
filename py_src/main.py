@@ -12,7 +12,7 @@ from src.Luminance import LightSource, Color, ColorGradient, Material
 from src.PrimaryStructures import Transform
 from src.Sampling import Sampler, RandomSampler
 
-def render_and_save(image_width: float, image_height: float, scene: Scene, algorithim: Algorithm, sampler: Sampler, out_path="render_out_strat.png"):
+def render_and_save(scene: Scene, algorithim: Algorithm, sampler: Sampler, out_path="render_out_strat.png"):
     """Render the scene using the given algorithm and return a PIL Image."""
     # Ensure parent directory exists for out_path
     out_dir = os.path.dirname(out_path)
@@ -22,7 +22,7 @@ def render_and_save(image_width: float, image_height: float, scene: Scene, algor
     # Use named argument for sampler - do not pass camera as a positional value (legacy behavior)
     pixel_colors = algorithim.render(scene, sampler=sampler)
     
-    W, H = image_width, image_height
+    W, H = scene.camera.width, scene.camera.height
     
     # Convert flat pixel_colors list (row-major, likely bottom-up) to 2D array
     img_array = np.zeros((H, W, 3), dtype=np.uint8)
@@ -121,7 +121,7 @@ def get_gradient_scene(width: int = 50, height: int = 50) -> tuple[int, int, Sce
     return width, height, scene
 
 # New: minimal scene - single sphere on ground with a single directional light
-def get_minimal_scene(width: int = 64, height: int = 64) -> tuple[int, int, Scene]:
+def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
     cam_transform = Transform(np.array([0.0, 0.0, -3.0]), np.zeros(3), np.ones(3))
     cam = VCamera(cam_transform, fov=60.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
     scene = Scene(name="minimal_scene", camera=cam, background_color=Color.from_hex("#a0c8ff"))
@@ -142,10 +142,10 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> tuple[int, int, Scen
     light = LightSource(position=np.array([2.0, 3.0, -1.0]), color=Color.from_hex("#FFFFFF"), intensity=15.0, radius=50.0, name="SunMin")
     scene.add_light(light)
 
-    return width, height, scene
+    return scene
 
 # New: Emissive scene - emission as lighting (emissive sphere and simple fill light)
-def get_emissive_scene(width: int = 64, height: int = 64) -> tuple[int, int, Scene]:
+def get_emissive_scene(width: int = 64, height: int = 64) -> Scene:
     cam_transform = Transform(np.array([0.0, 0.5, -3.5]), np.zeros(3), np.ones(3))
     cam = VCamera(cam_transform, fov=55.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
     scene = Scene(name="emissive_scene", camera=cam, background_color=Color.from_hex("#402050"))
@@ -172,10 +172,10 @@ def get_emissive_scene(width: int = 64, height: int = 64) -> tuple[int, int, Sce
     fill = LightSource(position=np.array([-4.0, 2.0, -3.0]), color=Color.from_hex("#AAAACC"), intensity=15.0, radius=6.0, name="FillEmiss")
     scene.add_light(fill)
 
-    return width, height, scene
+    return scene
 
 # New: studio / many lights scene to show shadows and complex shading
-def get_lit_studio_scene(width: int = 96, height: int = 96) -> tuple[int, int, Scene]:
+def get_lit_studio_scene(width: int = 96, height: int = 96) -> Scene:
     cam_transform = Transform(np.array([0.0, 1.0, -4.0]), np.array([-0.15, 0.0, 0.0]), np.ones(3))
     cam = VCamera(cam_transform, fov=50.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
     scene = Scene(name="lit_studio", camera=cam, background_color=Color.from_hex("#dfe7ff"))
@@ -207,7 +207,10 @@ def get_lit_studio_scene(width: int = 96, height: int = 96) -> tuple[int, int, S
     fill = LightSource(position=np.array([0.0, -2.5, -2.0]), color=Color.from_hex("#FFFFFF"), intensity=15.0, name="StudioFill")
     scene.add_light(fill)
 
-    return width, height, scene
+    return scene
+
+def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scene:
+    pass
 
 # Add orchestrator to render and save a set of scenes
 if __name__ == "__main__":
@@ -229,11 +232,11 @@ if __name__ == "__main__":
     raytracer = Raytracer(rays_per_pixel=rpp)
     sampler = RandomSampler(samples_per_pixel=spp)
 
-    for w, h, scene in all_scenes:
+    for scene in all_scenes:
         sanitized_name = scene.name.replace(" ", "_").lower()
         out_path = os.path.join(OUT_DIR, f"{sanitized_name}.png")
         print(f"Rendering '{scene.name}' -> {out_path} ({scene.camera.width}x{scene.camera.height})")
         try:
-            render_and_save(w, h, scene, raytracer, sampler, out_path=out_path)
+            render_and_save(scene, raytracer, sampler, out_path=out_path)
         except Exception as e:
             print(f"Failed to render '{scene.name}': {e}")

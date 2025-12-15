@@ -2,7 +2,7 @@ import numpy as np
 from typing import Callable
 from PrimaryStructures import Ray
 from Reflections import reflect_ray
-from Refractions import refract_ray
+from Refractions import refract_ray, calculate_critical_angle
 
 """
 
@@ -343,26 +343,47 @@ class Material:
 
     def calculate_optical_redirection(self, incoming_ray: Ray, surface_normal: np.ndarray, 
                                   incoming_color: Color, hit_point: np.ndarray, bias: float = 1e-4) -> tuple[Ray, Color]:
+        unit_dir = incoming_ray.orientation / np.linalg.norm(incoming_ray.orientation)
+        unit_normal = surface_normal / np.linalg.norm(surface_normal)
+
+        final_dir = reflect_ray(unit_normal, incoming_ray.orientation)
+        final_origin = hit_point + (unit_normal * bias)
+
         if self.can_refract and self.is_transparent:
-            new_orientation = refract_ray(...)
-            # Push IN for refraction
-            new_origin = hit_point - (surface_normal * bias) 
-        else:
-            new_orientation = reflect_ray(...)
-            # Push OUT for reflection
-            new_origin = hit_point + (surface_normal * bias)
+            ior_air = 1.0
+            ior_material = getattr(self, 'ior', 1.5)
 
-        # Calculate the new color after material effect
-        new_color = self.manipulate_color(incoming_color)
+            # Check if entering or exiting
+            cos_i = -np.dot(unit_normal, unit_dir)
+            if cos_i > 0:
+                # Entering the material (Air -> Glass)
+                n1, n2 = ior_air, ior_material
+                normal = unit_normal
+            else:
+                # Exiting the material (Glass -> Air)
+                n1, n2 = ior_material, ior_air
+                normal = -unit_normal # Flip normal to point into the new medium
+                cos_i = -cos_i
+            
+            try:
+                final_dir = refract_ray(normal, hit_point, incoming_ray.direction, n1, n2)
+                final_origin = hit_point - (normal * bias)
+            except ValueError:
+                pass
 
+        attenuation = self.base_color
+
+        # If it's a metal, the attenuation matches the reflection color strongly
+        # If it's glass, it might be clear (white attenuation) or tinted
+        
         # Create the new ray
         redirected_ray = Ray(
-            origin=new_origin,
-            orientation=new_orientation,
-            name=f"{incoming_ray.name} (reflected)"
+            origin=final_origin,
+            orientation=final_dir,
+            name=f"{incoming_ray.name}_bounce"
         )
-        return redirected_ray, new_color
-
+        
+        return redirected_ray, attenuation
     def get_diffuse_component(self, surface_normal: np.ndarray, light_dir: np.ndarray, light_intensity: float) -> Color:
         """Get the diffuse component of the material response."""
         diffuse = self.base_color * light_intensity * max(0, np.dot(surface_normal, light_dir))
