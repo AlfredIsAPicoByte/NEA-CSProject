@@ -323,7 +323,40 @@ class BasicLambertShading(ShadingStrategy):
 
         # 4. Delegate to Material
         # The loop happens inside here!
-        return material.apply_material_color(scene.get_lights(), point, normal, view_dir, Color(), check_visibility)
+        direct_light = material.apply_material_color(scene.get_lights(), point, normal, view_dir, Color(), check_visibility)
+    
+        if getattr(ray, "depth", 0) > 0:
+            # A. Calculate Origin Offset to prevent "Shadow Acne" / Self-Intersection
+            # We push the ray slightly away from the surface along the normal.
+            # Note: If your material supports REFRACTION, this logic needs to be smarter
+            # (pushing IN for refraction, OUT for reflection).
+            # For now, we assume reflection (push OUT).
+            bias = 1e-4
+            bounce_origin = point + (normal * bias)
+
+            # B. "Probe" the material for the next ray
+            # We pass white to get the raw attenuation color of the material
+            probe_color = Color(1.0, 1.0, 1.0)
+            
+            bounce_ray, attenuation = material.calculate_optical_redirection(
+                incoming_ray=ray,
+                surface_normal=normal,
+                incoming_color=probe_color, 
+                new_origin=bounce_origin,
+                bias=bias
+            )
+
+            # C. Recursion: Trace the new ray
+            # This calls the engine back to see what the reflected ray hits
+            incoming_light_from_bounce = trace_function(bounce_ray, depth - 1)
+
+            # D. Attenuate: Combine the incoming light with the material's tint
+            # e.g., If Gold reflects White light, the result is Gold.
+            indirect_light = incoming_light_from_bounce * attenuation
+
+        # Combine Direct + Indirect + Emissive
+        final_color = direct_light + indirect_light
+        return final_color
 
 # Raytracer using strategies
 @register_algorithm("raytracer")
@@ -341,120 +374,164 @@ class Raytracer(Algorithm):
         self.intersector = intersection_strategy if intersection_strategy is not None else RayMarchingIntersection()
         self.shader = shading_strategy if shading_strategy is not None else BasicLambertShading()
 
+    def _trace_ray(self, scene: Scene, ray: TracingRay, depth: int) -> Color:
+        """
+        Recursive function to trace a ray through the scene.
+        """
+        # 1. Base Case: Stop bouncing if depth limit reached
+        if depth < 0:
+            return Color(0.0, 0.0, 0.0)
+
+        # 2. Find Intersection
+        hit_obj, dist = self.intersector.find_hit(scene, ray)
+
+        # 3. Handle Hit
+        if hit_obj:
+            # We pass 'self._trace_ray' as the callback function to the shader.
+            # The shader will call this function again if it needs to bounce a ray.
+            return self.shader.shade(scene, ray, hit_obj, dist, depth, self._trace_ray)
+        
+        # 4. Handle Miss (Background)
+        try:
+            # Ensure ray.orientation is a numpy array for the background function
+            direction = np.asarray(ray.orientation) 
+            return scene.get_background_color(direction)
+        except Exception:
+            return Color(0.0, 0.0, 0.0)
+
     def render(self, scene: Scene, camera: Optional[VCamera] = None, seed: Optional[int] = None, tile_size: Optional[Tuple[int,int]] = None, sampler: Optional[Sampler] = None) -> List[Color]:
         """
         Render the scene and return pixel colors as a flat list (row-major order).
-        Backward compatible: If the second positional argument passed is a VCamera instance,
-        it will be used; otherwise we treat the second arg as the seed (legacy calls).
         """
-        # Backwards-compatible camera/seed handling:
+        # --- Setup ---
         if isinstance(camera, VCamera):
             cam = camera
         elif camera is None:
             cam = scene.camera
         else:
-            # camera param actually used as seed in old call signature: render(scene, camera_as_seed, ...)
             seed = camera
             cam = scene.camera
 
         if cam is None:
-            raise ValueError("No camera provided to Raytracer.render and scene.camera is None")
+            raise ValueError("No camera provided to Raytracer.render")
 
         cam_w, cam_h = cam.width, cam.height
-
-        # Use a flat list for accum: index = y * cam_w + x
         total_pixels = cam_w * cam_h
         pixel_accum: List[List[Color]] = [[] for _ in range(total_pixels)]
+        
+        # Define max bounces (recursion depth)
+        MAX_DEPTH = 4 
 
-        # Helper to push a color for pixel coordinates (x,y) if valid
         def push_pixel_color(x: int, y: int, color: Color) -> None:
-            if x is None or y is None:
-                return
-            if x < 0 or x >= cam_w or y < 0 or y >= cam_h:
-                return
-            pixel_accum[y * cam_w + x].append(color)
+            if x is not None and y is not None and 0 <= x < cam_w and 0 <= y < cam_h:
+                pixel_accum[y * cam_w + x].append(color)
 
-        # Adjust ray generation call to pass the actual 'cam' camera
         def _gen_rays_for_region(region):
             return self.ray_generator.generate(cam, self.rays_per_pixel, region=region, sampler=sampler, seed=seed)
 
-        if tile_size is None:
-            rays = _gen_rays_for_region(None)
-            print(f"Generated {len(rays)} rays for full image.")
+        # --- Render Loop ---
+        
+        def process_rays(rays):
+            """Helper to process a batch of rays using the recursive tracer."""
             for ray in rays:
-                hit_obj, dist = self.intersector.find_hit(scene, ray)
-
                 x = getattr(ray, "pixel_x", None)
                 y = getattr(ray, "pixel_y", None)
 
-                # Skip if pixel coordinates missing/out of bounds
+                # Skip invalid pixels
                 if x is None or y is None or x < 0 or x >= cam_w or y < 0 or y >= cam_h:
                     continue
 
-                if hit_obj is None:
-                    try:
-                        bg = scene.get_background_color(np.asarray(ray.orientation))
-                    except Exception:
-                        bg = Color()
-                    push_pixel_color(x, y, bg)
-                else:
-                    shaded = self.shader.shade(scene, ray, hit_obj, dist)
-                    push_pixel_color(x, y, shaded)
+                # Use the recursive tracer
+                # This handles Intersection -> Shading -> Bouncing internally
+                final_color = self._trace_ray(scene, ray, depth=MAX_DEPTH)
+                
+                push_pixel_color(x, y, final_color)
 
+        if tile_size is None:
+            # Full image render
+            rays = _gen_rays_for_region(None)
+            print(f"Generated {len(rays)} rays for full image.")
+            process_rays(rays)
             print("Completed rendering full image.")
         else:
-            # Tile-based processing
+            # Tiled render
             tile_w, tile_h = tile_size
             print(f"Rendering in tiles of size {tile_w}x{tile_h}...")
             for y0 in range(0, cam_h, tile_h):
                 for x0 in range(0, cam_w, tile_w):
-                    w = min(tile_w, cam_w - x0)
-                    h = min(tile_h, cam_h - y0)
+                    w, h = min(tile_w, cam_w - x0), min(tile_h, cam_h - y0)
                     region = (x0, y0, w, h)
                     rays = _gen_rays_for_region(region)
-                    print(f"Generated {len(rays)} rays for tile at ({x0},{y0}) size {w}x{h}.")
-                    for ray in rays:
-                        hit_obj, dist = self.intersector.find_hit(scene, ray)
-                        x = getattr(ray, "pixel_x", None)
-                        y = getattr(ray, "pixel_y", None)
-                        if x is None or y is None or x < 0 or x >= cam_w or y < 0 or y >= cam_h:
-                            continue
-                        if hit_obj is None:
-                            try:
-                                bg = scene.get_background_color(np.asarray(ray.orientation))
-                            except Exception:
-                                bg = Color()
-                            push_pixel_color(x, y, bg)
-                        else:
-                            shaded = self.shader.shade(scene, ray, hit_obj, dist)
-                            push_pixel_color(x, y, shaded)
+                    process_rays(rays)
 
-        # Build final colors (row-major), use background where empty
+        # --- Accumulation ---
         pixel_colors: List[Color] = []
-        for y in range(cam_h):
-            for x in range(cam_w):
-                idx = y * cam_w + x
-                colors = pixel_accum[idx]
-                if colors:
-                    avg_color = Color.average_colors(colors)
-                else:
-                    try:
-                        avg_color = scene.get_background_color(cam.transform.forward)
-                    except Exception:
-                        avg_color = Color()
-                pixel_colors.append(avg_color)
-
-        # Sanity check and pad if missing (very unlikely with above logic)
-        if len(pixel_colors) != total_pixels:
-            print(f"Warning: pixel_colors length {len(pixel_colors)} != expected {total_pixels}, padding with background color.")
-            while len(pixel_colors) < total_pixels:
-                try:
-                    bg = scene.get_background_color(cam.transform.forward)
-                except Exception:
-                    bg = Color()
-                pixel_colors.append(bg)
+        for idx in range(total_pixels):
+            colors = pixel_accum[idx]
+            if colors:
+                pixel_colors.append(Color.average_colors(colors))
+            else:
+                # Fill missing pixels with black
+                pixel_colors.append(Color(0,0,0)) 
 
         return pixel_colors
 
     def __repr__(self):
         return f"Raytracer(rays_per_pixel={self.rays_per_pixel}, intersector={self.intersector}, shader={self.shader})"
+
+
+"""
+def material_interaction_callback(current_ray: TracingRay, hit_object: VObject, hit_point: np.ndarray) -> tuple[Optional[TracingRay], Optional[TracingRay]]:
+    """
+    Connects the TracingRay's interaction system to the Material's optical logic.
+    """
+    # 1. Resolve Material
+    material = getattr(hit_object, "material", None) or getattr(hit_object.shape, "material", None)
+    
+    if not material:
+        return None, None
+
+    # 2. Calculate Context (Normal)
+    # We need the normal to decide reflection/refraction
+    if hasattr(hit_object.shape, "GetNormal"):
+        normal = hit_object.shape.GetNormal(hit_point)
+    else:
+        return None, None
+
+    # 3. Calculate Origin Offset (Prevent Shadow Acne)
+    # We push the new ray slightly off the surface.
+    # Note: Ideally, the Material determines if we push OUT (Reflection) or IN (Refraction).
+    # For now, we assume standard reflection bias (push OUT along normal).
+    bias = 1e-4
+    new_origin = hit_point + (normal * bias)
+
+    # 4. Invoke the Material's Logic
+    # We pass the current ray's 'throughput' as the 'incoming_color'
+    current_throughput = getattr(current_ray, "throughput", Color(1.0, 1.0, 1.0))
+    
+    new_ray_geom, new_throughput = material.calculate_optical_redirection(
+        incoming_ray=current_ray,
+        surface_normal=normal,
+        incoming_color=current_throughput,
+        new_origin=new_origin
+    )
+
+    # 5. Convert to TracingRay and Update Throughput
+    # We must convert the generic 'Ray' returned by material into a 'TracingRay'
+    # and attach the NEW throughput to it.
+    next_ray = TracingRay(
+        origin=new_ray_geom.origin,
+        orientation=new_ray_geom.orientation,
+        name=f"{current_ray.name}_bounce",
+        throughput=new_throughput, # <--- The critical energy transfer
+        depth=getattr(current_ray, "depth", 0) + 1 # Increment depth if you track it
+    )
+
+    # Attach this same callback to the new ray so it can bounce again!
+    next_ray.set_interaction_function(material_interaction_callback)
+
+    # 6. Return Tuple (Reflected, Refracted)
+    # Since your current material logic chooses ONE path (Reflect OR Refract),
+    # we return it as the first element. The second is None.
+    return next_ray, None
+"""

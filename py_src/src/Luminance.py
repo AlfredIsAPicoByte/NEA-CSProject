@@ -341,18 +341,16 @@ class Material:
         
         return final_color.clamp()
 
-    def calculate_optical_redirection(self, incoming_ray: Ray, surface_normal: np.ndarray, incoming_color: Color, new_origin: np.ndarray) -> tuple[Ray, Color]:
-        """
-        Compute the redirected (reflected or refracted) ray and its color after interaction with the material.
-        Returns a LightRay with updated direction and color.
-        """
-        # Decide between reflection and refraction based on material properties
+    def calculate_optical_redirection(self, incoming_ray: Ray, surface_normal: np.ndarray, 
+                                  incoming_color: Color, hit_point: np.ndarray, bias: float = 1e-4) -> tuple[Ray, Color]:
         if self.can_refract and self.is_transparent:
-            # Refract the incoming ray orientation about the normal
-            new_orientation = refract_ray(incoming_ray.orientation, surface_normal)
+            new_orientation = refract_ray(...)
+            # Push IN for refraction
+            new_origin = hit_point - (surface_normal * bias) 
         else:
-            # Reflect the incoming ray orientation about the normal
-            new_orientation = reflect_ray(surface_normal, incoming_ray.origin, incoming_ray.orientation)
+            new_orientation = reflect_ray(...)
+            # Push OUT for reflection
+            new_origin = hit_point + (surface_normal * bias)
 
         # Calculate the new color after material effect
         new_color = self.manipulate_color(incoming_color)

@@ -218,13 +218,13 @@ if __name__ == "__main__":
 
     # list of scenes to render
     all_scenes = [
-        get_minimal_scene(100, 100),
-        get_gradient_scene(128, 128),  # existing
-        get_emissive_scene(128, 128),
-        get_lit_studio_scene(200, 200),
+        get_minimal_scene(128, 128),
+        get_gradient_scene(256, 256),
+        get_emissive_scene(256, 256),
+        get_lit_studio_scene(512, 512),
     ]
 
-    rpp = 4  # rays per pixel
+    rpp = 1  # rays per pixel
     spp = 1  # samples per pixel
     raytracer = Raytracer(rays_per_pixel=rpp)
     sampler = RandomSampler(samples_per_pixel=spp)
