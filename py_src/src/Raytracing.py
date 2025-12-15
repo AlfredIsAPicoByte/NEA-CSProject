@@ -277,7 +277,7 @@ class BasicLambertShading(ShadingStrategy):
         offset = tangent * (r * math.cos(theta)) + bitangent * (r * math.sin(theta))
         return center + offset
     
-    def _calulate_shadow_visibility(self, scene: Scene, point: np.ndarray, light: LightSource, light_dir: np.ndarray):
+    def _calculate_shadow_visibility(self, scene: Scene, point: np.ndarray, light: LightSource, light_dir: np.ndarray):
         visibility = 1.0
         if self.enable_shadows:
             # ... (Existing Hard/Soft Shadow Calculation Logic goes here) ...
