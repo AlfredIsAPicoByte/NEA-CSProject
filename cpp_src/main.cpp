@@ -323,8 +323,6 @@ int main()
 		[&]() {
 			{
 				ImGui::Begin("Info Panel");
-				ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", time.deltaTime * 1000.0f, time.frameRate);
-				
 				ImGui::Text("Controls:");
 				ImGui::Text("  - WASD to move");
 				ImGui::Text("  - QE to move up and down, or roll in Plane mode");

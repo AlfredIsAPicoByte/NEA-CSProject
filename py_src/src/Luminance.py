@@ -299,6 +299,16 @@ class Material:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+    @classmethod
+    def _default(cls):
+        return cls(
+            color = Color(1, 1, 1, 1),
+            emissive = Color(),
+            roughness = 0,
+            glossiness = 0,
+            metallic = 0,
+        )
+
     def apply_material_color(self, light_sources: list[LightSource], hit_point: np.ndarray, normal: np.ndarray, view_dir: np.ndarray, ambient_color: Color, visibility_function: Callable) -> Color:
         """
         Calculates the full color of the material by iterating over all lights in the scene.

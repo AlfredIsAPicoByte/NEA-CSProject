@@ -4,7 +4,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from src.Algorithims import Algorithm
-from src.Raytracing import Raytracer
+from src.Raytracing import Raytracer, RayMarchingIntersection, BasicLambertShading
 from src.Camera import VCamera, CameraType
 from src.Scene import Scene
 from src.Geometry import Sphere, Cube, VObject
@@ -32,10 +32,7 @@ def render_and_save(scene: Scene, algorithim: Algorithm, sampler: Sampler, out_p
         raw_y = idx // W
         x = idx % W
         
-        # 2. <<< FIX APPLIED HERE: FLIP THE Y-COORDINATE >>>
-        # Maps the first rendered row (raw_y=0) to the last row of the array (H-1)
-        # Maps the last rendered row (raw_y=H-1) to the first row of the array (0)
-        y = H - 1 - raw_y
+        y = raw_y
         
         # Extract RGB from Color object (rest of the logic is fine)
         if hasattr(color, "rgba"):
@@ -69,14 +66,14 @@ def render_and_save(scene: Scene, algorithim: Algorithm, sampler: Sampler, out_p
 def get_gradient_scene(width: int = 50, height: int = 50) -> Scene:
     # --- 1. CAMERA & SCENE SETUP (Enhanced Depth) ---
     # Camera: Moved back to Z = -6.0 for a wider, more composed view
-    cam_transform = Transform(np.array([0.0, 1.5, -6.0]), np.array([-10.0, 0.0, 0.0]), np.ones(3)) # Tilted down slightly
-    cam = VCamera(cam_transform, fov=60.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
+    cam_transform = Transform(np.array([0.0, 1.5, -10.0]), np.array([-10.0, 0.0, 0.0]), np.ones(3)) # Tilted down slightly
+    cam = VCamera(cam_transform, fov=130.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
 
     # Background Gradient: Richer sunset/dusk sky for dramatic lighting
     sky_colors = [
-        Color.from_hex("#000033"),  # Deep navy at the bottom
-        Color.from_hex("#14408A"),  # Dark blue in the middle
         Color.from_hex("#C13584"),  # Magenta/pink at the top (zenith)
+        Color.from_hex("#14408A"),  # Dark blue in the middle
+        Color.from_hex("#000033"),  # Deep navy at the bottom
     ]
     sky_positions = [0.0, 0.5, 1.0] 
     scene = Scene(name="gradient_scene", camera=cam, background_color=ColorGradient(sky_colors, sky_positions)) 
@@ -84,17 +81,17 @@ def get_gradient_scene(width: int = 50, height: int = 50) -> Scene:
     # --- 2. LIGHTING (Dramatic Side Light + Ambient) ---
     
     # Primary Key Light (Sharp, slightly yellow, placed high and to the left for side lighting)
-    key_light = LightSource(position=np.array([4.0, 5.0, 0.0]), color=Color.from_hex("#FFEDC7"), intensity=2.5, name="Key Light")
+    key_light = LightSource(position=np.array([4.0, 5.0, 0.0]), color=Color.from_hex("#FFEDC7"), intensity=15.0, name="Key Light")
     scene.add_light(key_light)
     
     # Soft Fill Light (Simulates general ambient light or bounce light)
-    fill_light = LightSource(position=np.array([-5.0, 2.0, -5.0]), color=Color.from_hex("#C7E5FF"), intensity=0.3, name="Fill Light")
+    fill_light = LightSource(position=np.array([-5.0, 2.0, -5.0]), color=Color.from_hex("#C7E5FF"), intensity=3.0, name="Fill Light")
     scene.add_light(fill_light)
     
     # --- 3. GEOMETRY AND MATERIALS (Contrast and Realism) ---
 
     # Main Sphere (Mid-Ground): Highly Reflective Metal
-    sphere_shape_1 = Sphere(center=np.array([0.0, 0.5, 0.0]), radius=0.5, name="MainReflectiveBall")
+    sphere_shape_1 = Sphere(center=np.array([3.0, 0.5, 10.0]), radius=0.5, name="MainReflectiveBall")
     mat_metal = Material(color=Color.from_hex("#E0E0E0"), emissive=Color(0, 0, 0), roughness=0.05, glossiness=0.9, metallic=1.0) # Highly reflective metal
     sphere_shape_1.material = mat_metal
     scene.add_object(VObject(shape=sphere_shape_1, name="ReflectiveSphere"))
@@ -106,7 +103,7 @@ def get_gradient_scene(width: int = 50, height: int = 50) -> Scene:
     scene.add_object(VObject(shape=ground, name="GroundObject"))
 
     # Additional Object 1: Cube (Background/Visual Anchor) - Matte and Rough
-    box_shape = Cube(center=np.array([-2.5, 1.0, 4.0]), side_length=2.5, name="BackgroundBox")
+    box_shape = Cube(center=np.array([-2.5, -3.0, 4.0]), side_length=2.5, name="BackgroundBox")
     box_shape.transform.rotate(15, np.array([0, 1, 0])) # Simple rotation for visual interest
     mat_matte = Material(color=Color.from_hex("#C27A23"), emissive=Color(0, 0, 0), roughness=0.8, glossiness=0.1, metallic=0.0) # Rough, terracotta-like
     box_shape.material = mat_matte
@@ -147,7 +144,7 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
 # New: Emissive scene - emission as lighting (emissive sphere and simple fill light)
 def get_emissive_scene(width: int = 64, height: int = 64) -> Scene:
     cam_transform = Transform(np.array([0.0, 0.5, -3.5]), np.zeros(3), np.ones(3))
-    cam = VCamera(cam_transform, fov=55.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
+    cam = VCamera(cam_transform, fov=75.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
     scene = Scene(name="emissive_scene", camera=cam, background_color=Color.from_hex("#402050"))
 
     # Emissive sphere
@@ -229,7 +226,12 @@ if __name__ == "__main__":
 
     rpp = 1  # rays per pixel
     spp = 1  # samples per pixel
-    raytracer = Raytracer(rays_per_pixel=rpp)
+    intersector = RayMarchingIntersection()
+    shader = BasicLambertShading(
+        ambient_enabled=True, ambient_color=Color.from_hex("#222529"), ambient_intensity=0.1,
+        enable_shadows=True, shadow_samples=16, shadow_bias=5e-3
+    )
+    raytracer = Raytracer(rays_per_pixel=rpp, intersection_strategy=intersector, shading_strategy=shader)
     sampler = RandomSampler(samples_per_pixel=spp)
 
     for scene in all_scenes:
