@@ -381,7 +381,7 @@ class Material:
             except ValueError:
                 pass
 
-        attenuation = self.base_color
+        attenuation = LightSource.attenuate_color(self.base_color, LightSource.attenuate_sqr_distance())
 
         # If it's a metal, the attenuation matches the reflection color strongly
         # If it's glass, it might be clear (white attenuation) or tinted
