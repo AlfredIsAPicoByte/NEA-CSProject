@@ -46,3 +46,9 @@ void UpdateMaterialUBO(const Material& mat)
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(GPUMaterial), &data);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
+
+// Nothing to free per-Material right now; satisfies the linker
+void Material::CleanUp()
+{
+    // No per-instance GL resources allocated here
+}

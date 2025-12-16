@@ -20,6 +20,11 @@ class Scene:
         self.lights: List[LightSource] = []
         self.camera: Optional[VCamera] = camera
 
+        # Ambient lighting defaults (can be overridden via kwargs)
+        # small neutral ambient to avoid complete black shadows by default
+        self.ambient_color: Color = Color(0.03, 0.03, 0.03)
+        self.ambient_intensity: float = 0.1
+
         for key, value in kwargs.items():
             setattr(self, key, value)
     

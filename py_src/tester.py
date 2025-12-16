@@ -431,6 +431,54 @@ def test_background_gradient() -> bool:
     except Exception as e:
         return False, str(e)
 
+def test_ambient_lighting() -> bool:
+    """
+    Ensure ambient lighting contributes to shading when enabled.
+    """
+    try:
+        from src.Raytracing import BasicLambertShading
+        from src.PrimaryStructures import Ray, Transform
+        from src.Camera import VCamera, CameraType
+        from src.Geometry import Sphere, VObject
+        from src.Luminance import Color, Material
+        import numpy as np
+
+        # Scene with no explicit point lights; ambient present on scene
+        transform = Transform(np.array([0,0,0]), np.zeros(3), np.ones(3))
+        cam = VCamera(transform, fov=60.0, near=0.1, far=100.0, width=8, height=8, camType=CameraType.PERSPECTIVE)
+        scene = __import__("src.Scene", fromlist=["Scene"]).Scene(name="ambient_test", camera=cam)
+        scene.ambient_color = Color.from_hex("#888888")
+        scene.ambient_intensity = 0.5
+
+        # Simple object and material
+        sph = Sphere(center=np.array([0.0, 0.0, 0.0]), radius=1.0)
+        mat = Material(color=Color.from_hex("#404040"), emissive=Color(0,0,0))
+        sph.material = mat
+        obj = VObject(sph, name="sph")
+        scene.add_object(obj)
+
+        # Ray hitting object
+        ray = Ray(np.array([0.0, 0.0, -5.0]), np.array([0.0, 0.0, 1.0]))
+        shader = BasicLambertShading(ambient_enabled=True)
+
+        shaded = shader.shade(scene, ray, obj, 4.0)
+
+        # extract RGB
+        rgb = None
+        if hasattr(shaded, "rgba"):
+            rgb = np.asarray(shaded.rgba[:3], dtype=float)
+        elif all(hasattr(shaded, a) for a in ("red","green","blue")):
+            rgb = np.array([shaded.red, shaded.green, shaded.blue])
+        else:
+            return False, "Returned shade is not a Color-like object"
+
+        if np.allclose(rgb, 0.0):
+            return False, f"Ambient shading produced black color {rgb}"
+
+        return True
+    except Exception as e:
+        return False, str(e)
+
 available_tests: dict[str, Callable[[], Tuple[bool, str|None] | bool]] = {
     "Ray Structure Test": test_ray,
     "Shape Creation Test": test_shapes,
@@ -445,6 +493,7 @@ available_tests: dict[str, Callable[[], Tuple[bool, str|None] | bool]] = {
     "LightSource Structure Test": test_light_source,
     "Ray-Shape Intersection Test": test_ray_shape_intersection,
     "Background Gradient Test": test_background_gradient,
+    "Ambient Lighting Test": test_ambient_lighting,
 }
 
 # --- Final run_tests Implementation ---

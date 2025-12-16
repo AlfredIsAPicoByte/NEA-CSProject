@@ -49,6 +49,20 @@ class RayGenerator(ABC):
     ) -> List[TracingRay]:
         ...
 
+    def rotate_ray_by_camera_fov(self,
+        camera: "VCamera",
+        u: float, v: float,
+
+    ) -> np.ndarray:
+        ndc_x, ndc_y = 2 * u - 1, 1 - 2 * v
+        half_h = math.tan(math.radians(camera.fov) * 0.5)     # cam.fov = vertical FOV in degrees
+        half_w = (camera.width / camera.height) * half_h
+        px = ndc_x * half_w
+        py = ndc_y * half_h
+        direction = (camera.transform.forward + px * camera.transform.right + py * camera.transform.up)
+        direction = direction / np.linalg.norm(direction)
+        return direction
+
 class BasicRayGenerator(RayGenerator):
     def generate(
         self,
@@ -58,7 +72,7 @@ class BasicRayGenerator(RayGenerator):
         sampler: Optional[Sampler] = None,
         seed: Optional[int] = None,
     ) -> List[TracingRay]:
-        # Simple implementation that generates one ray per pixel without jitter
+        # Simple implementation that generates one ray per pixel without jitter or sampler
         cam_width, cam_height = camera.width, camera.height
 
         # default to full image
@@ -78,9 +92,8 @@ class BasicRayGenerator(RayGenerator):
                 for r in range(max(1, rays_per_pixel)):
                     u = (x + 0.5) / cam_width
                     v = (y + 0.5) / cam_height
+                    orientation = self.rotate_ray_by_camera_fov(camera, u, v)
 
-                    orientation = camera.transform.forward + (u - 0.5) * camera.transform.right + (v - 0.5) * camera.transform.up
-                    orientation = orientation / np.linalg.norm(orientation)
                     ray = TracingRay(
                         origin=camera.transform.position,
                         orientation=orientation,
@@ -137,8 +150,9 @@ class JitterRayGenerator(RayGenerator):
                         else:
                             u, v = self.jitter_within_pixel(rand, x, y, cam_width, cam_height)
 
-                        orientation = camera.transform.forward + (u - 0.5) * camera.transform.right + (v - 0.5) * camera.transform.up
-                        orientation = orientation / np.linalg.norm(orientation)
+                        
+                        orientation = self.rotate_ray_by_camera_fov(camera, u, v)
+
                         ray = TracingRay(
                             origin=camera.transform.position,
                             orientation=orientation,
@@ -164,8 +178,9 @@ class JitterRayGenerator(RayGenerator):
                         except Exception:
                             u, v = self.jitter_within_pixel(rand, x, y, cam_width, cam_height)
 
-                        orientation = camera.transform.forward + (u - 0.5) * camera.transform.right + (v - 0.5) * camera.transform.up
-                        orientation = orientation / np.linalg.norm(orientation)
+                        
+                        orientation = self.rotate_ray_by_camera_fov(camera, u, v)
+
                         ray = TracingRay(
                             origin=camera.transform.position,
                             orientation=orientation,
@@ -180,8 +195,9 @@ class JitterRayGenerator(RayGenerator):
                 # fallback: no sampler provided; produce jittered rays per pixel
                 for r in range(max(1, rays_per_pixel)):
                     u, v = self.jitter_within_pixel(rand, x, y, cam_width, cam_height)
-                    orientation = camera.transform.forward + (u - 0.5) * camera.transform.right + (v - 0.5) * camera.transform.up
-                    orientation = orientation / np.linalg.norm(orientation)
+                    
+                    orientation = self.rotate_ray_by_camera_fov(camera, u, v)
+
                     ray = TracingRay(
                         origin=camera.transform.position,
                         orientation=orientation,
@@ -250,16 +266,20 @@ class RayMarchingIntersection(IntersectionStrategy):
         return None, float("inf")
 
 class ShadingStrategy(ABC):
-    def __init__(self, ambient_col: Color = Color()):
-        self.ambient_color = ambient_col
+    def __init__(self, ambient_enabled: bool = True, ambient_color: Optional[Color] = None, ambient_intensity: Optional[float] = None):
+        self.ambient_enabled = ambient_enabled
+        self.ambient_color = ambient_color
+        self.ambient_intensity = ambient_intensity
 
     @abstractmethod
     def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable) -> Color:
         ...
 
 class BasicLambertShading(ShadingStrategy):
-    def __init__(self, ambient_col: Color = Color(), enable_shadows: bool = True, shadow_samples: int = 8, shadow_bias: float = 1e-3):
-        super().__init__(ambient_col)
+    def __init__(self, ambient_enabled: bool = True, ambient_color: Optional[Color] = None, ambient_intensity: Optional[float] = None,
+                 enable_shadows: bool = True, shadow_samples: int = 8, shadow_bias: float = 1e-3):
+        super().__init__(ambient_enabled, ambient_color, ambient_intensity)
+
         self.enable_shadows = enable_shadows
         self.shadow_samples = max(1, int(shadow_samples))
         self.shadow_bias = float(shadow_bias)
@@ -338,8 +358,11 @@ class BasicLambertShading(ShadingStrategy):
             return self._calculate_shadow_visibility(scene, point, light, light_dir)
 
         # Calculate local lighting (Diffuse + Specular from light sources)
-        ambient_col = getattr(scene, "ambient_color", Color())
-        direct_light = material.apply_material_color(scene.get_lights(), point, normal, view_dir, ambient_col, check_visibility)
+        if self.ambient_enabled:
+            ambient_col = self.ambient_color if self.ambient_color is not None else getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03))
+            direct_light = material.apply_material_color(scene.get_lights(), point, normal, view_dir, ambient_col, check_visibility)
+        else:
+            direct_light = material.apply_material_color(scene.get_lights(), point, normal, view_dir, Color(0.0, 0.0, 0.0), check_visibility)
 
         # --- 4. Indirect Lighting (Recursive Bounce) ---
         indirect_light = Color(0.0, 0.0, 0.0)

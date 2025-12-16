@@ -28,6 +28,16 @@ struct Material: public IVirtualObject {
     glm::vec3 emissive = glm::vec3(0.0f);
     float     padding3 = 0.0f;
 
+    Material(const glm::vec3& albedoColor, float metal, float rough, float useAlbedo,
+             float useNormal, float useMR, const glm::vec3& emissiveColor)
+        : albedo(albedoColor), metallic(metal), roughness(rough),
+          useAlbedoMap(useAlbedo), useNormalMap(useNormal), useMRMap(useMR),
+          emissive(emissiveColor) {}
+
     json ToJSON() const override;
     void FromJSON(const json& j) override;
+    void CleanUp() override;
 };
+
+void CreateMaterialUBO();
+void UpdateMaterialUBO(const Material& mat);

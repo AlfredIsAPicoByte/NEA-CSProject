@@ -29,9 +29,12 @@ struct Light: public IVirtualObject {
     int       type; // 0=point,1=dir,2=spot
 
     Light() : position(0.0f), coneAngles(.01f), color(1.0f), intensity(1.0f), type(0) {}
+    Light(const glm::vec3& pos, const glm::vec3& col, float inten, int t = 0)
+        : position(pos), radius(1.0f), coneAngles(.01f), color(col), intensity(inten), direction(0.0f, -1.0f, 0.0f), type(t) {}
 
     json ToJSON() const override;
     void FromJSON(const json& j) override;
+    void CleanUp() override;
 };
 
 void CreateLightsUBO();
