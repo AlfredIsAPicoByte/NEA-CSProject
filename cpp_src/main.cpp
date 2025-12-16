@@ -111,8 +111,10 @@ int main()
 
 	// Create shader programs
 	Shader litShaderProgram("lit.vert", "lit.frag");
-	Shader modelProgram("material_lit.vert", "material_lit.frag");
+	Shader materialProgram("material_lit.vert", "material_lit.frag");
 	Shader unlitShaderProgram("unlit.vert", "unlit.frag");
+
+	Material roughtMat(Color("#2cc20eff").toVec3(), 0.0f, 0.52f, 0.0f, 0.0f, 0.0f, Color("#000").toVec3());
 
 	std::vector<Vertex> floorVerts(vertices, vertices + sizeof(vertices) / sizeof(vertices[0]));
 	std::vector<GLuint> floorInd(indices, indices + sizeof(indices) / sizeof(indices[0]));
@@ -170,8 +172,12 @@ int main()
 	litShaderProgram.setFloat("u_specularStrength", 1.0f);
 	litShaderProgram.setFloat("u_ambient", 0.05f);
 
-	modelProgram.Activate();
-	camera.SetModelMatrixUniform(modelProgram, "u_camMatrix");
+	materialProgram.Activate();
+	CreateLightsUBO();
+	CreateMaterialUBO();
+	UpdateLightsUBO(std::vector<Light>{ Light{lightPos, lightColor.toVec3(), 1.0f} });
+	UpdateMaterialUBO(roughtMat);
+	camera.SetModelMatrixUniform(materialProgram, "u_camMatrix");
 	litShaderProgram.setVec3("u_viewDir", camera.Forward);
 
 	unlitShaderProgram.Activate();
@@ -190,16 +196,18 @@ int main()
 		camera.SetModelMatrixUniform(litShaderProgram, "u_camMatrix");
 		litShaderProgram.setVec3("u_viewPos", camera.Position);
 		
-		modelProgram.Activate();
-		camera.SetModelMatrixUniform(modelProgram, "u_camMatrix");
+		materialProgram.Activate();
+		UpdateLightsUBO(std::vector<Light>{ Light{lightPos, lightColor.toVec3(), 1.0f} });
+		UpdateMaterialUBO(roughtMat);
+		camera.SetModelMatrixUniform(materialProgram, "u_camMatrix");
 		litShaderProgram.setVec3("u_viewDir", camera.Forward);
 
 		unlitShaderProgram.Activate();
 		camera.SetModelMatrixUniform(unlitShaderProgram, "u_camMatrix");
-		
+
 		// Draw objects
 		floorMesh.Draw(litShaderProgram, camera);
-		bunny->Draw(litShaderProgram, camera);
+		bunny->Draw(materialProgram, camera);
 		sword->Draw(litShaderProgram, camera);
 		lightMesh.Draw(unlitShaderProgram, camera);
 	}));
@@ -508,7 +516,7 @@ int main()
 		
 	// Clean up and exit
 	litShaderProgram.Delete();
-	modelProgram.Delete();
+	materialProgram.Delete();
 	unlitShaderProgram.Delete();
 	
 	floorMesh.CleanUp();

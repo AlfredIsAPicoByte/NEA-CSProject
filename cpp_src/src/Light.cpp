@@ -64,3 +64,8 @@ void UpdateLightsUBO(const std::vector<Light>& lights)
 
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
+// Nothing to free per-Light right now; satisfies the linker
+void Light::CleanUp()
+{
+    // No per-instance GL resources allocated here
+}
