@@ -227,9 +227,9 @@ if __name__ == "__main__":
         get_lit_studio_scene(256, 256),
     ]
 
-    rpp = 1  # rays per pixel
-    spp = 1  # samples per pixel
-    raytracer = Raytracer(rays_per_pixel=rpp)
+    rpp = 4  # rays per pixel
+    spp = 2  # samples per pixel
+    gag = Raytracer(rays_per_pixel=rpp)
     sampler = RandomSampler(samples_per_pixel=spp)
 
     for scene in all_scenes:
