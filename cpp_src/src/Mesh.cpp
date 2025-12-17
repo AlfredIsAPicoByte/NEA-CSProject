@@ -89,20 +89,20 @@ json Mesh::ToJSON() const
     j["vertices"] = json::array();
     for (const auto& v : vertices) {
         json jv;
-        jv["Position"] = { v.Position.x, v.Position.y, v.Position.z };
-        jv["Normal"] = { v.Normal.x, v.Normal.y, v.Normal.z };
-        jv["color"] = { v.color.x, v.color.y, v.color.z };
-        jv["TexCoords"] = { v.TexCoords.x, v.TexCoords.y };
-        jv["Tangent"] = { v.Tangent.x, v.Tangent.y, v.Tangent.z, v.Tangent.w };
+        jv["vertex_position"] = { v.Position.x, v.Position.y, v.Position.z };
+        jv["vertex_normal"] = { v.Normal.x, v.Normal.y, v.Normal.z };
+        jv["vertex_color"] = { v.color.x, v.color.y, v.color.z };
+        jv["vertex_texture_uv"] = { v.TexCoords.x, v.TexCoords.y };
+        jv["vertex_tangent"] = { v.Tangent.x, v.Tangent.y, v.Tangent.z, v.Tangent.w };
         j["vertices"].push_back(jv);
     }
     j["indices"] = indices;
     j["textures"] = json::array();
     for (const auto& t : textures) {
         json jt;
-        jt["ID"] = t.ID;
-        jt["type"] = t.type;
-        jt["unit"] = t.unit;
+        jt["texture_ID"] = t.ID;
+        jt["texture_type"] = t.type;
+        jt["texture_unit"] = t.unit;
         j["textures"].push_back(jt);
     }
     return j;
@@ -111,11 +111,11 @@ json Mesh::ToJSON() const
 void Mesh::FromJSON(const json& j)
 {
     vertices.clear();
-    for (const auto& jv : j["vertices"]) {
+    for (const auto& jv : j["Vertices"]) {
         Vertex v;
         v.Position = glm::vec3(jv["Position"][0], jv["Position"][1], jv["Position"][2]);
         v.Normal = glm::vec3(jv["Normal"][0], jv["Normal"][1], jv["Normal"][2]);
-        v.color = glm::vec3(jv["color"][0], jv["color"][1], jv["color"][2]);
+        v.color = glm::vec3(jv["Color"][0], jv["Color"][1], jv["Color"][2]);
         v.TexCoords = glm::vec2(jv["TexCoords"][0], jv["TexCoords"][1]);
         v.Tangent = glm::vec4(jv["Tangent"][0], jv["Tangent"][1], jv["Tangent"][2], jv["Tangent"][3]);
         vertices.push_back(v);

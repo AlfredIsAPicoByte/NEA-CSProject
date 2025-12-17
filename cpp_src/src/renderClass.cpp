@@ -27,7 +27,9 @@ void Scene::Initialize()
 
 void Scene::Render(std::function<void()> preProcessing, std::function<Image()> renderStep, std::function<void()> postProcessing, std::function<void()> fallBack)
 {
-    if (renderSettings.usePythonRendering) {
+    Image renderedImage;
+
+    if (renderSettings->usePythonRendering) {
         // Call Python rendering functions here
         try {
             if (preProcessing) preProcessing();
@@ -65,7 +67,15 @@ void Scene::SetOpenGLRenderFunction(std::shared_ptr<std::function<void()>> rende
 
 bool Scene::SaveScene(const std::string& filePath)
 {
-    // Implement scene saving logic here
+    json j;
+
+    j["vertices"] = json::array();
+    for(auto r: renderables) {
+        j["Renderables"] = (r->ToJSON());
+    }
+    for(auto o: sceneObjects) {
+        o->ToJSON();
+    }
     return false;
 }
 
@@ -77,10 +87,10 @@ bool Scene::LoadScene(const std::string& filePath)
 
 bool Scene::SaveRenderedImage(const std::string& filePath)
 {
-    std::vector<uint8_t> pixels(renderSettings.imageWidth * renderSettings.imageHeight * 3);
-    glReadPixels(0, 0, renderSettings.imageWidth , renderSettings.imageHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    std::vector<uint8_t> pixels(renderSettings->imageWidth * renderSettings->imageHeight * 3);
+    glReadPixels(0, 0, renderSettings->imageWidth , renderSettings->imageHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
     // flip rows if needed
-    stbi_write_png(filePath.c_str(), renderSettings.imageWidth , renderSettings.imageHeight, 3, pixels.data(), renderSettings.imageWidth  * 3);
+    stbi_write_png(filePath.c_str(), renderSettings->imageWidth , renderSettings->imageHeight, 3, pixels.data(), renderSettings->imageWidth * 3);
     return true;
 }
 
