@@ -5,7 +5,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from src.Algorithims import Algorithm
-from src.Postprocessing import PostProcessor
+from src.Postprocessing import PostProcessingPipeline
 from src.Raytracing import Raytracer, RayMarchingIntersection, BasicLambertShading
 from src.Camera import VCamera, CameraType
 from src.Scene import Scene
@@ -14,15 +14,16 @@ from src.Luminance import LightSource, Color, ColorGradient, Material
 from src.PrimaryStructures import Transform
 from src.Sampling import Sampler, RandomSampler
 
-def render_and_save(scene: Scene, algorithim: Algorithm, sampler: Sampler, post_processing: Optional[Callable[[Color], Color]] = None, out_path="render_out_strat.png", flip_verticaly: bool = False):
+def render_process(scene: Scene, algorithim: Algorithm, sampler: Sampler, post_processing: Optional[Callable[[Color], Color]] = None):
+    # Use named argument for sampler - do not pass camera as a positional value (legacy behavior)
+    pixel_colors = algorithim.render(scene, sampler=sampler)        
+
+def render_image_cleanup_and_save(pixel_colors: Scene, out_path="render_out_strat.png", flip_verticaly: bool = False):
     """Render the scene using the given algorithm and return a PIL Image."""
     # Ensure parent directory exists for out_path
     out_dir = os.path.dirname(out_path)
     if out_dir and not os.path.exists(out_dir):
         os.makedirs(out_dir, exist_ok=True)
-
-    # Use named argument for sampler - do not pass camera as a positional value (legacy behavior)
-    pixel_colors = algorithim.render(scene, sampler=sampler)
     
     W, H = scene.camera.width, scene.camera.height
     

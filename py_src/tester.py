@@ -404,8 +404,8 @@ def test_background_gradient() -> Tuple[bool, Optional[str]]:
             # Try a couple of likely attributes/methods
             if hasattr(c, "rgba"):
                 arr = c.rgba[:3]
-            elif hasattr(c, "to_array"):
-                arr = c.to_array()[:3]
+            elif hasattr(c, "to_np_ndarray"):
+                arr = c.to_np_ndarray()[:3]
             elif all(hasattr(c, a) for a in ("red", "green", "blue")):
                 arr = (c.red, c.green, c.blue)
             else:
