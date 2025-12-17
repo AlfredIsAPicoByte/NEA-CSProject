@@ -11,6 +11,7 @@
 #include "Model.h"
 #include "Image.h"
 #include "IVirtualObject.h"
+#include "ModelMeshAdapter.h"
 #include "PythonManager.h"
 
 struct RenderSettings {
