@@ -149,18 +149,18 @@ class Shape2D(Shape, GeometryMixin, RayIntersectionMixin, SurfacePropertiesMixin
 class Circle(Shape2D):
     def __init__(self, center: np.ndarray, radius: float, **kwargs):
         super().__init__(**kwargs)
-        self.center = np.asarray(center, dtype=float)
+        self.transform.position = np.asarray(center, dtype=float)
         if radius <= 0:
             raise ValueError("Radius must be > 0")
         self.radius = float(radius)
-        self.transform.position = self.center
+        self.transform.position = self.transform.position
 
     def SignedDistance(self, point: np.ndarray) -> float:
-        return np.linalg.norm(point - self.center) - self.radius
+        return np.linalg.norm(point - self.transform.position) - self.radius
 
     def CheckRayIntersection(self, ray: "Ray") -> bool:
         d = ray.orientation
-        s = ray.origin - self.center
+        s = ray.origin - self.transform.position
         a = np.dot(d, d)
         b = 2 * np.dot(d, s)
         c = np.dot(s, s) - self.radius ** 2
@@ -170,7 +170,7 @@ class Circle(Shape2D):
         if not self.CheckRayIntersection(ray):
             return []
         d = ray.orientation
-        s = ray.origin - self.center
+        s = ray.origin - self.transform.position
         a = np.dot(d, d)
         b = 2 * np.dot(d, s)
         c = np.dot(s, s) - self.radius ** 2
@@ -187,7 +187,7 @@ class Circle(Shape2D):
         return [ray.point_at(t) for t in sorted(ts)]
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
-        vec = point - self.center
+        vec = point - self.transform.position
         return vec / (np.linalg.norm(vec) + 1e-12)
 
     def GetTangent(self, point: np.ndarray) -> np.ndarray:
@@ -206,7 +206,7 @@ class Circle(Shape2D):
         return 2 * pi * self.radius
 
     def __repr__(self):
-        return f"Circle(center={self.center}, radius={self.radius})"
+        return f"Circle(center={self.transform.position}, radius={self.radius})"
 
 class Triangle(Shape2D):
     def __init__(self, v1: np.ndarray, v2: np.ndarray, v3: np.ndarray, **kwargs):
@@ -412,18 +412,18 @@ class Shape3D(Shape, GeometryMixin, RayIntersectionMixin, SurfacePropertiesMixin
 class Sphere(Shape3D):
     def __init__(self, center: np.ndarray, radius: float, **kwargs):
         super().__init__(**kwargs)
-        self.center = np.asarray(center, dtype=float)
+        self.transform.position = np.asarray(center, dtype=float)
         if radius <= 0:
             raise ValueError("Radius must be > 0")
         self.radius = float(radius)
-        self.transform.position = self.center
+        self.transform.position = self.transform.position
 
     def SignedDistance(self, point: np.ndarray) -> float:
-        return np.linalg.norm(point - self.center) - self.radius
+        return np.linalg.norm(point - self.transform.position) - self.radius
 
     def CheckRayIntersection(self, ray: "Ray") -> bool:
         d = ray.orientation
-        s = ray.origin - self.center
+        s = ray.origin - self.transform.position
         a = np.dot(d, d)
         b = 2 * np.dot(d, s)
         c = np.dot(s, s) - self.radius ** 2
@@ -434,7 +434,7 @@ class Sphere(Shape3D):
             return []
         
         d = ray.orientation
-        s = ray.origin - self.center
+        s = ray.origin - self.transform.position
         a = np.dot(d, d)
         b = 2 * np.dot(d, s)
         c = np.dot(s, s) - self.radius ** 2
@@ -451,7 +451,7 @@ class Sphere(Shape3D):
         return [ray.point_at(t) for t in sorted(ts)]
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
-        vec = point - self.center
+        vec = point - self.transform.position
         return vec / (np.linalg.norm(vec) + 1e-12)
 
     def GetTangent(self, point: np.ndarray) -> np.ndarray:
@@ -480,35 +480,34 @@ class Sphere(Shape3D):
             theta = 2 * np.pi * i / phi
             y = 1 - (i / (resolution - 1)) * 2
             r = np.sqrt(max(1 - y * y, 0))
-            points.append(self.center + self.radius * np.array([np.cos(theta) * r, y, np.sin(theta) * r]))
+            points.append(self.transform.position + self.radius * np.array([np.cos(theta) * r, y, np.sin(theta) * r]))
         return points
 
     def __repr__(self):
-        return f"Sphere(center={self.center}, radius={self.radius})"
+        return f"Sphere(center={self.transform.position}, radius={self.radius})"
 
 class Cube(Shape3D):
     def __init__(self, center: np.ndarray, side_length: float, **kwargs):
         super().__init__(**kwargs)
-        self.center = np.asarray(center, dtype=float)
+        self.transform.position = np.asarray(center, dtype=float)
         if side_length <= 0:
             raise ValueError("Side length must be > 0")
         self.side_length = float(side_length)
-        self.transform.position = self.center
 
     def SignedDistance(self, point: np.ndarray) -> float:
         """Cube SDF using absolute coordinates."""
-        p = np.abs(point - self.center)
+        p = np.abs(point - self.transform.position)
         q = p - self.side_length / 2
         return np.linalg.norm(np.maximum(q, 0)) + min(np.max(q), 0)
 
     def CheckRayIntersection(self, ray: "Ray") -> bool:
         return len(self.GetRayIntersections(ray)) > 0
-
+    
     def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
         """AABB ray intersection."""
         half = self.side_length / 2
-        bounds_min = self.center - half
-        bounds_max = self.center + half
+        bounds_min = self.transform.position - half
+        bounds_max = self.transform.position + half
         
         t_min, t_max = 0, float('inf')
         for i in range(3):
@@ -531,7 +530,7 @@ class Cube(Shape3D):
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
         """Normal pointing outward from closest face."""
-        p = point - self.center
+        p = point - self.transform.position
         half = self.side_length / 2
         abs_p = np.abs(p)
         dominant = np.argmax(abs_p)
@@ -556,17 +555,8 @@ class Cube(Shape3D):
     def surface_area(self) -> float:
         return 6 * (self.side_length ** 2)
 
-    def ConvexHull(self, resolution: int = 8) -> List[np.ndarray]:
-        half = self.side_length / 2
-        points = []
-        for dx in [-half, half]:
-            for dy in [-half, half]:
-                for dz in [-half, half]:
-                    points.append(self.center + np.array([dx, dy, dz]))
-        return points
-
     def __repr__(self):
-        return f"Cube(center={self.center}, side_length={self.side_length})"
+        return f"Cube(transform={self.transform}, side_length={self.side_length})"
 
 class Prism(Shape3D):
     def __init__(self, base_polygon: Polygon, height: float, **kwargs):

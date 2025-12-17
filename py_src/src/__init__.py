@@ -19,6 +19,7 @@ _submodules = [
     "Reflections",
     "Refractions",
     "Raytracing",
+    "Postprocessing"
 ]
 
 __all__ = []

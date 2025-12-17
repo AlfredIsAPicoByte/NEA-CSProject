@@ -220,7 +220,7 @@ class LightSource:
     def attenuate_color(cls, color, factor: float) -> Color:
         """Return a new Color attenuated by the given factor."""
         # Note: 'color' is used to access the specific instance properties
-        return cls(
+        return Color(
             clamp(color.red * factor),
             clamp(color.green * factor),
             clamp(color.blue * factor),
@@ -381,7 +381,8 @@ class Material:
             except ValueError:
                 pass
 
-        attenuation = LightSource.attenuate_color(self.base_color, LightSource.attenuate_sqr_distance(np.linglang.norm(incomeing_ray.origin - hit_point))
+        attenuation = LightSource.attenuate_color(self.base_color, LightSource.attenuate_sqr_distance(np.linalg.norm(incoming_ray.origin - hit_point)))
+        attenuation += self.get_emissive_component()
 
         # If it's a metal, the attenuation matches the reflection color strongly
         # If it's glass, it might be clear (white attenuation) or tinted
@@ -394,6 +395,7 @@ class Material:
         )
         
         return redirected_ray, attenuation
+
     def get_diffuse_component(self, surface_normal: np.ndarray, light_dir: np.ndarray, light_intensity: float) -> Color:
         """Get the diffuse component of the material response."""
         diffuse = self.base_color * light_intensity * max(0, np.dot(surface_normal, light_dir))
@@ -453,7 +455,7 @@ class Material:
     
     def get_emissive_component(self) -> Color:
         """Get the emissive color of the material."""
-        return self.emissive * self.emissive_intensity
+        return self.emissive * getattr(self, "emissive_intensity", 1)
     
     def get_metallic_component(self) -> Color:
         """

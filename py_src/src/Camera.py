@@ -105,21 +105,6 @@ class VCamera:
         self.width = int(aspect.width * scale)
         self.height = int(aspect.height * scale)
 
-    def look_at(self, target: Transform):
-        direction = target.position - self.transform.position
-        direction = direction / np.linalg.norm(direction)
-        # Assuming up vector is (0, 1, 0)
-        right = np.cross(np.array([0, 1, 0]), direction)
-        right = right / np.linalg.norm(right)
-        up = np.cross(direction, right)
-        rotation_matrix = np.array([
-            [right[0], right[1], right[2], 0],
-            [up[0], up[1], up[2], 0],
-            [-direction[0], -direction[1], -direction[2], 0],
-            [0, 0, 0, 1]
-        ])
-        self.transform.rotation = rotation_matrix
-
     def get_frustum_planes(self) -> dict:
         """
         Compute the 6 frustum planes (left, right, top, bottom, near, far).
