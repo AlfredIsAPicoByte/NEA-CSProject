@@ -32,8 +32,7 @@ public:
     int selectedRenderable = -1;
     
     std::shared_ptr<std::function<void()>> openGLRenderFunction;
-    RenderSettings renderSettings;
-    Image renderedImage = Image();
+    std::shared_ptr<RenderSettings> renderSettings;
 
     void Initialize();
 

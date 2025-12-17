@@ -1,7 +1,10 @@
 #version 330 core
 // Designed for a model. Expects tangents/bitangents provided by the vertex shader.
 
-layout(std140 = 1) uniform MaterialUBO {
+#define PI 3.14159265359
+#define MAX_LIGHTS 4
+
+layout(std140, binding = 1) uniform MaterialBlock {
     vec3 u_albedo;
     float u_metallic;
     float u_roughness;
@@ -10,17 +13,16 @@ layout(std140 = 1) uniform MaterialUBO {
     vec3 u_emissive;
 };
 
-layout(std140 = 2) uniform LightsUBO {
-    vec4 u_lightPositions[4]; // w unused
-    vec4 u_lightColors[4];    // w unused
-    vec4 u_lightRadii[4];     // w unused
-}
-
-
-#define PI 3.14159265359
-
-// Lights (support up to 4)
-#define MAX_LIGHTS 4
+layout(std140, binding = 2) uniform LightBlock {
+    int u_lightCount;
+    // padding to vec4 alignment
+    vec4 _pad0;
+    // arrays of vec4 (xyz = pos/dir, w = radius/type/hint)
+    vec4 u_lightPosType[MAX_LIGHTS];          // w = type: 0=point,1=dir,2=spot
+    vec4 u_lightDirType[MAX_LIGHTS];          // w = type redundant for convenience
+    vec4 u_lightColorIntensity[MAX_LIGHTS];   // w = intensity
+    vec4 u_lightRadius[MAX_LIGHTS];           // w = unused
+};
 
 in vec3 FragPos;
 in vec3 Normal;

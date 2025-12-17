@@ -27,7 +27,9 @@ void Scene::Initialize()
 
 void Scene::Render(std::function<void()> preProcessing, std::function<Image()> renderStep, std::function<void()> postProcessing, std::function<void()> fallBack)
 {
-    if (renderSettings.usePythonRendering) {
+    Image renderedImage;
+
+    if (renderSettings->usePythonRendering) {
         // Call Python rendering functions here
         try {
             if (preProcessing) preProcessing();
@@ -65,22 +67,68 @@ void Scene::SetOpenGLRenderFunction(std::shared_ptr<std::function<void()>> rende
 
 bool Scene::SaveScene(const std::string& filePath)
 {
+    json j;
+
+    j["renderables"] = json::array();
+    for(auto r: renderables) {
+        j["renderables"].push_back(r->ToJSON());
+    }
+    j["objects"] = json::array();
+    for(auto o: sceneObjects) {
+        j["objects"].push_back(o->ToJSON());
+    }
+
     // Implement scene saving logic here
+    std::ofstream file(filePath);
+    if (file.is_open()) {
+        file << j.dump(4);
+        file.close();
+        return true;
+    }
+
+    AppendError("Failed to open file for saving: " + filePath);
     return false;
 }
 
 bool Scene::LoadScene(const std::string& filePath)
 {
-    // Implement scene loading logic here
+    std::ifstream file(filePath);
+    if (file.is_open()) {
+        json j;
+        file >> j;
+        file.close();
+
+        renderables.clear();
+        for (const auto& jr : j["renderables"]) {
+            // Here you would need to determine the type of renderable and create it accordingly
+            // For simplicity, we will assume all are Mesh objects
+            auto mesh = std::make_shared<Mesh>(std::vector<Vertex>{}, std::vector<GLuint>{}, std::vector<Texture>{});
+            mesh->FromJSON(jr);
+            renderables.push_back(mesh);
+        }
+
+        sceneObjects.clear();
+        for (const auto& jo : j["objects"]) {
+            // Here you would need to determine the type of object and create it accordingly
+            // For simplicity, we will skip actual object creation
+            // auto obj = std::make_shared<YourVirtualObjectType>();
+            // obj->FromJSON(jo);
+            // sceneObjects.push_back(obj);
+        }
+
+        return true;
+    }
+
+    AppendError("Failed to open file for loading: " + filePath);
     return false;
 }
 
 bool Scene::SaveRenderedImage(const std::string& filePath)
 {
-    std::vector<uint8_t> pixels(renderSettings.imageWidth * renderSettings.imageHeight * 3);
-    glReadPixels(0, 0, renderSettings.imageWidth , renderSettings.imageHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    std::vector<uint8_t> pixels(renderSettings->imageWidth * renderSettings->imageHeight * 3);
+    glReadPixels(0, 0, renderSettings->imageWidth , renderSettings->imageHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
     // flip rows if needed
-    stbi_write_png(filePath.c_str(), renderSettings.imageWidth , renderSettings.imageHeight, 3, pixels.data(), renderSettings.imageWidth  * 3);
+    stbi_write_png(filePath.c_str(), renderSettings->imageWidth , renderSettings->imageHeight, 3, pixels.data(), renderSettings->imageWidth * 3);
     return true;
 }
 

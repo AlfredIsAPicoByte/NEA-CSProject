@@ -18,7 +18,6 @@ in vec3 Normal;
 in vec2 TexCoords;
 in vec3 VertColor;
 
-uniform float u_specularStrength;
 uniform float u_ambient;
 uniform sampler2D u_albedoMap;
 uniform bool u_hasAlbedo;
@@ -43,7 +42,7 @@ vec3 calcLight(int i, vec3 N, vec3 V, vec3 albedo) {
     vec3 diffuse = albedo * lightCol * NdotL * att + albedo * u_ambient;
     vec3 H = normalize(L + V);
     float spec = pow(max(dot(N, H), 0.0), 32.0);
-    vec3 specular = lightCol * spec * att * u_specularStrength;
+    vec3 specular = lightCol * spec * att;
     return diffuse + specular;
 }
 
