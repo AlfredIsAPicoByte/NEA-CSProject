@@ -69,19 +69,57 @@ bool Scene::SaveScene(const std::string& filePath)
 {
     json j;
 
-    j["vertices"] = json::array();
+    j["renderables"] = json::array();
     for(auto r: renderables) {
-        j["Renderables"] = (r->ToJSON());
+        j["renderables"].push_back(r->ToJSON());
     }
+    j["objects"] = json::array();
     for(auto o: sceneObjects) {
-        o->ToJSON();
+        j["objects"].push_back(o->ToJSON());
     }
+
+    // Implement scene saving logic here
+    std::ofstream file(filePath);
+    if (file.is_open()) {
+        file << j.dump(4);
+        file.close();
+        return true;
+    }
+
+    AppendError("Failed to open file for saving: " + filePath);
     return false;
 }
 
 bool Scene::LoadScene(const std::string& filePath)
 {
-    // Implement scene loading logic here
+    std::ifstream file(filePath);
+    if (file.is_open()) {
+        json j;
+        file >> j;
+        file.close();
+
+        renderables.clear();
+        for (const auto& jr : j["renderables"]) {
+            // Here you would need to determine the type of renderable and create it accordingly
+            // For simplicity, we will assume all are Mesh objects
+            auto mesh = std::make_shared<Mesh>(std::vector<Vertex>{}, std::vector<GLuint>{}, std::vector<Texture>{});
+            mesh->FromJSON(jr);
+            renderables.push_back(mesh);
+        }
+
+        sceneObjects.clear();
+        for (const auto& jo : j["objects"]) {
+            // Here you would need to determine the type of object and create it accordingly
+            // For simplicity, we will skip actual object creation
+            // auto obj = std::make_shared<YourVirtualObjectType>();
+            // obj->FromJSON(jo);
+            // sceneObjects.push_back(obj);
+        }
+
+        return true;
+    }
+
+    AppendError("Failed to open file for loading: " + filePath);
     return false;
 }
 

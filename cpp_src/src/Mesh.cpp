@@ -111,13 +111,13 @@ json Mesh::ToJSON() const
 void Mesh::FromJSON(const json& j)
 {
     vertices.clear();
-    for (const auto& jv : j["Vertices"]) {
+    for (const auto& jv : j["vertices"]) {
         Vertex v;
-        v.Position = glm::vec3(jv["Position"][0], jv["Position"][1], jv["Position"][2]);
-        v.Normal = glm::vec3(jv["Normal"][0], jv["Normal"][1], jv["Normal"][2]);
-        v.color = glm::vec3(jv["Color"][0], jv["Color"][1], jv["Color"][2]);
-        v.TexCoords = glm::vec2(jv["TexCoords"][0], jv["TexCoords"][1]);
-        v.Tangent = glm::vec4(jv["Tangent"][0], jv["Tangent"][1], jv["Tangent"][2], jv["Tangent"][3]);
+        v.Position = glm::vec3(jv["position"][0], jv["position"][1], jv["position"][2]);
+        v.Normal = glm::vec3(jv["normal"][0], jv["normal"][1], jv["normal"][2]);
+        v.color = glm::vec3(jv["color"][0], jv["color"][1], jv["color"][2]);
+        v.TexCoords = glm::vec2(jv["uv"][0], jv["uv"][1]);
+        v.Tangent = glm::vec4(jv["tangent"][0], jv["tangent"][1], jv["tangent"][2], jv["tangent"][3]);
         vertices.push_back(v);
     }
     indices = j["indices"].get<std::vector<GLuint>>();
