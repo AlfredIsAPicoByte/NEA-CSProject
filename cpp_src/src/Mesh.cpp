@@ -89,20 +89,20 @@ json Mesh::ToJSON() const
     j["vertices"] = json::array();
     for (const auto& v : vertices) {
         json jv;
-        jv["vertex_position"] = { v.Position.x, v.Position.y, v.Position.z };
-        jv["vertex_normal"] = { v.Normal.x, v.Normal.y, v.Normal.z };
-        jv["vertex_color"] = { v.color.x, v.color.y, v.color.z };
-        jv["vertex_texture_uv"] = { v.TexCoords.x, v.TexCoords.y };
-        jv["vertex_tangent"] = { v.Tangent.x, v.Tangent.y, v.Tangent.z, v.Tangent.w };
+        jv["position"] = { v.Position.x, v.Position.y, v.Position.z };
+        jv["normal"] = { v.Normal.x, v.Normal.y, v.Normal.z };
+        jv["color"] = { v.color.x, v.color.y, v.color.z };
+        jv["uv"] = { v.TexCoords.x, v.TexCoords.y };
+        jv["tangent"] = { v.Tangent.x, v.Tangent.y, v.Tangent.z, v.Tangent.w };
         j["vertices"].push_back(jv);
     }
     j["indices"] = indices;
     j["textures"] = json::array();
     for (const auto& t : textures) {
         json jt;
-        jt["texture_ID"] = t.ID;
-        jt["texture_type"] = t.type;
-        jt["texture_unit"] = t.unit;
+        jt["ID"] = t.ID;
+        jt["type"] = t.type;
+        jt["unit"] = t.unit;
         j["textures"].push_back(jt);
     }
     return j;
