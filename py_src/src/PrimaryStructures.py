@@ -137,50 +137,71 @@ class Transform:
 
         self.update_orientations()
 
+    def _matrix_to_euler(self, R: np.ndarray) -> np.ndarray:
+        """Converts a 3x3 rotation matrix to ZYX Euler angles (Roll, Pitch, Yaw)."""
+        # Extracts angles assuming rotation order Rz * Ry * Rx
+        sy = np.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
+        singular = sy < 1e-6
+
+        if not singular:
+            x = np.arctan2(R[2, 1], R[2, 2])
+            y = np.arctan2(-R[2, 0], sy)
+            z = np.arctan2(R[1, 0], R[0, 0])
+        else:
+            x = np.arctan2(-R[1, 2], R[1, 1])
+            y = np.arctan2(-R[2, 0], sy)
+            z = 0
+
+        return np.array([x, y, z])
+
     def update_orientations(self):
-        """Updates forward/right/up vectors based on the combined (base + local) rotation."""
-        # use combined rotation (base + local) for orientation vectors
+        """Updates forward/right/up vectors based on current rotation."""
+        # Use numpy functions
         rx, ry, rz = self.rotation + self.local_rotation
-        cx, sx = cos(rx), sin(rx)
-        cy, sy = cos(ry), sin(ry)
-        cz, sz = cos(rz), sin(rz)
+        cx, sx = np.cos(rx), np.sin(rx)
+        cy, sy = np.cos(ry), np.sin(ry)
+        cz, sz = np.cos(rz), np.sin(rz)
         
         # Combined rotation matrix (Z * Y * X)
         R = np.array([
             [cy*cz, cz*sx*sy - cx*sz, cx*cz*sy + sx*sz],
             [cy*sz, cx*cz + sx*sy*sz, -cz*sx + cx*sy*sz],
-            [-sy, cy*sx, cx*cy]
+            [-sy,   cy*sx,            cx*cy]
         ])
         
+        # Standard basis vectors
+        self.right   = R @ np.array([1, 0, 0])
+        self.up      = R @ np.array([0, 1, 0])
         self.forward = R @ np.array([0, 0, 1])
-        self.right = R @ np.array([1, 0, 0])
-        self.up = R @ np.array([0, 1, 0])
-
+    
     def _rotation_matrix_from_euler(self, euler: np.ndarray) -> np.ndarray:
         rx, ry, rz = euler
+        # Rot X
         rot_x = np.array([
             [1, 0, 0],
-            [0, cos(rx), -sin(rx)],
-            [0, sin(rx), cos(rx)]
+            [0, np.cos(rx), -np.sin(rx)],
+            [0, np.sin(rx),  np.cos(rx)]
         ])
+        # Rot Y
         rot_y = np.array([
-            [cos(ry), 0, sin(ry)],
-            [0, 1, 0],
-            [-sin(ry), 0, cos(ry)]
+            [ np.cos(ry), 0, np.sin(ry)],
+            [ 0,          1, 0],
+            [-np.sin(ry), 0, np.cos(ry)]
         ])
+        # Rot Z
         rot_z = np.array([
-            [cos(rz), -sin(rz), 0],
-            [sin(rz), cos(rz), 0],
-            [0, 0, 1]
+            [np.cos(rz), -np.sin(rz), 0],
+            [np.sin(rz),  np.cos(rz), 0],
+            [0,           0,          1]
         ])
         return rot_z @ rot_y @ rot_x
 
     def _make_transform_matrix(self, position: np.ndarray, rotation: np.ndarray, scale: np.ndarray) -> np.ndarray:
-        """Create a 4x4 transform matrix from position, euler rotation and scale."""
         R = self._rotation_matrix_from_euler(rotation)
-        S = np.diag(np.append(scale, 1.0))
         M = np.eye(4)
-        M[:3, :3] = R @ np.diag(scale)
+        # Apply Scale first, then Rotation
+        M[:3, :3] = R @ np.diag(scale) 
+        # Apply Translation
         M[:3, 3] = position
         return M
 
@@ -194,18 +215,19 @@ class Transform:
 
     def get_global_matrix(self) -> np.ndarray:
         """Returns the global transformation matrix: parent's global @ base @ local."""
-        base = self.get_base_matrix()
-        local = self.get_local_matrix()
-        combined = base @ local
+        base = self._make_transform_matrix(self.position, self.rotation, self.scale)
+        local = self._make_transform_matrix(self.local_position, self.local_rotation, self.local_scale)
+        
+        # Order: Base transform is applied first, then Local offsets on top of that
+        combined = base @ local 
+        
         if self.parent is not None:
             return self.parent.get_global_matrix() @ combined
         return combined
     
     def get_global_position(self) -> np.ndarray:
-        """Returns the global position of the transform (applies parent, base and local)."""
-        global_matrix = self.get_global_matrix()
-        return global_matrix[:3, 3]
-
+        return self.get_global_matrix()[:3, 3]
+    
     def get_global_rotation(self) -> np.ndarray:
         """Returns an approximation of the global Euler rotation (base + local)."""
         # Exact Euler extraction from a matrix is non-trivial; return summed euler as a reasonable approximation.
@@ -221,6 +243,56 @@ class Transform:
         if self.parent is not None:
             return self.parent.get_global_scale() * base_scale
         return base_scale
+    
+    @property
+    def model_matrix(self) -> np.ndarray:
+        """Standard property expected by Shape classes (Local -> World)."""
+        return self.get_global_matrix()
+    
+    def look_at(self, target_position: np.ndarray, world_up: np.ndarray = None):
+        """
+        Rotates the transform to look at the target position.
+        Updates self.rotation (Euler angles).
+        """
+        if world_up is None:
+            world_up = np.array([0, 1, 0])
+
+        target_position = np.asarray(target_position, dtype=float)
+        
+        # 1. Calculate Forward vector
+        # (Assuming -Z forward convention for cameras, or +Z for objects depending on needs. 
+        # Here we use +Z forward for standard object orientation).
+        direction = target_position - self.get_global_position()
+        dist = np.linalg.norm(direction)
+        if dist < 1e-6: 
+            return # Prevent errors if target is self
+
+        forward = direction / dist
+
+        # 2. Calculate Right and Up
+        if np.abs(np.dot(forward, world_up)) > 0.999:
+            right = np.array([1, 0, 0])
+        else:
+            right = np.cross(world_up, forward)
+            right = right / np.linalg.norm(right)
+        
+        up = np.cross(forward, right)
+
+        # 3. Construct Rotation Matrix (Column-major logic for Object Transform)
+        # [ Right_x  Up_x  Fwd_x ]
+        # [ Right_y  Up_y  Fwd_y ]
+        # [ Right_z  Up_z  Fwd_z ]
+        rotation_matrix = np.array([
+            [right[0], up[0], forward[0]],
+            [right[1], up[1], forward[1]],
+            [right[2], up[2], forward[2]]
+        ])
+
+        # 4. Convert Matrix to Euler and assign to self.rotation
+        # We subtract local_rotation so the base rotation is correct
+        new_euler = self._matrix_to_euler(rotation_matrix)
+        self.rotation = new_euler - self.local_rotation
+        self.update_orientations()
 
     def translate(self, vector: np.ndarray, space: str = "global"):
         """

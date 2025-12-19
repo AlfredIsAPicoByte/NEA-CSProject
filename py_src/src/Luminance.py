@@ -12,9 +12,11 @@ def clamp(value, min_value: float|int = 0.0, max_value: float|int = 1.0):
     return max(min_value, min(value, max_value))
 
 class Color:
-    def __init__(self, r: float = 0, g: float = 0, b: float = 0, alpha: float = 1.0):
+    def __init__(self, red: float = 0, green: float = 0, blue: float = 0, alpha: float = 1.0, clamp: bool = True):
         """Clamp and store RGBA values between 0.0 and 1.0."""
-        self.rgba = np.array([clamp(r), clamp(g), clamp(b), clamp(alpha)], dtype=float)
+        self.rgba = np.array([red, green, blue, alpha], dtype=float)
+        if clamp:
+            self.rgba = self.clamp()
     
     def clamp(self):
         """Clamp the RGBA values to be within [0.0, 1.0]."""
@@ -22,7 +24,7 @@ class Color:
         return self
     
     @classmethod
-    def from_hex(cls, hex_str: str):
+    def from_hex(cls, hex_str: str, clamp: bool = True):
         """Create a Color object from a hex string."""
         hex_str = hex_str.strip().lstrip('#')
         if len(hex_str) not in (6, 8):
@@ -33,22 +35,22 @@ class Color:
         b = int(hex_str[4:6], 16) / 255.0
         a = int(hex_str[6:8], 16) / 255.0 if len(hex_str) == 8 else 1.0
 
-        rgba = np.array([clamp(r), clamp(g), clamp(b), clamp(a)], dtype=float)
-        return cls(*rgba)
+        rgba = np.array([r, g, b, a], dtype=float)
+        return cls(*rgba, clamp)
 
     @classmethod
-    def from_array(cls, arr):
+    def from_array(cls, arr, clamp: bool = True):
         """Create a Color object from an array-like input."""
         if len(arr) not in (3, 4):
             raise ValueError("Array must have 3 (RGB) or 4 (RGBA) elements.")
         r, g, b = arr[0], arr[1], arr[2]
         a = arr[3] if len(arr) == 4 else 1.0
-        return cls(r, g, b, a)
+        return cls(r, g, b, a, clamp)
     
     @classmethod
-    def from_rgb255(cls, r: int, g: int, b: int, alpha: int = 255):
+    def from_rgb255(cls, red: int = 0, green: int = 0, blue: int = 0, alpha: int = 255, clamp: bool = True):
         """Create a Color object from 0-255 RGB(A) values."""
-        return cls(r / 255.0, g / 255.0, b / 255.0, alpha / 255.0)
+        return cls(red / 255.0, green / 255.0, blue / 255.0, alpha / 255.0, clamp)
     
     @staticmethod
     def average_colors(colors: list['Color']) -> 'Color':
@@ -74,19 +76,19 @@ class Color:
     @property
     def red(self): return self.rgba[0]
     @red.setter
-    def red(self, value): self.rgba[0] = clamp(value)
+    def red(self, value): self.rgba[0] = value
     @property
     def green(self): return self.rgba[1]
     @green.setter
-    def green(self, value): self.rgba[1] = clamp(value)
+    def green(self, value): self.rgba[1] = value
     @property
     def blue(self): return self.rgba[2]
     @blue.setter
-    def blue(self, value): self.rgba[2] = clamp(value)
+    def blue(self, value): self.rgba[2] = value
     @property
     def alpha(self): return self.rgba[3]
     @alpha.setter
-    def alpha(self, value): self.rgba[3] = clamp(value)
+    def alpha(self, value): self.rgba[3] = value
 
     def __add__(self, other):
         if type(other).__name__ == 'Color' or isinstance(other, Color):
@@ -163,7 +165,7 @@ class Color:
     def to_hex(self, include_alpha=True):
         r, g, b, a = (self.rgba * 255).astype(int)
         return f"#{r:02X}{g:02X}{b:02X}{a:02X}" if include_alpha else f"#{r:02X}{g:02X}{b:02X}"
-    def to_array(self):
+    def to_np_ndarray(self):
         return self.rgba.copy()
     def to_rgb255(self):
         r, g, b, a = (self.rgba * 255).astype(int)
@@ -220,7 +222,7 @@ class LightSource:
     def attenuate_color(cls, color, factor: float) -> Color:
         """Return a new Color attenuated by the given factor."""
         # Note: 'color' is used to access the specific instance properties
-        return cls(
+        return Color(
             clamp(color.red * factor),
             clamp(color.green * factor),
             clamp(color.blue * factor),
@@ -381,7 +383,8 @@ class Material:
             except ValueError:
                 pass
 
-        attenuation = LightSource.attenuate_color(self.base_color, LightSource.attenuate_sqr_distance(np.linglang.norm(incomeing_ray.origin - hit_point))
+        attenuation = LightSource.attenuate_color(self.base_color, LightSource.attenuate_sqr_distance(np.linalg.norm(incoming_ray.origin - hit_point)))
+        attenuation += self.get_emissive_component()
 
         # If it's a metal, the attenuation matches the reflection color strongly
         # If it's glass, it might be clear (white attenuation) or tinted
@@ -394,6 +397,7 @@ class Material:
         )
         
         return redirected_ray, attenuation
+
     def get_diffuse_component(self, surface_normal: np.ndarray, light_dir: np.ndarray, light_intensity: float) -> Color:
         """Get the diffuse component of the material response."""
         diffuse = self.base_color * light_intensity * max(0, np.dot(surface_normal, light_dir))
@@ -453,7 +457,7 @@ class Material:
     
     def get_emissive_component(self) -> Color:
         """Get the emissive color of the material."""
-        return self.emissive * self.emissive_intensity
+        return self.emissive * getattr(self, "emissive_intensity", 1)
     
     def get_metallic_component(self) -> Color:
         """

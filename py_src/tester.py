@@ -1,9 +1,10 @@
 import sys
 import numpy as np
+from typing import Optional, Callable
 from src.Geometry import Sphere, VObject
 from src.Scene import Scene
 
-def run_unit_tests() -> bool:
+def run_unit_tests() -> Tuple[bool, Optional[str]]:
     """
     Minimal unit tests for the python ray-casting components.
     - verifies Sphere.signed_distance
@@ -51,7 +52,7 @@ FAIL_TEXT = ("❌" ,"FAILED")
 ERROR_TEXT = ("🚫" ,"CRITICAL ERROR")
 UNKNOWN_TEXT = ("⁉️", "UNKNOWN")
 
-def return_message_handler(test_logic: Callable[[], Tuple[bool, str|None] | bool], title: str, expected: bool = True) -> Tuple[bool, str]:
+def return_message_handler(test_logic: Callable[[], Tuple[bool, Optional[str]] | bool], title: str, expected: bool = True) -> Tuple[bool, str]:
     """
     A handler for any test. Executes the logic and formats the result message.
     """
@@ -97,7 +98,7 @@ def return_message_handler(test_logic: Callable[[], Tuple[bool, str|None] | bool
 
 # --- Available Tests Registry ---
 
-def test_ray() -> bool:
+def test_ray() -> Tuple[bool, Optional[str]]:
     """
     Test basic Ray structure functionality.
     """
@@ -123,7 +124,7 @@ def test_ray() -> bool:
     except Exception as e:
         return False, str(e)
 
-def test_shapes() -> bool:
+def test_shapes() -> Tuple[bool, Optional[str]]:
     shapes = {
         "Circle": [[0, 0], 1],
         "Triangle": [[0, 0], [1, 0], [0, 1]],
@@ -147,7 +148,7 @@ def test_shapes() -> bool:
     # All shapes created successfully
     return True
 
-def test_transform() -> bool:
+def test_transform() -> Tuple[bool, Optional[str]]:
     from src.PrimaryStructures import Transform
 
     position = np.array([1, 2, 3])
@@ -180,7 +181,7 @@ def test_transform() -> bool:
     
     return True
 
-def test_ratios() -> bool:
+def test_ratios() -> Tuple[bool, Optional[str]]:
     from src.PrimaryStructures import Ratio
 
     ratio = Ratio(16, 9)
@@ -190,7 +191,7 @@ def test_ratios() -> bool:
         return False, f"Ratio value mismatch, {ratio.value} != {16 / 9}"
     return True
 
-def test_ray_check_points() -> bool:
+def test_ray_check_points() -> Tuple[bool, Optional[str]]:
     from src.PrimaryStructures import Ray
 
     origin = np.zeros(3)
@@ -226,7 +227,7 @@ def test_ray_check_points() -> bool:
 
     return True
 
-def test_ray_transormation() -> bool:
+def test_ray_transormation() -> Tuple[bool, Optional[str]]:
     from src.PrimaryStructures import Ray
 
     origin = np.zeros(3)
@@ -245,7 +246,7 @@ def test_ray_transormation() -> bool:
     
     return True
 
-def test_vobject_creation() -> bool:
+def test_vobject_creation() -> Tuple[bool, Optional[str]]:
     from src.Geometry import VObject,SphereFactory
     from src.PrimaryStructures import Transform
 
@@ -262,7 +263,7 @@ def test_vobject_creation() -> bool:
 
     return True
 
-def test_color_operations() -> bool:
+def test_color_operations() -> Tuple[bool, Optional[str]]:
     from src.Luminance import Color
 
     color1 = Color(0.2, 0.4, 0.6)
@@ -280,7 +281,7 @@ def test_color_operations() -> bool:
 
     return True
 
-def test_camera() -> bool:
+def test_camera() -> Tuple[bool, Optional[str]]:
     from src.Camera import VCamera
     from src.PrimaryStructures import Transform, Ratio
     import numpy as np
@@ -307,7 +308,7 @@ def test_camera() -> bool:
 
     return True
 
-def test_light_ray() -> bool:
+def test_light_ray() -> Tuple[bool, Optional[str]]:
     from src.Luminance import Color, LightRay
     from src.PrimaryStructures import Ray
     import numpy as np
@@ -327,7 +328,7 @@ def test_light_ray() -> bool:
 
     return True
 
-def test_light_source() -> bool:
+def test_light_source() -> Tuple[bool, Optional[str]]:
     from src.Luminance import LightSource
 
     position = np.array([10, 10, 10])
@@ -341,7 +342,7 @@ def test_light_source() -> bool:
 
     return True
 
-def test_ray_shape_intersection() -> bool:
+def test_ray_shape_intersection() -> Tuple[bool, Optional[str]]:
     from src.Geometry import SphereFactory, CircleFactory
     from src.PrimaryStructures import Ray
     import numpy as np
@@ -369,7 +370,7 @@ def test_ray_shape_intersection() -> bool:
 
     return True
 
-def test_background_gradient() -> bool:
+def test_background_gradient() -> Tuple[bool, Optional[str]]:
     """
     Construct a scene with a ColorGradient background and ensure
     get_background_color returns non-magenta colors and varies with direction.
@@ -403,8 +404,8 @@ def test_background_gradient() -> bool:
             # Try a couple of likely attributes/methods
             if hasattr(c, "rgba"):
                 arr = c.rgba[:3]
-            elif hasattr(c, "to_array"):
-                arr = c.to_array()[:3]
+            elif hasattr(c, "to_np_ndarray"):
+                arr = c.to_np_ndarray()[:3]
             elif all(hasattr(c, a) for a in ("red", "green", "blue")):
                 arr = (c.red, c.green, c.blue)
             else:
@@ -431,7 +432,7 @@ def test_background_gradient() -> bool:
     except Exception as e:
         return False, str(e)
 
-def test_ambient_lighting() -> bool:
+def test_ambient_lighting() -> Tuple[bool, Optional[str]]:
     """
     Ensure ambient lighting contributes to shading when enabled.
     """
@@ -479,7 +480,7 @@ def test_ambient_lighting() -> bool:
     except Exception as e:
         return False, str(e)
 
-available_tests: dict[str, Callable[[], Tuple[bool, str|None] | bool]] = {
+available_tests: dict[str, Callable[[], Tuple[bool, Optional[str]] | bool]] = {
     "Ray Structure Test": test_ray,
     "Shape Creation Test": test_shapes,
     "Transform Structure Test": test_transform,
