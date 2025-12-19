@@ -400,7 +400,7 @@ json Camera::ToJSON() const
 	j["mouseSensitivity"] = mouseSensitivity;
 	j["invertY"] = invertY;
 	j["invertX"] = invertX;
-	// Add other members as needed
+	j["constructor"] = "Camera";
 	return j;
 }
 

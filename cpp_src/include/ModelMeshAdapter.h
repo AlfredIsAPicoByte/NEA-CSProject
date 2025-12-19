@@ -41,7 +41,11 @@ public:
     void SetModelMatrix(const glm::mat4& matrix) { model->SetModelMatrixForMesh((unsigned int)index, matrix); }
     glm::mat4 GetModelMatrix() const { return model->GetModelMatrixForMesh((unsigned int)index); }
 
-	json ToJSON() const override { return model->GetMeshes()[index].ToJSON(); }
+	json ToJSON() const override {
+        json j = model->GetMeshes()[index].ToJSON();
+        j["constructor"] = "Model_a";
+        return j;
+    }
 	void FromJSON(const json& j) override { model->GetMeshes()[index].FromJSON(j); }
 private:
     std::shared_ptr<Model> model;

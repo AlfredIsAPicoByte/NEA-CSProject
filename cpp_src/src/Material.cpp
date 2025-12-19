@@ -10,6 +10,7 @@ json Material::ToJSON() const
     j["useNormalMap"] = useNormalMap;
     j["useMRMap"] = useMRMap;
     j["emissive"] = { emissive.x, emissive.y, emissive.z };
+    j["constructor"] = "Material";
     return j;
 }
 void Material::FromJSON(const json& j)

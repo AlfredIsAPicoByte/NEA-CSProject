@@ -27,8 +27,6 @@ namespace py {
 }
 #endif
 
-
-
 const std::vector<std::string> requiredPythonPackages = {
     "numpy",
     "pybind11",
