@@ -55,17 +55,17 @@ class Sampler(ABC):
     def set_samples_per_pixel(self, spp: int) -> None:
         self.samples_per_pixel = spp
 
-    def get_samples_per_pixel(self, x: int, y:int) -> list[Sample]:
+    def get_samples_per_pixel(self, x: int, y:int) -> List[Sample]:
         """Utility to get all samples for a pixel as Sample(u,v) list."""
         self.start_pixel(x, y)
-        out: list[Sample] = []
+        out: List[Sample] = []
         for _ in range(self.samples_per_pixel):
             u, v = self.next_2d()
             out.append(Sample(u, v))
         return out
 
     # Alias expected by other parts of the code (renderer checks this name)
-    def get_samples_for_pixel(self, x: int, y: int) -> list[Sample]:
+    def get_samples_for_pixel(self, x: int, y: int) -> List[Sample]:
         return self.get_samples_per_pixel(x, y)
 
 class RandomSampler(Sampler):

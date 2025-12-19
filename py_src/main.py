@@ -1,6 +1,6 @@
 import numpy as np
 from PIL import Image
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, List
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -14,51 +14,68 @@ from src.Luminance import LightSource, Color, ColorGradient, Material
 from src.PrimaryStructures import Transform
 from src.Sampling import Sampler, RandomSampler
 
-def render_process(scene: Scene, algorithim: Algorithm, sampler: Sampler, post_processing: Optional[Callable[[Color], Color]] = None):
-    # Use named argument for sampler - do not pass camera as a positional value (legacy behavior)
-    pixel_colors = algorithim.render(scene, sampler=sampler)        
-
-def render_image_cleanup_and_save(pixel_colors: Scene, out_path="render_out_strat.png", flip_verticaly: bool = False):
-    """Render the scene using the given algorithm and return a PIL Image."""
-    # Ensure parent directory exists for out_path
-    out_dir = os.path.dirname(out_path)
-    if out_dir and not os.path.exists(out_dir):
-        os.makedirs(out_dir, exist_ok=True)
+def render_process(scene: Scene, algorithim: Algorithm, sampler: Sampler) -> List[Color]:
+    """
+    Renders the scene and returns a NumPy float32 array (H, W, 3) 
+    ready for post-processing.
+    """
+    # 1. Get raw list of Color objects
+    pixel_colors = algorithim.render(scene, sampler=sampler)
     
     W, H = scene.camera.width, scene.camera.height
     
-    # Convert flat pixel_colors list (row-major, likely bottom-up) to 2D array
-    img_array = np.zeros((H, W, 3), dtype=np.uint8)
+    # 2. Convert to NumPy Float Array (for efficient Post-Processing)
+    # We initialize with float32 to handle HDR values (> 1.0)
+    raw_buffer = np.zeros((H, W, 3), dtype=np.float32)
+    
     for idx, color in enumerate(pixel_colors):
         raw_y = idx // W
         x = idx % W
-        # Assuming your camera fills top-to-bottom or bottom-to-top. 
-        # If image is upside down, change this to: y = (H - 1) - raw_y
-        y = (H - 1) - raw_y if flip_verticaly else raw_y
+        y = (H - 1) - raw_y # Standard flip for most renderers
+        
+        # Safe extraction
+        r, g, b = 0.0, 0.0, 0.0
+        if hasattr(color, 'red'):
+            r, g, b = color.red, color.green, color.blue
+        elif hasattr(color, 'r'):
+            r, g, b = color.r, color.g, color.b
+        elif hasattr(color, 'components'):
+            comps = color.components
+            r, g, b = comps[0], comps[1], comps[2]
+        
+        raw_buffer[y, x] = [r, g, b]
+        
+    return raw_buffer
 
-        if not post_processing is None:
-            corrected_color = post_processing(color)
-        else:
-            corrected_color = color
+def save_image(img_data: np.ndarray, out_path="render_out.png"):
+    """
+    Applies Post-Processing (Bloom -> Tone Map -> Gamma) and saves.
+    """
+    out_dir = os.path.dirname(out_path)
+    if out_dir and not os.path.exists(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
 
-        # C. Quantize to 0-255
-        # We need to extract the raw float components first (r, g, b)
-        cr, cg, cb = corrected_color.red, corrected_color.green, corrected_color.blue
+    print("  ...Applying Post-Processing (Bloom + Tone Mapping)...")
 
-        # Explicitly multiply floats by 255 here to be safe and clear
-        r = int(np.clip(cr * 255.0, 0, 255))
-        g = int(np.clip(cg * 255.0, 0, 255))
-        b = int(np.clip(cb * 255.0, 0, 255))
+    # --- POST PROCESSING PIPELINE ---
+    # 1. Bloom (Glow) - Apply to bright spots before tone mapping
+    processed = PostProcessingPipeline.apply_bloom(img_data, threshold=1.0, intensity=0.2, radius=4)
 
-        # Assign
-        img_array[y, x, :] = [r, g, b]
+    # 2. Tone Mapping (ACES) - Squash HDR values to 0.0-1.0 nicely
+    processed = PostProcessingPipeline.aces_tone_map(processed)
+
+    # 3. Gamma Correction - Linear -> sRGB
+    processed = PostProcessingPipeline.gamma_correct(processed, gamma=2.2)
+    # --------------------------------
     
-    im = Image.fromarray(img_array, mode="RGB")
-    print(f"Rendered image: {W}x{H}")
-
-    # Save output
+    # Quantize to 0-255 uint8
+    final_pixels = (np.clip(processed, 0.0, 1.0) * 255.0).astype(np.uint8)
+    
+    im = Image.fromarray(final_pixels, mode="RGB")
     im.save(out_path)
-    print(f"Saved render to {out_path}")
+    print(f"  Saved to {out_path}")
+
+# --- SCENE DEFINITIONS ---
 
 def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     cam_transform = Transform(np.array([0.0, 1.5, -6.0]), np.array([0, 0.2, 0]), np.ones(3))
@@ -202,32 +219,120 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     return scene
 
 def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scene:
-    pass
+    # 1. Camera Setup (Wide FOV to see the whole room)
+    # Positioned slightly back to view the open box
+    cam_transform = Transform(
+        position=np.array([0.0, 2.5, -7.5]), 
+        rotation=np.array([0.0, 0.0, 0.0]), 
+        scale=np.ones(3)
+    )
+    cam = VCamera(cam_transform, fov=60.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
+    
+    # 2. Materials
+    # Walls (Matte)
+    mat_white = Material(color=Color.from_hex("#E0E0E0"), emissive=Color(), roughness=1.0, glossiness=0.0, metallic=0.0)
+    mat_red   = Material(color=Color.from_hex("#B03030"), emissive=Color(), roughness=1.0, glossiness=0.0, metallic=0.0)
+    mat_green = Material(color=Color.from_hex("#30B030"), emissive=Color(), roughness=1.0, glossiness=0.0, metallic=0.0)
+    
+    # Objects (Shiny/Transmissive)
+    mat_mirror = Material(color=Color.from_hex("#FFFFFF"), emissive=Color(), roughness=0.02, glossiness=0.98, metallic=1.0)
+    mat_glass  = Material(color=Color.from_hex("#FFFFFF"), emissive=Color(), roughness=0.0, glossiness=1.0, metallic=0.0, ior=1.5)
+    # Note: Enable refraction flag on material if your engine supports it
+    mat_glass.is_transparent = True
+    mat_glass.can_refract = True
+
+    # 3. Room Geometry (The Box)
+    room_objects = []
+    
+    # Floor
+    floor = Cube(center=np.array([0.0, -0.5, 0.0]), side_length=10.0, name="Floor")
+    floor.transform.scale = np.array([2.0, 0.1, 2.0]) # Flatten into plane
+    floor.material = mat_white
+    room_objects.append(floor)
+    
+    # Ceiling
+    ceiling = Cube(center=np.array([0.0, 5.5, 0.0]), side_length=10.0, name="Ceiling")
+    ceiling.transform.scale = np.array([2.0, 0.1, 2.0])
+    ceiling.material = mat_white
+    room_objects.append(ceiling)
+
+    # Back Wall
+    back = Cube(center=np.array([0.0, 2.5, 5.5]), side_length=10.0, name="BackWall")
+    back.transform.scale = np.array([2.0, 2.0, 0.1])
+    back.material = mat_white
+    room_objects.append(back)
+    
+    # Left Wall (Red)
+    left = Cube(center=np.array([-5.5, 2.5, 0.0]), side_length=10.0, name="LeftWall")
+    left.transform.scale = np.array([0.1, 2.0, 2.0])
+    left.material = mat_red
+    room_objects.append(left)
+
+    # Right Wall (Green)
+    right = Cube(center=np.array([5.5, 2.5, 0.0]), side_length=10.0, name="RightWall")
+    right.transform.scale = np.array([0.1, 2.0, 2.0])
+    right.material = mat_green
+    room_objects.append(right)
+    
+    # 4. Content Objects
+    
+    # Tall Box (Rotated)
+    tall_box = Cube(center=np.array([-2.0, 1.5, 2.0]), side_length=3.0, name="TallBox")
+    tall_box.transform.scale = np.array([0.6, 1.0, 0.6]) # Make it a pillar
+    tall_box.transform.rotate(20.0, np.array([0.0, 1.0, 0.0])) # Rotate Y
+    tall_box.material = mat_white # Standard white box for diffusal
+    room_objects.append(tall_box)
+    
+    # Sphere (Mirror)
+    mirror_sphere = Sphere(center=np.array([2.0, 1.25, 1.0]), radius=1.25, name="MirrorBall")
+    mirror_sphere.material = mat_mirror
+    room_objects.append(mirror_sphere)
+    
+    # Small Cube (Glass/Crystal in front)
+    glass_cube = Cube(center=np.array([0.0, 0.75, -2.0]), side_length=1.5, name="GlassCube")
+    glass_cube.transform.rotate(-15.0, np.array([0.0, 1.0, 0.0]))
+    glass_cube.material = mat_glass
+    room_objects.append(glass_cube)
+
+    # 5. Lighting
+    # A single strong area light on the ceiling (simulating the Cornell Box light patch)
+    ceiling_light = LightSource(
+        position=np.array([0.0, 4.8, 0.0]), 
+        color=Color.from_hex("#FFF0E0"), 
+        intensity=25.0, 
+        radius=1.5, 
+        name="CeilingLight"
+    )
+
+    # Assemble Scene
+    scene = Scene(name="rgb_cornell_box", camera=cam, background_color=Color(0,0,0)) # Pitch black void outside
+    
+    scene.add_light(ceiling_light)
+    for obj in room_objects:
+        scene.add_object(VObject(shape=obj, name=obj.name))
+
+    return scene
 
 # Add orchestrator to render and save a set of scenes
 if __name__ == "__main__":
-    # where to save outputs (repo root / benchmark / simple_scene)
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    # list of scenes to render
     all_scenes = [
-        get_minimal_scene(),
-        get_gradient_scene(),
-        get_emissive_scene(),
-        get_lit_studio_scene(),
+        get_minimal_scene(100, 100),
+        get_gradient_scene(100, 100),
+        get_emissive_scene(124, 124),
+        get_lit_studio_scene(124, 256),
+        get_rgb_room_with_objects_scene(128, 128),
     ]
 
-    rpp = 1  # rays per pixel
-    spp = 1  # samples per pixel
-    intersector = RayMarchingIntersection(
-        max_distance=1000,
-        max_steps=256
-    )
+    rpp = 2
+    spp = 1
+    intersector = RayMarchingIntersection(max_distance=1000, max_steps=500)
     shader = BasicLambertShading(
-        ambient_enabled=True, ambient_color=Color.from_hex("#0B0B0C"), ambient_intensity=0.1,
-        enable_shadows=True, shadow_samples=8, shadow_bias=1e-3
+        ambient_enabled=True, ambient_color=Color.from_hex("#0B0B0C"), ambient_intensity=0.2,
+        enable_shadows=True, shadow_samples=15, shadow_bias=5e-4
     )
     raytracer = Raytracer(rays_per_pixel=rpp, intersection_strategy=intersector, shading_strategy=shader)
     sampler = RandomSampler(samples_per_pixel=spp)
@@ -236,7 +341,14 @@ if __name__ == "__main__":
         sanitized_name = scene.name.replace(" ", "_").lower()
         out_path = os.path.join(OUT_DIR, f"{sanitized_name}.png")
         print(f"Rendering '{scene.name}' -> {out_path} ({scene.camera.width}x{scene.camera.height})")
+        
         try:
-            render_and_save(scene, raytracer, sampler, out_path=out_path)
+            # 1. Render to Float Array
+            raw_img_data = render_process(scene, raytracer, sampler)
+            # 2. Post-Process and Save
+            save_image(raw_img_data, out_path=out_path)
+            
         except Exception as e:
             print(f"Failed to render '{scene.name}': {e}")
+            import traceback
+            traceback.print_exc()
