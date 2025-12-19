@@ -10,7 +10,7 @@
 #include "Mesh.h"
 #include "IVirtualObject.h"
 
-class Model {
+class Model : public IVirtualObject {
 public:
 	// Loads in a model from a file and stores tha information in 'data', 'JSON', and 'file'
 	Model(const char* file);
@@ -29,6 +29,10 @@ public:
 	std::vector<glm::mat4> GetModelMatricesForAllMeshes() const;
 	void SetModelMatrixForMesh(unsigned int meshIndex, const glm::mat4& modelMatrix);
 	void SetModelMatricesForAllMeshes(const std::vector<glm::mat4>& modelMatrices);
+
+	void CleanUp() override;
+	
+
 private:
 	// Variables for easy access
 	const char* file;

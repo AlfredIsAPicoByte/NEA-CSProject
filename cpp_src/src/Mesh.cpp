@@ -105,6 +105,7 @@ json Mesh::ToJSON() const
         jt["unit"] = t.unit;
         j["textures"].push_back(jt);
     }
+    j["constructor"] = "Mesh";
     return j;
 }
 

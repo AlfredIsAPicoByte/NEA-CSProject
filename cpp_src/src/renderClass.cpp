@@ -103,7 +103,19 @@ bool Scene::LoadScene(const std::string& filePath)
             // Here you would need to determine the type of renderable and create it accordingly
             // For simplicity, we will assume all are Mesh objects
             auto mesh = std::make_shared<Mesh>(std::vector<Vertex>{}, std::vector<GLuint>{}, std::vector<Texture>{});
-            mesh->FromJSON(jr);
+            try {
+                mesh->FromJSON(jr);
+            } catch (const std::exception& e) {
+                AppendError(std::string("Error loading renderable from JSON: ") + e.what());
+                
+                try {
+                    auto model = std::make_shared<ModelMeshAdapter>(std::make_shared<Model>(), 0);
+                    model->FromJSON(jr);
+                    mesh = model;
+                } catch (const std::exception& e) {
+                    AppendError(std::string("Error loading renderable from JSON: ") + e.what());
+                }
+            }
             renderables.push_back(mesh);
         }
 

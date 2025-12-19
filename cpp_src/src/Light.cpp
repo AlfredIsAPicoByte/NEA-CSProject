@@ -10,6 +10,7 @@ json Light::ToJSON() const
     j["intensity"] = intensity;
     j["direction"] = { direction.x, direction.y, direction.z };
     j["type"] = type;
+    j["constructor"] = "Light";
     return j;
 }
 void Light::FromJSON(const json& j)

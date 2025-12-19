@@ -1,8 +1,19 @@
 #pragma once
 
+#include <string>
 #include <chrono>
 #include <thread>
 #include <algorithm>
+#include <functional>
+
+struct Checkpoint
+{
+    std::chrono::steady_clock::time_point time;
+    std::string data;
+
+    float get_time_passed();
+    bool wait_until_time_passed(std::chrono::steady_clock::duration duration);
+};
 
 class Time
 {

@@ -9,15 +9,15 @@ public:
     virtual ~IVirtualObject() = default;
     virtual void CleanUp() = 0;
 
-    void SetID(int newID) {
-        id = newID;
+    void SetLocaID(int newID) {
+        l_id = newID;
     };
-    int GetID() const {
-        return id;
+    int GetLocalID() const {
+        return l_id;
     };
 
     virtual json ToJSON() const = 0;
     virtual void FromJSON(const json& j) = 0;
 private:
-    unsigned int id;
+    unsigned int l_id;
 };
