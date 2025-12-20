@@ -49,31 +49,65 @@ def render_process(scene: Scene, algorithim: Algorithm, sampler: Sampler) -> Lis
 
 def save_image(img_data: np.ndarray, out_path="render_out.png"):
     """
-    Applies Post-Processing (Bloom -> Tone Map -> Gamma) and saves.
+    Saves the image.
     """
     out_dir = os.path.dirname(out_path)
     if out_dir and not os.path.exists(out_dir):
         os.makedirs(out_dir, exist_ok=True)
-
-    print("  ...Applying Post-Processing (Bloom + Tone Mapping)...")
-
-    # --- POST PROCESSING PIPELINE ---
-    # 1. Bloom (Glow) - Apply to bright spots before tone mapping
-    processed = PostProcessingPipeline.apply_bloom(img_data, threshold=1.0, intensity=0.2, radius=4)
-
-    # 2. Tone Mapping (ACES) - Squash HDR values to 0.0-1.0 nicely
-    processed = PostProcessingPipeline.aces_tone_map(processed)
-
-    # 3. Gamma Correction - Linear -> sRGB
-    processed = PostProcessingPipeline.gamma_correct(processed, gamma=2.2)
-    # --------------------------------
     
     # Quantize to 0-255 uint8
-    final_pixels = (np.clip(processed, 0.0, 1.0) * 255.0).astype(np.uint8)
+    final_pixels = np.clip((img_data * 255.0), 0, 1).astype(np.uint8)
     
     im = Image.fromarray(final_pixels, mode="RGB")
     im.save(out_path)
     print(f"  Saved to {out_path}")
+
+def render_and_save(scene: Scene, algorithim: Algorithm, sampler: Sampler, out_path="render_out_strat.png"):
+    """Render the scene using the given algorithm and return a PIL Image."""
+    # Ensure parent directory exists for out_path
+    out_dir = os.path.dirname(out_path)
+    if out_dir and not os.path.exists(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+
+    # Use named argument for sampler - do not pass camera as a positional value (legacy behavior)
+    pixel_colors = algorithim.render(scene, sampler=sampler)
+    
+    W, H = scene.camera.width, scene.camera.height
+    
+    # Convert flat pixel_colors list (row-major, likely bottom-up) to 2D array
+    img_array = np.zeros((H, W, 3), dtype=np.uint8)
+    for idx, color in enumerate(pixel_colors):
+        
+        # 1. Calculate the raw row index (0 is bottom, H-1 is top)
+        raw_y = idx // W
+        x = idx % W
+        
+        y = raw_y
+        
+        # Extract RGB from Color object (rest of the logic is fine)
+        if hasattr(color, "rgba"):
+            rgb = color.rgba[:3]
+        elif hasattr(color, "to_array"):
+            rgb = color.to_array()[:3]
+        else:
+            rgb = [0.0, 0.0, 0.0]
+        
+        # Clamp to [0, 1] and convert to [0, 255]
+        rgb = np.clip(np.asarray(rgb, dtype=np.float64) * 255.0, 0, 255).astype(np.uint8)
+        
+        # Assign the color to the correctly flipped position
+        img_array[y, x, :] = rgb
+    
+    im = Image.fromarray(img_array, mode="RGB")
+    print(f"Rendered image: {W}x{H}, {len(pixel_colors)} pixel colors")
+    
+    # Convert to numpy to inspect pixel range (works for PIL Image or array)
+    try:
+        arr = np.array(im)
+        print(f"Render pixel range: min={arr.min()}, max={arr.max()}, "
+              f"shape={arr.shape}, dtype={arr.dtype}")
+    except Exception as e:
+        print("Could not convert render to numpy array:", e)
 
 # --- SCENE DEFINITIONS ---
 

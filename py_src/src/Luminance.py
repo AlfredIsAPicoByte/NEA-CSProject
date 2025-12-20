@@ -382,7 +382,6 @@ class Material:
                 # Exiting the material (Glass -> Air)
                 n1, n2 = ior_material, ior_air
                 normal = -unit_normal # Flip normal to point into the new medium
-                cos_i = -cos_i
             
             try:
                 final_dir = refract_ray(normal, hit_point, incoming_ray.direction, n1, n2)
