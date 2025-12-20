@@ -91,7 +91,7 @@ json Mesh::ToJSON() const
         json jv;
         jv["position"] = { v.Position.x, v.Position.y, v.Position.z };
         jv["normal"] = { v.Normal.x, v.Normal.y, v.Normal.z };
-        jv["color"] = { v.color.x, v.color.y, v.color.z };
+        jv["color"] = { v.Color.x, v.Color.y, v.Color.z };
         jv["uv"] = { v.TexCoords.x, v.TexCoords.y };
         jv["tangent"] = { v.Tangent.x, v.Tangent.y, v.Tangent.z, v.Tangent.w };
         j["vertices"].push_back(jv);
@@ -116,7 +116,7 @@ void Mesh::FromJSON(const json& j)
         Vertex v;
         v.Position = glm::vec3(jv["position"][0], jv["position"][1], jv["position"][2]);
         v.Normal = glm::vec3(jv["normal"][0], jv["normal"][1], jv["normal"][2]);
-        v.color = glm::vec3(jv["color"][0], jv["color"][1], jv["color"][2]);
+        v.Color = glm::vec3(jv["color"][0], jv["color"][1], jv["color"][2]);
         v.TexCoords = glm::vec2(jv["uv"][0], jv["uv"][1]);
         v.Tangent = glm::vec4(jv["tangent"][0], jv["tangent"][1], jv["tangent"][2], jv["tangent"][3]);
         vertices.push_back(v);

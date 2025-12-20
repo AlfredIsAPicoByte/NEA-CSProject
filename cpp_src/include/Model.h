@@ -31,8 +31,6 @@ public:
 	void SetModelMatricesForAllMeshes(const std::vector<glm::mat4>& modelMatrices);
 
 	void CleanUp() override;
-	
-
 private:
 	// Variables for easy access
 	const char* file;

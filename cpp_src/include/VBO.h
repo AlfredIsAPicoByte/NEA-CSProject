@@ -8,7 +8,7 @@ struct Vertex
 {
 	glm::vec3 Position;
 	glm::vec3 Normal;
-	glm::vec3 color;
+	glm::vec3 Color;
 	glm::vec2 TexCoords;
 	glm::vec4 Tangent;
 };
