@@ -1,17 +1,20 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Dict, Type, Any
+from typing import Optional, Dict, Type, Any, List
 
-from Scene import Scene
-from Luminance import Color, Material
-from PrimaryStructures import Ray
-from Camera import VCamera
-from Reflections import reflect_ray
-from Refractions import refract_ray
+from Luminance import Color
 
 @dataclass
-class RenderStats:
+class ParameterStats:
+    image_width: int = 800
+    image_height: int = 600
+    output_file: str = "render.png"
+    max_bounces: int = 5
+    max_distance: float = 1000.0
+    max_steps: int = 1000
+    epsilon: float = 0.005 # Small offset to avoid self-intersection
+
     rays_traced: int = 0
     hits: int = 0
     misses: int = 0
@@ -25,31 +28,21 @@ class Algorithm(ABC):
     Abstract base for rendering algorithms (ray marcher, path tracer, rasterizer, ...).
     Implementations should be side-effect free where possible and avoid global state.
     """
-
-    # common configurable parameters
-    image_width: int = 800
-    image_height: int = 600
-    output_file: str = "render.png"
-    max_bounces: int = 5
-    max_distance: float = 1000.0
-    max_steps: int = 1000
-    epsilon: float = 0.005 # Small offset to avoid self-intersection
-
     def __init__(self, **kwargs: Any):
         for k, v in kwargs.items():
             if hasattr(self, k):
                 setattr(self, k, v)
-        self.stats = RenderStats()
+        self.stats = ParameterStats()
 
     @abstractmethod
-    def render(self, scene: Any, camera: Any, seed: Optional[int] = None) -> Any:
+    def render(self, scene: Any, seed: Optional[int] = None) -> List[Color]:
         """
         High-level render entry point: produce an image/buffer from the scene and camera.
         """
         raise NotImplementedError
 
     def reset_stats(self) -> None:
-        self.stats = RenderStats()
+        self.stats = ParameterStats()
 
 # Lightweight registry/factory for algorithm implementations
 _ALGO_REGISTRY: Dict[str, Type[Algorithm]] = {
@@ -82,8 +75,8 @@ class RenderingManager:
     def __init__(self, algorithm_name: str = "raytracer", **algo_kwargs: Any):
         self.algorithm = create_algorithm(algorithm_name, **algo_kwargs)
 
-    def render_scene(self, scene: Any, camera: Any, seed: Optional[int] = None) -> Any:
-        return self.algorithm.render(scene, camera, seed)
+    def render_scene(self, scene: Any, seed: Optional[int] = None) -> List[Color]:
+        return self.algorithm.render(scene, seed)
     
-    def get_stats(self) -> RenderStats:
+    def get_stats(self) -> ParameterStats:
         return self.algorithm.stats

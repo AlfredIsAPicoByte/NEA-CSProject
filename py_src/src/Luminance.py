@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Callable
+from typing import Callable, List, Optional
 from PrimaryStructures import Ray
 from Reflections import reflect_ray
 from Refractions import refract_ray, calculate_critical_angle
@@ -12,11 +12,20 @@ def clamp(value, min_value: float|int = 0.0, max_value: float|int = 1.0):
     return max(min_value, min(value, max_value))
 
 class Color:
-    def __init__(self, red: float = 0, green: float = 0, blue: float = 0, alpha: float = 1.0, clamp: bool = True):
-        """Clamp and store RGBA values between 0.0 and 1.0."""
-        self.rgba = np.array([red, green, blue, alpha], dtype=float)
+    def __init__(self, r=0.0, g=0.0, b=0.0, a=1.0, clamp=True):
+        # Robust initialization: Handle case where 'r' is actually a list/array/Color
+        if hasattr(r, "__len__") and len(r) == 3:
+            # If input is a tuple/list/array (e.g. from numpy)
+            self.rgba = np.array([float(r[0]), float(r[1]), float(r[2]), float(r[3])], dtype=np.float32)
+        elif hasattr(r, "rgba"):
+            # If input is another Color object (Copy Constructor)
+            self.rgba = np.array(r.rgba, dtype=np.float32)
+        else:
+            # Standard initialization
+            self.rgba = np.array([float(r), float(g), float(b), float(a)], dtype=np.float32)
+
         if clamp:
-            self.rgba = self.clamp()
+            self.rgba = np.clip(self.rgba, 1, 0)
     
     def clamp(self):
         """Clamp the RGBA values to be within [0.0, 1.0]."""
@@ -53,7 +62,7 @@ class Color:
         return cls(red / 255.0, green / 255.0, blue / 255.0, alpha / 255.0, clamp)
     
     @staticmethod
-    def average_colors(colors: list['Color']) -> 'Color':
+    def average_colors(colors: List['Color']) -> 'Color':
         if not colors:
             return Color() # Return black if list is empty
             
@@ -67,9 +76,9 @@ class Color:
             
         N = len(colors)
         return Color(
-            sum_r / N, 
-            sum_g / N, 
-            sum_b / N, 
+            sum_r / N,
+            sum_g / N,
+            sum_b / N,
             sum_a / N
         )
 
@@ -89,6 +98,19 @@ class Color:
     def alpha(self): return self.rgba[3]
     @alpha.setter
     def alpha(self, value): self.rgba[3] = value
+
+    # Legacy alias support (fixes "object has no attribute 'r'")
+    @property
+    def r(self): return self.rgba[0]
+    @property
+    def g(self): return self.rgba[1]
+    @property
+    def b(self): return self.rgba[2]
+    @property
+    def a(self): return self.rgba[3]
+    
+    @property
+    def components(self): return self.rgba
 
     def __add__(self, other):
         if type(other).__name__ == 'Color' or isinstance(other, Color):
@@ -171,12 +193,12 @@ class Color:
         r, g, b, a = (self.rgba * 255).astype(int)
         return (r, g, b)
     
+    
     def __repr__(self):
-        r, g, b, a = self.rgba
-        return f"Color(r={r:.3f}, g={g:.3f}, b={b:.3f}, a={a:.3f})"
+        return f"Color(red={self.red:.2f}, green={self.green:.2f}, blue={self.blue:.2f}, alpha={self.alpha:.2f})"
 
 class ColorGradient:
-    def __init__(self, colors: list[Color], positions: list[float]):
+    def __init__(self, colors: List[Color], positions: List[float]):
         if len(colors) != len(positions):
             raise ValueError("Colors and positions must have the same length.")
         if any(p < 0.0 or p > 1.0 for p in positions):
@@ -265,7 +287,7 @@ class LightSource:
         if attenuation_type == "distance_cof":
             return self.attenuate_distance_cof(self.color, distance, **kwargs)
         elif attenuation_type == "distance_max":
-            return self.attenuate_diatance_max(self.color, distance, **kwargs)
+            return self.attenuate_distance_max(self.color, distance, **kwargs)
         else:
             raise ValueError(f"Unknown attenuation type: {attenuation_type}")
 
@@ -276,42 +298,27 @@ class LightSource:
         )
 
 class Material:
-    def __init__(self, color: Color, emissive: Color, roughness: float, glossiness: float, metallic: float, **kwargs):
-        """
-        A simple material that reflects LightRay based on its color, roughness, and glossiness.
+    def __init__(self, color: Color, roughness: float = 0.5, glossiness: float = 0.5, metallic: float = 0.0, ior: float = 1.0, emissive: Optional[Color] = None, emissive_intensity: float = 1.0):
+        # Ensure base_color is stored as a Color object
+        self.base_color = color if isinstance(color, Color) else Color(color)
         
-        Attribute:
-            color: The base color of the material.
-            roughness: A value between 0.0 and 1.0 that determines
-                how rough the surface is. 0.0 = perfectly smooth, 1.0 = very rough.
-            glossiness: A value between 0.0 and 1.0 that determines
-                how glossy the surface is. 0.0 = matte, 1.0 = perfectly glossy.
-        """
-        self.base_color = color
-        self.emissive = emissive
-        self.emissive_intensity = 1
-        self.roughness = clamp(roughness)
-        self.glossiness = clamp(glossiness)
-        self.metallic = clamp(metallic)
-
-        self.can_refract = False
+        # Handle emissive defaulting
+        if emissive is None:
+            self.emissive_color = Color(0, 0, 0)
+        else:
+            self.emissive_color = emissive if isinstance(emissive, Color) else Color(emissive)
+            
+        self.roughness = roughness
+        self.glossiness = glossiness
+        self.metallic = metallic
+        self.ior = ior
+        self.emissive_intensity = emissive_intensity
+        
+        # Flags
         self.is_transparent = False
-        self.name = "Material"
+        self.can_refract = False
 
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-    @classmethod
-    def _default(cls):
-        return cls(
-            color = Color(1, 1, 1, 1),
-            emissive = Color(),
-            roughness = 0,
-            glossiness = 0,
-            metallic = 0,
-        )
-
-    def apply_material_color(self, light_sources: list[LightSource], hit_point: np.ndarray, normal: np.ndarray, view_dir: np.ndarray, ambient_color: Color, visibility_function: Callable) -> Color:
+    def apply_material_color(self, light_sources: List[LightSource], hit_point: np.ndarray, normal: np.ndarray, view_dir: np.ndarray, ambient_color: Color, visibility_function: Callable) -> Color:
         """
         Calculates the full color of the material by iterating over all lights in the scene.
         """
@@ -383,7 +390,7 @@ class Material:
             except ValueError:
                 pass
 
-        attenuation = LightSource.attenuate_color(self.base_color, LightSource.attenuate_sqr_distance(np.linalg.norm(incoming_ray.origin - hit_point)))
+        attenuation = LightSource.attenuate_color(self.base_color + incoming_color, LightSource.attenuate_sqr_distance(np.linalg.norm(incoming_ray.origin - hit_point)))
         attenuation += self.get_emissive_component()
 
         # If it's a metal, the attenuation matches the reflection color strongly
@@ -457,7 +464,7 @@ class Material:
     
     def get_emissive_component(self) -> Color:
         """Get the emissive color of the material."""
-        return self.emissive * getattr(self, "emissive_intensity", 1)
+        return self.emissive_color * getattr(self, "emissive_intensity", 1)
     
     def get_metallic_component(self) -> Color:
         """
@@ -478,7 +485,7 @@ class Material:
     def __repr__(self):
         return (
             f"Material(color={self.base_color}, "
-            f"roughness={self.roughness:.2f}, glossiness={self.glossiness:.2f}, emissive={self.emissive}, metallic={self.metallic:.2f})"
+            f"roughness={self.roughness:.2f}, glossiness={self.glossiness:.2f}, emissive={self.emissive_color}, metallic={self.metallic:.2f})"
         )
 """
 Luminance module: Provides classes for color representation, light rays, materials, and light sources.
