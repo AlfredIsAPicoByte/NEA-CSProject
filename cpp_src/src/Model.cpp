@@ -504,3 +504,7 @@ void Model::SetModelMatricesForAllMeshes(const std::vector<glm::mat4>& modelMatr
 	}
 	matricesMeshes = modelMatrices;
 }
+
+void Model::CleanUp() {
+	
+}
