@@ -12,7 +12,7 @@ def clamp(value, min_value: float|int = 0.0, max_value: float|int = 1.0):
     return max(min_value, min(value, max_value))
 
 class Color:
-    def __init__(self, r=0.0, g=0.0, b=0.0, a=1.0, clamp=True):
+    def __init__(self, r=0.0, g=0.0, b=0.0, a=1.0, clamp=False):
         # Robust initialization: Handle case where 'r' is actually a list/array/Color
         if hasattr(r, "__len__") and len(r) == 3:
             # If input is a tuple/list/array (e.g. from numpy)
@@ -25,7 +25,7 @@ class Color:
             self.rgba = np.array([float(r), float(g), float(b), float(a)], dtype=np.float32)
 
         if clamp:
-            self.rgba = np.clip(self.rgba, 1, 0)
+            self.clamp()
     
     def clamp(self):
         """Clamp the RGBA values to be within [0.0, 1.0]."""
@@ -33,7 +33,7 @@ class Color:
         return self
     
     @classmethod
-    def from_hex(cls, hex_str: str, clamp: bool = True):
+    def from_hex(cls, hex_str: str, clamp: bool = False):
         """Create a Color object from a hex string."""
         hex_str = hex_str.strip().lstrip('#')
         if len(hex_str) not in (6, 8):
@@ -48,7 +48,7 @@ class Color:
         return cls(*rgba, clamp)
 
     @classmethod
-    def from_array(cls, arr, clamp: bool = True):
+    def from_array(cls, arr, clamp: bool = False):
         """Create a Color object from an array-like input."""
         if len(arr) not in (3, 4):
             raise ValueError("Array must have 3 (RGB) or 4 (RGBA) elements.")
@@ -337,7 +337,7 @@ class Material:
             if NdotL <= 0.0: continue # behind the surface
 
             attenuation = LightSource.attenuate_sqr_distance(light_dist)
-            light_intensity = getattr(light, "intensity", 1.0) * attenuation
+            light_intensity = light.intensity * attenuation
 
             # 2. Visibility / Shadows (Callback to the renderer/strategy)
             # We pass the light info back to the strategy's visibility function

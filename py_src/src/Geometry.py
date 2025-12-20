@@ -2,8 +2,9 @@ from abc import ABC, abstractmethod
 import numpy as np
 from typing import Optional, Tuple, List
 from dataclasses import dataclass
+
 from PrimaryStructures import Transform, Ray
-from Luminance import Color, Material
+from Luminance import Material
 
 # Base Classes & Mixins
 class GeometryMixin(ABC):

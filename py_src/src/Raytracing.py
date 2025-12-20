@@ -490,7 +490,14 @@ class Raytracer(Algorithm):
         except Exception:
             return Color(0.0, 0.0, 0.0)
 
-    def render(self, scene: Scene, camera: Optional[VCamera] = None, seed: Optional[int] = None, tile_size: Optional[Tuple[int,int]] = None, sampler: Optional[Sampler] = None) -> List[Color]:
+    def render(
+            self,
+            scene: Scene,
+            camera: Optional[VCamera] = None,
+            seed: Optional[int] = None,
+            tile_size: Optional[Tuple[int,int]] = None,
+            sampler: Optional[Sampler] = None
+        ) -> List[Color]:
         """
         Render the scene and return pixel colors as a flat list (row-major order).
         """

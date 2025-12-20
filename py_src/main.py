@@ -20,7 +20,7 @@ def render_process(scene: Scene, algorithim: Algorithm, sampler: Sampler) -> Lis
     ready for post-processing.
     """
     # 1. Get raw list of Color objects
-    pixel_colors = algorithim.render(scene, sampler=sampler)
+    pixel_colors: List[Color] = algorithim.render(scene, sampler=sampler)
     
     W, H = scene.camera.width, scene.camera.height
     
@@ -31,17 +31,9 @@ def render_process(scene: Scene, algorithim: Algorithm, sampler: Sampler) -> Lis
     for idx, color in enumerate(pixel_colors):
         raw_y = idx // W
         x = idx % W
-        y = (H - 1) - raw_y # Standard flip for most renderers
+        y = raw_y # (y = (H - 1) - raw_y) to flip the image
         
-        # Safe extraction
-        r, g, b = 0.0, 0.0, 0.0
-        if hasattr(color, 'red'):
-            r, g, b = color.red, color.green, color.blue
-        elif hasattr(color, 'r'):
-            r, g, b = color.r, color.g, color.b
-        elif hasattr(color, 'components'):
-            comps = color.components
-            r, g, b = comps[0], comps[1], comps[2]
+        r, g, b = color.red, color.green, color.blue
         
         raw_buffer[y, x] = [r, g, b]
         
@@ -356,9 +348,9 @@ if __name__ == "__main__":
     all_scenes = [
         get_minimal_scene(100, 100),
         get_gradient_scene(100, 100),
-        get_emissive_scene(124, 124),
-        get_lit_studio_scene(124, 256),
-        get_rgb_room_with_objects_scene(128, 128),
+        get_emissive_scene(128, 128),
+        get_lit_studio_scene(144, 108),
+        get_rgb_room_with_objects_scene(108, 144),
     ]
 
     rpp = 2

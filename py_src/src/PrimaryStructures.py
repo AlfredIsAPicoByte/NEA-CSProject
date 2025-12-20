@@ -1,4 +1,4 @@
-from math import cos, sin, acos
+from math import cos, sin, acos, gcd
 import numpy as np
 
 class Ray:
@@ -403,6 +403,22 @@ class Ratio:
             
         self.width = width
         self.height = height
+
+    def simplify(self):
+        """
+        Reduces the ratio to its simplest integer form.
+        Example: 1920/1080 -> 16/9
+        """
+        # We must convert to integers to find the GCD
+        w_int = int(self.width)
+        h_int = int(self.height)
+
+        # Calculate Greatest Common Divisor
+        divisor = gcd(w_int, h_int)
+
+        # Update the stored values
+        self.width = w_int / divisor
+        self.height = h_int / divisor
 
     def __add__(self, other):
         if not isinstance(other, Ratio):
