@@ -23,19 +23,11 @@ class TracingRay(Ray):
     def set_interaction_function(self, func: Callable[["TracingRay", VObject, np.ndarray], Tuple[Optional["TracingRay"], Optional["TracingRay"]]]) -> None:
         self.interaction_function = func
 
-    def interact(self, hit_object: VObject, hit_point: np.ndarray) -> Tuple[Optional["TracingRay"], Optional["TracingRay"]]:
-        """Invoke the interaction function if set.
-           Returns a tuple of (reflected_ray, refracted_ray).
-        """
-        if hasattr(self, "interaction_function") and callable(self.interaction_function):
-            return self.interaction_function(self, hit_object, hit_point)
-        return None, None
-
     def __repr__(self):
         return f"TracingRay(name={self.name}, origin={self.origin}, orientation={self.orientation})"
     pass
 
-# Strategy interfaces and simple implementations
+# Strategy interfaces for ray generation, intersection, and shading
 class RayGenerator(ABC):
     """Abstract base class for ray generation strategies."""
     @abstractmethod
@@ -44,7 +36,6 @@ class RayGenerator(ABC):
         camera: "VCamera",
         rays_per_pixel: int,
         region: Optional[Tuple[int, int, int, int]] = None,  # (x, y, width, height)
-        sampler: Optional[Any] = None,  # SamplingManager or Sampler-compatible
         seed: Optional[int] = None,
     ) -> List[TracingRay]:
         ...
@@ -52,7 +43,6 @@ class RayGenerator(ABC):
     def rotate_ray_by_camera_fov(self,
         camera: "VCamera",
         u: float, v: float,
-
     ) -> np.ndarray:
         ndc_x, ndc_y = 2 * u - 1, 1 - 2 * v
         half_h = math.tan(math.radians(camera.fov) * 0.5)     # cam.fov = vertical FOV in degrees
@@ -63,13 +53,39 @@ class RayGenerator(ABC):
         direction = direction / np.linalg.norm(direction)
         return direction
 
+class IntersectionStrategy(ABC):
+    @abstractmethod
+    def find_hit(self, scene: Scene, ray: TracingRay) -> Tuple[Optional[VObject], float]:
+        ...
+
+class ShadingStrategy(ABC):
+    def __init__(
+            self,
+            ambient_enabled: bool = True,
+            ambient_color: Optional[Color] = None,
+            ambient_intensity: Optional[float] = None,
+            enable_shadows: bool = True,
+            shadow_samples: int = 8,
+            shadow_bias: float = 1e-3
+        ):
+        self.ambient_enabled = ambient_enabled
+        self.ambient_color = ambient_color
+        self.ambient_intensity = ambient_intensity
+        self.enable_shadows = enable_shadows
+        self.shadow_samples = max(1, int(shadow_samples))
+        self.shadow_bias = float(shadow_bias)
+
+    @abstractmethod
+    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable) -> Color:
+        ...
+
+# Ray generation implementations
 class BasicRayGenerator(RayGenerator):
     def generate(
         self,
         camera: "VCamera",
         rays_per_pixel: int,
         region: Optional[Tuple[int, int, int, int]] = None,
-        sampler: Optional[Sampler] = None,
         seed: Optional[int] = None,
     ) -> List[TracingRay]:
         # Simple implementation that generates one ray per pixel without jitter or sampler
@@ -116,7 +132,6 @@ class JitterRayGenerator(RayGenerator):
         camera: "VCamera",
         rays_per_pixel: int,
         region: Optional[Tuple[int, int, int, int]] = None,
-        sampler: Optional[Sampler] = None,
         seed: Optional[int] = None,
     ) -> List[TracingRay]:
         if seed is not None:
@@ -139,60 +154,6 @@ class JitterRayGenerator(RayGenerator):
         rays: List[TracingRay] = []
         for y in range(y_start, y_start + region_h):
             for x in range(x_start, x_start + region_w):
-                # If sampler is a SamplingManager, prefer its precomputed/per-pixel list
-                if sampler is not None and hasattr(sampler, "get_samples_for_pixel"):
-                    samples_list = sampler.get_samples_for_pixel(x, y)
-                    for r in range(max(1, rays_per_pixel)):
-                        if r < len(samples_list):
-                            s = samples_list[r]
-                            u = (x + s.u) / cam_width
-                            v = (y + s.v) / cam_height
-                        else:
-                            u, v = self.jitter_within_pixel(rand, x, y, cam_width, cam_height)
-
-                        
-                        orientation = self.rotate_ray_by_camera_fov(camera, u, v)
-
-                        ray = TracingRay(
-                            origin=camera.transform.position,
-                            orientation=orientation,
-                            pixel_x=x,
-                            pixel_y=y,
-                            color=Color(),
-                            name=f"Camera Ray ({x},{y}) #{r}"
-                        )
-                        rays.append(ray)
-                    continue
-
-                # If sampler conforms to Sampler interface (start_pixel/next_2d)
-                if sampler is not None and hasattr(sampler, "start_pixel") and hasattr(sampler, "next_2d"):
-                    try:
-                        sampler.start_pixel(x, y)
-                    except Exception:
-                        pass
-                    for r in range(max(1, rays_per_pixel)):
-                        try:
-                            off_u, off_v = sampler.next_2d()
-                            u = (x + off_u) / cam_width
-                            v = (y + off_v) / cam_height
-                        except Exception:
-                            u, v = self.jitter_within_pixel(rand, x, y, cam_width, cam_height)
-
-                        
-                        orientation = self.rotate_ray_by_camera_fov(camera, u, v)
-
-                        ray = TracingRay(
-                            origin=camera.transform.position,
-                            orientation=orientation,
-                            pixel_x=x,
-                            pixel_y=y,
-                            color=Color(),
-                            name=f"Camera Ray ({x},{y}) #{r}"
-                        )
-                        rays.append(ray)
-                    continue
-
-                # fallback: no sampler provided; produce jittered rays per pixel
                 for r in range(max(1, rays_per_pixel)):
                     u, v = self.jitter_within_pixel(rand, x, y, cam_width, cam_height)
                     
@@ -216,30 +177,7 @@ class JitterRayGenerator(RayGenerator):
         v = (y + 0.5 + jitter_v) / cam_height
         return u, v
 
-class IntersectionStrategy(ABC):
-    @abstractmethod
-    def find_hit(self, scene: Any, ray: TracingRay) -> Tuple[Optional[VObject], float]:
-        ...
-
-class BasicRayIntersection(IntersectionStrategy):
-    def find_hit(self, scene: Scene, ray: TracingRay) -> Tuple[Optional[VObject], float]:
-        closest_object = None
-        closest_distance = float("inf")
-
-        for obj in scene.objects:
-            try:
-                distance = obj.shape.intersect(ray)
-                if distance is not None and 0 < distance < closest_distance:
-                    closest_distance = distance
-                    closest_object = obj
-            except Exception:
-                continue
-
-        if closest_object is not None:
-            return closest_object, closest_distance
-        else:
-            return None, float("inf")
-
+# Ray intersection (+ interaction) implementations
 class RayMarchingIntersection(IntersectionStrategy):
     def __init__(self, epsilon: float = 1e-4, max_distance: float = 100.0, max_steps: int = 256):
         self.epsilon = epsilon
@@ -265,25 +203,25 @@ class RayMarchingIntersection(IntersectionStrategy):
                 return None, float("inf")
         return None, float("inf")
 
-class ShadingStrategy(ABC):
-    def __init__(self, ambient_enabled: bool = True, ambient_color: Optional[Color] = None, ambient_intensity: Optional[float] = None):
-        self.ambient_enabled = ambient_enabled
-        self.ambient_color = ambient_color
-        self.ambient_intensity = ambient_intensity
-
-    @abstractmethod
+# Shading implementations
+class SimpleShading(ShadingStrategy):
     def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable) -> Color:
-        ...
+        point = ray.point_at(distance)
+        normal = hit_object.shape.GetNormal(point)
+        view_dir = -ray.orientation
+        
+        # Simple diffuse shading with ambient light
+        material: Material | None = getattr(hit_object, "material", None) or getattr(hit_object.shape, "material", None)
+        
+        if not material:
+            return Color(1, 0, 1) # Error Pink
 
-class BasicLambertShading(ShadingStrategy):
-    def __init__(self, ambient_enabled: bool = True, ambient_color: Optional[Color] = None, ambient_intensity: Optional[float] = None,
-                 enable_shadows: bool = True, shadow_samples: int = 8, shadow_bias: float = 1e-3):
-        super().__init__(ambient_enabled, ambient_color, ambient_intensity)
+        ambient_col = self.ambient_color if self.ambient_color is not None else getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03))
+        direct_light = material.apply_material_color(scene.get_lights(), point, normal, view_dir, ambient_col, lambda l, l_dir, l_dist: 1.0)
 
-        self.enable_shadows = enable_shadows
-        self.shadow_samples = max(1, int(shadow_samples))
-        self.shadow_bias = float(shadow_bias)
+        return direct_light.clamp()
 
+class LambertShading(ShadingStrategy):
     def _random_point_on_disc(self, center: np.ndarray, normal: np.ndarray, radius: float, seed: Optional[int] = None,) -> np.ndarray:
         if seed is not None:
             rand_gen = random.Random(seed)
@@ -409,7 +347,7 @@ class Raytracer(Algorithm):
         self.rays_per_pixel = max(1, rays_per_pixel)
         self.ray_generator = ray_generator if ray_generator is not None else BasicRayGenerator()
         self.intersector = intersection_strategy if intersection_strategy is not None else RayMarchingIntersection()
-        self.shader = shading_strategy if shading_strategy is not None else BasicLambertShading()
+        self.shader = shading_strategy if shading_strategy is not None else SimpleShading()
         
     def _material_interaction_callback(self, current_ray: TracingRay, hit_object: VObject, hit_point: np.ndarray) -> tuple[Optional[TracingRay], Optional[TracingRay]]:
         """
@@ -493,22 +431,14 @@ class Raytracer(Algorithm):
     def render(
             self,
             scene: Scene,
-            camera: Optional[VCamera] = None,
             seed: Optional[int] = None,
-            tile_size: Optional[Tuple[int,int]] = None,
-            sampler: Optional[Sampler] = None
+            tile_size: Optional[Tuple[int,int]] = None
         ) -> List[Color]:
         """
         Render the scene and return pixel colors as a flat list (row-major order).
         """
         # --- Setup ---
-        if isinstance(camera, VCamera):
-            cam = camera
-        elif camera is None:
-            cam = scene.camera
-        else:
-            seed = camera
-            cam = scene.camera
+        cam = scene.camera
 
         if cam is None:
             raise ValueError("No camera provided to Raytracer.render")
@@ -525,10 +455,9 @@ class Raytracer(Algorithm):
                 pixel_accum[y * cam_w + x].append(color)
 
         def _gen_rays_for_region(region):
-            return self.ray_generator.generate(cam, self.rays_per_pixel, region=region, sampler=sampler, seed=seed)
+            return self.ray_generator.generate(cam, self.rays_per_pixel, region=region, seed=seed)
 
         # --- Render Loop ---
-        
         def process_rays(rays):
             """Helper to process a batch of rays using the recursive tracer."""
             for ray in rays:
@@ -547,6 +476,7 @@ class Raytracer(Algorithm):
                 
                 push_pixel_color(x, y, final_color)
 
+        # --- Image/Tile rendering management ---
         if tile_size is None:
             # Full image render
             rays = _gen_rays_for_region(None)
@@ -557,14 +487,15 @@ class Raytracer(Algorithm):
             # Tiled render
             tile_w, tile_h = tile_size
             print(f"Rendering in tiles of size {tile_w}x{tile_h}...")
-            for y0 in range(0, cam_h, tile_h):
-                for x0 in range(0, cam_w, tile_w):
-                    w, h = min(tile_w, cam_w - x0), min(tile_h, cam_h - y0)
-                    region = (x0, y0, w, h)
+            for ty in range(0, cam_h, tile_h):
+                for tx in range(0, cam_w, tile_w):
+                    region = (tx, ty, min(tile_w, cam_w - tx), min(tile_h, cam_h - ty))
                     rays = _gen_rays_for_region(region)
+                    print(f"Generated {len(rays)} rays for tile at ({tx},{ty}) size {region[2]}x{region[3]}.")
                     process_rays(rays)
+                    print(f"Completed rendering tile at ({tx},{ty}).")
 
-        # --- Accumulation ---
+        # --- Color accumulation ---
         pixel_colors: List[Color] = []
         for idx in range(total_pixels):
             colors = pixel_accum[idx]
@@ -572,7 +503,7 @@ class Raytracer(Algorithm):
                 pixel_colors.append(Color.average_colors(colors))
             else:
                 # Fill missing pixels with black
-                pixel_colors.append(Color(0,0,0)) 
+                pixel_colors.append(Color(0, 0, 0)) 
 
         return pixel_colors
 

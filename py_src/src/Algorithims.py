@@ -1,9 +1,10 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Dict, Type, Any, List
+from typing import Optional, Dict, Type, Any, List, Tuple
 
 from Luminance import Color
+from Scene import Scene
 
 @dataclass
 class ParameterStats:
@@ -35,7 +36,12 @@ class Algorithm(ABC):
         self.stats = ParameterStats()
 
     @abstractmethod
-    def render(self, scene: Any, seed: Optional[int] = None) -> List[Color]:
+    def render(
+            self,
+            scene: Scene,
+            seed: Optional[int] = None,
+            tile_size: Optional[Tuple[int,int]] = None
+        ) -> List[Color]:
         """
         High-level render entry point: produce an image/buffer from the scene and camera.
         """
@@ -45,10 +51,7 @@ class Algorithm(ABC):
         self.stats = ParameterStats()
 
 # Lightweight registry/factory for algorithm implementations
-_ALGO_REGISTRY: Dict[str, Type[Algorithm]] = {
-    "raytracer": None,  # to be filled by concrete implementation
-    "rasterizer": None,  # to be filled by concrete implementation
-}
+_ALGO_REGISTRY: Dict[str, Type[Algorithm]] = { }
 
 def register_algorithm(name: str):
     def _decorator(cls: Type[Algorithm]):
@@ -64,19 +67,3 @@ def create_algorithm(name: str, **kwargs) -> Algorithm:
     if name not in _ALGO_REGISTRY:
         raise ValueError(f"Unknown algorithm '{name}'. Registered: {list(_ALGO_REGISTRY.keys())}")
     return _ALGO_REGISTRY[name](**kwargs)
-
-# Example stub to show usage (no direct import of concrete implementation here).
-# Concrete algorithm modules should import this file and call @register_algorithm("raytracer") above their class.
-
-class RenderingManager:
-    """
-    High-level manager to select and run rendering algorithms.
-    """
-    def __init__(self, algorithm_name: str = "raytracer", **algo_kwargs: Any):
-        self.algorithm = create_algorithm(algorithm_name, **algo_kwargs)
-
-    def render_scene(self, scene: Any, seed: Optional[int] = None) -> List[Color]:
-        return self.algorithm.render(scene, seed)
-    
-    def get_stats(self) -> ParameterStats:
-        return self.algorithm.stats

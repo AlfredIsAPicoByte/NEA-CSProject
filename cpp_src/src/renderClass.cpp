@@ -65,15 +65,7 @@ void Scene::SetOpenGLRenderFunction(std::shared_ptr<std::function<void()>> rende
 bool Scene::SaveScene(const std::string& filePath)
 {
     json j;
-
-    j["renderables"] = json::array();
-    for(auto r: renderables) {
-        j["renderables"].push_back(r->ToJSON());
-    }
-    j["objects"] = json::array();
-    for(auto o: sceneObjects) {
-        j["objects"].push_back(o->ToJSON());
-    }
+    SerializeFields(j);
 
     // Implement scene saving logic here
     std::ofstream file(filePath);
@@ -124,6 +116,7 @@ bool Scene::LoadScene(const std::string& filePath)
         return false;
     }
     ifs.close();
+
     DeserializeFields(j);
     return true;
 }
@@ -166,15 +159,20 @@ void Scene::DeserializeFields(const json& j)
             std::string rName = rData.is_string() ? rData.get<std::string>() : "";
             std::string constructor = rData.contains("constructor") ? rData["constructor"].get<std::string>() : "";
             
-            for (const auto& obj : sceneObjects) {
-                if (!obj) continue;
-                auto renderablePtr = std::dynamic_pointer_cast<IRenderable>(obj);
-                if (renderablePtr && renderablePtr->GetName() == rName) {
-                    foundRenderable = renderablePtr;
+            switch(constructor) {
+                case "Mesh":
+                    foundRenderable = std::make_shared<Mesh>();
                     break;
-                }
+                case "ModelAdapter":
+                    foundRenderable = std::make_shared<ModelMeshAdapter();
+                    break;
+                default:
+                    AppendWarning("Unknown renderable constructor: " + constructor);
+                    break;
             }
-            renderables.push_back(foundRenderable);
+
+            foundRenderable->FromJSON(rData);
+            AddRenderable(foundRenderable);
         }
     }
 
@@ -189,15 +187,27 @@ void Scene::DeserializeFields(const json& j)
             std::shared_ptr<IVirtualObject> foundObject = nullptr;
             std::string oName = oData.is_string() ? oData.get<std::string>() : "";
             std::string constructor = oData.contains("constructor") ? oData["constructor"].get<std::string>() : "";
-            
-            for (const auto& obj : sceneObjects) {
-                if (!obj) continue;
-                if (obj->name == oName) {
-                    foundObject = obj;
+
+            switch(constructor) {
+                case "Camera":
+                    foundObject = std::make_shared<Camera>();
                     break;
-                }
+                case "Light":
+                    foundObject = std::make_shared<Light>(glm::vec3(1.0f), 1.0f, 1.0f, 1.0f);
+                    break;
+                case "Material":
+                    foundObject = std::make_shared<Material>(glm::vec3(1.0f), 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, glm::vec3(0.0f));
+                    break;
+                case "ModelRaw":
+                    foundObject = std::make_shared<Mesh>();
+                    break;
+                default:
+                    AppendWarning("Unknown object constructor: " + constructor);
+                    break;
             }
-            sceneObjects.push_back(foundObject);
+
+            foundObject->FromJSON(oData);
+            AddObject(foundObject);
         }
     }
 }
