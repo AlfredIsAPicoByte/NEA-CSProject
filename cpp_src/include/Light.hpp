@@ -5,7 +5,7 @@
 #include <algorithm>
 
 #include "shaderClass.h"
-#include "IVirtualObject.h"
+#include "IVirtualObject.hpp"
 #include "Debugger.h"
 
 static GLuint g_LightsUBO = 0; // Global UBO for lights
@@ -32,9 +32,11 @@ struct Light: public IVirtualObject {
     Light(const glm::vec3& pos, const glm::vec3& col, float inten, int t = 0)
         : position(pos), radius(1.0f), coneAngles(.01f), color(col), intensity(inten), direction(0.0f, -1.0f, 0.0f), type(t) {}
 
-    json ToJSON() const override;
-    void FromJSON(const json& j) override;
     void CleanUp() override;
+
+protected:
+    void SerializeFields(json& j) const override;
+    void DeserializeFields(const json& j) override;
 };
 
 void CreateLightsUBO();

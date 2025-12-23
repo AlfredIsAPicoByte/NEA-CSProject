@@ -10,7 +10,7 @@
 
 #include "Model.h"
 #include "Image.h"
-#include "IVirtualObject.h"
+#include "IVirtualObject.hpp"
 #include "ModelMeshAdapter.h"
 #include "PythonManager.h"
 
@@ -18,9 +18,19 @@ struct RenderSettings {
     int imageWidth = 800;
     int imageHeight = 800;
     bool usePythonRendering = true;
+
+    RenderSettings() = default;
+    RenderSettings(int width = 800, int height = 800, bool pythonRendering = true)
+        : imageWidth(width), imageHeight(height), usePythonRendering(pythonRendering) {}
+
+    void SerializeFields(json& j) const {
+        j["image_width"] = imageWidth;
+        j["image_height"] = imageHeight;
+        j["use_python_rendering"] = usePythonRendering;
+    }
 };
 
-class Scene{
+class Scene : public IVirtualObject {
 public:
     Scene();
     ~Scene();
@@ -42,6 +52,9 @@ public:
     bool SaveScene(const std::string& filePath);
     bool LoadScene(const std::string& filePath);
     bool SaveRenderedImage(const std::string& filePath);
+
+    void SerializeFields(json& j) const override;
+    void DeserializeFields(const json& j) override;
 
     void LoadModel(const std::string& modelPath, Shader& shader);
     void SetCamera(Camera* camera);

@@ -4,7 +4,7 @@
 #include <stdexcept>
 
 #include "Model.h"
-#include "IRenderable.h"
+#include "IRenderable.hpp"
 
 class ModelMeshAdapter : public IRenderable {
 public:
@@ -41,12 +41,12 @@ public:
     void SetModelMatrix(const glm::mat4& matrix) { model->SetModelMatrixForMesh((unsigned int)index, matrix); }
     glm::mat4 GetModelMatrix() const { return model->GetModelMatrixForMesh((unsigned int)index); }
 
-	json ToJSON() const override {
-        json j = model->GetMeshes()[index].ToJSON();
-        j["constructor"] = "Model_a";
+	void SerializeFields(json& j) const override {
+        j = model->GetMeshes()[index].ToJSON();
+        j["constructor"] = "ModelAdapter";
         return j;
     }
-	void FromJSON(const json& j) override { model->GetMeshes()[index].FromJSON(j); }
+	void DeserializeFields(const json& j) override { model->GetMeshes()[index].FromJSON(j); }
 private:
     std::shared_ptr<Model> model;
     size_t index;

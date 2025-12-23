@@ -27,22 +27,19 @@ void Scene::Initialize()
 
 void Scene::Render(std::function<void()> preProcessing, std::function<Image()> renderStep, std::function<void()> postProcessing, std::function<void()> fallBack)
 {
-    Image renderedImage;
+    if (preProcessing) preProcessing();
 
-    if (renderSettings->usePythonRendering) {
-        // Call Python rendering functions here
-        try {
-            if (preProcessing) preProcessing();
-            if (renderStep) renderedImage = renderStep();
-            if (postProcessing) postProcessing();
-        } catch (const std::exception& e) {
-            AppendPythonError(std::string("Python rendering error: ") + e.what());
-            if (fallBack) fallBack();
-        }
-    } else {
-        // Use openGL rendering
-        if (openGLRenderFunction) (*openGLRenderFunction)();
+    if (renderStep) {
+        // run provided render step (e.g. Python renderer)
+        Image img = renderStep();
+        (void)img; // ignore if caller doesn't need stored image here
+    } else if (openGLRenderFunction && !renderSettings->usePythonRendering) {
+        (*openGLRenderFunction)();
+    } else if (fallBack) {
+        fallBack();
     }
+
+    if (postProcessing) postProcessing();
 }
 
 void Scene::UpdateScene()
@@ -90,49 +87,119 @@ bool Scene::SaveScene(const std::string& filePath)
     return false;
 }
 
+void Scene::SerializeFields(json& j) const
+{
+    j["name"] = name;
+    j["active_camera"] = sceneCamera->ToJSON() ? sceneCamera->GetLocalID() : -1;
+    j["selected_renderable"] = selectedRenderable;
+    renderSettings->SerializeFields(j["render_settings"]);
+
+    j["renderables"] = json::array();
+    for (const auto& r : renderables) {
+        if (!r) { j["renderables"].push_back(nullptr); continue; }
+        // try to treat renderable as IVirtualObject to get name
+        auto asVO = std::dynamic_pointer_cast<IVirtualObject>(r);
+        if (asVO) j["renderables"].push_back(asVO->name);
+        else j["renderables"].push_back("renderable");
+    }
+    j["objects"] = json::array();
+    for (const auto& obj : sceneObjects) {
+        if (!obj) { j["objects"].push_back(nullptr); continue; }
+        // IVirtualObject is expected to have a public name field
+        j["objects"].push_back(obj->name);
+    }
+    j["constructor"] = "Scene";
+}
+
 bool Scene::LoadScene(const std::string& filePath)
 {
-    std::ifstream file(filePath);
-    if (file.is_open()) {
-        json j;
-        file >> j;
-        file.close();
+    std::ifstream ifs(filePath);
+    if (!ifs.is_open()) return false;
 
-        renderables.clear();
-        for (const auto& jr : j["renderables"]) {
-            // Here you would need to determine the type of renderable and create it accordingly
-            // For simplicity, we will assume all are Mesh objects
-            auto mesh = std::make_shared<Mesh>(std::vector<Vertex>{}, std::vector<GLuint>{}, std::vector<Texture>{});
-            try {
-                mesh->FromJSON(jr);
-            } catch (const std::exception& e) {
-                AppendError(std::string("Error loading renderable from JSON: ") + e.what());
-                
-                try {
-                    auto model = std::make_shared<ModelMeshAdapter>(std::make_shared<Model>(), 0);
-                    model->FromJSON(jr);
-                    mesh = model;
-                } catch (const std::exception& e) {
-                    AppendError(std::string("Error loading renderable from JSON: ") + e.what());
-                }
+    json j;
+    try {
+        ifs >> j;
+    } catch (...) {
+        AppendError("Failed to parse scene JSON from file: " + filePath);
+        return false;
+    }
+    ifs.close();
+    DeserializeFields(j);
+    return true;
+}
+
+void Scene::DeserializeFields(const json& j)
+{
+    if (j.contains("name")) {
+        name = j["name"];
+    }
+    if (j.contains("active_camera")) {
+        int camID = j["active_camera"];
+        // Find camera by ID in sceneObjects
+        for (const auto& obj : sceneObjects) {
+            if (!obj) continue;
+            if (obj->GetLocalID() == camID) {
+                sceneCamera = dynamic_cast<Camera*>(obj.get());
+                break;
             }
-            renderables.push_back(mesh);
         }
-
-        sceneObjects.clear();
-        for (const auto& jo : j["objects"]) {
-            // Here you would need to determine the type of object and create it accordingly
-            // For simplicity, we will skip actual object creation
-            // auto obj = std::make_shared<YourVirtualObjectType>();
-            // obj->FromJSON(jo);
-            // sceneObjects.push_back(obj);
-        }
-
-        return true;
+    }
+    if (j.contains("selected_renderable")) {
+        selectedRenderable = j["selected_renderable"];
+    }
+    if (j.contains("render_settings")) {
+        const auto& rs = j["render_settings"];
+        if (rs.contains("image_width")) renderSettings->imageWidth = rs["image_width"];
+        if (rs.contains("image_height")) renderSettings->imageHeight = rs["image_height"];
+        if (rs.contains("use_python_rendering")) renderSettings->usePythonRendering = rs["use_python_rendering"];
     }
 
-    AppendError("Failed to open file for loading: " + filePath);
-    return false;
+    if (j.contains("renderables")) {
+        renderables.clear();
+        for (const auto& rData : j["renderables"]) {
+            if (rData.is_null()) {
+                renderables.push_back(nullptr);
+                continue;
+            }
+            // Find renderable by name and constructor
+            std::shared_ptr<IRenderable> foundRenderable = nullptr;
+            std::string rName = rData.is_string() ? rData.get<std::string>() : "";
+            std::string constructor = rData.contains("constructor") ? rData["constructor"].get<std::string>() : "";
+            
+            for (const auto& obj : sceneObjects) {
+                if (!obj) continue;
+                auto renderablePtr = std::dynamic_pointer_cast<IRenderable>(obj);
+                if (renderablePtr && renderablePtr->GetName() == rName) {
+                    foundRenderable = renderablePtr;
+                    break;
+                }
+            }
+            renderables.push_back(foundRenderable);
+        }
+    }
+
+    if (j.contains("objects")) {
+        sceneObjects.clear();
+        for (const auto& oData : j["objects"]) {
+            if (oData.is_null()) {
+                sceneObjects.push_back(nullptr);
+                continue;
+            }
+            // Find object by name and constructor
+            std::shared_ptr<IVirtualObject> foundObject = nullptr;
+            std::string oName = oData.is_string() ? oData.get<std::string>() : "";
+            std::string constructor = oData.contains("constructor") ? oData["constructor"].get<std::string>() : "";
+            
+            for (const auto& obj : sceneObjects) {
+                if (!obj) continue;
+                if (obj->name == oName) {
+                    foundObject = obj;
+                    break;
+                }
+            }
+            sceneObjects.push_back(foundObject);
+        }
+    }
 }
 
 bool Scene::SaveRenderedImage(const std::string& filePath)

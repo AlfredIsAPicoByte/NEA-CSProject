@@ -1,8 +1,7 @@
 #include "Material.h"
 
-json Material::ToJSON() const
+void Material::SerializeFields(json& j) const
 {
-    json j;
     j["albedo"] = { albedo.x, albedo.y, albedo.z };
     j["metallic"] = metallic;
     j["roughness"] = roughness;
@@ -11,17 +10,24 @@ json Material::ToJSON() const
     j["useMRMap"] = useMRMap;
     j["emissive"] = { emissive.x, emissive.y, emissive.z };
     j["constructor"] = "Material";
-    return j;
 }
-void Material::FromJSON(const json& j)
+
+void Material::DeserializeFields(const json& j)
 {
-    albedo = glm::vec3(j["albedo"][0], j["albedo"][1], j["albedo"][2]);
-    metallic = j["metallic"];
-    roughness = j["roughness"];
-    useAlbedoMap = j["useAlbedoMap"];
-    useNormalMap = j["useNormalMap"];
-    useMRMap = j["useMRMap"];
-    emissive = glm::vec3(j["emissive"][0], j["emissive"][1], j["emissive"][2]);
+    if (j.contains("albedo"))
+        albedo = glm::vec3(j["albedo"][0], j["albedo"][1], j["albedo"][2]);
+    if (j.contains("metallic"))
+        metallic = j["metallic"];
+    if (j.contains("roughness"))
+        roughness = j["roughness"];
+    if (j.contains("useAlbedoMap"))
+        useAlbedoMap = j["useAlbedoMap"];
+    if (j.contains("useNormalMap"))
+        useNormalMap = j["useNormalMap"];
+    if (j.contains("useMRMap"))
+        useMRMap = j["useMRMap"];
+    if (j.contains("emissive"))
+        emissive = glm::vec3(j["emissive"][0], j["emissive"][1], j["emissive"][2]);
 }
 
 void CreateMaterialUBO()

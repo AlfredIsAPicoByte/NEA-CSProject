@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 #include <glad/glad.h>
 
-#include "IVirtualObject.h"
+#include "IVirtualObject.hpp"
 #include "Debugger.h"
 
 static GLuint g_MaterialUBO = 0;
@@ -34,9 +34,11 @@ struct Material: public IVirtualObject {
           useAlbedoMap(useAlbedo), useNormalMap(useNormal), useMRMap(useMR),
           emissive(emissiveColor) {}
 
-    json ToJSON() const override;
-    void FromJSON(const json& j) override;
     void CleanUp() override;
+
+protected:
+    void SerializeFields(json& j) const override;
+    void DeserializeFields(const json& j) override;
 };
 
 void CreateMaterialUBO();
