@@ -383,8 +383,56 @@ class Polygon(Shape2D):
     def __repr__(self):
         return f"Polygon({len(self.vertices)} vertices)"
 
-# 3D Shapes
+class Plane(Shape2D):
+    def __init__(self, point: np.ndarray, normal: np.ndarray, **kwargs):
+        super().__init__(**kwargs)
+        self.point = np.asarray(point, dtype=float)
+        norm = np.linalg.norm(normal)
+        if norm < 1e-10:
+            raise ValueError("Normal vector cannot be zero")
+        self.normal = np.asarray(normal, dtype=float) / norm
+        self.transform.position = self.point
 
+    def SignedDistance(self, point: np.ndarray) -> float:
+        return np.dot(point - self.point, self.normal)
+
+    def CheckRayIntersection(self, ray: "Ray") -> bool:
+        denom = np.dot(self.normal, ray.orientation)
+        return abs(denom) > 1e-10
+
+    def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
+        denom = np.dot(self.normal, ray.orientation)
+        if abs(denom) < 1e-10:
+            return []
+        
+        t = np.dot(self.normal, self.point - ray.origin) / denom
+        if t >= -1e-10:
+            return [ray.point_at(t)]
+        return []
+
+    def GetNormal(self, point: np.ndarray) -> np.ndarray:
+        return self.normal
+
+    def GetTangent(self, point: np.ndarray) -> np.ndarray:
+        if abs(self.normal[0]) < 0.9:
+            arbitrary = np.array([1.0, 0.0, 0.0])
+        else:
+            arbitrary = np.array([0.0, 1.0, 0.0])
+        tangent = np.cross(self.normal, arbitrary)
+        return tangent / (np.linalg.norm(tangent) + 1e-12)
+
+    @property
+    def area(self) -> float:
+        return float('inf')
+
+    @property
+    def perimeter(self) -> float:
+        return float('inf')
+
+    def __repr__(self):
+        return f"Plane(point={self.point}, normal={self.normal})"
+
+# 3D Shapes
 class Shape3D(Shape, GeometryMixin, RayIntersectionMixin, SurfacePropertiesMixin):
     """Base for 3D shapes."""
     
@@ -496,10 +544,23 @@ class Cube(Shape3D):
         self.side_length = float(side_length)
 
     def SignedDistance(self, point: np.ndarray) -> float:
-        """Cube SDF using absolute coordinates."""
-        p = np.abs(point - self.transform.position)
-        q = p - self.side_length / 2
-        return np.linalg.norm(np.maximum(q, 0)) + min(np.max(q), 0)
+        """Cube SDF using absolute coordinates, accounting for transform scale."""
+        # Transform point to local space (account for position and scale)
+        p_local = point - self.transform.position
+        # Divide by scale to normalize to unit cube, then scale back
+        scale = self.transform.scale
+        p_local = p_local / (scale + 1e-10)  # Prevent division by zero
+        
+        # Now compute SDF in normalized space
+        abs_p = np.abs(p_local)
+        half = self.side_length / 2  # Half-extent in local normalized space
+        q = abs_p - half
+        
+        # Compute SDF
+        sdf = np.linalg.norm(np.maximum(q, 0)) + min(np.max(q), 0)
+        
+        # Scale the result back
+        return sdf * np.min(scale)
 
     def CheckRayIntersection(self, ray: "Ray") -> bool:
         return len(self.GetRayIntersections(ray)) > 0
@@ -558,6 +619,55 @@ class Cube(Shape3D):
 
     def __repr__(self):
         return f"Cube(transform={self.transform}, side_length={self.side_length})"
+
+class Cuboid(Shape3D):
+    def __init__(self, center: np.ndarray, dimensions: Tuple[float, float, float], **kwargs):
+        super().__init__(**kwargs)
+        self.transform.position = np.asarray(center, dtype=float)
+        if any(d <= 0 for d in dimensions):
+            raise ValueError("All dimensions must be > 0")
+        self.dimensions_tuple = tuple(float(d) for d in dimensions)
+
+    def SignedDistance(self, point: np.ndarray) -> float:
+        p = np.abs(point - self.transform.position)
+        q = p - np.array(self.dimensions_tuple) / 2
+        return np.linalg.norm(np.maximum(q, 0)) + min(np.max(q), 0)
+
+    def CheckRayIntersection(self, ray: "Ray") -> bool:
+        return len(self.GetRayIntersections(ray)) > 0
+
+    def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
+        half = np.array(self.dimensions_tuple) / 2
+        bounds_min = self.transform.position - half
+        bounds_max = self.transform.position + half
+        
+        t_min, t_max = 0, float('inf')
+        for i in range(3):
+            if abs(ray.orientation[i]) > 1e-10:
+                t1 = (bounds_min[i] - ray.origin[i]) / ray.orientation[i]
+                t2 = (bounds_max[i] - ray.origin[i]) / ray.orientation[i]
+                t_min = max(t_min, min(t1, t2))
+                t_max = min(t_max, max(t1, t2))
+            elif ray.origin[i] < bounds_min[i] or ray.origin[i] > bounds_max[i]:
+                return []
+        
+        if t_min <= t_max and t_max >= -1e-10:
+            result = []
+            if t_min >= -1e-10:
+                result.append(ray.point_at(t_min))
+            if t_max != t_min and t_max >= -1e-10:
+                result.append(ray.point_at(t_max))
+            return result
+        return []
+
+    def GetNormal(self, point: np.ndarray) -> np.ndarray:
+        p = point - self.transform.position
+        half = np.array(self.dimensions_tuple) / 2
+        abs_p = np.abs(p)
+        dominant = np.argmax(abs_p / half)
+        normal = np.zeros(3)
+        normal[dominant] = np.sign(p[dominant])
+        return normal
 
 class Prism(Shape3D):
     def __init__(self, base_polygon: Polygon, height: float, **kwargs):
@@ -698,12 +808,10 @@ class Capsule(Shape3D):
 # VObject & Factories
 @dataclass
 class VObject:
-    """Visual object combining shape, transform, material, and name."""
-
+    """Visual object combining shape, transform, material etc."""
     shape: Shape
     transform: Optional["Transform"] = None
     material: Optional["Material"] = None
-    texture: Optional[str] = None
     name: str = "VObject"
 
     def __post_init__(self):

@@ -4,39 +4,35 @@ from typing import Optional, Callable, List
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from src.Algorithims import Algorithm
-from src.Postprocessing import PostProcessingPipeline
-from src.Raytracing import Raytracer
-from src.Camera import VCamera, CameraType
-from src.Scene import Scene
-from src.Geometry import Sphere, Cube, VObject
-from src.Luminance import LightSource, Color, ColorGradient, Material
 from src.PrimaryStructures import Transform
+from src.Geometry import Sphere, Cube, VObject
+from src.Algorithims import Algorithm
+from src.Raytracing import Raytracer
 from src.Sampling import Sampler, RandomSampler
+from src.Postprocessing import PostProcessingPipeline
+from src.Scene import Scene
+from src.Camera import VCamera, CameraType
+from src.Luminance import LightSource, Color, ColorGradient, Material
 
-def render_process(scene: Scene, algorithim: Algorithm, sampler: Sampler) -> List[Color]:
+def render_process(scene: Scene, algorithim: Algorithm) -> np.ndarray:
     """
-    Renders the scene and returns a NumPy float32 array (H, W, 3) 
-    ready for post-processing.
+    Renders the scene and returns a NumPy float32 array (H, W, 3) ready for post-processing.
+    Uses the sampler to generate subpixel samples for each pixel.
+    If region is specified, only renders that region: (x0, y0, x1, y1).
     """
-    # 1. Get raw list of Color objects
-    pixel_colors: List[Color] = algorithim.render(scene)
-    
     W, H = scene.camera.width, scene.camera.height
-    
-    # 2. Convert to NumPy Float Array (for efficient Post-Processing)
-    # We initialize with float32 to handle HDR values (> 1.0)
     raw_buffer = np.zeros((H, W, 3), dtype=np.float32)
     
-    for idx, color in enumerate(pixel_colors):
-        raw_y = idx // W
-        x = idx % W
-        y = raw_y # (y = (H - 1) - raw_y) to flip the image
-        
-        r, g, b = color.red, color.green, color.blue
-        
-        raw_buffer[y, x] = [r, g, b]
-        
+    # Render the scene using the provided algorithm
+    pixel_colors: List[Color] = algorithim.render(scene)
+    # Convert list of Colors to NumPy array
+    for y in range(H):
+        for x in range(W):
+            idx = y * W + x
+            col = pixel_colors[idx]
+            raw_buffer[y, x, 0] = col.r
+            raw_buffer[y, x, 1] = col.g
+            raw_buffer[y, x, 2] = col.b
     return raw_buffer
 
 def save_image(img_data: np.ndarray, out_path="render_out.png"):
@@ -186,7 +182,7 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     scene.add_object(VObject(shape=box_shape, name="StudioBox"))
 
     # Lights
-    key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#EEE0BA"), intensity=150.0, radius=1.5, name="StudioKey")
+    key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#EEE0BA"), intensity=50.0, radius=1.5, name="StudioKey")
     key.radius = 0.3  # area light radius (for soft shadows)
     scene.add_light(key)
     rim = LightSource(position=np.array([-3.0, 2.0, 1.0]), color=Color.from_hex("#DC97C5"), intensity=20.0, radius=0.75, name="StudioRim")
@@ -283,6 +279,9 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
         name="CeilingLight"
     )
 
+    # 6. Point camera towards the room center
+    cam.transform.look_at(np.array([0.0, 2.5, 0.0]))
+
     # Assemble Scene
     scene = Scene(name="rgb_cornell_box", camera=cam, background_color=Color(0,0,0)) # Pitch black void outside
     
@@ -299,17 +298,18 @@ if __name__ == "__main__":
     os.makedirs(OUT_DIR, exist_ok=True)
 
     all_scenes = [
-        get_minimal_scene(100, 100),
-        get_gradient_scene(100, 100),
-        get_emissive_scene(128, 128),
-        get_lit_studio_scene(144, 108),
-        get_rgb_room_with_objects_scene(108, 144),
+        get_minimal_scene(50, 50),
+        get_gradient_scene(80, 60),
+        get_emissive_scene(64, 64),
+        get_lit_studio_scene(80, 60),
+        get_rgb_room_with_objects_scene(80, 60),
     ]
 
-    rpp = 1
-    spp = 1
-    raytracer = Raytracer(rays_per_pixel=rpp)
-    sampler = RandomSampler(samples_per_pixel=spp)
+    generator = None
+    intersection = None
+    interactor = None
+    shading = None
+    raytracer = Raytracer(ray_generator=generator, intersection_strategy=intersection, interaction_strategy=interactor, shading_strategy=shading)
 
     for scene in all_scenes:
         sanitized_name = scene.name.replace(" ", "_").lower()
@@ -318,7 +318,7 @@ if __name__ == "__main__":
         
         try:
             # 1. Render to Float Array
-            raw_img_data = render_process(scene, raytracer, sampler)
+            raw_img_data = render_process(scene, raytracer)
             # 2. Post-Process and Save
             save_image(raw_img_data, out_path=out_path)
             

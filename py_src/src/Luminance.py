@@ -318,7 +318,15 @@ class Material:
         self.is_transparent = False
         self.can_refract = False
 
-    def apply_material_color(self, light_sources: List[LightSource], hit_point: np.ndarray, normal: np.ndarray, view_dir: np.ndarray, ambient_color: Color, visibility_function: Callable) -> Color:
+    def apply_material_color(
+            self,
+            light_sources: List[LightSource],
+            hit_point: np.ndarray,
+            normal: np.ndarray,
+            view_dir: np.ndarray,
+            ambient_color: Color,
+            visibility_function: Callable
+        ) -> Color:
         """
         Calculates the full color of the material by iterating over all lights in the scene.
         """
@@ -342,7 +350,6 @@ class Material:
             # 2. Visibility / Shadows (Callback to the renderer/strategy)
             # We pass the light info back to the strategy's visibility function
             visibility = visibility_function(light, light_dir, light_dist)
-            
             if visibility <= 0.0: continue
 
             # 3. PBR Components
@@ -360,13 +367,19 @@ class Material:
         
         return final_color.clamp()
 
-    def calculate_optical_redirection(self, incoming_ray: Ray, surface_normal: np.ndarray, 
-                                  incoming_color: Color, hit_point: np.ndarray, bias: float = 1e-4) -> tuple[Ray, Color]:
+    def calculate_optical_redirection(
+            self,
+            incoming_ray: Ray,
+            surface_normal: np.ndarray,
+            incoming_color: Color,
+            new_origin: np.ndarray,
+            bias: float = 1e-4
+        ) -> tuple[Ray, Color]:
         unit_dir = incoming_ray.orientation / np.linalg.norm(incoming_ray.orientation)
         unit_normal = surface_normal / np.linalg.norm(surface_normal)
 
         final_dir = reflect_ray(unit_normal, incoming_ray.orientation)
-        final_origin = hit_point + (unit_normal * bias)
+        final_origin = new_origin + (unit_normal * bias)
 
         if self.can_refract and self.is_transparent:
             ior_air = 1.0
@@ -384,12 +397,12 @@ class Material:
                 normal = -unit_normal # Flip normal to point into the new medium
             
             try:
-                final_dir = refract_ray(normal, hit_point, incoming_ray.direction, n1, n2)
-                final_origin = hit_point - (normal * bias)
+                final_dir = refract_ray(normal, new_origin, incoming_ray.direction, n1, n2)
+                final_origin = new_origin - (normal * bias)
             except ValueError:
                 pass
 
-        attenuation = LightSource.attenuate_color(self.base_color + incoming_color, LightSource.attenuate_sqr_distance(np.linalg.norm(incoming_ray.origin - hit_point)))
+        attenuation = LightSource.attenuate_color(self.base_color + incoming_color, LightSource.attenuate_sqr_distance(np.linalg.norm(incoming_ray.origin - new_origin)))
         attenuation += self.get_emissive_component()
 
         # If it's a metal, the attenuation matches the reflection color strongly

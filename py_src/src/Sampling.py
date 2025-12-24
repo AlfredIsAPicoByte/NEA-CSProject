@@ -23,8 +23,28 @@ class SampleSettings:
 class Sample:
     u: float                      # horizontal sample position in [0,1)
     v: float                      # vertical sample position in [0,1)
+    w: float = 1.0                # sample weight (for adaptive sampling)
+    width: int = 1
+    height: int = 1
+
+    def __init__(self, u: float, v: float, w: float = 1.0, width: int = 1, height: int = 1):
+        self.u = u
+        self.v = v
+        self.w = w
+        self.width = width
+        self.height = height
     
-    pixels_covered: int = 1        # number of pixels this sample covers (for adaptive sampling)
+    def get_sample_index(self, image_width: int, image_height: int) -> int:
+        """Convert normalized (u,v) to a linear sample index."""
+        x = min(int(self.u * image_width), image_width - 1)
+        y = min(int(self.v * image_height), image_height - 1)
+        return y * image_width + x
+
+    def get_pixel_coords(self, image_width: int, image_height: int) -> Tuple[int, int]:
+        """Convert normalized (u,v) to pixel coordinates."""
+        x = min(int(self.u * image_width), image_width - 1)
+        y = min(int(self.v * image_height), image_height - 1)
+        return (x, y)
 
 class Sampler(ABC):
     """
@@ -52,10 +72,7 @@ class Sampler(ABC):
     def clone(self, seed: Optional[int] = None) -> "Sampler":
         ...
 
-    def set_samples_per_pixel(self, spp: int) -> None:
-        self.samples_per_pixel = spp
-
-    def get_samples_per_pixel(self, x: int, y:int) -> List[Sample]:
+    def get_samples_for_pixel(self, x: int, y:int) -> List[Sample]:
         """Utility to get all samples for a pixel as Sample(u,v) list."""
         self.start_pixel(x, y)
         out: List[Sample] = []
@@ -64,9 +81,40 @@ class Sampler(ABC):
             out.append(Sample(u, v))
         return out
 
-    # Alias expected by other parts of the code (renderer checks this name)
-    def get_samples_for_pixel(self, x: int, y: int) -> List[Sample]:
-        return self.get_samples_per_pixel(x, y)
+    def get_samples_for_region(self, region: Tuple[int, int, int, int]) -> List[Sample]:
+        """Utility to get all samples for a region (x0,y0,x1,y1) as Sample(u,v) list."""
+        x0, y0, x1, y1 = region
+        out: List[Sample] = []
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                self.start_pixel(x, y)
+                for _ in range(self.samples_per_pixel):
+                    u, v = self.next_2d()
+                    out.append(Sample(u, v))
+        return out
+
+    def get_sample_by_index(self, index: int, image_width: int, image_height: int) -> Sample:
+        """Utility to get a single sample by linear index over the image."""
+        total_pixels = image_width * image_height
+        pixel_index = index // self.samples_per_pixel
+        sample_index = index % self.samples_per_pixel
+        x = pixel_index % image_width
+        y = pixel_index // image_width
+        self.start_pixel(x, y)
+        for _ in range(sample_index + 1):
+            u, v = self.next_2d()
+        return Sample(u, v)
+
+    def sample_pixel(self, x: int, y: int, sample_idx: int, width: int, height: int) -> tuple[float, float]:
+        """
+        Returns a subpixel offset (dx, dy) in [0, 1) for the given pixel and sample index.
+        Default implementation uses get_samples_for_pixel.
+        """
+        samples = self.get_samples_for_pixel(x, y)
+        if sample_idx < len(samples):
+            return (samples[sample_idx].u, samples[sample_idx].v)
+        # fallback: random
+        return (random.random(), random.random())
 
 class RandomSampler(Sampler):
     """Independent RNG sampler, deterministic with base seed + pixel coords."""
@@ -98,6 +146,12 @@ class RandomSampler(Sampler):
 
     def clone(self, seed: Optional[int] = None) -> "RandomSampler":
         return RandomSampler(self.samples_per_pixel, seed if seed is not None else self._base_seed)
+
+    def sample_pixel(self, x: int, y: int, sample_idx: int, width: int, height: int) -> tuple[float, float]:
+        self.start_pixel(x, y)
+        for _ in range(sample_idx + 1):
+            dx, dy = self.next_2d()
+        return dx, dy
 
 class StratifiedSampler(Sampler):
     """Stratified 2D sampler (square grid) with per-cell jitter."""
@@ -141,6 +195,17 @@ class StratifiedSampler(Sampler):
     def clone(self, seed: Optional[int] = None) -> "StratifiedSampler":
         return StratifiedSampler(self.samples_per_pixel, seed if seed is not None else self._base_seed)
 
+    def sample_pixel(self, x: int, y: int, sample_idx: int, width: int, height: int) -> tuple[float, float]:
+        self.start_pixel(x, y)
+        n = max(1, int(math.ceil(math.sqrt(self.samples_per_pixel))))
+        i = sample_idx % n
+        j = sample_idx // n
+        if j >= n:
+            return (self._rng.random(), self._rng.random())
+        dx = (i + self._rng.random()) / n
+        dy = (j + self._rng.random()) / n
+        return dx, dy
+
 # Simple quasi-random (Halton) generator for demonstration
 class HaltonSampler(Sampler):
     def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
@@ -176,6 +241,12 @@ class HaltonSampler(Sampler):
     def clone(self, seed: Optional[int] = None) -> "HaltonSampler":
         return HaltonSampler(self.samples_per_pixel, seed if seed is not None else self._base_seed)
 
+    def sample_pixel(self, x: int, y: int, sample_idx: int, width: int, height: int) -> tuple[float, float]:
+        # Use sample_idx+1 to avoid zero index in Halton
+        u = self._halton(sample_idx + 1, 2)
+        v = self._halton(sample_idx + 1, 3)
+        return u, v
+
 class AdaptiveSampler(Sampler):
     """Placeholder for an adaptive sampler implementation."""
     def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
@@ -193,6 +264,9 @@ class AdaptiveSampler(Sampler):
 
     def clone(self, seed: Optional[int] = None) -> "AdaptiveSampler":
         return AdaptiveSampler(self.samples_per_pixel, seed)
+
+    def sample_pixel(self, x: int, y: int, sample_idx: int, width: int, height: int) -> tuple[float, float]:
+        return (random.random(), random.random())
 
 # Registry and factory
 _SAMPLER_REGISTRY: dict[str, type[Sampler]] = {

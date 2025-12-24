@@ -1,9 +1,14 @@
 from main import save_image
 import numpy as np, os
-arr = np.zeros((10,10,3), dtype=np.float32)
-for y in range(10):
-    for x in range(10):
-        arr[y,x]=[x/9.0,y/9.0,(x+y)/18.0]
-os.makedirs("benchmark/simple_scene", exist_ok=True)
-save_image(arr, "benchmark/simple_scene/test_out.png")
-print("Wrote benchmark/simple_scene/test_out.png")
+
+if __name__ == "__main__":
+    width, height = 256, 256
+    # Create a simple gradient image for testing
+    image = np.zeros((height, width, 3), dtype=np.uint8)
+    for y in range(height):
+        for x in range(width):
+            image[y, x] = [x % 256, y % 256, (x + y) % 256]
+    
+    output_path = os.path.join(os.path.dirname(__file__), "test_output.png")
+    save_image(image, output_path)
+    print(f"Test image saved to {output_path}")

@@ -7,22 +7,9 @@ from Luminance import Color
 from Scene import Scene
 
 @dataclass
-class ParameterStats:
-    image_width: int = 800
-    image_height: int = 600
-    output_file: str = "render.png"
-    max_bounces: int = 5
-    max_distance: float = 1000.0
-    max_steps: int = 1000
-    epsilon: float = 0.005 # Small offset to avoid self-intersection
-
-    rays_traced: int = 0
-    hits: int = 0
-    misses: int = 0
-    bounces: int = 0
-    max_depth_reached: int = 0
-    time_seconds: float = 0.0
-    memory_usage: float = 0.0
+class RenderStats:
+    time_taken_seconds: float = 0.0
+    memory_usage: float = 0.0  # in MB
 
 class Algorithm(ABC):
     """
@@ -33,13 +20,15 @@ class Algorithm(ABC):
         for k, v in kwargs.items():
             if hasattr(self, k):
                 setattr(self, k, v)
-        self.stats = ParameterStats()
+                
+        self.stats = RenderStats()
 
     @abstractmethod
     def render(
             self,
             scene: Scene,
             seed: Optional[int] = None,
+            region: Optional[Tuple[int,int,int,int]] = None,
             tile_size: Optional[Tuple[int,int]] = None
         ) -> List[Color]:
         """
@@ -48,7 +37,7 @@ class Algorithm(ABC):
         raise NotImplementedError
 
     def reset_stats(self) -> None:
-        self.stats = ParameterStats()
+        self.stats = RenderStats()
 
 # Lightweight registry/factory for algorithm implementations
 _ALGO_REGISTRY: Dict[str, Type[Algorithm]] = { }

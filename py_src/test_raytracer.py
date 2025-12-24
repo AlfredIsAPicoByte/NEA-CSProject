@@ -17,7 +17,6 @@ from src.Scene import Scene
 from src.Raytracing import BasicLambertShading, Raytracer
 
 # --- 2. THE TESTS ---
-
 def test_ray_structure():
     """Test basic Ray structure functionality."""
     origin = np.zeros(3)
