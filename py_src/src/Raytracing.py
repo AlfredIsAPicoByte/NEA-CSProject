@@ -1,7 +1,7 @@
 import numpy as np
 import random
 import math
-from typing import Any, Optional, List, Tuple, Callable
+from typing import Optional, List, Tuple, Callable
 from abc import ABC, abstractmethod
 
 from PrimaryStructures import Ray
@@ -80,16 +80,18 @@ class IntersectionStrategy(ABC):
         ...
 
 class InteractionStrategy(ABC):
-    def __init__(self):
-        ...
+    def __init__(
+            self,
+            bias: float = 1e-4
+        ):
+        self.bias = bias
 
     @abstractmethod
     def interact(
         self,
         ray: TracingRay,
         hit_object: VObject,
-        hit_point: np.ndarray,
-        bias: float = 1e-4
+        hit_point: np.ndarray
     ) -> Optional[TracingRay]:
         ...
 
@@ -119,6 +121,7 @@ class ShadingStrategy(ABC):
         hit_distance: Optional[float],
         current_depth: int,
         trace_function: Callable,
+        interaction_function: Callable,
     ) -> Color:
         ...
 
@@ -268,12 +271,12 @@ class RayMarchingIntersection(IntersectionStrategy):
 
 # Interaction implementations
 class SimpleInteraction(InteractionStrategy):
-    def interact(self, ray: TracingRay, hit_object: VObject, hit_point: np.ndarray, bias: float = 1e-4) -> Optional[TracingRay]:
+    def interact(self, ray: TracingRay, hit_object: VObject, hit_point: np.ndarray) -> Optional[TracingRay]:
         # Simple interaction that just returns None (no bounce)
         return None
 
 class OpticalMaterialInteraction(InteractionStrategy):
-    def interact(self, ray: TracingRay, hit_object: VObject, hit_point: np.ndarray, bias: float = 1e-4) -> Optional[TracingRay]:
+    def interact(self, ray: TracingRay, hit_object: VObject, hit_point: np.ndarray) -> Optional[TracingRay]:
         # 1. Resolve Material
         material = getattr(hit_object, "material", None) or getattr(hit_object.shape, "material", None)
         
@@ -288,41 +291,61 @@ class OpticalMaterialInteraction(InteractionStrategy):
             return None
 
         # 3. Calculate Origin Offset (Prevent Shadow Acne)
-        # We push the new ray slightly off the surface.
-        # Note: Ideally, the Material determines if we push OUT (Reflection) or IN (Refraction).
-        # For now, we assume standard reflection bias (push OUT along normal).
-        new_origin = hit_point + (normal * bias)
+        new_origin = hit_point + (normal * self.bias)
 
-        # 4. Invoke the Material's Logic
-        # We pass the current ray's 'throughput' as the 'incoming_color'
+        # 4. Invoke the Material's Logic (with robust handling)
         current_throughput = getattr(ray, "throughput", Color(1.0, 1.0, 1.0))
-        
-        new_ray_geom, current_throughput = material.calculate_optical_redirection(
-            incoming_ray=ray,
-            surface_normal=normal,
-            incoming_color=current_throughput,
-            new_origin=new_origin
-        )
 
-        # 5. Convert to TracingRay and Update Throughput
-        # We must convert the generic 'Ray' returned by material into a 'TracingRay'
-        # and attach the NEW throughput to it.
+        # Attempt to let the material produce the redirected ray & attenuation.
+        # If the material implementation raises or returns a malformed orientation,
+        # we fall back to a safe perfect-reflection ray.
+        try:
+            new_ray_geom, current_throughput = material.calculate_optical_redirection(
+                incoming_ray=ray,
+                surface_normal=normal,
+                incoming_color=current_throughput,
+                new_origin=new_origin
+            )
+
+            # Ensure orientation is a 1D numpy vector of length 3
+            try:
+                ori = np.asarray(new_ray_geom.orientation, dtype=float).reshape(-1)
+                if ori.ndim != 1 or ori.size != 3:
+                    raise ValueError("Malformed orientation")
+                # normalize
+                ori = ori / np.linalg.norm(ori)
+                orientation_vec = ori
+                origin_vec = np.asarray(new_ray_geom.origin, dtype=float).reshape(-1)
+            except Exception:
+                # malformed orientation/origin from material -> fallback to reflection
+                incoming = np.asarray(ray.orientation, dtype=float).reshape(-1)
+                incoming = incoming / np.linalg.norm(incoming)
+                reflect_dir = incoming - 2.0 * np.dot(incoming, normal) * normal
+                orientation_vec = reflect_dir / np.linalg.norm(reflect_dir)
+                origin_vec = new_origin
+
+        except Exception:
+            # Material call failed -> fallback to perfect reflection
+            incoming = np.asarray(ray.orientation, dtype=float).reshape(-1)
+            incoming = incoming / np.linalg.norm(incoming)
+            reflect_dir = incoming - 2.0 * np.dot(incoming, normal) * normal
+            orientation_vec = reflect_dir / np.linalg.norm(reflect_dir)
+            origin_vec = new_origin
+
+        # 5. Convert/Return TracingRay and Update Throughput
         next_ray = TracingRay(
-            origin=new_ray_geom.origin,
-            orientation=new_ray_geom.orientation,
+            origin=origin_vec,
+            orientation=orientation_vec,
             name=f"{ray.name}_bounce",
             throughput=current_throughput,
-            depth=getattr(ray, "depth", 0) + 1 # Increment depth if you track it
+            depth=getattr(ray, "depth", 0) + 1
         )
 
-        # 6. Return the new ray
-        # Since your current material logic chooses ONE path (Reflect OR Refract),
-        # we return it as the first element. The second is None.
         return next_ray
 
 # Shading implementations
 class FlatShading(ShadingStrategy):
-    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable) -> Color:
+    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable, interaction_function: Callable) -> Color:
         # Simply return the base color of the material without any lighting
         material: Optional[Material] = getattr(hit_object, "material", None) or getattr(hit_object.shape, "material", None) if hasattr(hit_object, "shape") else None
         
@@ -333,7 +356,7 @@ class FlatShading(ShadingStrategy):
         return base_color
     
 class SimpleShading(ShadingStrategy):
-    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable) -> Color:
+    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable, interaction_function: Callable) -> Color:
         point = ray.point_at(distance)
         
         # Safely get normal
@@ -355,7 +378,7 @@ class SimpleShading(ShadingStrategy):
         return direct_light
 
 class BasicLambertShading(ShadingStrategy):
-    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable) -> Color:
+    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable, interaction_function: Callable) -> Color:
         point = ray.point_at(distance)
         
         # Safely get normal
@@ -425,7 +448,7 @@ class RecursiveLambertShading(ShadingStrategy):
 
         return visibility
 
-    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable) -> Color:
+    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable, interaction_function: Callable) -> Color:
         """
         Calculates the color of a point on an object, including direct lighting and recursive reflections.
         """
@@ -475,15 +498,7 @@ class RecursiveLambertShading(ShadingStrategy):
                     # We use a white probe to get the material's pure attenuation color
                     probe_color = Color(1.0, 1.0, 1.0)
                     
-                    # Use 'point' as the hit location. 
-                    # Note: We rely on calculate_optical_redirection to handle the bias (Acne prevention)
-                    # If your material function doesn't handle bias, add it here: point + normal * 1e-4
-                    bounce_ray, attenuation = material.calculate_optical_redirection(
-                        incoming_ray=ray,
-                        surface_normal=normal,
-                        incoming_color=probe_color,
-                        new_origin=point 
-                    )
+                    bounce_ray = interaction_function(ray, hit_object, point)
 
                     # B. Recursive Trace
                     # This calls 'self._trace_ray' which you passed in
@@ -491,7 +506,7 @@ class RecursiveLambertShading(ShadingStrategy):
 
                     # C. Combine
                     # Result = Light from world * Material Attenuation
-                    indirect_light = incoming_light * attenuation
+                    indirect_light = incoming_light * getattr(bounce_ray, "throughput", probe_color)
                 except Exception:
                     # If optical redirection fails, skip indirect lighting
                     indirect_light = Color(0.0, 0.0, 0.0)
@@ -534,16 +549,17 @@ class Raytracer(Algorithm):
         if depth < 0:
             return Color(0.0, 0.0, 0.0)
 
+        self.stats.rays_traced += 1
+
         # 2. Intersect: Find the closest object
         hit_obj, dist = self.intersector.find_hit(scene, ray)
 
         # 3. Hit: If we hit something, ask the shader to calculate color
         if hit_obj:
-            # CRITICAL: We pass 'self._trace_ray' as the 'trace_function' argument.
-            # This allows the shade() method to call THIS function back for reflections.
-            # The interaction strategy should be integrated into the shader for proper compositing.
-            return self.shader.shade(scene, ray, hit_obj, dist, depth, self._trace_ray)
-        
+            self.stats.hits += 1
+
+            return self.shader.shade(scene, ray, hit_obj, dist, depth, self._trace_ray, self.interactor.interact)
+
         # 4. Miss: If we hit nothing, return background color
         try:
             # Ensure direction is a numpy array for your background logic
