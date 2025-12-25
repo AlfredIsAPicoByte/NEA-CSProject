@@ -349,7 +349,11 @@ class Material:
 
             # 2. Visibility / Shadows (Callback to the renderer/strategy)
             # We pass the light info back to the strategy's visibility function
-            visibility = visibility_function(light, light_dir, light_dist)
+            if self.is_transparent:
+                visibility = 1.0  # Fully visible through transparent materials
+            else:
+                visibility = visibility_function(light, light_dir, light_dist)
+            
             if visibility <= 0.0: continue
 
             # 3. PBR Components
@@ -421,7 +425,7 @@ class Material:
         """Get the diffuse component of the material response."""
         diffuse = self.base_color * light_intensity * max(0, np.dot(surface_normal, light_dir))
         return diffuse
-    
+
     def get_specular_component(self, surface_normal: np.ndarray, light_dir: np.ndarray, light_intensity: float, view_dir: np.ndarray) -> Color:
         """Get the specular component of the material response using the Micro-Facet BRDF."""
         
@@ -499,6 +503,8 @@ class Material:
             f"Material(color={self.base_color}, "
             f"roughness={self.roughness:.2f}, glossiness={self.glossiness:.2f}, emissive={self.emissive_color}, metallic={self.metallic:.2f})"
         )
+
+
 """
 Luminance module: Provides classes for color representation, light rays, materials, and light sources.
 

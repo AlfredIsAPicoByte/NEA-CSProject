@@ -292,6 +292,9 @@ class OpticalMaterialInteraction(InteractionStrategy):
 
         # 3. Calculate Origin Offset (Prevent Shadow Acne)
         new_origin = hit_point + (normal * self.bias)
+        distance = np.linalg.norm(new_origin - ray.origin)
+        if distance < self.bias:
+            new_origin = ray.point_at(distance + self.bias)
 
         # 4. Invoke the Material's Logic (with robust handling)
         current_throughput = getattr(ray, "throughput", Color(1.0, 1.0, 1.0))

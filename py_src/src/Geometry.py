@@ -57,6 +57,16 @@ class GeometryMixin(ABC):
         
         return current
 
+class TransformationMixin(ABC):
+    def Translate(self, offset: np.ndarray) -> None:
+        raise NotImplementedError
+    
+    def Rotate(self, angle: float, axis: np.ndarray) -> None:
+        raise NotImplementedError
+
+    def Enlarge(self, factor: np.ndarray) -> None:
+        raise NotImplementedError
+
 class RayIntersectionMixin(ABC):
     """Mixin for ray-shape intersection tests."""
     
@@ -124,8 +134,38 @@ class Shape(ABC):
     def __repr__(self):
         return f"{self.__class__.__name__}(name={self.name})"
 
-# 2D Shapes
+# --- Transform helpers -------------------------------------------------
+def _world_to_local_point(point: np.ndarray, transform: Transform) -> np.ndarray:
+    M = transform.model_matrix
+    inv = np.linalg.inv(M)
+    p_h = np.asarray([point[0], point[1], point[2], 1.0], dtype=float)
+    local = inv @ p_h
+    return local[:3]
 
+def _local_to_world_point(point: np.ndarray, transform: Transform) -> np.ndarray:
+    M = transform.model_matrix
+    p_h = np.asarray([point[0], point[1], point[2], 1.0], dtype=float)
+    world = M @ p_h
+    return world[:3]
+
+def _world_to_local_direction(direction: np.ndarray, transform: Transform) -> np.ndarray:
+    lin = transform.model_matrix[:3, :3]
+    inv_lin = np.linalg.inv(lin)
+    return inv_lin @ direction
+
+def _ray_world_to_local(ray: Ray, transform: Transform) -> Ray:
+    origin_local = _world_to_local_point(ray.origin, transform)
+    dir_local = _world_to_local_direction(ray.orientation, transform)
+    return Ray(origin_local, dir_local, name=ray.name)
+
+def _normal_local_to_world(normal_local: np.ndarray, transform: Transform) -> np.ndarray:
+    lin = transform.model_matrix[:3, :3]
+    world_n = np.linalg.inv(lin).T @ normal_local
+    return world_n / (np.linalg.norm(world_n) + 1e-12)
+
+# -----------------------------------------------------------------------
+
+# 2D Shapes
 class Shape2D(Shape, GeometryMixin, RayIntersectionMixin, SurfacePropertiesMixin):
     """Base for 2D shapes."""
     
@@ -432,8 +472,55 @@ class Plane(Shape2D):
     def __repr__(self):
         return f"Plane(point={self.point}, normal={self.normal})"
 
+class ClippedPlane(Plane):
+    def __init__(self, point: np.ndarray, normal: np.ndarray, bounds: List[np.ndarray], **kwargs):
+        super().__init__(point, normal, **kwargs)
+        self.bounds = [np.asarray(b, dtype=float) for b in bounds]
+    
+    def CheckRayIntersection(self, ray: "Ray") -> bool:
+        intersections = self.GetRayIntersections(ray)
+        return len(intersections) > 0
+    
+    def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
+        intersections = super().GetRayIntersections(ray)
+        valid_points = []
+        for pt in intersections:
+            if self._point_in_bounds(pt):
+                valid_points.append(pt)
+        return valid_points
+    
+    def _point_in_bounds(self, point: np.ndarray) -> bool:
+        # Simple bounding box check (could be improved for arbitrary polygons)
+        xs = [b[0] for b in self.bounds]
+        ys = [b[1] for b in self.bounds]
+        return (min(xs) <= point[0] <= max(xs)) and (min(ys) <= point[1] <= max(ys))
+
+    @property
+    def area(self) -> float:
+        # Approximate area via polygon area formula
+        area = 0
+        n = len(self.bounds)
+        for i in range(n):
+            v1 = self.bounds[i]
+            v2 = self.bounds[(i + 1) % n]
+            area += v1[0] * v2[1] - v2[0] * v1[1]
+        return abs(area) / 2
+
+    @property
+    def perimeter(self) -> float:
+        perim = 0
+        n = len(self.bounds)
+        for i in range(n):
+            v1 = self.bounds[i]
+            v2 = self.bounds[(i + 1) % n]
+            perim += np.linalg.norm(v2 - v1)
+        return perim
+
+    def __repr__(self):
+        return f"ClippedPlane(point={self.point}, normal={self.normal}, bounds={len(self.bounds)} vertices)"
+
 # 3D Shapes
-class Shape3D(Shape, GeometryMixin, RayIntersectionMixin, SurfacePropertiesMixin):
+class Shape3D(Shape, GeometryMixin, RayIntersectionMixin, SurfacePropertiesMixin, TransformationMixin):
     """Base for 3D shapes."""
     
     @property
@@ -468,11 +555,17 @@ class Sphere(Shape3D):
         self.transform.position = self.transform.position
 
     def SignedDistance(self, point: np.ndarray) -> float:
-        return np.linalg.norm(point - self.transform.position) - self.radius
+        # Transform point into local/object space (handles position, rotation and scale)
+        p_local = _world_to_local_point(point, self.transform)
+        sdf_local = np.linalg.norm(p_local) - self.radius
+        # Approximate world-space distance by scaling with the smallest global scale
+        scale = self.transform.get_global_scale()
+        return sdf_local * float(np.min(scale))
 
     def CheckRayIntersection(self, ray: "Ray") -> bool:
-        d = ray.orientation
-        s = ray.origin - self.transform.position
+        local_ray = _ray_world_to_local(ray, self.transform)
+        d = local_ray.orientation
+        s = local_ray.origin
         a = np.dot(d, d)
         b = 2 * np.dot(d, s)
         c = np.dot(s, s) - self.radius ** 2
@@ -481,36 +574,53 @@ class Sphere(Shape3D):
     def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
         if not self.CheckRayIntersection(ray):
             return []
-        
-        d = ray.orientation
-        s = ray.origin - self.transform.position
+
+        local_ray = _ray_world_to_local(ray, self.transform)
+        d = local_ray.orientation
+        s = local_ray.origin
         a = np.dot(d, d)
         b = 2 * np.dot(d, s)
         c = np.dot(s, s) - self.radius ** 2
         discriminant = b ** 2 - 4 * a * c
-        
+
         if abs(discriminant) < 1e-10:
             t = -b / (2 * a)
-            return [ray.point_at(t)] if t >= -1e-10 else []
-        
+            if t < -1e-10:
+                return []
+            local_pt = local_ray.point_at(t)
+            return [_local_to_world_point(local_pt, self.transform)]
+
         sqrt_disc = np.sqrt(discriminant)
         t1 = (-b - sqrt_disc) / (2 * a)
         t2 = (-b + sqrt_disc) / (2 * a)
         ts = [t for t in [t1, t2] if t >= -1e-10]
-        return [ray.point_at(t) for t in sorted(ts)]
+        world_pts = []
+        for t in sorted(ts):
+            local_pt = local_ray.point_at(t)
+            world_pts.append(_local_to_world_point(local_pt, self.transform))
+        return world_pts
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
-        vec = point - self.transform.position
-        return vec / (np.linalg.norm(vec) + 1e-12)
+        # Compute normal in local space then transform to world space correctly
+        p_local = _world_to_local_point(point, self.transform)
+        local_n = p_local / (np.linalg.norm(p_local) + 1e-12)
+        return _normal_local_to_world(local_n, self.transform)
 
     def GetTangent(self, point: np.ndarray) -> np.ndarray:
-        normal = self.GetNormal(point)
-        if abs(normal[0]) < 0.9:
-            arbitrary = np.array([1.0, 0.0, 0.0])
+        # Compute tangent in local space and transform it to world
+        p_local = _world_to_local_point(point, self.transform)
+        local_n = p_local / (np.linalg.norm(p_local) + 1e-12)
+        # pick local arbitrary axis
+        if abs(local_n[0]) < 0.9:
+            arb = np.array([1.0, 0.0, 0.0])
         else:
-            arbitrary = np.array([0.0, 1.0, 0.0])
-        tangent = np.cross(normal, arbitrary)
-        return tangent / (np.linalg.norm(tangent) + 1e-12)
+            arb = np.array([0.0, 1.0, 0.0])
+        local_t = np.cross(local_n, arb)
+        local_t = local_t / (np.linalg.norm(local_t) + 1e-12)
+        # convert tangent direction to world (linear part)
+        lin = self.transform.model_matrix[:3, :3]
+        world_t = lin @ local_t
+        return world_t / (np.linalg.norm(world_t) + 1e-12)
 
     @property
     def volume(self) -> float:
@@ -529,7 +639,8 @@ class Sphere(Shape3D):
             theta = 2 * np.pi * i / phi
             y = 1 - (i / (resolution - 1)) * 2
             r = np.sqrt(max(1 - y * y, 0))
-            points.append(self.transform.position + self.radius * np.array([np.cos(theta) * r, y, np.sin(theta) * r]))
+            local_pt = self.radius * np.array([np.cos(theta) * r, y, np.sin(theta) * r])
+            points.append(_local_to_world_point(local_pt, self.transform))
         return points
 
     def __repr__(self):
@@ -544,61 +655,53 @@ class Cube(Shape3D):
         self.side_length = float(side_length)
 
     def SignedDistance(self, point: np.ndarray) -> float:
-        """Cube SDF using absolute coordinates, accounting for transform scale."""
-        # Transform point to local space (account for position and scale)
-        p_local = point - self.transform.position
-        # Divide by scale to normalize to unit cube, then scale back
-        scale = self.transform.scale
-        p_local = p_local / (scale + 1e-10)  # Prevent division by zero
-        
-        # Now compute SDF in normalized space
+        # Work in local/object space for correct handling of rotation & scale
+        p_local = _world_to_local_point(point, self.transform)
         abs_p = np.abs(p_local)
-        half = self.side_length / 2  # Half-extent in local normalized space
+        half = self.side_length / 2
         q = abs_p - half
-        
-        # Compute SDF
-        sdf = np.linalg.norm(np.maximum(q, 0)) + min(np.max(q), 0)
-        
-        # Scale the result back
-        return sdf * np.min(scale)
+        sdf_local = np.linalg.norm(np.maximum(q, 0)) + min(np.max(q), 0)
+        scale = self.transform.get_global_scale()
+        return sdf_local * float(np.min(scale))
 
     def CheckRayIntersection(self, ray: "Ray") -> bool:
         return len(self.GetRayIntersections(ray)) > 0
     
     def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
-        """AABB ray intersection."""
+        # Transform ray to local/object space and intersect with axis-aligned cube centered at origin
+        local_ray = _ray_world_to_local(ray, self.transform)
         half = self.side_length / 2
-        bounds_min = self.transform.position - half
-        bounds_max = self.transform.position + half
-        
-        t_min, t_max = 0, float('inf')
+        bounds_min = -np.ones(3) * half
+        bounds_max = np.ones(3) * half
+
+        t_min, t_max = -float('inf'), float('inf')
         for i in range(3):
-            if abs(ray.orientation[i]) > 1e-10:
-                t1 = (bounds_min[i] - ray.origin[i]) / ray.orientation[i]
-                t2 = (bounds_max[i] - ray.origin[i]) / ray.orientation[i]
+            if abs(local_ray.orientation[i]) > 1e-10:
+                t1 = (bounds_min[i] - local_ray.origin[i]) / local_ray.orientation[i]
+                t2 = (bounds_max[i] - local_ray.origin[i]) / local_ray.orientation[i]
                 t_min = max(t_min, min(t1, t2))
                 t_max = min(t_max, max(t1, t2))
-            elif ray.origin[i] < bounds_min[i] or ray.origin[i] > bounds_max[i]:
+            elif local_ray.origin[i] < bounds_min[i] or local_ray.origin[i] > bounds_max[i]:
                 return []
-        
+
         if t_min <= t_max and t_max >= -1e-10:
-            result = []
+            pts = []
             if t_min >= -1e-10:
-                result.append(ray.point_at(t_min))
+                pts.append(_local_to_world_point(local_ray.point_at(t_min), self.transform))
             if t_max != t_min and t_max >= -1e-10:
-                result.append(ray.point_at(t_max))
-            return result
+                pts.append(_local_to_world_point(local_ray.point_at(t_max), self.transform))
+            return pts
         return []
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
-        """Normal pointing outward from closest face."""
-        p = point - self.transform.position
+        # Compute normal in local space (axis-aligned cube) and transform to world
+        p_local = _world_to_local_point(point, self.transform)
         half = self.side_length / 2
-        abs_p = np.abs(p)
+        abs_p = np.abs(p_local)
         dominant = np.argmax(abs_p)
-        normal = np.zeros(3)
-        normal[dominant] = np.sign(p[dominant])
-        return normal
+        local_n = np.zeros(3)
+        local_n[dominant] = np.sign(p_local[dominant])
+        return _normal_local_to_world(local_n, self.transform)
 
     def GetTangent(self, point: np.ndarray) -> np.ndarray:
         normal = self.GetNormal(point)
@@ -629,45 +732,48 @@ class Cuboid(Shape3D):
         self.dimensions_tuple = tuple(float(d) for d in dimensions)
 
     def SignedDistance(self, point: np.ndarray) -> float:
-        p = np.abs(point - self.transform.position)
-        q = p - np.array(self.dimensions_tuple) / 2
-        return np.linalg.norm(np.maximum(q, 0)) + min(np.max(q), 0)
+        p_local = np.abs(_world_to_local_point(point, self.transform))
+        q = p_local - np.array(self.dimensions_tuple) / 2
+        sdf_local = np.linalg.norm(np.maximum(q, 0)) + min(np.max(q), 0)
+        scale = self.transform.get_global_scale()
+        return sdf_local * float(np.min(scale))
 
     def CheckRayIntersection(self, ray: "Ray") -> bool:
         return len(self.GetRayIntersections(ray)) > 0
 
     def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
+        local_ray = _ray_world_to_local(ray, self.transform)
         half = np.array(self.dimensions_tuple) / 2
-        bounds_min = self.transform.position - half
-        bounds_max = self.transform.position + half
-        
-        t_min, t_max = 0, float('inf')
+        bounds_min = -half
+        bounds_max = half
+
+        t_min, t_max = -float('inf'), float('inf')
         for i in range(3):
-            if abs(ray.orientation[i]) > 1e-10:
-                t1 = (bounds_min[i] - ray.origin[i]) / ray.orientation[i]
-                t2 = (bounds_max[i] - ray.origin[i]) / ray.orientation[i]
+            if abs(local_ray.orientation[i]) > 1e-10:
+                t1 = (bounds_min[i] - local_ray.origin[i]) / local_ray.orientation[i]
+                t2 = (bounds_max[i] - local_ray.origin[i]) / local_ray.orientation[i]
                 t_min = max(t_min, min(t1, t2))
                 t_max = min(t_max, max(t1, t2))
-            elif ray.origin[i] < bounds_min[i] or ray.origin[i] > bounds_max[i]:
+            elif local_ray.origin[i] < bounds_min[i] or local_ray.origin[i] > bounds_max[i]:
                 return []
-        
+
         if t_min <= t_max and t_max >= -1e-10:
-            result = []
+            pts = []
             if t_min >= -1e-10:
-                result.append(ray.point_at(t_min))
+                pts.append(_local_to_world_point(local_ray.point_at(t_min), self.transform))
             if t_max != t_min and t_max >= -1e-10:
-                result.append(ray.point_at(t_max))
-            return result
+                pts.append(_local_to_world_point(local_ray.point_at(t_max), self.transform))
+            return pts
         return []
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
-        p = point - self.transform.position
+        p_local = _world_to_local_point(point, self.transform)
         half = np.array(self.dimensions_tuple) / 2
-        abs_p = np.abs(p)
+        abs_p = np.abs(p_local)
         dominant = np.argmax(abs_p / half)
-        normal = np.zeros(3)
-        normal[dominant] = np.sign(p[dominant])
-        return normal
+        local_n = np.zeros(3)
+        local_n[dominant] = np.sign(p_local[dominant])
+        return _normal_local_to_world(local_n, self.transform)
 
 class Prism(Shape3D):
     def __init__(self, base_polygon: Polygon, height: float, **kwargs):
@@ -876,8 +982,8 @@ including ray intersection and surface property queries.
 Classes:
 - Shape: Abstract base class for all shapes.
 - Shape2D, Shape3D: Base classes for 2D and 3D shapes.
-- Circle, Triangle, Polygon: Concrete 2D shape implementations.
-- Sphere, Cube, Prism, Pyramid, Capsule: Concrete 3D shape implementations.
+- Circle, Triangle, Polygon, Plane, ClippedPlane: Concrete 2D shape implementations.
+- Sphere, Cube, Cuboid, Prism, Pyramid, Capsule: Concrete 3D shape implementations.
 - GeometryMixin, RayIntersectionMixin, SurfacePropertiesMixin: Mixins for geometric queries.
 - VObject: Combines shape with transform and material for rendering.
 - ShapeFactory and its subclasses: Factories for creating shape instances. 

@@ -182,7 +182,7 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     scene.add_object(VObject(shape=box_shape, name="StudioBox"))
 
     # Lights
-    key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#EEE0BA"), intensity=50.0, radius=1.5, name="StudioKey")
+    key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#EEE0BA"), intensity=30.0, radius=1.5, name="StudioKey")
     key.radius = 0.3  # area light radius (for soft shadows)
     scene.add_light(key)
     rim = LightSource(position=np.array([-3.0, 2.0, 1.0]), color=Color.from_hex("#DC97C5"), intensity=20.0, radius=0.75, name="StudioRim")
