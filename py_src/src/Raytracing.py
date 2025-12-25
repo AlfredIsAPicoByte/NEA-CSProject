@@ -353,8 +353,9 @@ class FlatShading(ShadingStrategy):
             return Color(1, 0, 1) # Error Pink
 
         base_color = getattr(material, "base_color", Color(1.0, 1.0, 1.0))
-        return base_color
-    
+        emissive_color = getattr(material, "emissive_color", Color(0.0, 0.0, 0.0))
+        return (base_color + emissive_color).clamp()
+
 class SimpleShading(ShadingStrategy):
     def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable, interaction_function: Callable) -> Color:
         point = ray.point_at(distance)
