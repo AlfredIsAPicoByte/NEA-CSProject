@@ -140,7 +140,7 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     scene.add_object(VObject(shape=s2, name="StudioBallB"))
 
     # Background 
-    box_shape = Plane(point=np.array([0.0, 0.5, 3.0]), normal=np.array([0.0, -1.0, 0.0]), name="StudioBack")
+    box_shape = Cube(center=np.array([0.0, 0.5, 3.0]), side_length=4.0, name="StudioBack")
     mat_box = Material.create_diffuse(Color.from_hex("#C2C6C9"), roughness=1.0)
     box_shape.material = mat_box
     scene.add_object(VObject(shape=box_shape, name="StudioBox"))
