@@ -7,7 +7,7 @@ from PrimaryStructures import HitInfo, Ray
 from Scene import Scene
 from Camera import VCamera, CameraType
 from Geometry import VObject
-from Reflections import calculate_reflectance
+from Reflections import calculate_reflectance, reflect_ray
 from Luminance import Color, Material, LightSource, calculate_optical_redirection
 from RenderingAlgorithims import Algorithm, RenderStats, register_algorithm
 
@@ -301,16 +301,23 @@ class RayMarchingIntersection(IntersectionStrategy):
             normal = closest_object.shape.GetNormal(point) if closest_object and hasattr(closest_object, "shape") and hasattr(closest_object.shape, "GetNormal") else np.array([0.0, 1.0, 0.0])
             
             if distance_to_closest <= self.epsilon:
-                return HitInfo(True, point, normal, closest_object, distance_traveled)
+                return HitInfo(
+                    did_hit=True,
+                    hit_point=point,
+                    incoming_direction=None,
+                    surface_normal=normal,
+                    distance=distance_traveled,
+                    obj=closest_object,
+                )
             
             distance_traveled += distance_to_closest
             if distance_traveled >= self.max_distance:
                 break
 
-        return HitInfo(False, None, None, None, float('inf'))
+        return HitInfo(False, None, None, None, float('inf'), None)
 
 # Interaction implementations
-class OpticalMaterialInteraction(InteractionStrategy):
+class SimpleMaterialInteraction(InteractionStrategy):
     def interact(self, ray: TracingRay, hit_info: HitInfo) -> Optional[TracingRay]:
         # 1. Resolve Material
         material: Material = getattr(hit_info.object, "material", None) or getattr(hit_info.object.shape, "material", None) if hasattr(hit_info.object, "shape") else None
@@ -320,7 +327,7 @@ class OpticalMaterialInteraction(InteractionStrategy):
         # 2. Calculate Context (Normal)
         # We need the normal to decide reflection/refraction
         if hasattr(hit_info.object.shape, "GetNormal"):
-            normal = hit_info.object.shape.GetNormal(hit_info.point)
+            normal: np.ndarray = hit_info.object.shape.GetNormal(hit_info.point)
         else:
             return None
 
@@ -347,29 +354,11 @@ class OpticalMaterialInteraction(InteractionStrategy):
             if not did_reflect and is_inside:
                 current_throughput = material.get_volumetric_component(current_throughput, hit_info.distance)
 
-            # Ensure orientation is a 1D numpy vector of length 3
-            try:
-                ori = np.asarray(new_ray.orientation, dtype=float).reshape(-1)
-                if ori.ndim != 1 or ori.size != 3:
-                    raise ValueError("Malformed orientation")
-                # normalize
-                ori = ori / np.linalg.norm(ori)
-                orientation_vec = ori
-                origin_vec = np.asarray(new_ray.origin, dtype=float).reshape(-1)
-            except Exception:
-                # malformed orientation/origin from material -> fallback to reflection
-                incoming = np.asarray(ray.orientation, dtype=float).reshape(-1)
-                incoming = incoming / np.linalg.norm(incoming)
-                reflect_dir = incoming - 2.0 * np.dot(incoming, normal) * normal
-                orientation_vec = reflect_dir / np.linalg.norm(reflect_dir)
-                origin_vec = new_origin
+            orientation_vec = new_ray.orientation
+            origin_vec = new_origin
 
         except Exception:
-            # Material call failed -> fallback to perfect reflection
-            incoming = np.asarray(ray.orientation, dtype=float).reshape(-1)
-            incoming = incoming / np.linalg.norm(incoming)
-            reflect_dir = incoming - 2.0 * np.dot(incoming, normal) * normal
-            orientation_vec = reflect_dir / np.linalg.norm(reflect_dir)
+            orientation_vec = reflect_ray(normal, ray.orientation)
             origin_vec = new_origin
 
         # 5. Convert/Return TracingRay and Update Throughput
@@ -407,21 +396,20 @@ class RecursiveLambertShading(ShadingStrategy):
 
         # --- 3. Direct Lighting (Your existing logic) ---
         # Define shadow check callback
-        def check_visibility(light, light_dir, light_dist):
-            if not self.enable_shadows: return 1.0
-            return self._calculate_shadow_visibility(scene, point, light, light_dir)
+        def check_visibility(hit_point, light_pos):
+            if not self.enable_shadows:
+                return 1.0
+            occluded = scene.is_occluded(hit_point, light_pos, bias=self.shadow_bias)
+            return 0.0 if occluded else 1.0
 
         # Calculate local lighting (Diffuse + Specular from light sources)
         direct_light = material.apply_material(scene.get_lights(), hit_info, view_dir, check_visibility)
         
         if self.ambient_enabled:
             ambient_col = self.ambient_color if self.ambient_color is not None else getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03))
-            direct_light += material.get_ambient_component(normal, view_dir, ambient_col, self.ambient_intensity)
-
-        if self.environment_enabled:
-            env_color = scene.get_environment_color(ray.orientation)
-            direct_light += material.get_environment_component(env_color, calculate_reflectance(np.dot(normal, view_dir), getattr(material, "ior", 1.5), 1.0))
-
+            ambient_intensity = self.ambient_intensity if self.ambient_intensity is not None else getattr(scene, "ambient_intensity", 0.1)
+            direct_light += material.apply_ambient_color(normal, view_dir, ambient_col, ambient_intensity)
+            
         # --- 4. Indirect Lighting (Recursive Bounce) ---
         indirect_light = Color(0.0, 0.0, 0.0)
 
@@ -477,7 +465,7 @@ class Raytracer(Algorithm):
         super().__init__()
         self.ray_generator: RayGenerator = ray_generator if ray_generator is not None else JitterRayGenerator()
         self.intersector: IntersectionStrategy = intersection_strategy if intersection_strategy is not None else RayMarchingIntersection()
-        self.interactor: InteractionStrategy = interaction_strategy if interaction_strategy is not None else OpticalMaterialInteraction()
+        self.interactor: InteractionStrategy = interaction_strategy if interaction_strategy is not None else SimpleMaterialInteraction()
         self.shader: ShadingStrategy = shading_strategy if shading_strategy is not None else RecursiveLambertShading()
 
         self.stats = TracingStats()
@@ -500,7 +488,7 @@ class Raytracer(Algorithm):
         if hit.object is not None and hit.hit:
             self.stats.hits += 1
 
-            return self.shader.shade(scene, ray, hit.object, hit.distance, depth, self._trace_ray, self.interactor.interact)
+            return self.shader.shade(scene, ray, hit, depth, self._trace_ray, self.interactor.interact)
 
         # 4. Miss: If we hit nothing, return background color
         try:

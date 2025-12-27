@@ -1,6 +1,6 @@
+from __future__ import annotations
 import math
 import numpy as np
-from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -13,38 +13,98 @@ class PixelFilter(Enum):
 
 @dataclass
 class SampleSettings:
-    width: int = 800               # image width in pixels
-    height: int = 600              # image height in pixels
-    filter_type: PixelFilter = PixelFilter.BOX
-    filter_width: float = 1.0          # size of the filter kernel
-    size: int = 16               # total samples per pixel (may be square for stratified)
-
+    width: int = 800
+    height: int = 600
+    filter_type: int = PixelFilter.BOX
+    filter_width: float = 2.0  # Radius in pixels for the filter
+    
 @dataclass
 class Sample:
-    u: float                      # horizontal sample position in [0,1)
-    v: float                      # vertical sample position in [0,1)
-    w: float = 1.0                # sample weight (for adaptive sampling)
-    width: int = 1
-    height: int = 1
+    u: float
+    v: float
+    w: float = 1.0
 
-    def __init__(self, u: float, v: float, w: float = 1.0, width: int = 1, height: int = 1):
-        self.u = u
-        self.v = v
-        self.w = w
-        self.width = width
-        self.height = height
+def evaluate_filter_weight(
+    settings: SampleSettings, 
+    dist_x: float, 
+    dist_y: float
+) -> float:
+    """
+    Calculates the weight of a sample based on its distance from the pixel center.
+    dist_x, dist_y are in 'pixel units' (not normalized 0-1).
+    """
+    # 1. Check bounds (if sample is outside filter radius, weight is 0)
+    # Note: Box filters usually ignore radius or use 0.5, but generic filters use a radius.
+    if abs(dist_x) > settings.filter_width or abs(dist_y) > settings.filter_width:
+        return 0.0
+
+    ftype = settings.filter_type
+
+    # --- BOX FILTER ---
+    # All samples within the pixel square get equal weight.
+    if ftype == PixelFilter.BOX:
+        # Standard Box is usually just 1.0 inside the boundary
+        return 1.0
+
+    # --- TENT FILTER (Triangle) ---
+    # Linear falloff: 1.0 at center, 0.0 at radius
+    elif ftype == PixelFilter.TENT:
+        wx = max(0.0, 1.0 - abs(dist_x) / settings.filter_width)
+        wy = max(0.0, 1.0 - abs(dist_y) / settings.filter_width)
+        return wx * wy
+
+    # --- GAUSSIAN FILTER ---
+    # Exponential falloff: Creates very smooth images
+    elif ftype == PixelFilter.GAUSSIAN:
+        alpha = 2.0  # Controls "pointiness" of the bell curve
+        exp_x = math.exp(-alpha * (dist_x * dist_x)) - math.exp(-alpha * (settings.filter_width**2))
+        exp_y = math.exp(-alpha * (dist_y * dist_y)) - math.exp(-alpha * (settings.filter_width**2))
+        return max(0.0, exp_x * exp_y)
+
+    return 1.0
+
+def reconstruct_pixel(
+    pixel_x: int,
+    pixel_y: int,
+    samples: List[Sample],
+    colors: List[np.ndarray], # RGB numpy arrays like [1.0, 0.5, 0.0]
+    settings: SampleSettings
+) -> np.ndarray:
+    """
+    Combines many samples into one final pixel color using the chosen filter.
+    """
     
-    def get_sample_index(self, image_width: int, image_height: int) -> int:
-        """Convert normalized (u,v) to a linear sample index."""
-        x = min(int(self.u * image_width), image_width - 1)
-        y = min(int(self.v * image_height), image_height - 1)
-        return y * image_width + x
+    # Accumulators
+    final_color = np.array([0.0, 0.0, 0.0])
+    total_weight = 0.0
+    
+    # Center of the pixel in normalized coordinates (0.0 to 1.0)
+    # We add 0.5 to target the *center* of the pixel grid cell
+    center_u = (pixel_x + 0.5) / settings.width
+    center_v = (pixel_y + 0.5) / settings.height
 
-    def get_pixel_coords(self, image_width: int, image_height: int) -> Tuple[int, int]:
-        """Convert normalized (u,v) to pixel coordinates."""
-        x = min(int(self.u * image_width), image_width - 1)
-        y = min(int(self.v * image_height), image_height - 1)
-        return (x, y)
+    for sample, color in zip(samples, colors):
+        # 1. Calculate distance from pixel center in PIXEL UNITS
+        #    (We multiply by width/height to convert 0..1 back to 0..800)
+        dist_x = (sample.u - center_u) * settings.width
+        dist_y = (sample.v - center_v) * settings.height
+
+        # 2. Get the filter weight (how much this sample contributes)
+        #    We multiply by sample.w to respect adaptive sampling weights if they exist
+        filter_w = evaluate_filter_weight(settings, dist_x, dist_y)
+        combined_weight = filter_w * sample.w
+
+        # 3. Accumulate
+        if combined_weight > 0:
+            final_color += color * combined_weight
+            total_weight += combined_weight
+
+    # 4. Normalize
+    #    If total_weight is 0 (e.g. no samples hit), return black or ambient
+    if total_weight > 0:
+        return final_color / total_weight
+    else:
+        return np.array([0.0, 0.0, 0.0])
 
 class Sampler(ABC):
     """
@@ -191,7 +251,6 @@ class StratifiedSampler(Sampler):
         dy = (j + self._rng.random()) / n
         return dx, dy
 
-# Simple quasi-random (Halton) generator for demonstration
 class HaltonSampler(Sampler):
     def __init__(self, samples_per_pixel: int = 1):
         super().__init__(samples_per_pixel)

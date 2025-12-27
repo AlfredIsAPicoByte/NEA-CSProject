@@ -1,7 +1,7 @@
 import numpy as np
 import math
 
-REFRACTIVE_INDICIES = {
+REFRACTIVE_INDICES = {
     "air": 1.000293,
     "water": 1.333,
     "glass": 1.5,

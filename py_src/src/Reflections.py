@@ -90,7 +90,6 @@ def reflect_ray(normal: np.ndarray, ray_direction: np.ndarray) -> np.ndarray:
     reflected = direction - 2 * dot_product * normal
     return reflected / (np.linalg.norm(reflected) + 1e-12)
 
-
 """
 Reflection module: Provides functions to calculate reflection angles and reflected ray directions based on the law of reflection.
 """

@@ -4,7 +4,7 @@ from typing import Callable, List, Tuple, Optional
 
 from PrimaryStructures import Ray, HitInfo
 from Reflections import reflect_ray, calculate_reflectance
-from Refractions import refract_ray, REFRACTIVE_INDICIES
+from Refractions import refract_ray, REFRACTIVE_INDICES
 
 def clamp(value, min_value: float|int = 0.0, max_value: float|int = 1.0):
     return max(min_value, min(value, max_value))
@@ -12,7 +12,7 @@ def clamp(value, min_value: float|int = 0.0, max_value: float|int = 1.0):
 def lerp(a, b, t):
     return a + (b - a) * t
 
-def attenuate_distance_cof(cls, distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0) -> float:
+def attenuate_distance_cof(distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0) -> float:
     """
     Return a factor attenuated by distance using quadratic attenuation.
     factor = 1 / (a*d^2 + b*d + c)
@@ -22,7 +22,7 @@ def attenuate_distance_cof(cls, distance: float, a: float = 0.0, b: float = 0.0,
     factor = 1.0 / (a * (distance ** 2) + b * distance + c)
     return factor
 
-def attenuate_distance_max(cls, distance: float, max_distance: float) -> float:
+def attenuate_distance_max(distance: float, max_distance: float) -> float:
     """
     Return a factor attenuated linearly based on distance and max distance.
     factor = max(0, 1 - (distance / max_distance))
@@ -32,7 +32,7 @@ def attenuate_distance_max(cls, distance: float, max_distance: float) -> float:
     factor = max(0.0, 1.0 - (distance / max_distance))
     return factor
 
-def attenuate_sqr_distance(cls, distance: float) -> float:
+def attenuate_sqr_distance(distance: float) -> float:
     """
     Return a factor attenuated linearly based on distance squared.
     factor = 1 / ((distance ** 2) + 1e-6)
@@ -40,7 +40,7 @@ def attenuate_sqr_distance(cls, distance: float) -> float:
     factor = 1 / ((distance ** 2) + 1e-6)
     return factor
 
-def attenuate_distance_exponential(self, distance: float, decay_rate: float = 1.0) -> float:
+def attenuate_distance_exponential(distance: float, decay_rate: float = 1.0) -> float:
     """
     Return a factor attenuated exponentially based on distance.
     factor = exp(-decay_rate * distance)
@@ -234,7 +234,7 @@ class Color:
         return f"Color(red={self.red:.2f}, green={self.green:.2f}, blue={self.blue:.2f}, alpha={self.alpha:.2f})"
 
 
-def attenuate_color(cls, color, factor: float) -> Color:
+def attenuate_color(color, factor: float) -> Color:
     """Return a new Color attenuated by the given factor."""
     # Note: 'color' is used to access the specific instance properties
     return Color(
@@ -286,13 +286,12 @@ class LightSource:
         self.radius = radius
         self.name = name
 
-    def get_light_direction(self, hit_point: np.ndarray) -> np.ndarray:
-        """Return the normalized direction vector from the light source to the hit point."""
-        direction = hit_point - self.position
+    def get_light_direction(self, hit_point: np.ndarray, bias: float = 1e-4) -> np.ndarray:
+        """Return the normalized direction vector from the hit point towards the light source."""
+        direction = self.position - hit_point
         norm = np.linalg.norm(direction)
-        if norm == 0:
-            return direction  # Zero vector if at the same point
-        return direction / norm
+        
+        return direction / (norm + bias)
 
     def __repr__(self):
         return (
@@ -311,21 +310,19 @@ class Material:
     def __init__(
             self,
             albedo_color: Color = Color(1, 1, 1),
-            emissive_color: Color = Color(0, 0, 0),
             roughness: float = 0.5,
             metallicness: float = 0.0,
             specular_tint_amount: float = 0.0,
             emissive_intensity: float = 1.0,
-            ior: float = REFRACTIVE_INDICIES["glass"],
+            ior: float = REFRACTIVE_INDICES["glass"],
             absorption_color: Color = Color(0.0, 0.0, 0.0),
             absorption_strength = 0.5,
             is_transparent: bool = False,
-            transperent_strength: float = 1.0,
+            opacity: float = 1.0,
             type: MaterialType = MaterialType.DIFFUSE,
         ):
         # Ensure colors are stored as a Color objects
         self.albedo = albedo_color if isinstance(albedo_color, Color) else Color(albedo_color)
-        self.emissive_color = emissive_color if isinstance(emissive_color, Color) else Color(emissive_color)
         self.absorption_color = absorption_color if isinstance(absorption_color, Color) else Color(absorption_color)
         
         # Surface properties
@@ -333,7 +330,7 @@ class Material:
         self.metallic = clamp(metallicness, 0.0, 1.0)
         self.specular_tint_amount = clamp(specular_tint_amount, 0.0, 1.0)
         self.absorption_strength = clamp(absorption_strength, 0.0, 1.0)
-        self.transperent_strength = clamp(transperent_strength, 0.0, 1.0)
+        self.opacity = clamp(opacity, 0.0, 1.0)
         self.emissive_intensity = emissive_intensity
         self.ior = ior
 
@@ -342,20 +339,68 @@ class Material:
         self.type = type
 
     @classmethod
-    def create_diffuse(cls):
-        return cls()
+    def create_diffuse(cls, albedo: Color, roughness: float = 0.5, metallicness: float = 0):
+        """
+        Creates a standard non-metallic (dielectric) material like plastic, wood, or chalk.
+        """
+        return cls(
+            albedo_color=albedo,
+            roughness=roughness,
+            metallicness=metallicness
+        )
 
     @classmethod
-    def create_specular(cls):
-        return cls()
+    def create_specular(cls, albedo: Color, roughness: float = 0.2, metallicness: float = 1.0, specular_tint_amount: float = 0.5):
+        """
+        Creates a reflective material like gold, aluminum, or copper.
+        """
+        return cls(
+            albedo_color=albedo,
+            roughness=roughness,
+            metallicness=metallicness,
+            specular_tint_amount=specular_tint_amount,
+            type=MaterialType.SPECULAR
+        )
     
     @classmethod
-    def create_glass(cls):
-        return cls()
+    def create_glass(cls, albedo: Color, roughness: float = 0.0, metallicness: float = 0.0, ior: float = 1.5):
+        """
+        Creates a dielectric transparent material.
+        """
+        return cls(
+            albedo_color=albedo,
+            roughness=roughness,
+            metallicness=metallicness,
+            ior=ior,
+            is_transparent=True,
+            type=MaterialType.GLASS
+        )
     
     @classmethod
-    def create_transparent(cls):
-        return cls()
+    def create_transparent(cls, albedo: Color, roughness: float = 0.5, opacity: float = 0.5):
+        """
+        Creates a 'thin' transparent material (alpha blending), like a ghost or a hologram.
+        This does not use IOR/Refraction logic, just simple opacity.
+        """
+
+        return cls(
+            albedo_color=albedo,
+            roughness=roughness,
+            opacity=opacity,
+            is_transparent=True,
+            type=MaterialType.TRANSPARENT
+        )
+    
+    @classmethod
+    def create_emissive(cls, albedo: Color, intensity: float):
+        """
+        Creates a self-illuminated material that ignores.
+        """
+        return cls(
+            albedo_color=albedo,
+            emissive_intensity=intensity,
+            type=MaterialType.EMISSIVE
+        )
 
     def apply_material(
             self,
@@ -509,7 +554,7 @@ class Material:
 
     def get_emissive_component(self) -> Color:
         """Get the emissive color of the material."""
-        return self.emissive_color * self.emissive_intensity
+        return self.albedo * self.emissive_intensity
 
     def get_volumetric_component(self, incoming_color: Color, distance: float) -> Color:
         """
@@ -523,7 +568,7 @@ class Material:
         """
         Calculates the transparency color contribution of the material.
         """
-        return lerp(incoming_color, self.albedo, self.transperent_strength)
+        return lerp(incoming_color, self.albedo, 1 - self.opacity)
 
     def apply_ambient_color(self, surface_normal: np.ndarray, view_dir: np.ndarray, ambient_color: Color, ambient_intensity: float) -> Color:
         """
@@ -535,33 +580,20 @@ class Material:
 
     def __repr__(self):
         return (
-            f"Material(type={self.type.name}, albedo={self.albedo}, "
-            f"specular_tint={self.specular_tint}, ior={self.ior:.2f}, "
-            f"diffuse_roughness={self.diffuse_roughness:.2f}, "
-            f"reflective_roughness={self.reflective_roughness:.2f})"
+            f"Material()"
         )
-
-def calulate_ray_reflection(
-        incoming_ray: Ray,
-        surface_normal: np.ndarray,
-        seed: Optional[int] = None,
-        ):
-    pass
-
-def calculate_ray_refraction():
-    pass
 
 def calculate_optical_redirection(
         incoming_ray: Ray,
         surface_normal: np.ndarray,
         new_origin: np.ndarray,
-        current_refactive_index: float = REFRACTIVE_INDICIES['glass'],
-        incoming_refactive_index: float = REFRACTIVE_INDICIES['air'],
+        current_refactive_index: float = REFRACTIVE_INDICES['glass'],
+        incoming_refactive_index: float = REFRACTIVE_INDICES['air'],
         seed: Optional[int] = None,
         bias: float = 1e-4
-    ) -> Tuple[Ray, bool]:
+    ) -> Tuple[Ray, bool, bool]:
     rng = np.random.default_rng(seed)
-    
+
     unit_dir = incoming_ray.orientation / np.linalg.norm(incoming_ray.orientation)
     unit_normal = surface_normal / np.linalg.norm(surface_normal)
 
@@ -584,8 +616,7 @@ def calculate_optical_redirection(
             final_dir = refracted
             final_origin = new_origin - unit_normal * bias
             did_reflect = False
-        else:
-            # Total internal reflection fallback
+        else: # Total internal reflection
             final_dir = reflect_ray(unit_normal, unit_dir)
             final_origin = new_origin + unit_normal * bias
             did_reflect = True
