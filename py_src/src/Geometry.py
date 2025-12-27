@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
 from typing import Optional, Tuple, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from PrimaryStructures import Transform, Ray
 from Luminance import Material
@@ -105,6 +105,7 @@ class Shape(ABC):
         self.name = name
         self.transform = transform or Transform(np.zeros(3), np.zeros(3), np.ones(3))
         self.material = material
+        
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -920,18 +921,75 @@ class VObject:
     material: Optional["Material"] = None
     name: str = "VObject"
 
+    children: List["VObject"] = field(default_factory=list)
+    parent: Optional["VObject"] = None
+
     def __post_init__(self):
         if self.transform is None:
             self.transform = Transform(np.zeros(3), np.zeros(3), np.ones(3))
 
     @property
     def position(self) -> np.ndarray:
-        return self.transform.position
-
+        """Get world position considering parent hierarchy."""
+        world_pos = self.transform.position
+        if self.parent is not None:
+            world_pos = world_pos + self.parent.position
+        return world_pos
     @position.setter
     def position(self, value: np.ndarray) -> None:
+        """Set local position relative to parent."""
+        value = np.asarray(value, dtype=float)
+        if self.parent is not None:
+            self.transform.position = value - self.parent.position
+        else:
+            self.transform.position = value
+    @property
+    def world_position(self) -> np.ndarray:
+        """Get absolute world position."""
+        world_pos = self.transform.position
+        current = self.parent
+        while current is not None:
+            world_pos = world_pos + current.transform.position
+            current = current.parent
+        return world_pos
+    @property
+    def local_position(self) -> np.ndarray:
+        """Get position relative to parent."""
+        return self.transform.position
+    @local_position.setter
+    def local_position(self, value: np.ndarray) -> None:
+        """Set position relative to parent."""
         self.transform.position = np.asarray(value, dtype=float)
-        self.shape.transform.position = self.transform.position
+    @property
+    def rotation(self) -> np.ndarray:
+        """Get local rotation."""
+        return self.transform.rotation
+    @rotation.setter
+    def rotation(self, value: np.ndarray) -> None:
+        """Set local rotation."""
+        self.transform.rotation = np.asarray(value, dtype=float)
+    @property
+    def scale(self) -> np.ndarray:
+        """Get local scale."""
+        return self.transform.sca
+    @scale.setter
+    def scale(self, value: np.ndarray) -> None:
+        """Set local scale."""
+        self.transform.scale = np.asarray(value, dtype=float)
+    def translate(self, offset: np.ndarray, space: str = "local") -> None:
+        """Translate in local or world space."""
+        offset = np.asarray(offset, dtype=float)
+        if space == "local":
+            self.transform.translate(offset, space="local")
+        else:
+            self.transform.translate(offset, space="global")
+    def rotate(self, angle: float, axis: np.ndarray, space: str = "local") -> None:
+        """Rotate around axis in local or world space."""
+        self.transform.rotate(angle, axis, space=space)
+    def scale_by(self, factor: np.ndarray) -> None:
+        """Scale uniformly or per-axis."""
+        factor = np.asarray(factor, dtype=float)
+        self.transform.enlarge(factor, space="local")
 
     def __repr__(self):
         return f"VObject(name={self.name}, shape={self.shape})"

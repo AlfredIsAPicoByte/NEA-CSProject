@@ -8,6 +8,7 @@ from Scene import Scene
 
 @dataclass
 class RenderStats:
+    
     time_taken_seconds: float = 0.0
     memory_usage: float = 0.0  # in MB
 

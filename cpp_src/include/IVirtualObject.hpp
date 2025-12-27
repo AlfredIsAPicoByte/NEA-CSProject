@@ -28,7 +28,10 @@ IVirtualObject() {
     json ToJSON() const {
         json j;
         j["l_id"] = l_id;     // Serialize base ID
-        SerializeFields(j);   // Delegate to child for specific data
+        SerializeFields(j);   // Delegate to child classes for specific data
+        for (const auto& child : children) {
+            j["children"].push_back(child->ToJSON());
+        }
         return j;
     }
 
@@ -37,7 +40,38 @@ IVirtualObject() {
         if (j.contains("l_id")) {
             l_id = j["l_id"]; // Deserialize base ID
         }
-        DeserializeFields(j); // Delegate to child for specific data
+        DeserializeFields(j); // Delegate to child classes for specific data
+
+        for (const auto& childJson : j.value("children", json::array())) {
+            // Here we would need a factory method to create the correct IVirtualObject derived type
+            // For simplicity, we'll assume a generic IVirtualObject can be created
+            auto child = std::make_unique<IVirtualObject>();
+            child->FromJSON(childJson);
+            AddChild(std::move(child));
+        }
+    }
+
+    void AddChild(std::unique_ptr<IVirtualObject> child) {
+        child->parent = shared_from_this();
+        children.push_back(std::move(child));
+    }
+
+    void RemoveChild(IVirtualObject* child) {
+        children.erase(std::remove_if(children.begin(), children.end(),
+            [child](const std::unique_ptr<IVirtualObject>& ptr) { return ptr.get() == child; }),
+            children.end());
+    }
+
+    void SetParent(std::shared_ptr<IVirtualObject> newParent) {
+        parent = newParent;
+    }
+
+    void ClearParent() {
+        parent.reset();
+    }
+
+    void ClearChildren() {
+        children.clear();
     }
 
     IVirtualObject(const IVirtualObject& v) : l_id(v.l_id) {}
@@ -65,4 +99,7 @@ protected:
     virtual void DeserializeFields(const json& j) = 0;
 private:
     unsigned int l_id;
+
+    std::vector<std::unique_ptr<IVirtualObject>> children;
+    std::weak_ptr<IVirtualObject> parent;
 };

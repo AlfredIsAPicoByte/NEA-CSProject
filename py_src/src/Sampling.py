@@ -1,10 +1,10 @@
+import math
+import numpy as np
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Tuple, Optional, List
-import random
-import math
 
 class PixelFilter(Enum):
     BOX = 0
@@ -53,8 +53,11 @@ class Sampler(ABC):
     - next_1d/next_2d: supply samples in [0,1)
     - clone: produce independent sampler for thread/worker
     """
-    def __init__(self, samples_per_pixel: int = 1):
+    def __init__(self, samples_per_pixel: int = 1, **kwargs):
         self.samples_per_pixel = samples_per_pixel
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     @abstractmethod
     def start_pixel(self, x: int, y: int) -> None:
@@ -70,6 +73,10 @@ class Sampler(ABC):
 
     @abstractmethod
     def clone(self, seed: Optional[int] = None) -> "Sampler":
+        ...
+
+    @abstractmethod
+    def sample_pixel(self, x: int, y: int, sample_idx: int, seed: Optional[int] = None) -> tuple[float, float]:
         ...
 
     def get_samples_for_pixel(self, x: int, y:int) -> List[Sample]:
@@ -105,38 +112,16 @@ class Sampler(ABC):
             u, v = self.next_2d()
         return Sample(u, v)
 
-    def sample_pixel(self, x: int, y: int, sample_idx: int, width: int, height: int) -> tuple[float, float]:
-        """
-        Returns a subpixel offset (dx, dy) in [0, 1) for the given pixel and sample index.
-        Default implementation uses get_samples_for_pixel.
-        """
-        samples = self.get_samples_for_pixel(x, y)
-        if sample_idx < len(samples):
-            return (samples[sample_idx].u, samples[sample_idx].v)
-        # fallback: random
-        return (random.random(), random.random())
-
 class RandomSampler(Sampler):
     """Independent RNG sampler, deterministic with base seed + pixel coords."""
-    def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
+    def __init__(self, samples_per_pixel: int = 1):
         super().__init__(samples_per_pixel)
-        self._base_seed = 0 if seed is None else int(seed)
-        self._rng = random.Random(self._base_seed)
+        self._rng = np.random.default_rng()
         self._x = 0
         self._y = 0
 
     def start_pixel(self, x: int, y: int) -> None:
         self._x = x; self._y = y
-        # Build a deterministic integer seed from base_seed and pixel coords.
-        # random.seed only accepts None, int, float, str, bytes, bytearray.
-        # Use a simple integer hashing with primes and mask to 32-bit to keep it stable.
-        try:
-            base = int(self._base_seed)
-        except Exception:
-            base = 0
-        seed_val = (base * 73856093) ^ (x * 19349663) ^ (y * 83492791)
-        seed_val &= 0xFFFFFFFF
-        self._rng.seed(seed_val)
 
     def next_1d(self) -> float:
         return self._rng.random()
@@ -145,9 +130,9 @@ class RandomSampler(Sampler):
         return (self._rng.random(), self._rng.random())
 
     def clone(self, seed: Optional[int] = None) -> "RandomSampler":
-        return RandomSampler(self.samples_per_pixel, seed if seed is not None else self._base_seed)
+        return RandomSampler(self.samples_per_pixel)
 
-    def sample_pixel(self, x: int, y: int, sample_idx: int, width: int, height: int) -> tuple[float, float]:
+    def sample_pixel(self, x: int, y: int, sample_idx: int, seed: Optional[int] = None) -> tuple[float, float]:
         self.start_pixel(x, y)
         for _ in range(sample_idx + 1):
             dx, dy = self.next_2d()
@@ -158,7 +143,7 @@ class StratifiedSampler(Sampler):
     def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
         super().__init__(samples_per_pixel)
         self._base_seed = 0 if seed is None else int(seed)
-        self._rng = random.Random(self._base_seed)
+        self._rng =np.random.default_rng(seed)
         self._x = 0
         self._y = 0
         self._current = 0
@@ -195,7 +180,7 @@ class StratifiedSampler(Sampler):
     def clone(self, seed: Optional[int] = None) -> "StratifiedSampler":
         return StratifiedSampler(self.samples_per_pixel, seed if seed is not None else self._base_seed)
 
-    def sample_pixel(self, x: int, y: int, sample_idx: int, width: int, height: int) -> tuple[float, float]:
+    def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
         self.start_pixel(x, y)
         n = max(1, int(math.ceil(math.sqrt(self.samples_per_pixel))))
         i = sample_idx % n
@@ -208,10 +193,9 @@ class StratifiedSampler(Sampler):
 
 # Simple quasi-random (Halton) generator for demonstration
 class HaltonSampler(Sampler):
-    def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
+    def __init__(self, samples_per_pixel: int = 1):
         super().__init__(samples_per_pixel)
         self._index = 0
-        self._base_seed = 0 if seed is None else int(seed)
 
     @staticmethod
     def _halton(index: int, base: int) -> float:
@@ -239,9 +223,9 @@ class HaltonSampler(Sampler):
         return v
 
     def clone(self, seed: Optional[int] = None) -> "HaltonSampler":
-        return HaltonSampler(self.samples_per_pixel, seed if seed is not None else self._base_seed)
+        return HaltonSampler(self.samples_per_pixel)
 
-    def sample_pixel(self, x: int, y: int, sample_idx: int, width: int, height: int) -> tuple[float, float]:
+    def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
         # Use sample_idx+1 to avoid zero index in Halton
         u = self._halton(sample_idx + 1, 2)
         v = self._halton(sample_idx + 1, 3)
@@ -257,16 +241,16 @@ class AdaptiveSampler(Sampler):
         pass
 
     def next_1d(self) -> float:
-        return random.random()
+        return np.random()
 
     def next_2d(self) -> Tuple[float, float]:
-        return (random.random(), random.random())
+        return (np.random(), np.random())
 
     def clone(self, seed: Optional[int] = None) -> "AdaptiveSampler":
         return AdaptiveSampler(self.samples_per_pixel, seed)
 
-    def sample_pixel(self, x: int, y: int, sample_idx: int, width: int, height: int) -> tuple[float, float]:
-        return (random.random(), random.random())
+    def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
+        return (np.random(), np.random())
 
 # Registry and factory
 _SAMPLER_REGISTRY: dict[str, type[Sampler]] = {
@@ -336,8 +320,8 @@ class SamplingManager:
             try:
                 u, v = sampler.next_2d()
             except Exception:
-                u = random.random()
-                v = random.random()
+                u = np.random()
+                v = np.random()
             out.append(Sample(u, v))
         return out
 

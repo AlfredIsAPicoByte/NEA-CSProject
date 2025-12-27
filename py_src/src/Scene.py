@@ -2,16 +2,10 @@ from typing import List, Tuple, Optional
 import numpy as np
 from math import atan2, asin, pi, floor
 
-from PrimaryStructures import Ray
+from PrimaryStructures import Ray, HitInfo
 from Camera import VCamera
 from Geometry import VObject
-from Luminance import LightSource, Color, ColorGradient
-
-class BackgroundType:
-    SOLID_COLOR = 0
-    GRADIENT = 1
-    SHPERE_MAP = 2
-    TEXTURE = 3
+from Luminance import LightSource, Color
 
 class Scene:
     def __init__(self, name: str = "Scene", camera: Optional[VCamera] = None, **kwargs):
@@ -54,22 +48,37 @@ class Scene:
                 closest = obj
         return (min_d, closest)
     
-    def get_closest_intersection(self, ray: Ray) -> Tuple[Optional[VObject], Optional[np.ndarray]]:
-        """Return the closest intersected object and the hit point, or (None, None) if no intersection."""
+    def get_closest_intersection(self, ray: Ray) -> HitInfo:
+        """Return a `HitInfo` describing the closest intersection (or hit=False if none)."""
         closest_obj = None
         closest_hit = None
         min_distance = float("inf")
-        
+
         for obj in self.objects:
-            hit_point = obj.shape.intersect(ray)
+            try:
+                hit_point = obj.shape.intersect(ray)
+            except Exception:
+                hit_point = None
+
             if hit_point is not None:
                 distance = np.linalg.norm(hit_point - ray.origin)
                 if distance < min_distance:
                     min_distance = distance
                     closest_obj = obj
                     closest_hit = hit_point
-        
-        return closest_obj, closest_hit
+
+        if closest_obj is None or closest_hit is None:
+            return HitInfo(False)
+
+        # Attempt to get a surface normal if the shape provides one
+        normal = None
+        try:
+            if hasattr(closest_obj.shape, 'GetNormal'):
+                normal = closest_obj.shape.GetNormal(closest_hit)
+        except Exception:
+            normal = None
+
+        return HitInfo(hit=True, point=closest_hit, direction=ray.orientation, normal=normal, distance=min_distance, obj=closest_obj)
     
     def get_background_color(self, direction) -> Color:
         """
@@ -179,11 +188,13 @@ class Scene:
         try:
             from PrimaryStructures import Ray
             ray = Ray(origin, dir_norm)
-            closest_obj, hit_point = self.get_closest_intersection(ray)
-            if closest_obj is not None and hit_point is not None:
-                hit_dist = np.linalg.norm(hit_point - origin)
-                if hit_dist < (dist_to_light - epsilon):
-                    return True
+            hit_info = self.get_closest_intersection(ray)
+            if hit_info.hit and getattr(hit_info, 'object', None) is not None and hit_info.point is not None:
+                # If the hit object's material is opaque and the hit is closer than the light
+                if not hit_info.object.material.is_transparent:
+                    hit_dist = np.linalg.norm(hit_info.point - origin)
+                    if hit_dist < (dist_to_light - epsilon):
+                        return True
         except Exception:
             # geometry intersection may not be supported; fall back to distance estimator below
             pass

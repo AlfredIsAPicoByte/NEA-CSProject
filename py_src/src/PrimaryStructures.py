@@ -1,5 +1,6 @@
 from math import cos, sin, acos, gcd
 import numpy as np
+from typing import Optional, Tuple
 
 class Ray:
     def __init__(self, origin: np.ndarray, orientation: np.ndarray, name: str = "Ray"):
@@ -109,6 +110,38 @@ class Ray:
 
     def __repr__(self):
         return f"Ray(origin={self.origin}, orientation={self.orientation})"
+
+class HitInfo:
+    """
+    Stores information about a ray-object intersection.
+    """
+    def __init__(
+            self,
+            did_hit: bool,
+            hit_point: Optional[np.ndarray] = None,
+            incoming_direction: Optional[np.ndarray] = None,
+            surface_normal: Optional[np.ndarray] = None,
+            distance: Optional[float] = None,
+            obj: Optional[object] = None
+        ):
+        # Primary boolean flag - use `hit` for clarity
+        self.hit = bool(did_hit)
+        # Backwards-compatible alias
+        self.did_hit = self.hit
+
+        self.point = hit_point
+        # direction is typically the incoming ray direction
+        self.direction = incoming_direction / np.linalg.norm(incoming_direction) if incoming_direction is not None else None
+        self.normal = surface_normal / np.linalg.norm(surface_normal) if surface_normal is not None else None
+        self.distance = distance
+        # Optional reference to the object that was hit
+        self.object = obj
+
+    def __repr__(self):
+        return (
+            f"HitInfo(hit={self.hit}, point={self.point}, normal={self.normal}, "
+            f"distance={self.distance}, object={getattr(self, 'object', None)})"
+        )
 
 class Transform:
     """
@@ -500,10 +533,10 @@ class Ratio:
     
 """
 PrimaryStructures module: Provides datastructures essential for most graphical computations.
-Includes Ray, Transform, and Ratio classes.
 
 Classes:
 - Ray: Represents a ray in 2D/3D space with origin and orientation.
+- HitInfo: Stores information about ray-object intersections.
 - Transform: Represents a 3D transformation with position, rotation, scale, and hierarchical parent support.
 - Ratio: Represents a ratio (fraction) with width and height, supporting basic arithmetic operations and comparisons.
 """

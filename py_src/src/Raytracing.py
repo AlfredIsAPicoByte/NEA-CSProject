@@ -1,15 +1,15 @@
 import numpy as np
-import random
 import math
 from typing import Optional, List, Tuple, Callable
 from abc import ABC, abstractmethod
 
-from PrimaryStructures import Ray
+from PrimaryStructures import HitInfo, Ray
 from Scene import Scene
 from Camera import VCamera, CameraType
 from Geometry import VObject
-from Luminance import Color, Material, LightSource
-from Algorithims import Algorithm, RenderStats, register_algorithm
+from Reflections import calculate_reflectance
+from Luminance import Color, Material, LightSource, calculate_optical_redirection
+from RenderingAlgorithims import Algorithm, RenderStats, register_algorithm
 
 # Define a ray that holds the ray and data
 class TracingRay(Ray):
@@ -38,7 +38,7 @@ class RayGenerator(ABC):
     ) -> List[TracingRay]:
         ...
 
-    def camera_rotate_ray(self,
+    def _camera_rotate_ray(self,
         camera: VCamera,
         u: float, v: float,
     ) -> np.ndarray:
@@ -76,7 +76,7 @@ class IntersectionStrategy(ABC):
         self,
         scene: Scene,
         ray: TracingRay,
-    ) -> Tuple[Optional[VObject], float]:
+    ) -> HitInfo:
         ...
 
 class InteractionStrategy(ABC):
@@ -87,12 +87,7 @@ class InteractionStrategy(ABC):
         self.bias = bias
 
     @abstractmethod
-    def interact(
-        self,
-        ray: TracingRay,
-        hit_object: VObject,
-        hit_point: np.ndarray
-    ) -> Optional[TracingRay]:
+    def interact(self, ray: TracingRay, hit_info: HitInfo) -> Optional[TracingRay]:
         ...
 
 class ShadingStrategy(ABC):
@@ -117,13 +112,57 @@ class ShadingStrategy(ABC):
         self,
         scene: Scene,
         ray: TracingRay,
-        hit_object: Optional[VObject],
-        hit_distance: Optional[float],
+        hit_info: HitInfo,
         current_depth: int,
         trace_function: Callable,
         interaction_function: Callable,
     ) -> Color:
         ...
+    
+    def _random_point_on_disc(self, center: np.ndarray, normal: np.ndarray, radius: float, seed: Optional[int] = None,) -> np.ndarray:
+        rng = np.random.default_rng(seed)
+
+        # Fix: If normal is parallel to World Up (0,1,0), use X-axis instead to avoid Zero Vector crash.
+        if abs(normal[1]) > 0.99:
+            helper_axis = np.array([1.0, 0.0, 0.0])
+        else:
+            helper_axis = np.array([0.0, 1.0, 0.0])
+            
+        tangent = np.cross(helper_axis, normal)
+        tangent = tangent / np.linalg.norm(tangent)
+        bitangent = np.cross(normal, tangent)
+
+        u1 = rng.random() 
+        u2 = rng.random()
+
+        # We use sqrt(u1) to distribute points evenly by area (prevents clustering in the center)
+        r = math.sqrt(u1) * radius
+        theta = u2 * 2.0 * math.pi
+        
+        offset = tangent * (r * math.cos(theta)) + bitangent * (r * math.sin(theta))
+        
+        return center + offset
+    
+    def _calculate_shadow_visibility(self, scene: Scene, point: np.ndarray, light: LightSource, light_dir: np.ndarray):
+        visibility = 1.0
+
+        if self.enable_shadows:
+            radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
+            if not radius or self.shadow_samples == 1:
+                # single test for occlusion
+                occluded = scene.is_occluded(point, light.position, bias=self.shadow_bias)
+                visibility = 0.0 if occluded else 1.0
+            
+            else:
+                # soft shadow by sampling area light
+                visible_count = 0
+                for _ in range(self.shadow_samples):
+                    sample_pos = self._random_point_on_disc(light.position, -light_dir, float(radius))
+                    if not scene.is_occluded(point, sample_pos, bias=self.shadow_bias):
+                        visible_count += 1
+                visibility = visible_count / float(self.shadow_samples)
+
+        return visibility
 
 # Ray generation implementations
 class BasicRayGenerator(RayGenerator):
@@ -158,7 +197,7 @@ class BasicRayGenerator(RayGenerator):
                 for r in range(max(1, self.rays_per_pixel)):
                     u = (x + 0.5) / cam_width
                     v = (y + 0.5) / cam_height
-                    orientation = self.camera_rotate_ray(camera, u, v)
+                    orientation = self._camera_rotate_ray(camera, u, v)
 
                     # For orthographic cameras, the origin must be offset in the image plane
                     if camera.type == CameraType.ORTHOGRAPHIC:
@@ -195,10 +234,7 @@ class JitterRayGenerator(RayGenerator):
         region: Optional[Tuple[int, int, int, int]] = None, # (x1, y1, w, h)
         seed: Optional[int] = None,
     ) -> List[TracingRay]:
-        if seed is not None:
-            rand = random.Random(seed)
-        else:
-            rand = random.Random()
+        rng = np.random.default_rng(seed)
 
         cam_width, cam_height = camera.width, camera.height
         # default to full image
@@ -216,9 +252,9 @@ class JitterRayGenerator(RayGenerator):
         for y in range(y_start, y_start + region_h):
             for x in range(x_start, x_start + region_w):
                 for r in range(max(1, self.rays_per_pixel)):
-                    u, v = self.jitter_within_pixel(rand, x, y, cam_width, cam_height)
+                    u, v = self.jitter_within_pixel(rng, x, y, cam_width, cam_height)
 
-                    orientation = self.camera_rotate_ray(camera, u, v)
+                    orientation = self._camera_rotate_ray(camera, u, v)
 
                     # For orthographic cameras, the origin must be offset in the image plane
                     if camera.type == CameraType.ORTHOGRAPHIC:
@@ -241,16 +277,16 @@ class JitterRayGenerator(RayGenerator):
                     rays.append(ray)
         return rays
     
-    def jitter_within_pixel(self, rand: random.Random, x: int, y: int, cam_width: int, cam_height: int) -> Tuple[float, float]:
-        jitter_u = rand.uniform(-0.5, 0.5) / cam_width
-        jitter_v = rand.uniform(-0.5, 0.5) / cam_height
+    def jitter_within_pixel(self, rng: np.random.Generator, x: int, y: int, cam_width: int, cam_height: int) -> Tuple[float, float]:
+        jitter_u = rng.uniform(-0.5, 0.5) 
+        jitter_v = rng.uniform(-0.5, 0.5)
         u = (x + 0.5 + jitter_u) / cam_width
         v = (y + 0.5 + jitter_v) / cam_height
         return u, v
 
 # Ray intersection implementations
 class RayMarchingIntersection(IntersectionStrategy):
-    def find_hit(self, scene: Scene, ray: TracingRay) -> Tuple[Optional[VObject], float]:
+    def find_hit(self, scene: Scene, ray: TracingRay) -> HitInfo:
         distance_traveled = 0.0
 
         for _ in range(self.max_steps):
@@ -261,37 +297,35 @@ class RayMarchingIntersection(IntersectionStrategy):
                 distance_to_closest, closest_object = dist_obj
             else:
                 distance_to_closest, closest_object = dist_obj, None
+
+            normal = closest_object.shape.GetNormal(point) if closest_object and hasattr(closest_object, "shape") and hasattr(closest_object.shape, "GetNormal") else np.array([0.0, 1.0, 0.0])
+            
             if distance_to_closest <= self.epsilon:
-                return closest_object, distance_traveled
+                return HitInfo(True, point, normal, closest_object, distance_traveled)
             
             distance_traveled += distance_to_closest
             if distance_traveled >= self.max_distance:
-                return None, float("inf")
-        return None, float("inf")
+                break
+
+        return HitInfo(False, None, None, None, float('inf'))
 
 # Interaction implementations
-class SimpleInteraction(InteractionStrategy):
-    def interact(self, ray: TracingRay, hit_object: VObject, hit_point: np.ndarray) -> Optional[TracingRay]:
-        # Simple interaction that just returns None (no bounce)
-        return None
-
 class OpticalMaterialInteraction(InteractionStrategy):
-    def interact(self, ray: TracingRay, hit_object: VObject, hit_point: np.ndarray) -> Optional[TracingRay]:
+    def interact(self, ray: TracingRay, hit_info: HitInfo) -> Optional[TracingRay]:
         # 1. Resolve Material
-        material = getattr(hit_object, "material", None) or getattr(hit_object.shape, "material", None)
-        
+        material: Material = getattr(hit_info.object, "material", None) or getattr(hit_info.object.shape, "material", None) if hasattr(hit_info.object, "shape") else None
         if not material:
             return None
 
         # 2. Calculate Context (Normal)
         # We need the normal to decide reflection/refraction
-        if hasattr(hit_object.shape, "GetNormal"):
-            normal = hit_object.shape.GetNormal(hit_point)
+        if hasattr(hit_info.object.shape, "GetNormal"):
+            normal = hit_info.object.shape.GetNormal(hit_info.point)
         else:
             return None
 
         # 3. Calculate Origin Offset (Prevent Shadow Acne)
-        new_origin = hit_point + (normal * self.bias)
+        new_origin = hit_info.point + (normal * self.bias)
         distance = np.linalg.norm(new_origin - ray.origin)
         if distance < self.bias:
             new_origin = ray.point_at(distance + self.bias)
@@ -303,22 +337,25 @@ class OpticalMaterialInteraction(InteractionStrategy):
         # If the material implementation raises or returns a malformed orientation,
         # we fall back to a safe perfect-reflection ray.
         try:
-            new_ray_geom, current_throughput = material.calculate_optical_redirection(
+            new_ray, did_reflect, is_inside = calculate_optical_redirection(
                 incoming_ray=ray,
                 surface_normal=normal,
                 incoming_color=current_throughput,
                 new_origin=new_origin
             )
 
+            if not did_reflect and is_inside:
+                current_throughput = material.get_volumetric_component(current_throughput, hit_info.distance)
+
             # Ensure orientation is a 1D numpy vector of length 3
             try:
-                ori = np.asarray(new_ray_geom.orientation, dtype=float).reshape(-1)
+                ori = np.asarray(new_ray.orientation, dtype=float).reshape(-1)
                 if ori.ndim != 1 or ori.size != 3:
                     raise ValueError("Malformed orientation")
                 # normalize
                 ori = ori / np.linalg.norm(ori)
                 orientation_vec = ori
-                origin_vec = np.asarray(new_ray_geom.origin, dtype=float).reshape(-1)
+                origin_vec = np.asarray(new_ray.origin, dtype=float).reshape(-1)
             except Exception:
                 # malformed orientation/origin from material -> fallback to reflection
                 incoming = np.asarray(ray.orientation, dtype=float).reshape(-1)
@@ -347,127 +384,23 @@ class OpticalMaterialInteraction(InteractionStrategy):
         return next_ray
 
 # Shading implementations
-class FlatShading(ShadingStrategy):
-    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable, interaction_function: Callable) -> Color:
-        # Simply return the base color of the material without any lighting
-        material: Optional[Material] = getattr(hit_object, "material", None) or getattr(hit_object.shape, "material", None) if hasattr(hit_object, "shape") else None
-        
-        if not material:
-            return Color(1, 0, 1) # Error Pink
-
-        base_color = getattr(material, "base_color", Color(1.0, 1.0, 1.0))
-        emissive_color = getattr(material, "emissive_color", Color(0.0, 0.0, 0.0))
-        return (base_color + emissive_color).clamp()
-
-class SimpleShading(ShadingStrategy):
-    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable, interaction_function: Callable) -> Color:
-        point = ray.point_at(distance)
-        
-        # Safely get normal
-        if not hasattr(hit_object, "shape") or not hasattr(hit_object.shape, "GetNormal"):
-            return Color(1, 0, 1)  # Error Pink
-        
-        normal = hit_object.shape.GetNormal(point)
-        view_dir = -ray.orientation
-        
-        # Simple diffuse shading with ambient light
-        material: Optional[Material] = getattr(hit_object, "material", None) or getattr(hit_object.shape, "material", None) if hasattr(hit_object, "shape") else None
-        
-        if not material:
-            return Color(1, 0, 1) # Error Pink
-
-        ambient_col = self.ambient_color if self.ambient_color is not None else getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03))
-        direct_light = material.apply_material_color(scene.get_lights(), point, normal, view_dir, ambient_col, lambda l, l_dir, l_dist: 1.0)
-
-        return direct_light
-
-class BasicLambertShading(ShadingStrategy):
-    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable, interaction_function: Callable) -> Color:
-        point = ray.point_at(distance)
-        
-        # Safely get normal
-        if not hasattr(hit_object, "shape") or not hasattr(hit_object.shape, "GetNormal"):
-            return Color(1, 0, 1)  # Error Pink
-        
-        normal = hit_object.shape.GetNormal(point)
-        view_dir = -ray.orientation
-        
-        # Simple diffuse shading with ambient light
-        material: Optional[Material] = getattr(hit_object, "material", None) or getattr(hit_object.shape, "material", None) if hasattr(hit_object, "shape") else None
-        
-        if not material:
-            return Color(1, 0, 1) # Error Pink
-
-        ambient_col = self.ambient_color if self.ambient_color is not None else getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03))
-        direct_light = material.apply_material_color(scene.get_lights(), point, normal, view_dir, ambient_col, lambda l, l_dir, l_dist: 1.0)
-
-        return direct_light
-
 class RecursiveLambertShading(ShadingStrategy):
-    def _random_point_on_disc(self, center: np.ndarray, normal: np.ndarray, radius: float, seed: Optional[int] = None,) -> np.ndarray:
-        if seed is not None:
-            rand_gen = random.Random(seed)
-        else:
-            rand_gen = random.Random()
-
-        # Fix: If normal is parallel to World Up (0,1,0), use X-axis instead to avoid Zero Vector crash.
-        if abs(normal[1]) > 0.99:
-            helper_axis = np.array([1.0, 0.0, 0.0])
-        else:
-            helper_axis = np.array([0.0, 1.0, 0.0])
-            
-        tangent = np.cross(helper_axis, normal)
-        tangent = tangent / np.linalg.norm(tangent)
-        bitangent = np.cross(normal, tangent)
-
-        u1 = rand_gen.random() 
-        u2 = rand_gen.random()
-
-        # We use sqrt(u1) to distribute points evenly by area (prevents clustering in the center)
-        r = math.sqrt(u1) * radius
-        theta = u2 * 2.0 * math.pi
-        
-        offset = tangent * (r * math.cos(theta)) + bitangent * (r * math.sin(theta))
-        
-        return center + offset
-    
-    def _calculate_shadow_visibility(self, scene: Scene, point: np.ndarray, light: LightSource, light_dir: np.ndarray):
-        visibility = 1.0
-
-        if self.enable_shadows:
-            radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
-            if not radius or self.shadow_samples == 1:
-                # single test for occlusion
-                occluded = scene.is_occluded(point, light.position, bias=self.shadow_bias)
-                visibility = 0.0 if occluded else 1.0
-            
-            else:
-                # soft shadow by sampling area light
-                visible_count = 0
-                for _ in range(self.shadow_samples):
-                    sample_pos = self._random_point_on_disc(light.position, -light_dir, float(radius))
-                    if not scene.is_occluded(point, sample_pos, bias=self.shadow_bias):
-                        visible_count += 1
-                visibility = visible_count / float(self.shadow_samples)
-
-        return visibility
-
-    def shade(self, scene: Scene, ray: TracingRay, hit_object: VObject, distance: float, depth: int, trace_function: Callable, interaction_function: Callable) -> Color:
+    def shade(self, scene: Scene, ray: TracingRay, hit_info: HitInfo, depth: int, trace_function: Callable, interaction_function: Callable) -> Color:
         """
         Calculates the color of a point on an object, including direct lighting and recursive reflections.
         """
         # --- 1. Setup Geometry Context ---
-        point = ray.point_at(distance)
+        point = ray.point_at(hit_info.distance)
         
         # Safely get normal
-        if not hasattr(hit_object, "shape") or not hasattr(hit_object.shape, "GetNormal"):
+        if not hasattr(hit_info.object, "shape") or not hasattr(hit_info.object.shape, "GetNormal"):
             return Color(1, 0, 1)  # Error Pink
-        
-        normal = hit_object.shape.GetNormal(point)
+
+        normal = hit_info.object.shape.GetNormal(point)
         view_dir = -ray.orientation
         
         # 2. Resolve Material
-        material: Optional[Material] = getattr(hit_object, "material", None) or getattr(hit_object.shape, "material", None) if hasattr(hit_object, "shape") else None
+        material: Optional[Material] = getattr(hit_info.object, "material", None) or getattr(hit_info.object.shape, "material", None) if hasattr(hit_info.object, "shape") else None
         
         if not material:
             return Color(1, 0, 1) # Error Pink
@@ -479,11 +412,15 @@ class RecursiveLambertShading(ShadingStrategy):
             return self._calculate_shadow_visibility(scene, point, light, light_dir)
 
         # Calculate local lighting (Diffuse + Specular from light sources)
+        direct_light = material.apply_material(scene.get_lights(), hit_info, view_dir, check_visibility)
+        
         if self.ambient_enabled:
             ambient_col = self.ambient_color if self.ambient_color is not None else getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03))
-            direct_light = material.apply_material_color(scene.get_lights(), point, normal, view_dir, ambient_col, check_visibility)
-        else:
-            direct_light = material.apply_material_color(scene.get_lights(), point, normal, view_dir, Color(0.0, 0.0, 0.0), check_visibility)
+            direct_light += material.get_ambient_component(normal, view_dir, ambient_col, self.ambient_intensity)
+
+        if self.environment_enabled:
+            env_color = scene.get_environment_color(ray.orientation)
+            direct_light += material.get_environment_component(env_color, calculate_reflectance(np.dot(normal, view_dir), getattr(material, "ior", 1.5), 1.0))
 
         # --- 4. Indirect Lighting (Recursive Bounce) ---
         indirect_light = Color(0.0, 0.0, 0.0)
@@ -502,15 +439,15 @@ class RecursiveLambertShading(ShadingStrategy):
                     # We use a white probe to get the material's pure attenuation color
                     probe_color = Color(1.0, 1.0, 1.0)
                     
-                    bounce_ray = interaction_function(ray, hit_object, point)
+                    new_ray = interaction_function(ray, hit_info.object, point)
 
                     # B. Recursive Trace
                     # This calls 'self._trace_ray' which you passed in
-                    incoming_light = trace_function(scene, bounce_ray, depth - 1)
+                    incoming_light = trace_function(scene, new_ray, depth - 1)
 
                     # C. Combine
                     # Result = Light from world * Material Attenuation
-                    indirect_light = incoming_light * getattr(bounce_ray, "throughput", probe_color)
+                    indirect_light = incoming_light * getattr(new_ray, "throughput", probe_color)
                 except Exception:
                     # If optical redirection fails, skip indirect lighting
                     indirect_light = Color(0.0, 0.0, 0.0)
@@ -519,6 +456,7 @@ class RecursiveLambertShading(ShadingStrategy):
         final_color = direct_light + indirect_light
         return final_color
 
+# Stats for ray tracing
 class TracingStats(RenderStats):
     rays_traced: int = 0
     hits: int = 0
@@ -556,13 +494,13 @@ class Raytracer(Algorithm):
         self.stats.rays_traced += 1
 
         # 2. Intersect: Find the closest object
-        hit_obj, dist = self.intersector.find_hit(scene, ray)
+        hit = self.intersector.find_hit(scene, ray)
 
         # 3. Hit: If we hit something, ask the shader to calculate color
-        if hit_obj:
+        if hit.object is not None and hit.hit:
             self.stats.hits += 1
 
-            return self.shader.shade(scene, ray, hit_obj, dist, depth, self._trace_ray, self.interactor.interact)
+            return self.shader.shade(scene, ray, hit.object, hit.distance, depth, self._trace_ray, self.interactor.interact)
 
         # 4. Miss: If we hit nothing, return background color
         try:

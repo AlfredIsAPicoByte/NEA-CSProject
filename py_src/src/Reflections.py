@@ -1,9 +1,5 @@
 import numpy as np
 
-"""
-
-"""
-
 def calculate_reflection_angle(incidentAngle: float) -> float:
     """
     Calculate the reflection angle based on the law of reflection.
@@ -23,6 +19,40 @@ def calculate_incident_angle(normalAngle: float, incomingAngle: float) -> float:
         incomingAngle (float): The angle of the incoming ray in degrees.
     """
     return abs(incomingAngle - normalAngle)
+
+def calculate_reflectance(incidentAngle: float, refractiveIndex1: float, refractiveIndex2: float) -> float:
+    """
+    Calculate the reflectance using Fresnel equations for unpolarized light.
+
+    Attributes:
+        incidentAngle (float): The angle of incidence in degrees.
+        refractiveIndex1 (float): The refractive index of the first medium.
+        refractiveIndex2 (float): The refractive index of the second medium.
+    """
+    import math
+
+    # Convert angle to radians
+    incidentAngleRad = math.radians(incidentAngle)
+
+    # Calculate sine of transmission angle using Snell's law
+    sinTransmissionAngle = (refractiveIndex1 / refractiveIndex2) * math.sin(incidentAngleRad)
+
+    # Total internal reflection check
+    if abs(sinTransmissionAngle) > 1.0:
+        return 1.0  # Total internal reflection
+
+    transmissionAngleRad = math.asin(sinTransmissionAngle)
+
+    cosIncident = math.cos(incidentAngleRad)
+    cosTransmission = math.cos(transmissionAngleRad)
+
+    rs = ((refractiveIndex1 * cosIncident - refractiveIndex2 * cosTransmission) /
+          (refractiveIndex1 * cosIncident + refractiveIndex2 * cosTransmission)) ** 2
+    rp = ((refractiveIndex1 * cosTransmission - refractiveIndex2 * cosIncident) /
+          (refractiveIndex1 * cosTransmission + refractiveIndex2 * cosIncident)) ** 2
+
+    reflectance = (rs + rp) / 2.0
+    return reflectance
 
 def reflect_angle(normalAngle: float, incomingAngle: float) -> float:
     """
@@ -59,3 +89,8 @@ def reflect_ray(normal: np.ndarray, ray_direction: np.ndarray) -> np.ndarray:
     dot_product = np.dot(direction, normal)
     reflected = direction - 2 * dot_product * normal
     return reflected / (np.linalg.norm(reflected) + 1e-12)
+
+
+"""
+Reflection module: Provides functions to calculate reflection angles and reflected ray directions based on the law of reflection.
+"""

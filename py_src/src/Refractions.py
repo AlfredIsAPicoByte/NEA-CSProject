@@ -1,10 +1,6 @@
 import numpy as np
 import math
 
-"""
-
-"""
-
 REFRACTIVE_INDICIES = {
     "air": 1.000293,
     "water": 1.333,
@@ -199,10 +195,14 @@ def refract_ray(normal: np.ndarray, origin: np.ndarray, direction: np.ndarray, r
     sin_theta_t2 = n_ratio ** 2 * sin_theta_i2
 
     if sin_theta_t2 > 1.0:
-        raise ValueError("Total internal reflection occurs; no refraction.")
+        return None
 
     cos_theta_t = math.sqrt(1.0 - sin_theta_t2)
     refractedDirection = n_ratio * incomingDirection + (n_ratio * cos_theta_i - cos_theta_t) * normal
     refractedDirection = refractedDirection / np.linalg.norm(refractedDirection)
 
     return (origin, refractedDirection)
+
+"""
+Refraction module: Provides functions to calculate refraction angles, refractive indices, and refracted ray directions based on Snell's Law.
+"""

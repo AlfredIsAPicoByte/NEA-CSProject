@@ -19,6 +19,7 @@ venv.bak/
 build/
 dist/
 develop-eggs/
+.pytest_cache/
 
 # C++
 *.o

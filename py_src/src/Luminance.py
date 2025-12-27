@@ -1,15 +1,52 @@
+from enum import Enum
 import numpy as np
-from typing import Callable, List, Optional
-from PrimaryStructures import Ray
-from Reflections import reflect_ray
-from Refractions import refract_ray, calculate_critical_angle
+from typing import Callable, List, Tuple, Optional
 
-"""
-
-"""
+from PrimaryStructures import Ray, HitInfo
+from Reflections import reflect_ray, calculate_reflectance
+from Refractions import refract_ray, REFRACTIVE_INDICIES
 
 def clamp(value, min_value: float|int = 0.0, max_value: float|int = 1.0):
     return max(min_value, min(value, max_value))
+
+def lerp(a, b, t):
+    return a + (b - a) * t
+
+def attenuate_distance_cof(cls, distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0) -> float:
+    """
+    Return a factor attenuated by distance using quadratic attenuation.
+    factor = 1 / (a*d^2 + b*d + c)
+    """
+    if c == 0 and a == 0 and b == 0:
+        raise ValueError("Attenuation coefficients cannot all be zero")
+    factor = 1.0 / (a * (distance ** 2) + b * distance + c)
+    return factor
+
+def attenuate_distance_max(cls, distance: float, max_distance: float) -> float:
+    """
+    Return a factor attenuated linearly based on distance and max distance.
+    factor = max(0, 1 - (distance / max_distance))
+    """
+    if max_distance <= 0:
+        raise ValueError("max_distance must be greater than zero")
+    factor = max(0.0, 1.0 - (distance / max_distance))
+    return factor
+
+def attenuate_sqr_distance(cls, distance: float) -> float:
+    """
+    Return a factor attenuated linearly based on distance squared.
+    factor = 1 / ((distance ** 2) + 1e-6)
+    """
+    factor = 1 / ((distance ** 2) + 1e-6)
+    return factor
+
+def attenuate_distance_exponential(self, distance: float, decay_rate: float = 1.0) -> float:
+    """
+    Return a factor attenuated exponentially based on distance.
+    factor = exp(-decay_rate * distance)
+    """
+    factor = np.exp(-decay_rate * distance)
+    return factor
 
 class Color:
     def __init__(self, r=0.0, g=0.0, b=0.0, a=1.0, clamp=False):
@@ -192,10 +229,20 @@ class Color:
     def to_rgb255(self):
         r, g, b, a = (self.rgba * 255).astype(int)
         return (r, g, b)
-    
-    
+
     def __repr__(self):
         return f"Color(red={self.red:.2f}, green={self.green:.2f}, blue={self.blue:.2f}, alpha={self.alpha:.2f})"
+
+
+def attenuate_color(cls, color, factor: float) -> Color:
+    """Return a new Color attenuated by the given factor."""
+    # Note: 'color' is used to access the specific instance properties
+    return Color(
+        clamp(color.red * factor),
+        clamp(color.green * factor),
+        clamp(color.blue * factor),
+        color.alpha
+    )
 
 class ColorGradient:
     def __init__(self, colors: List[Color], positions: List[float]):
@@ -208,19 +255,26 @@ class ColorGradient:
         
         self.colors = colors
         self.positions = positions
-    
-    def get_color(self, t: float) -> Color:
+
+    def get_color(
+            self,
+            t: float,
+            interpolation_function: Callable[[float], float] = lambda x: x # Linear by default
+        ) -> Color:
         """Get interpolated color at position t in [0.0, 1.0]."""
         t = clamp(t)
         for i in range(1, len(self.positions)):
             if t <= self.positions[i]:
                 t0, t1 = self.positions[i-1], self.positions[i]
                 c0, c1 = self.colors[i-1], self.colors[i]
-                factor = (t - t0) / (t1 - t0) if t1 > t0 else 0.0
+
+                factor = interpolation_function((t - t0) / (t1 - t0) if t1 > t0 else 0.0)
+
                 r = c0.red + factor * (c1.red - c0.red)
                 g = c0.green + factor * (c1.green - c0.green)
                 b = c0.blue + factor * (c1.blue - c0.blue)
                 a = c0.alpha + factor * (c1.alpha - c0.alpha)
+
                 return Color(r, g, b, a)
         return self.colors[-1]
         
@@ -239,57 +293,6 @@ class LightSource:
         if norm == 0:
             return direction  # Zero vector if at the same point
         return direction / norm
-    
-    @classmethod
-    def attenuate_color(cls, color, factor: float) -> Color:
-        """Return a new Color attenuated by the given factor."""
-        # Note: 'color' is used to access the specific instance properties
-        return Color(
-            clamp(color.red * factor),
-            clamp(color.green * factor),
-            clamp(color.blue * factor),
-            color.alpha
-        )
-    
-    @classmethod
-    def attenuate_distance_cof(cls, distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0) -> float:
-        """
-        Return a factor attenuated by distance using quadratic attenuation.
-        factor = 1 / (a*d^2 + b*d + c)
-        """
-        if c == 0 and a == 0 and b == 0:
-            raise ValueError("Attenuation coefficients cannot all be zero")
-        factor = 1.0 / (a * (distance ** 2) + b * distance + c)
-        return factor
-    
-    @classmethod
-    def attenuate_distance_max(cls, distance: float, max_distance: float) -> float:
-        """
-        Return a factor attenuated linearly based on distance and max distance.
-        factor = max(0, 1 - (distance / max_distance))
-        """
-        if max_distance <= 0:
-            raise ValueError("max_distance must be greater than zero")
-        factor = max(0.0, 1.0 - (distance / max_distance))
-        return factor
-    
-    @classmethod
-    def attenuate_sqr_distance(cls, distance: float) -> float:
-        """
-        Return a factor attenuated linearly based on distance squared.
-        factor = 1 / ((distance ** 2) + 1e-6)
-        """
-        factor = 1 / ((distance ** 2) + 1e-6)
-        return factor
-
-    def get_final_color(self, distance: float, attenuation_type: str = "distance_cof", **kwargs) -> Color:
-        """Return the final color of the light source after applying attenuation based on distance."""
-        if attenuation_type == "distance_cof":
-            return self.attenuate_distance_cof(self.color, distance, **kwargs)
-        elif attenuation_type == "distance_max":
-            return self.attenuate_distance_max(self.color, distance, **kwargs)
-        else:
-            raise ValueError(f"Unknown attenuation type: {attenuation_type}")
 
     def __repr__(self):
         return (
@@ -297,140 +300,148 @@ class LightSource:
             f"color={self.color}, intensity={self.intensity:.2f})"
         )
 
-class Material:
-    def __init__(self, color: Color, roughness: float = 0.5, glossiness: float = 0.5, metallic: float = 0.0, ior: float = 1.0, emissive: Optional[Color] = None, emissive_intensity: float = 1.0):
-        # Ensure base_color is stored as a Color object
-        self.base_color = color if isinstance(color, Color) else Color(color)
-        
-        # Handle emissive defaulting
-        if emissive is None:
-            self.emissive_color = Color(0, 0, 0)
-        else:
-            self.emissive_color = emissive if isinstance(emissive, Color) else Color(emissive)
-            
-        self.roughness = roughness
-        self.glossiness = glossiness
-        self.metallic = metallic
-        self.ior = ior
-        self.emissive_intensity = emissive_intensity
-        
-        # Flags
-        self.is_transparent = False
-        self.can_refract = False
+class MaterialType(Enum):
+    DIFFUSE = 1 # Only diffuse reflections
+    SPECULAR = 2 # Includes specular reflections and metallic properties
+    GLASS = 3 # Uses refraction and reflection based on IOR
+    TRANSPARENT = 4 # No surface, only transparency and albedo tint
+    EMISSIVE = 5 # Self-illuminating material, no light considerations
 
-    def apply_material_color(
+class Material:
+    def __init__(
             self,
-            light_sources: List[LightSource],
-            hit_point: np.ndarray,
-            normal: np.ndarray,
+            albedo_color: Color = Color(1, 1, 1),
+            emissive_color: Color = Color(0, 0, 0),
+            roughness: float = 0.5,
+            metallicness: float = 0.0,
+            specular_tint_amount: float = 0.0,
+            emissive_intensity: float = 1.0,
+            ior: float = REFRACTIVE_INDICIES["glass"],
+            absorption_color: Color = Color(0.0, 0.0, 0.0),
+            absorption_strength = 0.5,
+            is_transparent: bool = False,
+            transperent_strength: float = 1.0,
+            type: MaterialType = MaterialType.DIFFUSE,
+        ):
+        # Ensure colors are stored as a Color objects
+        self.albedo = albedo_color if isinstance(albedo_color, Color) else Color(albedo_color)
+        self.emissive_color = emissive_color if isinstance(emissive_color, Color) else Color(emissive_color)
+        self.absorption_color = absorption_color if isinstance(absorption_color, Color) else Color(absorption_color)
+        
+        # Surface properties
+        self.roughness = clamp(roughness, 0.0, 1.0)
+        self.metallic = clamp(metallicness, 0.0, 1.0)
+        self.specular_tint_amount = clamp(specular_tint_amount, 0.0, 1.0)
+        self.absorption_strength = clamp(absorption_strength, 0.0, 1.0)
+        self.transperent_strength = clamp(transperent_strength, 0.0, 1.0)
+        self.emissive_intensity = emissive_intensity
+        self.ior = ior
+
+        # Flags
+        self.is_transparent = is_transparent
+        self.type = type
+
+    @classmethod
+    def create_diffuse(cls):
+        return cls()
+
+    @classmethod
+    def create_specular(cls):
+        return cls()
+    
+    @classmethod
+    def create_glass(cls):
+        return cls()
+    
+    @classmethod
+    def create_transparent(cls):
+        return cls()
+
+    def apply_material(
+            self,
+            scene_lights: List[LightSource],
+            hit_info: HitInfo,
             view_dir: np.ndarray,
-            ambient_color: Color,
-            visibility_function: Callable
+            visibility_function: Callable,
+            bias: float = 1e-4
         ) -> Color:
         """
         Calculates the full color of the material by iterating over all lights in the scene.
         """
         final_color = Color(0.0, 0.0, 0.0, 1.0)
-        
-        for light in light_sources:
-            # 1. Geometry & Attenuation
-            light_vec = light.position - hit_point
-            light_dist = np.linalg.norm(light_vec)
+        surface_normal = hit_info.normal
+        hit_point = hit_info.point
+
+        for light in scene_lights:
+            if self.type == MaterialType.EMISSIVE:
+                break  # Emissive materials do not respond to external light sources
+
+            light_dir = light.get_light_direction(hit_point)
+            light_dist = np.linalg.norm(light.position - hit_point)
+
+            if light_dist <= bias:
+                continue # Light is too close or at the hit point
             
-            if light_dist <= 1e-6: continue # too close
-
-            light_dir = light_vec / light_dist
+            # Determine if the ray is escaping or entering the surface
+            NdotL = max(0.0, np.dot(surface_normal, light_dir))
+            if NdotL <= 0.0 and self.type != MaterialType.TRANSPARENT and self.type != MaterialType.GLASS:
+                continue # behind the surface, ignore for glass and transparent materials
             
-            NdotL = max(0.0, np.dot(normal, light_dir))
-            if NdotL <= 0.0: continue # behind the surface
+            light_attenuation = attenuate_sqr_distance(light_dist) # Using inverse square law for point lights
+            light_intensity = light.intensity * light_attenuation
 
-            attenuation = LightSource.attenuate_sqr_distance(light_dist)
-            light_intensity = light.intensity * attenuation
-
-            # 2. Visibility / Shadows (Callback to the renderer/strategy)
-            # We pass the light info back to the strategy's visibility function
-            if self.is_transparent:
-                visibility = 1.0  # Fully visible through transparent materials
+            if self.type == MaterialType.TRANSPARENT:
+                visibility = 1.0
             else:
-                visibility = visibility_function(light, light_dir, light_dist)
-            
-            if visibility <= 0.0: continue
+                visibility = visibility_function(hit_point, light.position)
 
-            # 3. PBR Components
-            diffuse = self.get_diffuse_component(normal, light_dir, light_intensity)
-            specular = self.get_specular_component(normal, light_dir, light_intensity, view_dir)
-            
-            # 4. Accumulate
-            final_color += (diffuse + specular) * light.color * visibility
+            if visibility <= 0.0:
+                continue # Light is fully blocked
 
-        # Add in ambient color 
-        final_color += ambient_color * self.base_color
+            # Material response based on type
+            if self.type == MaterialType.DIFFUSE:
+                diffuse_component = self.get_diffuse_component(surface_normal, light_dir, light_intensity)
+                final_color += diffuse_component * visibility
 
-        # Add Emissive (Self-illumination)
-        final_color += self.get_emissive_component()
+            if self.type == MaterialType.SPECULAR:
+                diffuse_component = self.get_diffuse_component(surface_normal, light_dir, light_intensity)
+                specular_component = self.get_specular_component(surface_normal, light_dir, light_intensity, view_dir)
+                final_color += (diffuse_component + specular_component) * visibility
+
+            if self.type == MaterialType.GLASS:
+                specular_component = self.get_specular_component(surface_normal, light_dir, light_intensity, view_dir)
+                final_color += specular_component * visibility
+
+            if self.type == MaterialType.TRANSPARENT:
+                transparent_component = self.get_transparency_component()
+                final_color += transparent_component * visibility
+
+        if self.type == MaterialType.EMISSIVE:
+            emissive_component = self.get_emissive_component()
+            final_color = emissive_component
         
-        return final_color.clamp()
-
-    def calculate_optical_redirection(
-            self,
-            incoming_ray: Ray,
-            surface_normal: np.ndarray,
-            incoming_color: Color,
-            new_origin: np.ndarray,
-            bias: float = 1e-4
-        ) -> tuple[Ray, Color]:
-        unit_dir = incoming_ray.orientation / np.linalg.norm(incoming_ray.orientation)
-        unit_normal = surface_normal / np.linalg.norm(surface_normal)
-
-        final_dir = reflect_ray(unit_normal, incoming_ray.orientation)
-        final_origin = new_origin + (unit_normal * bias)
-
-        if self.can_refract and self.is_transparent:
-            ior_air = 1.0
-            ior_material = getattr(self, 'ior', 1.5)
-
-            # Check if entering or exiting
-            cos_i = -np.dot(unit_normal, unit_dir)
-            if cos_i > 0:
-                # Entering the material (Air -> Glass)
-                n1, n2 = ior_air, ior_material
-                normal = unit_normal
-            else:
-                # Exiting the material (Glass -> Air)
-                n1, n2 = ior_material, ior_air
-                normal = -unit_normal # Flip normal to point into the new medium
-            
-            try:
-                final_dir = refract_ray(normal, new_origin, incoming_ray.direction, n1, n2)
-                final_origin = new_origin - (normal * bias)
-            except ValueError:
-                pass
-
-        attenuation = LightSource.attenuate_color(self.base_color + incoming_color, LightSource.attenuate_sqr_distance(np.linalg.norm(incoming_ray.origin - new_origin)))
-        attenuation += self.get_emissive_component()
-
-        # If it's a metal, the attenuation matches the reflection color strongly
-        # If it's glass, it might be clear (white attenuation) or tinted
-        
-        # Create the new ray
-        redirected_ray = Ray(
-            origin=final_origin,
-            orientation=final_dir,
-            name=f"{incoming_ray.name}_bounce"
-        )
-        
-        return redirected_ray, attenuation
+        return final_color
 
     def get_diffuse_component(self, surface_normal: np.ndarray, light_dir: np.ndarray, light_intensity: float) -> Color:
-        """Get the diffuse component of the material response."""
-        diffuse = self.base_color * light_intensity * max(0, np.dot(surface_normal, light_dir))
+        """
+        Get the diffuse component (Lambertian). 
+        Corrected to respect the Metallic workflow energy conservation.
+        """
+        NdotL = max(0.0, np.dot(surface_normal, light_dir))
+        
+        # 1. Standard Lambert Diffuse (Simple but physically consistent)
+        diffuse = light_intensity * self.albedo * NdotL
+        
+        # 2. ENERGY CONSERVATION: Metals have NO diffuse.
+        # As metallic approaches 1.0, diffuse must approach 0.0.
+        diffuse = diffuse * (1.0 - self.metallic)
+        
         return diffuse
 
     def get_specular_component(self, surface_normal: np.ndarray, light_dir: np.ndarray, light_intensity: float, view_dir: np.ndarray) -> Color:
         """Get the specular component of the material response using the Micro-Facet BRDF."""
         
         # --- 0. Pre-Calculations and Constants ---
-        
         alpha = self.roughness
         alpha_sq = alpha * alpha
         
@@ -449,13 +460,12 @@ class Material:
         NDF = alpha_sq / (np.pi * denom_ndf * denom_ndf)
         
         # --- 2. Geometric Shadowing Function (GSF - Schlick-GGX Approximation) ---
-        k = (alpha + 1.0) / 2.0
+        k = ((alpha + 1.0) ** 2) / 8.0 
+        
         GS_Schlick = lambda n_dot_k: n_dot_k / (n_dot_k * (1.0 - k) + k)
         GSF = GS_Schlick(NdotL) * GS_Schlick(NdotV)
         
         # --- 3. Fresnel Function (FF - Schlick Approximation) ---
-        
-        # REUSED COMPONENT: Calculate F0 using the dedicated function
         F0 = self.get_metallic_component()
         
         # F_schlick calculation (Color operations are handled correctly)
@@ -463,7 +473,6 @@ class Material:
         FF = F0 + (Color(1.0, 1.0, 1.0) - F0) * term_pow5
 
         # --- 4. Final BRDF Term (Fs) and Specular Contribution ---
-        
         # Denominator of the BRDF term
         denom_fs = 4.0 * NdotL * NdotV 
         
@@ -477,39 +486,131 @@ class Material:
         specular = light_intensity * Fs * NdotL 
         
         return specular
-    
+
+    def get_metallic_component(self, bias: float = 1e-4) -> Color:
+        """
+        Calculates the F0 (Base Reflectivity) using Disney's specular tint model.
+        """
+        # 1. Calculate the tint for the dielectric (non-metal) part
+        # Normalize albedo to get just the hue/saturation
+        luminance = self.albedo.r * 0.3 + self.albedo.g * 0.6 + self.albedo.b * 0.1
+        tint_color = self.albedo / (luminance + bias) # Avoid divide by zero
+        
+        # Mix between white (standard plastic) and the tint color based on a 'specular_tint' float slider
+        F0_dielectric_base = Color(0.04, 0.04, 0.04)
+        F0_dielectric_tinted = F0_dielectric_base * tint_color
+        
+        # If self.specular_tint_amount is 0.0, use white. If 1.0, use the tint.
+        F0_dielectric_final = lerp(F0_dielectric_base, F0_dielectric_tinted, self.specular_tint_amount)
+
+        # 2. Final Blend using Metallic
+        # If metal, use Albedo. If dielectric, use our new custom tinted F0.
+        return F0_dielectric_final * (1.0 - self.metallic) + self.albedo * self.metallic
+
     def get_emissive_component(self) -> Color:
         """Get the emissive color of the material."""
-        return self.emissive_color * getattr(self, "emissive_intensity", 1)
-    
-    def get_metallic_component(self) -> Color:
+        return self.emissive_color * self.emissive_intensity
+
+    def get_volumetric_component(self, incoming_color: Color, distance: float) -> Color:
         """
-        Calculates the F0 (Base Reflectivity) vector, blending between 
-        dielectric (non-metal) and metallic properties.
+        Calculates the volumetric attenuation of light passing through the material
         """
-        # F_dielectric is the standard 4% reflection at normal incidence
-        # for non-metals (represented as an RGB color vector).
-        F_dielectric = Color(0.04, 0.04, 0.04)
-        
-        # F0 is a linear interpolation (Lerp) controlled by self.metallic:
-        # If metallic = 0, F0 = F_dielectric
-        # If metallic = 1, F0 = self.base_color
-        F0 = F_dielectric * (1.0 - self.metallic) + self.base_color * self.metallic
-        
-        return F0
+        transmittance = attenuate_distance_exponential(distance, decay_rate=self.absorption_strength)
+        absorbance = 1.0 - transmittance
+        return attenuate_color(self.absorption_color, absorbance) * attenuate_color(incoming_color, transmittance)
+
+    def get_transparency_component(self, incoming_color: Color) -> Color:
+        """
+        Calculates the transparency color contribution of the material.
+        """
+        return lerp(incoming_color, self.albedo, self.transperent_strength)
+
+    def apply_ambient_color(self, surface_normal: np.ndarray, view_dir: np.ndarray, ambient_color: Color, ambient_intensity: float) -> Color:
+        """
+        Calculates the ambient color contribution of the material.
+        """
+        NdotV = max(0.0, np.dot(surface_normal, view_dir))
+        ambient = ambient_color * ambient_intensity * NdotV * self.albedo
+        return ambient
 
     def __repr__(self):
         return (
-            f"Material(color={self.base_color}, "
-            f"roughness={self.roughness:.2f}, glossiness={self.glossiness:.2f}, emissive={self.emissive_color}, metallic={self.metallic:.2f})"
+            f"Material(type={self.type.name}, albedo={self.albedo}, "
+            f"specular_tint={self.specular_tint}, ior={self.ior:.2f}, "
+            f"diffuse_roughness={self.diffuse_roughness:.2f}, "
+            f"reflective_roughness={self.reflective_roughness:.2f})"
         )
 
+def calulate_ray_reflection(
+        incoming_ray: Ray,
+        surface_normal: np.ndarray,
+        seed: Optional[int] = None,
+        ):
+    pass
+
+def calculate_ray_refraction():
+    pass
+
+def calculate_optical_redirection(
+        incoming_ray: Ray,
+        surface_normal: np.ndarray,
+        new_origin: np.ndarray,
+        current_refactive_index: float = REFRACTIVE_INDICIES['glass'],
+        incoming_refactive_index: float = REFRACTIVE_INDICIES['air'],
+        seed: Optional[int] = None,
+        bias: float = 1e-4
+    ) -> Tuple[Ray, bool]:
+    rng = np.random.default_rng(seed)
+    
+    unit_dir = incoming_ray.orientation / np.linalg.norm(incoming_ray.orientation)
+    unit_normal = surface_normal / np.linalg.norm(surface_normal)
+
+    reflectance = calculate_reflectance(
+        np.degrees(np.arccos(-np.dot(unit_normal, unit_dir))),
+        current_refactive_index,
+        incoming_refactive_index,
+    )
+    
+    # Decide between reflection and refraction based on reflectance
+    if rng.random() < reflectance:
+        # Reflect
+        final_dir = reflect_ray(unit_normal, unit_dir)
+        final_origin = new_origin + unit_normal * bias
+        did_reflect = True
+    else:
+        # Refract
+        refracted = refract_ray(unit_normal, unit_dir, incoming_refactive_index, current_refactive_index)
+        if not refracted is None:
+            final_dir = refracted
+            final_origin = new_origin - unit_normal * bias
+            did_reflect = False
+        else:
+            # Total internal reflection fallback
+            final_dir = reflect_ray(unit_normal, unit_dir)
+            final_origin = new_origin + unit_normal * bias
+            did_reflect = True
+    
+    # Create the new ray
+    redirected_ray = Ray(
+        origin=final_origin,
+        orientation=final_dir,
+        name=f"{incoming_ray.name}_bounce"
+    )
+
+    NdotL = np.dot(surface_normal, incoming_ray.orientation)
+    
+    return redirected_ray, did_reflect, NdotL >= 0.0
 
 """
 Luminance module: Provides classes for color representation, light rays, materials, and light sources.
 
-Provides:
-  - Color: RGBA color with conversions (hex, RGB255, array)
-  - Material: Surface properties (roughness, glossiness) affecting light interaction
-  - LightSource: Point light emitting rays with color and intensity
+Classes:
+    - Color: RGBA color with conversions (hex, RGB255, array)
+    - ColorGradient: Interpolated color gradients
+    - LightSource: Point light emitting rays with color and intensity
+    - Material: Surface properties (roughness, glossiness) affecting light interaction
+Functions:
+    - Various distance attenuation functions
+    - Color attenuation function
+    - Optical redirection calculation for reflection/refraction
 """

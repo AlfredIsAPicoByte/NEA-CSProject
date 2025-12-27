@@ -6,49 +6,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from src.PrimaryStructures import Transform
 from src.Geometry import Sphere, Cube, VObject
-from src.Algorithims import Algorithm
+from src.RenderingAlgorithims import Algorithm
 from src.Raytracing import Raytracer
 from src.Sampling import Sampler, RandomSampler
 from src.Postprocessing import PostProcessingPipeline
 from src.Scene import Scene
 from src.Camera import VCamera, CameraType
 from src.Luminance import LightSource, Color, ColorGradient, Material
-
-def render_process(scene: Scene, algorithim: Algorithm) -> np.ndarray:
-    """
-    Renders the scene and returns a NumPy float32 array (H, W, 3) ready for post-processing.
-    Uses the sampler to generate subpixel samples for each pixel.
-    If region is specified, only renders that region: (x0, y0, x1, y1).
-    """
-    W, H = scene.camera.width, scene.camera.height
-    raw_buffer = np.zeros((H, W, 3), dtype=np.float32)
-    
-    # Render the scene using the provided algorithm
-    pixel_colors: List[Color] = algorithim.render(scene)
-    # Convert list of Colors to NumPy array
-    for y in range(H):
-        for x in range(W):
-            idx = y * W + x
-            col = pixel_colors[idx]
-            raw_buffer[y, x, 0] = col.r
-            raw_buffer[y, x, 1] = col.g
-            raw_buffer[y, x, 2] = col.b
-    return raw_buffer
-
-def save_image(img_data: np.ndarray, out_path="render_out.png"):
-    """
-    Saves the image.
-    """
-    out_dir = os.path.dirname(out_path)
-    if out_dir and not os.path.exists(out_dir):
-        os.makedirs(out_dir, exist_ok=True)
-    
-    # Quantize to 0-255 uint8
-    final_pixels = np.clip(img_data * 255.0, 0, 255).astype(np.uint8)
-    
-    im = Image.fromarray(final_pixels, mode="RGB")
-    im.save(out_path)
-    print(f"  Saved to {out_path}")
 
 # --- SCENE DEFINITIONS ---
 
@@ -72,23 +36,23 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
 
     # Main Sphere (Mid-Ground): Highly Reflective Metal
     sphere_shape_1 = Sphere(center=np.array([13.0, 5.0, 22.0]), radius=0.5, name="MainReflectiveBall")
-    mat_metal = Material(color=Color.from_hex("#E0E0E0"), emissive=Color(0, 0, 0), roughness=0.05, glossiness=0.9, metallic=1.0) # Highly reflective metal
+    mat_metal = Material(albedo_color=Color.from_hex("#E0E0E0"), emissive_color=Color(0, 0, 0), roughness=0.05, glossiness=0.9, metallic=1.0) # Highly reflective metal
     sphere_shape_1.material = mat_metal
 
     # Ground: Darker, slightly reflective floor for showing reflections
     ground = Sphere(center=np.array([0.0, -100.0, 0.0]), radius=100.0, name="FloorPlane")
-    mat_floor = Material(color=Color.from_hex("#4B5320"), emissive=Color(0.01, 0.01, 0.01), roughness=0.3, glossiness=0.6, metallic=0.0)
+    mat_floor = Material(albedo_color=Color.from_hex("#4B5320"), emissive_color=Color(0.01, 0.01, 0.01), roughness=0.3, glossiness=0.6, metallic=0.0)
     ground.material = mat_floor
 
     # Additional Object 1: Cube (Background/Visual Anchor) - Matte and Rough
     box_shape = Cube(center=np.array([2.5, 3.0, 4.0]), side_length=2.5, name="BackgroundBox")
     box_shape.transform.rotate(15, np.array([0, 1, 0])) # Simple rotation for visual interest
-    mat_matte = Material(color=Color.from_hex("#C27A23"), emissive=Color(0, 0, 0), roughness=0.8, glossiness=0.1, metallic=0.0) # Rough, terracotta-like
+    mat_matte = Material(albedo_color=Color.from_hex("#C27A23"), emissive_color=Color(0, 0, 0), roughness=0.8, glossiness=0.1, metallic=0.0) # Rough, terracotta-like
     box_shape.material = mat_matte
     
     # Additional Object 2: Small Emissive Sphere (Light Source Helper) - Floating in air
     sphere_shape_2 = Sphere(center=np.array([-2.0, 2.5, 2.0]), radius=0.3, name="EmissiveOrb")
-    mat_glow = Material(color=Color(0, 0, 0), emissive=Color(0.5, 0.3, 0.1), roughness=0.0, glossiness=0.0, metallic=0.0) # Pure glow
+    mat_glow = Material(albedo_color=Color(0, 0, 0), emissive_color=Color(0.5, 0.3, 0.1), roughness=0.0, glossiness=0.0, metallic=0.0) # Pure glow
     sphere_shape_2.material = mat_glow
 
     cam.transform.look_at(sphere_shape_1.transform.position)
@@ -112,13 +76,13 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
 
     # Sphere at origin
     sphere_shape = Sphere(center=np.array([0.0, 0.0, 0.0]), radius=0.5, name="BallMin")
-    mat = Material(color=Color.from_hex("#44A1FF"), emissive=Color(0, 0, 0), roughness=0.5, glossiness=0.1, metallic=0.0)
+    mat = Material(albedo_color=Color.from_hex("#44A1FF"), emissive_color=Color(0, 0, 0), roughness=0.5, metallic=0.0)
     sphere_shape.material = mat
     scene.add_object(VObject(shape=sphere_shape, name="SphereMin"))
 
     # Ground
     ground = Sphere(center=np.array([0.0, -100.5, 0.0]), radius=100.0, name="GroundMin")
-    matg = Material(color=Color.from_hex("#808080"), emissive=Color(0, 0, 0), roughness=1.0, glossiness=0.0, metallic=0.0)
+    matg = Material(albedo_color=Color.from_hex("#808080"), emissive_color=Color(0, 0, 0), roughness=1.0, metallic=0.0)
     ground.material = matg
     scene.add_object(VObject(shape=ground, name="GroundMin"))
 
@@ -136,19 +100,19 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
 
     # Emissive sphere
     emissive = Sphere(center=np.array([0.8, 1.0, 0.0]), radius=0.3, name="EmissiveOrb")
-    mat_glow = Material(color=Color(0,0,0), emissive=Color(0.3, 0.3, 0.9), roughness=0.0, glossiness=0.0, metallic=0.0, emissive_intensity=1.5)
+    mat_glow = Material(albedo_color=Color(0,0,0), emissive_color=Color(0.3, 0.3, 0.9), roughness=0.0, glossiness=0.0, metallic=0.0, emissive_intensity=1.5)
     emissive.material = mat_glow
     scene.add_object(VObject(shape=emissive, name="GlowingSphere"))
 
     # Reflective sphere
     mirror = Sphere(center=np.array([-0.5, 0.5, 0.0]), radius=0.5, name="Mirror")
-    mat_reflect = Material(color=Color.from_hex("#EDEDED"), emissive=Color(0, 0, 0), roughness=0.05, glossiness=0.9, metallic=0.9)
+    mat_reflect = Material(albedo_color=Color.from_hex("#EDEDED"), emissive_color=Color(0, 0, 0), roughness=0.05, glossiness=0.9, metallic=0.9)
     mirror.material = mat_reflect
     scene.add_object(VObject(shape=mirror, name="MirrorSphere"))
 
     # Ground
     ground = Sphere(center=np.array([0.0, -100.5, 0.0]), radius=100.0, name="GroundEmissive")
-    matg = Material(color=Color.from_hex("#202020"), emissive=Color(0,0,0), roughness=0.8, glossiness=0.0, metallic=0.0)
+    matg = Material(albedo_color=Color.from_hex("#202020"), emissive_color=Color(0,0,0), roughness=0.8, glossiness=0.0, metallic=0.0)
     ground.material = matg
     scene.add_object(VObject(shape=ground, name="GroundEmissive"))
 
@@ -166,18 +130,18 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
 
     # Objects: two spheres and box as background
     s1 = Sphere(center=np.array([-0.6, 0.4, 0.5]), radius=0.4, name="StudioBallA")
-    mat1 = Material(color=Color.from_hex("#FFB86B"), emissive=Color(0,0,0), roughness=0.3, glossiness=0.2, metallic=0.0)
+    mat1 = Material(albedo_color=Color.from_hex("#FFB86B"), emissive_color=Color(0,0,0), roughness=0.3, glossiness=0.2, metallic=0.0)
     s1.material = mat1
     scene.add_object(VObject(shape=s1, name="StudioBallA"))
 
     s2 = Sphere(center=np.array([0.8, 0.45, 0.2]), radius=0.45, name="StudioBallB")
-    mat2 = Material(color=Color.from_hex("#6B9BFF"), emissive=Color(0,0,0), roughness=0.15, glossiness=0.6, metallic=0.2)
+    mat2 = Material(albedo_color=Color.from_hex("#6B9BFF"), emissive_color=Color(0,0,0), roughness=0.15, glossiness=0.6, metallic=0.2)
     s2.material = mat2
     scene.add_object(VObject(shape=s2, name="StudioBallB"))
 
     # Background box
     box_shape = Cube(center=np.array([0.0, 0.5, 3.0]), side_length=4.0, name="StudioBack")
-    mat_box = Material(color=Color.from_hex("#C2C6C9"), emissive=Color(0,0,0), roughness=1.0, glossiness=0.0, metallic=0.0)
+    mat_box = Material(albedo_color=Color.from_hex("#C2C6C9"), emissive_color=Color(0,0,0), roughness=1.0, glossiness=0.0, metallic=0.0)
     box_shape.material = mat_box
     scene.add_object(VObject(shape=box_shape, name="StudioBox"))
 
@@ -205,13 +169,13 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     
     # 2. Materials
     # Walls (Matte)
-    mat_white = Material(color=Color.from_hex("#E0E0E0"), emissive=Color(), roughness=1.0, glossiness=0.0, metallic=0.0)
-    mat_red   = Material(color=Color.from_hex("#B03030"), emissive=Color(), roughness=1.0, glossiness=0.0, metallic=0.0)
-    mat_green = Material(color=Color.from_hex("#30B030"), emissive=Color(), roughness=1.0, glossiness=0.0, metallic=0.0)
+    mat_white = Material(albedo_color=Color.from_hex("#E0E0E0"), emissive_color=Color(), roughness=1.0, glossiness=0.0, metallic=0.0)
+    mat_red   = Material(albedo_color=Color.from_hex("#B03030"), emissive_color=Color(), roughness=1.0, glossiness=0.0, metallic=0.0)
+    mat_green = Material(albedo_color=Color.from_hex("#30B030"), emissive_color=Color(), roughness=1.0, glossiness=0.0, metallic=0.0)
     
     # Objects (Shiny/Transmissive)
-    mat_mirror = Material(color=Color.from_hex("#FFFFFF"), emissive=Color(), roughness=0.02, glossiness=0.98, metallic=1.0)
-    mat_glass  = Material(color=Color.from_hex("#FFFFFF"), emissive=Color(), roughness=0.0, glossiness=1.0, metallic=0.0, ior=1.5)
+    mat_mirror = Material(albedo_color=Color.from_hex("#FFFFFF"), emissive_color=Color(), roughness=0.02, glossiness=0.98, metallic=1.0)
+    mat_glass  = Material(albedo_color=Color.from_hex("#FFFFFF"), emissive_color=Color(), roughness=0.0, glossiness=1.0, metallic=0.0, ior=1.5)
     # Note: Enable refraction flag on material if your engine supports it
     mat_glass.is_transparent = True
     mat_glass.can_refract = True
@@ -292,6 +256,43 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     return scene
 
 # Add orchestrator to render and save a set of scenes
+
+def render_process(scene: Scene, algorithim: Algorithm) -> np.ndarray:
+    """
+    Renders the scene and returns a NumPy float32 array (H, W, 3) ready for post-processing.
+    Uses the sampler to generate subpixel samples for each pixel.
+    If region is specified, only renders that region: (x0, y0, x1, y1).
+    """
+    W, H = scene.camera.width, scene.camera.height
+    raw_buffer = np.zeros((H, W, 3), dtype=np.float32)
+    
+    # Render the scene using the provided algorithm
+    pixel_colors: List[Color] = algorithim.render(scene)
+    # Convert list of Colors to NumPy array
+    for y in range(H):
+        for x in range(W):
+            idx = y * W + x
+            col = pixel_colors[idx]
+            raw_buffer[y, x, 0] = col.r
+            raw_buffer[y, x, 1] = col.g
+            raw_buffer[y, x, 2] = col.b
+    return raw_buffer
+
+def save_image(img_data: np.ndarray, out_path="render_out.png"):
+    """
+    Saves the image.
+    """
+    out_dir = os.path.dirname(out_path)
+    if out_dir and not os.path.exists(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+    
+    # Quantize to 0-255 uint8
+    final_pixels = np.clip(img_data * 255.0, 0, 255).astype(np.uint8)
+    
+    im = Image.fromarray(final_pixels, mode="RGB")
+    im.save(out_path)
+    print(f"  Saved to {out_path}")
+
 if __name__ == "__main__":
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
