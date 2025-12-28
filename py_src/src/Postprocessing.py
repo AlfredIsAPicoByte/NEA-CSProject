@@ -51,20 +51,20 @@ class PostProcessingPipeline:
         return final_img
 
     @staticmethod
-    def apply_chromatic_aberration(img_array: np.ndarray, strength: float = 2.0) -> np.ndarray:
+    def apply_chromatic_aberration(img_array: np.ndarray, direction: np.ndarray, strength: float = 2.0) -> np.ndarray:
         """
         Simulates lens fringing by shifting Red and Blue channels in opposite directions.
         """
         height, width, _ = img_array.shape
         out_img = np.copy(img_array)
         
-        # Shift Red channel LEFT
+        # Shift Red channel
         r_shift = int(strength)
         red_channel = np.roll(img_array[..., 0], shift=-r_shift, axis=1)
         # Fix wrap-around artifact
         red_channel[:, -r_shift:] = img_array[:, -r_shift:, 0]
         
-        # Shift Blue channel RIGHT
+        # Shift Blue channel
         b_shift = int(strength)
         blue_channel = np.roll(img_array[..., 2], shift=b_shift, axis=1)
         # Fix wrap-around artifact
