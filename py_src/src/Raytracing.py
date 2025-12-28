@@ -7,9 +7,11 @@ from PrimaryStructures import HitInfo, Ray
 from Scene import Scene
 from Camera import VCamera, CameraType
 from Geometry import VObject
-from Reflections import calculate_reflectance, reflect_ray
-from Luminance import Color, Material, LightSource, calculate_optical_redirection
+from Reflections import calculate_reflection_vector
+from Refractions import REFRACTIVE_INDICES
+from Luminance import Color, Material, LightSource, calculate_redirection_ray
 from RenderingAlgorithims import Algorithm, RenderStats, register_algorithm
+from Sampling import SamplingManager, SampleSettings, Sampler, Sample, RandomSampler, reconstruct_pixel
 
 # Define a ray that holds the ray and data
 class TracingRay(Ray):
@@ -25,7 +27,12 @@ class TracingRay(Ray):
 
 # Strategy interfaces for ray generation, intersection, and shading
 class RayGenerator(ABC):
-    def __init__(self, rays_per_pixel: int = 1):
+    def __init__(
+            self,
+            gen_sampler: Sampler = RandomSampler(),
+            rays_per_pixel: int = 1
+        ):
+        self.gen_sampler = gen_sampler
         self.rays_per_pixel = max(1, rays_per_pixel)
 
     """Abstract base class for ray generation strategies."""
@@ -54,11 +61,22 @@ class RayGenerator(ABC):
         ndc_x, ndc_y = 2 * u - 1, 1 - 2 * v
         half_h = math.tan(math.radians(camera.fov) * 0.5)     # cam.fov = vertical FOV in degrees
         half_w = (camera.width / camera.height) * half_h
-        px = ndc_x * half_w
-        py = ndc_y * half_h
-        direction = (camera.transform.forward + px * camera.transform.right + py * camera.transform.up)
-        direction = direction / np.linalg.norm(direction)
-        return direction
+
+        fov_scale = math.tan(math.radians(camera.fov * 0.5))
+
+        camera_x = ndc_x * camera.aspect.value * fov_scale
+        camera_y = ndc_y * fov_scale
+        camera_z = 1.0
+
+        local_dir = np.array([camera_x, camera_y, camera_z], dtype=float)
+        world_dir = (
+            (local_dir[0] * camera.transform.right) +
+            (local_dir[1] * camera.transform.up) +
+            (local_dir[2] * camera.transform.forward)
+        )
+
+        world_dir = world_dir / np.linalg.norm(world_dir)
+        return world_dir
 
 class IntersectionStrategy(ABC):
     def __init__(
@@ -82,8 +100,12 @@ class IntersectionStrategy(ABC):
 class InteractionStrategy(ABC):
     def __init__(
             self,
+            surface_sampler: Sampler = RandomSampler(),
+            refractive_index: float = REFRACTIVE_INDICES["air"],
             bias: float = 1e-4
         ):
+        self.surface_sampler = surface_sampler
+        self.scene_ior = refractive_index
         self.bias = bias
 
     @abstractmethod
@@ -104,7 +126,7 @@ class ShadingStrategy(ABC):
         self.ambient_color = ambient_color
         self.ambient_intensity = ambient_intensity
         self.enable_shadows = enable_shadows
-        self.shadow_samples = max(1, int(shadow_samples))
+        self.shadow_samples = shadow_samples
         self.shadow_bias = float(shadow_bias)
 
     @abstractmethod
@@ -116,6 +138,7 @@ class ShadingStrategy(ABC):
         current_depth: int,
         trace_function: Callable,
         interaction_function: Callable,
+        seed: Optional[float] = None
     ) -> Color:
         ...
     
@@ -165,124 +188,95 @@ class ShadingStrategy(ABC):
         return visibility
 
 # Ray generation implementations
-class BasicRayGenerator(RayGenerator):
-    """
-    Generate basic camera rays without jitter.
-    Supports optional region/tile to generate rays for a chunk of the image.
-    """
-    def generate(
-        self,
-        camera: VCamera,
-        region: Optional[Tuple[int, int, int, int]] = None, # (x1, y1, w, h)
-        seed: Optional[int] = None,
-    ) -> List[TracingRay]:
-        # Simple implementation that generates one ray per pixel without jitter or sampler
-        cam_width, cam_height = camera.width, camera.height
-
-        # default to full image
-        if region is None:
-            x_start, y_start, region_w, region_h = 0, 0, cam_width, cam_height
-        else:
-            x_start, y_start, region_w, region_h = region
-            # clamp region to camera dimensions
-            x_start = max(0, x_start)
-            y_start = max(0, y_start)
-            region_w = max(0, min(region_w, cam_width - x_start))
-            region_h = max(0, min(region_h, cam_height - y_start))
-        
-        rays: List[TracingRay] = []
-
-        for y in range(y_start, y_start + region_h):
-            for x in range(x_start, x_start + region_w):
-                for r in range(max(1, self.rays_per_pixel)):
-                    u = (x + 0.5) / cam_width
-                    v = (y + 0.5) / cam_height
-                    orientation = self._camera_rotate_ray(camera, u, v)
-
-                    # For orthographic cameras, the origin must be offset in the image plane
-                    if camera.type == CameraType.ORTHOGRAPHIC:
-                        half_h = math.tan(math.radians(camera.fov) * 0.5) if hasattr(camera, 'fov') else 0.5
-                        half_w = (camera.width / camera.height) * half_h
-                        px = (2 * u - 1) * half_w
-                        py = (1 - 2 * v) * half_h
-                        ndc_x = 2 * u - 1
-                        ndc_y = 1 - 2 * v
-                        ray_origin = camera.transform.position + px * camera.transform.right + py * camera.transform.up
-                    else:
-                        ray_origin = camera.transform.position
-
-                    ray = TracingRay(
-                        origin=ray_origin,
-                        orientation=orientation,
-                        pixel_x=x,
-                        pixel_y=y,
-                        color=Color(),
-                        name=f"Camera Ray ({x},{y}) #{r}"
-                    )
-                    rays.append(ray)
-        return rays
-
 class JitterRayGenerator(RayGenerator):
-    """Generate camera rays with per-pixel jitter (anti-aliasing).
-       Supports optional region/tile to generate rays for a chunk of the image.
-       Accepts an optional sampler or SamplingManager to produce deterministic,
-       stratified or quasi-random sample positions per pixel (useful for tiles).
+    """
+    Generate camera rays with per-pixel jitter (anti-aliasing).
+    - Iterates over the requested region.
+    - Ask the Sampler for (u,v) offsets for every pixel.
+    - Calculates the Ray Origin and Direction based on Camera Type.
     """
     def generate(
         self,
         camera: VCamera,
-        region: Optional[Tuple[int, int, int, int]] = None, # (x1, y1, w, h)
+        region: Optional[Tuple[int, int, int, int]] = None, # (x, y, w, h)
         seed: Optional[int] = None,
     ) -> List[TracingRay]:
-        rng = np.random.default_rng(seed)
-
         cam_width, cam_height = camera.width, camera.height
-        # default to full image
+        
+        # 1. Resolve Region
         if region is None:
             x_start, y_start, region_w, region_h = 0, 0, cam_width, cam_height
         else:
-            x_start, y_start, region_w, region_h = region
-            # clamp region to camera dimensions
-            x_start = max(0, x_start)
-            y_start = max(0, y_start)
-            region_w = max(0, min(region_w, cam_width - x_start))
-            region_h = max(0, min(region_h, cam_height - y_start))
+            x_start, y_start, req_w, req_h = region
+            # Clamp to image bounds
+            x_start = max(0, min(x_start, cam_width))
+            y_start = max(0, min(y_start, cam_height))
+            region_w = max(0, min(req_w, cam_width - x_start))
+            region_h = max(0, min(req_h, cam_height - y_start))
 
         rays: List[TracingRay] = []
+
+        # 2. Iterate over pixels
         for y in range(y_start, y_start + region_h):
             for x in range(x_start, x_start + region_w):
-                for r in range(max(1, self.rays_per_pixel)):
-                    u, v = self.jitter_within_pixel(rng, x, y, cam_width, cam_height)
+                
+                # 3. Get Samples
+                # The SamplingManager returns a list of Sample objects (offsets 0.0-1.0)
+                # matching the configured Samples Per Pixel (SPP).
+                pixel_samples = self.gen_sampler.get_samples_for_pixel(x, y)
 
-                    orientation = self._camera_rotate_ray(camera, u, v)
-
-                    # For orthographic cameras, the origin must be offset in the image plane
+                for i, sample in enumerate(pixel_samples):
+                    # Calculate Global Normalized Coordinates [0, 1]
+                    # We add the sample offset (0.0 to 1.0) to the integer pixel coordinate
+                    u = (x + sample.u) / cam_width
+                    v = (y + sample.v) / cam_height
+                    
+                    # 4. Calculate Ray Geometry
                     if camera.type == CameraType.ORTHOGRAPHIC:
-                        half_h = math.tan(math.radians(camera.fov) * 0.5) if hasattr(camera, 'fov') else 0.5
-                        half_w = (camera.width / camera.height) * half_h
-                        px = (2 * u - 1) * half_w
-                        py = (1 - 2 * v) * half_h
-                        ray_origin = camera.transform.position + px * camera.transform.right + py * camera.transform.up
-                    else:
-                        ray_origin = camera.transform.position
+                        # --- ORTHOGRAPHIC ---
+                        # Direction: Always straightforward (Camera Forward)
+                        # Origin: Shifts across the image plane based on (u, v)
+                        
+                        # Calculate physical dimensions of the sensor/plane
+                        # If 'orthographic_scale' isn't present, assume FOV-based scaling or default
+                        ortho_scale = getattr(camera, 'orthographic_scale', 1.0)
+                        aspect_ratio = cam_width / cam_height
+                        
+                        plane_height = ortho_scale
+                        plane_width = plane_height * aspect_ratio
 
+                        # Map u,v (0..1) to Plane Coordinates (-Width/2 .. +Width/2)
+                        px = (u - 0.5) * plane_width
+                        py = (0.5 - v) * plane_height # Flip Y if needed for standard coordinate systems
+
+                        # Origin = CameraPos + (Right * px) + (Up * py)
+                        ray_origin = (
+                            camera.transform.position + 
+                            (camera.transform.right * px) + 
+                            (camera.transform.up * py)
+                        )
+                        ray_orientation = camera.transform.forward
+
+                    else:
+                        # --- PERSPECTIVE ---
+                        # Origin: Always the camera position (pinhole)
+                        # Direction: Diverges from origin through the pixel
+                        ray_origin = camera.transform.position
+                        ray_orientation = self._camera_rotate_ray(camera, u, v)
+
+                    # 5. Build Ray
                     ray = TracingRay(
                         origin=ray_origin,
-                        orientation=orientation,
+                        orientation=ray_orientation,
                         pixel_x=x,
                         pixel_y=y,
-                        color=Color(),
-                        name=f"Camera Ray ({x},{y}) #{r}"
+                        color=Color(), # Start black/empty
+                        name=f"Ray ({x},{y}) #{i}",
+                        throughput=Color(1.0, 1.0, 1.0) # Used for path tracing accumulation
                     )
                     rays.append(ray)
+
         return rays
-    
-    def jitter_within_pixel(self, rng: np.random.Generator, x: int, y: int, cam_width: int, cam_height: int) -> Tuple[float, float]:
-        jitter_u = rng.uniform(-0.5, 0.5) 
-        jitter_v = rng.uniform(-0.5, 0.5)
-        u = (x + 0.5 + jitter_u) / cam_width
-        v = (y + 0.5 + jitter_v) / cam_height
-        return u, v
 
 # Ray intersection implementations
 class RayMarchingIntersection(IntersectionStrategy):
@@ -292,6 +286,7 @@ class RayMarchingIntersection(IntersectionStrategy):
         for _ in range(self.max_steps):
             point = ray.point_at(distance_traveled)
             dist_obj = scene.distance_estimator(point)
+
             # support either (dist, obj) or single distance return
             if isinstance(dist_obj, tuple):
                 distance_to_closest, closest_object = dist_obj
@@ -318,7 +313,7 @@ class RayMarchingIntersection(IntersectionStrategy):
 
 # Interaction implementations
 class SimpleMaterialInteraction(InteractionStrategy):
-    def interact(self, ray: TracingRay, hit_info: HitInfo) -> Optional[TracingRay]:
+    def interact(self, ray: TracingRay, hit_info: HitInfo, seed: Optional[float]) -> Optional[TracingRay]:
         # 1. Resolve Material
         material: Material = getattr(hit_info.object, "material", None) or getattr(hit_info.object.shape, "material", None) if hasattr(hit_info.object, "shape") else None
         if not material:
@@ -344,27 +339,32 @@ class SimpleMaterialInteraction(InteractionStrategy):
         # If the material implementation raises or returns a malformed orientation,
         # we fall back to a safe perfect-reflection ray.
         try:
-            new_ray, did_reflect, is_inside = calculate_optical_redirection(
+            new_ray, did_reflect, is_inside = calculate_redirection_ray(
                 incoming_ray=ray,
                 surface_normal=normal,
-                incoming_color=current_throughput,
-                new_origin=new_origin
+                new_origin=new_origin,
+                roughness=material.roughness,
+                sampler=self.surface_sampler,
+                current_refactive_index=self.scene_ior,
+                incoming_refactive_index=material.ior,
+                seed=seed,
+                bias=self.bias,
+                fast=True
             )
 
             if not did_reflect and is_inside:
                 current_throughput = material.get_volumetric_component(current_throughput, hit_info.distance)
 
-            orientation_vec = new_ray.orientation
-            origin_vec = new_origin
-
         except Exception:
-            orientation_vec = reflect_ray(normal, ray.orientation)
-            origin_vec = new_origin
+            new_ray = Ray(
+                origin=new_origin,
+                orientation=calculate_reflection_vector(normal, ray.orientation)
+            )
 
         # 5. Convert/Return TracingRay and Update Throughput
         next_ray = TracingRay(
-            origin=origin_vec,
-            orientation=orientation_vec,
+            origin=new_ray.origin,
+            orientation=new_ray.orientation,
             name=f"{ray.name}_bounce",
             throughput=current_throughput,
             depth=getattr(ray, "depth", 0) + 1
@@ -374,7 +374,7 @@ class SimpleMaterialInteraction(InteractionStrategy):
 
 # Shading implementations
 class RecursiveLambertShading(ShadingStrategy):
-    def shade(self, scene: Scene, ray: TracingRay, hit_info: HitInfo, depth: int, trace_function: Callable, interaction_function: Callable) -> Color:
+    def shade(self, scene: Scene, ray: TracingRay, hit_info: HitInfo, depth: int, trace_function: Callable, interaction_function: Callable, seed: Optional[float] = None) -> Color:
         """
         Calculates the color of a point on an object, including direct lighting and recursive reflections.
         """
@@ -416,18 +416,17 @@ class RecursiveLambertShading(ShadingStrategy):
         # Only recurse if we have depth left and if the material is reflective/refractive
         # Fully diffuse materials (glossiness=0, roughness=1) don't contribute to indirect lighting
         if depth > 0:
-            glossiness = getattr(material, "glossiness", 0.0)
-            roughness = getattr(material, "roughness", 1.0)
+            roughness = getattr(material, "roughtness", 0)
             is_transparent = getattr(material, "is_transparent", False)
             
-            # Only compute indirect lighting if material is somewhat specular or transparent
-            if glossiness > 0.01 or is_transparent:
+            # Only compute indirect lighting if material is transparent or is not completely diffuse
+            if is_transparent or roughness > 0.99:
                 try:
                     # A. Probe the material to get the bounce ray
                     # We use a white probe to get the material's pure attenuation color
-                    probe_color = Color(1.0, 1.0, 1.0)
+                    probe_color = Color(1.0, 1.0, 1.0) # use scene probes in the future
                     
-                    new_ray = interaction_function(ray, hit_info.object, point)
+                    new_ray = interaction_function(ray, hit_info.object, point, seed)
 
                     # B. Recursive Trace
                     # This calls 'self._trace_ray' which you passed in
@@ -436,8 +435,10 @@ class RecursiveLambertShading(ShadingStrategy):
                     # C. Combine
                     # Result = Light from world * Material Attenuation
                     indirect_light = incoming_light * getattr(new_ray, "throughput", probe_color)
-                except Exception:
+                    indirect_light *= (1 - roughness)
+                except Exception as e:
                     # If optical redirection fails, skip indirect lighting
+                    print("Redirection failed:", e)
                     indirect_light = Color(0.0, 0.0, 0.0)
 
         # --- 5. Final Composition ---
@@ -457,12 +458,17 @@ class TracingStats(RenderStats):
 class Raytracer(Algorithm):
     def __init__(
         self,
+        sampling_manager: Optional[SamplingManager] = None,
         ray_generator: Optional[RayGenerator] = None,
         intersection_strategy: Optional[IntersectionStrategy] = None,
         interaction_strategy: Optional[InteractionStrategy] = None,
         shading_strategy: Optional[ShadingStrategy] = None,
+        sample_settings: Optional[SampleSettings] = None,
     ):
         super().__init__()
+        self.sampling_manager = sampling_manager
+        self.sample_settings = sample_settings or SampleSettings()
+
         self.ray_generator: RayGenerator = ray_generator if ray_generator is not None else JitterRayGenerator()
         self.intersector: IntersectionStrategy = intersection_strategy if intersection_strategy is not None else RayMarchingIntersection()
         self.interactor: InteractionStrategy = interaction_strategy if interaction_strategy is not None else SimpleMaterialInteraction()
@@ -475,95 +481,114 @@ class Raytracer(Algorithm):
         The recursive engine. It takes a ray, finds what it hits, and calculates the color.
         If the surface is reflective, this function will be called again by the shader.
         """
-        # 1. Base Case: Stop bouncing if we run out of depth
         if depth < 0:
             return Color(0.0, 0.0, 0.0)
 
         self.stats.rays_traced += 1
 
-        # 2. Intersect: Find the closest object
         hit = self.intersector.find_hit(scene, ray)
 
-        # 3. Hit: If we hit something, ask the shader to calculate color
         if hit.object is not None and hit.hit:
             self.stats.hits += 1
-
             return self.shader.shade(scene, ray, hit, depth, self._trace_ray, self.interactor.interact)
 
-        # 4. Miss: If we hit nothing, return background color
         try:
-            # Ensure direction is a numpy array for your background logic
             return scene.get_background_color(np.asarray(ray.orientation))
         except Exception:
             return Color(0.0, 0.0, 0.0)
 
     def render(
-            self,
-            scene: Scene,
-            seed: Optional[int] = None,
-            region: Optional[Tuple[int, int, int, int]] = None, # (x1, y1, w, h)
-        ) -> List[Color]:
-        """
-        Render the scene and return pixel colors as a flat list (row-major order).
-        """
-        # --- Setup ---
+        self,
+        scene: Scene,
+        seed: Optional[int] = None,
+        region: Optional[Tuple[int, int, int, int]] = None,
+    ) -> List[Color]:
         cam = scene.camera
-
         if cam is None:
-            raise ValueError("No camera provided to Raytracer.render")
+            raise ValueError("No camera provided")
 
         cam_w, cam_h = cam.width, cam.height
-        total_pixels = cam_w * cam_h
-        pixel_accum: List[List[Color]] = [[] for _ in range(total_pixels)]
+        MAX_DEPTH = 4
         
-        # Define max bounces (recursion depth)
-        MAX_DEPTH = 4 
+        self.sample_settings.width = cam_w
+        self.sample_settings.height = cam_h
 
-        def push_pixel_color(x: int, y: int, color: Color) -> None:
-            if x is not None and y is not None and 0 <= x < cam_w and 0 <= y < cam_h:
-                if region is not None:
-                    rx, ry, rw, rh = region
-                    if not (rx <= x < rx + rw and ry <= y < ry + rh):
-                        return
-                
-                if color is not None:
-                    pixel_accum[y * cam_w + x].append(color)
-                else:
-                    pixel_accum[y * cam_w + x].append(Color())
+        # FIX 1: Storage - Use a simplified structure if possible, but we will stick 
+        # to your list logic for now. 
+        # Warning: High SPP will crash memory here.
+        pixel_samples_and_colors = [[] for _ in range(cam_w * cam_h)]
 
         def _gen_rays(region=None, seed=None):
             return self.ray_generator.generate(scene.camera, region=region, seed=seed)
 
-        # --- Render Loop ---
         def process_rays(rays):
-            """Helper to process a batch of rays using the trace logic."""
             for ray in rays:
-                x = getattr(ray, "pixel_x", None)
-                y = getattr(ray, "pixel_y", None)
+                # SKIP invalid rays
+                if ray is None: continue
 
-                # Skip invalid pixels
-                if x is None or y is None or x < 0 or x >= cam_w or y < 0 or y >= cam_h or (region is not None and not (region[0] <= x < region[0] + region[2] and region[1] <= y < region[1] + region[3])):
+                # FIX 2: Ensure we have valid pixel coordinates
+                x = getattr(ray, "pixel_x", -1)
+                y = getattr(ray, "pixel_y", -1)
+                
+                # Bounds check
+                if not (0 <= x < cam_w and 0 <= y < cam_h):
                     continue
 
-                # Use the tracing logic to get the final color
+                # Region check
+                if region:
+                     rx, ry, rw, rh = region
+                     if not (rx <= x < rx + rw and ry <= y < ry + rh):
+                         continue
+
+                # Trace
                 final_color = self._trace_ray(scene, ray, MAX_DEPTH)
                 
-                push_pixel_color(x, y, final_color)
+                # FIX 3: Calculate proper Sample UVs if missing from the Ray
+                # We reconstruct 'u' and 'v' from the ray orientation if the generator didn't save them.
+                # Ideally, RayGenerator should save ray.u and ray.v. 
+                # Here, we assume the ray might lack them and patch it:
+                if hasattr(ray, 'sample_u'):
+                    s_u, s_v = ray.sample_u, ray.sample_v
+                else:
+                    # FALLBACK: If generator didn't store normalized coords, 
+                    # we can't filter accurately. We force center of pixel.
+                    # This forces a BOX filter look.
+                    s_u = (x + 0.5) / cam_w
+                    s_v = (y + 0.5) / cam_h
 
-        # --- Image rendering ---
-        rays = _gen_rays(region=region)
+                sample = Sample(s_u, s_v, 1.0)
+                
+                pixel_idx = int(y * cam_w + x)
+                pixel_samples_and_colors[pixel_idx].append((sample, final_color))
+
+        # --- EXECUTION ---
+        rays = _gen_rays(region=region, seed=seed)
         process_rays(rays)
-        print("Completed rendering image.")
 
-        # --- Color accumulation ---
+        # --- RECONSTRUCTION ---
         pixel_colors: List[Color] = []
-        for idx in range(total_pixels):
-            colors = pixel_accum[idx]
-            if colors:
-                pixel_colors.append(Color.average_colors(colors))
-            else:
-                # Fill missing pixels with black
-                pixel_colors.append(Color(0, 0, 0)) 
+        
+        # We iterate purely by index to keep the flattened list structure correct
+        for pixel_idx in range(len(pixel_samples_and_colors)):
+            samples_and_colors = pixel_samples_and_colors[pixel_idx]
+            
+            # Calculate x, y from index for the filter context
+            y = pixel_idx // cam_w
+            x = pixel_idx % cam_w
+
+            if not samples_and_colors:
+                pixel_colors.append(Color(0, 0, 0))
+                continue
+
+            samples = [sc[0] for sc in samples_and_colors]
+            # Convert Color objects to numpy arrays for the reconstructor math
+            colors = [np.array([sc[1].r, sc[1].g, sc[1].b]) for sc in samples_and_colors]
+            
+            # Note: This reconstruction is still strictly "Bucketed" 
+            # (only looks at samples inside this pixel). 
+            reconstructed = reconstruct_pixel(x, y, samples, colors, self.sample_settings)
+            
+            pixel_colors.append(Color(reconstructed[0], reconstructed[1], reconstructed[2]))
 
         return pixel_colors
 

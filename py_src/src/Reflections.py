@@ -1,16 +1,27 @@
 import numpy as np
+import math
+from typing import Tuple
 
-def calculate_reflection_angle(incidentAngle: float) -> float:
-    """
-    Calculate the reflection angle based on the law of reflection.
-    The reflection angle is equal to the incident angle.
+from PrimaryStructures import Ray
+from Sampling import Sampler
 
-    Attributes:
-        incidentincidentAngle (float): The angle of incidence in degrees.
-    """
-    return incidentAngle
+def _safe_norm(v: np.ndarray, eps: float = 1e-8) -> float:
+    return np.linalg.norm(v) + eps
 
-def calculate_incident_angle(normalAngle: float, incomingAngle: float) -> float:
+def _unit(v: np.ndarray, eps: float = 1e-8) -> np.ndarray:
+    return v / _safe_norm(v, eps)
+
+def _orthonormal_basis(n: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    up = np.array([1, 0, 0]) if abs(n[1]) > 0.999 else np.array([0, 1, 0])
+    t = np.cross(up, n)
+    t = _unit(t)
+    b = np.cross(n, t)
+    return t, b
+
+def calculate_incident_angle(
+        normalAngle: float,
+        incomingAngle: float
+    ) -> float:
     """
     Calculate the angle of incidence based on the normal and incoming angles.
 
@@ -20,41 +31,10 @@ def calculate_incident_angle(normalAngle: float, incomingAngle: float) -> float:
     """
     return abs(incomingAngle - normalAngle)
 
-def calculate_reflectance(incidentAngle: float, refractiveIndex1: float, refractiveIndex2: float) -> float:
-    """
-    Calculate the reflectance using Fresnel equations for unpolarized light.
-
-    Attributes:
-        incidentAngle (float): The angle of incidence in degrees.
-        refractiveIndex1 (float): The refractive index of the first medium.
-        refractiveIndex2 (float): The refractive index of the second medium.
-    """
-    import math
-
-    # Convert angle to radians
-    incidentAngleRad = math.radians(incidentAngle)
-
-    # Calculate sine of transmission angle using Snell's law
-    sinTransmissionAngle = (refractiveIndex1 / refractiveIndex2) * math.sin(incidentAngleRad)
-
-    # Total internal reflection check
-    if abs(sinTransmissionAngle) > 1.0:
-        return 1.0  # Total internal reflection
-
-    transmissionAngleRad = math.asin(sinTransmissionAngle)
-
-    cosIncident = math.cos(incidentAngleRad)
-    cosTransmission = math.cos(transmissionAngleRad)
-
-    rs = ((refractiveIndex1 * cosIncident - refractiveIndex2 * cosTransmission) /
-          (refractiveIndex1 * cosIncident + refractiveIndex2 * cosTransmission)) ** 2
-    rp = ((refractiveIndex1 * cosTransmission - refractiveIndex2 * cosIncident) /
-          (refractiveIndex1 * cosTransmission + refractiveIndex2 * cosIncident)) ** 2
-
-    reflectance = (rs + rp) / 2.0
-    return reflectance
-
-def reflect_angle(normalAngle: float, incomingAngle: float) -> float:
+def calculate_reflection_angle(
+        normalAngle: float,
+        incomingAngle: float
+    ) -> float:
     """
     Calculate the outgoing angle of the reflected ray based on the law of reflection.
 
@@ -63,16 +43,19 @@ def reflect_angle(normalAngle: float, incomingAngle: float) -> float:
         incomingAngle (float): The angle of the incoming ray in degrees.
     """
     incidentAngle = calculate_incident_angle(normalAngle, incomingAngle)
-    reflectionAngle = calculate_reflection_angle(incidentAngle)
 
     if incomingAngle > normalAngle:
-        outgoingAngle = normalAngle + reflectionAngle
+        outgoingAngle = normalAngle + incidentAngle
     else:
-        outgoingAngle = normalAngle - reflectionAngle
+        outgoingAngle = normalAngle - incidentAngle
 
     return outgoingAngle
 
-def reflect_ray(normal: np.ndarray, ray_direction: np.ndarray) -> np.ndarray:
+def calculate_reflection_vector(
+        normal: np.ndarray,
+        direction: np.ndarray,
+        bias: float = 1e-4
+    ) -> np.ndarray:
     """
     Compute reflected ray direction using law of reflection.
     
@@ -83,12 +66,86 @@ def reflect_ray(normal: np.ndarray, ray_direction: np.ndarray) -> np.ndarray:
     Returns:
         Reflected ray direction (normalized)
     """
-    normal = normal / (np.linalg.norm(normal) + 1e-12)
-    direction = ray_direction / (np.linalg.norm(ray_direction) + 1e-12)
+    unit_normal = _unit(normal, bias)
+    unit_direction = _unit(direction, bias)
+
+    reflected_direction = unit_direction - 2 * np.dot(unit_direction, unit_normal) * unit_normal
+    return _unit(reflected_direction, bias)
+
+def calculate_surface_reflection_ray(
+        normal: np.ndarray,
+        direction: np.ndarray,
+        origin: np.ndarray,
+        roughness: float,
+        sampler: Sampler,
+        bias: float = 1e-4
+    ) -> Tuple[Ray, float]:
+    # 1. Get Random Samples (u, v)
+    # These determine "where" on the roughness hemisphere we pick a direction
+    u, v = sampler.next_2d()
+
+    # 2. Importance Sampling (GGX)
+    # We map the random (u, v) to a 3D direction based on Roughness (alpha)
+    # The rougher the surface, the wider the spread of possible directions.
+    alpha = roughness * roughness
+
+    phi = 2.0 * np.pi * u
+    cos_theta = math.sqrt((1.0 - v) / (1.0 + (alpha*alpha - 1.0) * v))
+    sin_theta = math.sqrt(max(0.0, 1.0 - cos_theta * cos_theta))
+
+    H_tangent = np.array([
+        sin_theta * math.cos(phi),
+        sin_theta * math.sin(phi),
+        cos_theta
+    ])
+
+    tangent, bitangent = _orthonormal_basis(normal)
+
+    H_world = (tangent * H_tangent[0]) + (bitangent * H_tangent[1]) + (normal * H_tangent[2])
+    H_world = _unit(H_world)
+
+    view_dir = -_unit(direction)
+
+    dot_v_h = np.dot(view_dir, H_world)
+    reflection_dir = (2.0 * dot_v_h * H_world) - view_dir
+    reflection_dir = _unit(reflection_dir)
+
+    # 5. Create the new Ray
+    # Offset origin to prevent acne
+    new_origin = origin + (normal * bias) # or hit_point + bias
     
-    dot_product = np.dot(direction, normal)
-    reflected = direction - 2 * dot_product * normal
-    return reflected / (np.linalg.norm(reflected) + 1e-12)
+    # Calculate Probability Density Function (PDF)
+    # This is needed for the color math (throughput) to balance correctly.
+    # (Simplified for demonstration)
+    pdf = (2.0 * dot_v_h) / (cos_theta * alpha * alpha) # Approximation
+
+    new_ray = Ray(origin=new_origin, orientation=reflection_dir, name="reflection")
+    
+    return new_ray, pdf
+
+def calculate_surface_reflection_ray_cheap(
+        normal: np.ndarray,
+        direction: np.ndarray,
+        origin: np.ndarray,
+        roughness: float,
+        sampler: Sampler,
+        bias: float = 1e-4
+    ) -> Tuple[Ray, float]:
+    # 1. Calculate PERFECT reflection
+    perfect_reflection_vec = calculate_reflection_vector(normal, direction)
+
+    rand_x, rand_y = sampler.next_2d()
+    rand_z = sampler.next_1d()
+    random_vec = np.array([rand_x, rand_y, rand_z]) - 0.5
+    random_vec = _unit(random_vec)
+
+    fuzzed_reflection_vec = perfect_reflection_vec + (random_vec * roughness)
+    fuzzed_reflection_vec = _unit(fuzzed_reflection_vec)
+
+    return (Ray(
+        origin=origin + (normal * bias),
+        orientation=fuzzed_reflection_vec
+    ), 1)
 
 """
 Reflection module: Provides functions to calculate reflection angles and reflected ray directions based on the law of reflection.

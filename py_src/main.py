@@ -7,8 +7,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 from src.PrimaryStructures import Transform
 from src.Geometry import Sphere, Cube, VObject, Plane
 from src.RenderingAlgorithims import Algorithm
-from src.Raytracing import Raytracer
-from src.Sampling import Sampler, RandomSampler
+from src.Raytracing import Raytracer, JitterRayGenerator, RayMarchingIntersection, SimpleMaterialInteraction, RecursiveLambertShading
+from src.Sampling import SamplingManager, SampleSettings, PixelFilter
 from src.Postprocessing import PostProcessingPipeline
 from src.Scene import Scene
 from src.Camera import VCamera, CameraType
@@ -22,11 +22,12 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
 
     # Background Gradient: Richer sunset/dusk sky for dramatic lighting
     sky_colors = [
-        Color.from_hex("#000033"),  # Deep navy at the bottom
-        Color.from_hex("#14408A"),  # Dark blue in the middle
-        Color.from_hex("#C13584"),  # Magenta/pink at the top (zenith)
+        Color.from_hex("#42424E"),
+        Color.from_hex("#2D2515"),
+        Color.from_hex("#5B6791"),
+        Color.from_hex("#87BFC6"),
     ]
-    sky_positions = [0.0, 0.5, 1.0] 
+    sky_positions = [0.0, 0.3, 0.4, 1.0] 
 
     # Primary Key Light (Sharp, slightly yellow, placed high and to the left for side lighting)
     key_light = LightSource(position=np.array([4.0, 5.0, 0.0]), color=Color.from_hex("#FFEDC7"), intensity=15.0, radius=0.5, name="Key Light")
@@ -295,19 +296,31 @@ if __name__ == "__main__":
     OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
     os.makedirs(OUT_DIR, exist_ok=True)
 
+    img_w, img_h = 80, 60
+
     all_scenes = [
-        get_minimal_scene(50, 50),
-        get_gradient_scene(80, 60),
-        get_emissive_scene(64, 64),
-        get_lit_studio_scene(80, 60),
-        get_rgb_room_with_objects_scene(80, 60),
+        get_minimal_scene(img_w, img_h),
+        get_gradient_scene(img_w, img_h),
+        get_emissive_scene(img_w, img_h),
+        get_lit_studio_scene(img_w, img_h),
+        get_rgb_room_with_objects_scene(img_w, img_h),
     ]
 
-    generator = None
-    intersection = None
-    interactor = None
-    shading = None
-    raytracer = Raytracer(ray_generator=generator, intersection_strategy=intersection, interaction_strategy=interactor, shading_strategy=shading)
+    sample_settings = SampleSettings(img_w, img_h, 1, PixelFilter.BOX, 2)
+    sampling_manager = SamplingManager(sample_settings, "random")
+
+    generator = JitterRayGenerator(sampling_manager._sampler)
+    intersection = RayMarchingIntersection()
+    interactor = SimpleMaterialInteraction(sampling_manager._sampler)
+    shading = RecursiveLambertShading()
+
+    raytracer = Raytracer(
+        sampling_manager=sampling_manager,
+        ray_generator=generator,
+        intersection_strategy=intersection,
+        interaction_strategy=interactor,
+        shading_strategy=shading
+    )
 
     for scene in all_scenes:
         sanitized_name = scene.name.replace(" ", "_").lower()

@@ -1,111 +1,201 @@
 import numpy as np
+import math
+from typing import List, Tuple, Dict, Any, Union
+from dataclasses import dataclass
+from Sampling import SampleSettings, Sample
 
 class PostProcessingPipeline:
     @staticmethod
-    def apply_bloom(img_array: np.ndarray, threshold: float = 0.8, intensity: float = 0.5, radius: int = 2) -> np.ndarray:
+    def reconstruct_from_samples(
+        width: int,
+        height: int,
+        pixel_samples_and_colors: List[List[Tuple['Sample', np.ndarray]]], # Using string 'Sample' for forward ref
+        settings: 'SampleSettings'
+    ) -> np.ndarray:
         """
-        Simple Bloom effect: Extracts bright pixels, blurs them, and adds them back.
-        Note: Real bloom uses Gaussian blur; this uses a fast box blur approximation.
+        Phase 1: Film Reconstruction.
+        Converts the raw list of ray samples into a coherent 2D floating-point image
+        using the specific PixelFilter (Box, Gaussian, etc.) defined in settings.
+        """
+        # Initialize floating point buffer (Linear Color Space)
+        img_array = np.zeros((height, width, 3), dtype=np.float32)
+
+        # We assume reconstruct_pixel is available from your sampling module
+        # If not, ensure it is imported at the top of this file.
+        from Sampling import reconstruct_pixel 
+
+        # Iterate through pixels
+        # Note: In a highly optimized engine, this loop would be C++ or Numba.
+        # For Python, this is the bottleneck, but it is accurate.
+        for y in range(height):
+            for x in range(width):
+                pixel_idx = y * width + x
+                
+                # Safety check for bounds
+                if pixel_idx >= len(pixel_samples_and_colors):
+                    continue
+
+                samples_data = pixel_samples_and_colors[pixel_idx]
+                
+                if not samples_data:
+                    # Black pixel if no rays hit
+                    continue
+
+                # Unpack the list of tuples [(Sample, ColorArray), ...]
+                samples = [s[0] for s in samples_data]
+                colors = [s[1] for s in samples_data] # Expecting np.array([r,g,b])
+
+                # Reconstruct single pixel color
+                final_color = reconstruct_pixel(x, y, samples, colors, settings)
+                
+                img_array[y, x] = final_color
+
+        return img_array
+
+    @staticmethod
+    def apply_bloom_separable(img_array: np.ndarray, threshold: float = 0.8, intensity: float = 0.5, radius: int = 4) -> np.ndarray:
+        """
+        Phase 2: Bloom.
+        Uses a Separable Box Blur (Two-Pass) to approximate Gaussian Blur efficiently.
+        Pass 1: Blur Horizontal. Pass 2: Blur Vertical.
+        O(W*H) complexity instead of O(W*H*radius^2).
         """
         height, width, _ = img_array.shape
         
-        # 1. Extract bright parts (Thresholding)
-        # We work on a copy to avoid altering original yet
-        bright_pass = np.copy(img_array)
+        # 1. Extract Bright Pass (Soft Threshold)
+        # Use simple luminance dot product
+        luminance = np.dot(img_array[..., :3], [0.299, 0.587, 0.114])
         
-        # Calculate luminance (perceived brightness)
-        luminance = np.dot(bright_pass[..., :3], [0.299, 0.587, 0.114])
+        # Soft knee threshold calculation
+        knee = 0.1 # Softness
+        soft = np.maximum(luminance - threshold + knee, 0)
+        soft = soft / (2 * knee + 1e-5) # Normalize
+        weight = np.maximum(soft, np.maximum(luminance - threshold, 0) / (np.maximum(luminance, 1e-5)))
         
-        # Mask: Keep only pixels brighter than threshold
-        mask = luminance < threshold
-        bright_pass[mask] = 0  # Darken everything else
-        
-        # 2. Blur the bright pass (Box Blur approximation using integral images or simple convolution)
-        # For simplicity in pure NumPy without Scipy/OpenCV:
-        # We shift the image in 4 directions and average them to simulate a blur
-        blurred = np.copy(bright_pass)
-        
-        # Accumulate shifts for blur effect
-        for y_off in range(-radius, radius + 1):
-            for x_off in range(-radius, radius + 1):
-                if x_off == 0 and y_off == 0: continue
-                
-                # Roll circles pixel values around
-                shifted = np.roll(bright_pass, shift=(y_off, x_off), axis=(0, 1))
-                
-                # Zero out the wrap-around artifacts (simple cleanup)
-                if y_off > 0: shifted[:y_off, :] = 0
-                if y_off < 0: shifted[y_off:, :] = 0
-                if x_off > 0: shifted[:, :x_off] = 0
-                if x_off < 0: shifted[:, x_off:] = 0
-                
-                blurred += shifted
+        # Apply mask to create bright pass
+        bright_pass = img_array * weight[..., np.newaxis]
 
-        # Normalize the blur stack
-        blurred = blurred / ((2 * radius + 1) ** 2)
-
-        # 3. Additive blending (Screen-like blend)
-        # Original + (Blurred Highlights * Intensity)
-        final_img = img_array + (blurred * intensity)
+        # 2. Separable Blur implementation
+        # Note: Scipy.ndimage.gaussian_filter is faster, but this is a dependency-free NumPy implementation.
+        kernel_size = radius * 2 + 1
+        kernel = np.ones(kernel_size) / kernel_size
         
-        return final_img
+        # Pass 1: Horizontal Convolve
+        blurred_h = np.zeros_like(bright_pass)
+        for i in range(3): # For R, G, B
+            for r in range(height):
+                blurred_h[r, :, i] = np.convolve(bright_pass[r, :, i], kernel, mode='same')
+                
+        # Pass 2: Vertical Convolve
+        blurred_final = np.zeros_like(blurred_h)
+        for i in range(3):
+            for c in range(width):
+                blurred_final[:, c, i] = np.convolve(blurred_h[:, c, i], kernel, mode='same')
+
+        # 3. Additive Blending
+        return img_array + (blurred_final * intensity)
 
     @staticmethod
     def apply_chromatic_aberration(img_array: np.ndarray, strength: float = 2.0) -> np.ndarray:
         """
-        Simulates lens fringing by shifting Red and Blue channels in opposite directions.
+        Phase 2: Lens Imperfections.
+        Shifts Red and Blue channels in opposite directions.
         """
-        height, width, _ = img_array.shape
+        shift = int(strength)
+        if shift == 0: return img_array
+        
         out_img = np.copy(img_array)
         
-        # Shift Red channel LEFT
-        r_shift = int(strength)
-        red_channel = np.roll(img_array[..., 0], shift=-r_shift, axis=1)
-        # Fix wrap-around artifact
-        red_channel[:, -r_shift:] = img_array[:, -r_shift:, 0]
+        # Shift Red Left
+        out_img[:, :-shift, 0] = img_array[:, shift:, 0]
+        out_img[:, -shift:, 0] = img_array[:, -1:, 0] # Clamp edge
         
-        # Shift Blue channel RIGHT
-        b_shift = int(strength)
-        blue_channel = np.roll(img_array[..., 2], shift=b_shift, axis=1)
-        # Fix wrap-around artifact
-        blue_channel[:, :b_shift] = img_array[:, :b_shift, 2]
-        
-        out_img[..., 0] = red_channel
-        out_img[..., 2] = blue_channel
+        # Shift Blue Right
+        out_img[:, shift:, 2] = img_array[:, :-shift, 2]
+        out_img[:, :shift, 2] = img_array[:, :1, 2]   # Clamp edge
         
         return out_img
 
     @staticmethod
     def apply_vignette(img_array: np.ndarray, strength: float = 0.5, curve: float = 1.0) -> np.ndarray:
-        """
-        Darkens the corners of the image.
-        """
+        """Darkens corners to simulate lens barrel."""
         height, width, _ = img_array.shape
-        
-        # Create coordinate grid (-1 to 1)
         x = np.linspace(-1, 1, width)
         y = np.linspace(-1, 1, height)
         X, Y = np.meshgrid(x, y)
         
-        # Calculate distance from center (radius)
         radius = np.sqrt(X**2 + Y**2)
+        # 1.0 at center, drops to 1-strength at corners
+        vignette = 1.0 - np.clip(radius * strength, 0, 1) ** curve
         
-        # Create vignette mask (1 at center, 0 at corners)
-        # Formula: 1 - strength * radius^curve
-        mask = 1.0 - np.clip(radius * strength, 0, 1) ** curve
-        
-        # Expand mask to 3 channels for multiplication
-        mask = np.dstack((mask, mask, mask))
-        
-        return img_array * mask
+        return img_array * vignette[..., np.newaxis]
 
     @staticmethod
     def aces_tone_map(img_array: np.ndarray) -> np.ndarray:
-        """Vectorized ACES Tone Mapping for numpy arrays."""
-        a, b, c, d, e = 2.51, 0.03, 2.43, 0.59, 0.14
-        return (img_array * (a * img_array + b)) / (img_array * (c * img_array + d) + e)
+        """
+        Phase 3: Tone Mapping.
+        ACES Filmic Tone Mapping approximation (Narkowicz).
+        Compresses High Dynamic Range (HDR) values > 1.0 into 0.0-1.0 range nicely.
+        """
+        a = 2.51
+        b = 0.03
+        c = 2.43
+        d = 0.59
+        e = 0.14
+        return np.clip((img_array * (a * img_array + b)) / (img_array * (c * img_array + d) + e), 0.0, 1.0)
 
     @staticmethod
     def gamma_correct(img_array: np.ndarray, gamma: float = 2.2) -> np.ndarray:
-        """Vectorized Gamma Correction."""
-        return np.power(np.maximum(img_array, 0), 1.0 / gamma)
+        """
+        Phase 4: Gamma Correction.
+        Converts Linear Physics space to sRGB Monitor space.
+        """
+        return np.power(np.maximum(img_array, 0.0), 1.0 / gamma)
+
+    @classmethod
+    def process_and_export(cls, 
+                           pixel_samples: List[List[Tuple['Sample', np.ndarray]]], 
+                           settings: 'SampleSettings',
+                           pipeline_options: Dict[str, Any]
+                           ) -> np.ndarray:
+        """
+        Master function to run the entire pipeline from Raw Samples -> Saved 8-bit Image.
+        """
+        width = settings.width
+        height = settings.height
+        
+        # 1. Reconstruct (Raw Samples -> Float Image)
+        print("Reconstructing image from samples...")
+        img = cls.reconstruct_from_samples(width, height, pixel_samples, settings)
+        
+        # 2. Effects (Linear Space)
+        if pipeline_options.get('bloom_enabled', True):
+            print("Applying Bloom...")
+            img = cls.apply_bloom_separable(
+                img, 
+                threshold=pipeline_options.get('bloom_threshold', 0.9),
+                intensity=pipeline_options.get('bloom_intensity', 0.4),
+                radius=pipeline_options.get('bloom_radius', 3)
+            )
+
+        if pipeline_options.get('chromatic_aberration_enabled', False):
+            print("Applying Chromatic Aberration...")
+            img = cls.apply_chromatic_aberration(img, strength=2.0)
+
+        if pipeline_options.get('vignette_enabled', True):
+            print("Applying Vignette...")
+            img = cls.apply_vignette(img, strength=0.4)
+
+        # 3. Tone Mapping (HDR -> LDR)
+        print("Tone Mapping...")
+        img = cls.aces_tone_map(img)
+
+        # 4. Gamma Correction
+        print("Gamma Correcting...")
+        img = cls.gamma_correct(img)
+
+        # 5. Quantize (Float -> 8-bit Int)
+        print("Quantizing...")
+        img_8bit = np.clip(img * 255.0, 0, 255).astype(np.uint8)
+        
+        return img_8bit

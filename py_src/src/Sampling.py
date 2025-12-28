@@ -15,7 +15,8 @@ class PixelFilter(Enum):
 class SampleSettings:
     width: int = 800
     height: int = 600
-    filter_type: int = PixelFilter.BOX
+    size: int = 1
+    filter_type: PixelFilter = PixelFilter.BOX
     filter_width: float = 2.0  # Radius in pixels for the filter
     
 @dataclass
@@ -136,7 +137,7 @@ class Sampler(ABC):
         ...
 
     @abstractmethod
-    def sample_pixel(self, x: int, y: int, sample_idx: int, seed: Optional[int] = None) -> tuple[float, float]:
+    def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
         ...
 
     def get_samples_for_pixel(self, x: int, y:int) -> List[Sample]:
@@ -174,7 +175,7 @@ class Sampler(ABC):
 
 class RandomSampler(Sampler):
     """Independent RNG sampler, deterministic with base seed + pixel coords."""
-    def __init__(self, samples_per_pixel: int = 1):
+    def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
         super().__init__(samples_per_pixel)
         self._rng = np.random.default_rng()
         self._x = 0
@@ -190,9 +191,9 @@ class RandomSampler(Sampler):
         return (self._rng.random(), self._rng.random())
 
     def clone(self, seed: Optional[int] = None) -> "RandomSampler":
-        return RandomSampler(self.samples_per_pixel)
+        return RandomSampler(self.samples_per_pixel, seed)
 
-    def sample_pixel(self, x: int, y: int, sample_idx: int, seed: Optional[int] = None) -> tuple[float, float]:
+    def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
         self.start_pixel(x, y)
         for _ in range(sample_idx + 1):
             dx, dy = self.next_2d()
@@ -252,7 +253,7 @@ class StratifiedSampler(Sampler):
         return dx, dy
 
 class HaltonSampler(Sampler):
-    def __init__(self, samples_per_pixel: int = 1):
+    def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
         super().__init__(samples_per_pixel)
         self._index = 0
 
@@ -282,7 +283,7 @@ class HaltonSampler(Sampler):
         return v
 
     def clone(self, seed: Optional[int] = None) -> "HaltonSampler":
-        return HaltonSampler(self.samples_per_pixel)
+        return HaltonSampler(self.samples_per_pixel, seed)
 
     def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
         # Use sample_idx+1 to avoid zero index in Halton

@@ -3,8 +3,9 @@ import numpy as np
 from typing import Callable, List, Tuple, Optional
 
 from PrimaryStructures import Ray, HitInfo
-from Reflections import reflect_ray, calculate_reflectance
-from Refractions import refract_ray, REFRACTIVE_INDICES
+from Reflections import calculate_surface_reflection_ray, calculate_surface_reflection_ray_cheap
+from Refractions import calculate_refraction_vector, calculate_reflectance, REFRACTIVE_INDICES
+from Sampling import Sampler
 
 def clamp(value, min_value: float|int = 0.0, max_value: float|int = 1.0):
     return max(min_value, min(value, max_value))
@@ -304,7 +305,7 @@ class MaterialType(Enum):
     SPECULAR = 2 # Includes specular reflections and metallic properties
     GLASS = 3 # Uses refraction and reflection based on IOR
     TRANSPARENT = 4 # No surface, only transparency and albedo tint
-    EMISSIVE = 5 # Self-illuminating material, no light considerations
+    EMISSIVE = 5 # Self-illuminating material, no light calculations
 
 class Material:
     def __init__(
@@ -315,7 +316,7 @@ class Material:
             specular_tint_amount: float = 0.0,
             emissive_intensity: float = 1.0,
             ior: float = REFRACTIVE_INDICES["glass"],
-            absorption_color: Color = Color(0.0, 0.0, 0.0),
+            absorption_color: Color = Color(1.0, 0.1, 1.0),
             absorption_strength = 0.5,
             is_transparent: bool = False,
             opacity: float = 1.0,
@@ -487,7 +488,7 @@ class Material:
         """Get the specular component of the material response using the Micro-Facet BRDF."""
         
         # --- 0. Pre-Calculations and Constants ---
-        alpha = self.roughness
+        alpha = self.roughness * self.roughness
         alpha_sq = alpha * alpha
         
         # Halfway Vector (H)
@@ -583,54 +584,55 @@ class Material:
             f"Material()"
         )
 
-def calculate_optical_redirection(
+def calculate_redirection_ray(
         incoming_ray: Ray,
         surface_normal: np.ndarray,
         new_origin: np.ndarray,
+        roughness: float,
+        sampler: Sampler,
         current_refactive_index: float = REFRACTIVE_INDICES['glass'],
         incoming_refactive_index: float = REFRACTIVE_INDICES['air'],
         seed: Optional[int] = None,
-        bias: float = 1e-4
+        bias: float = 1e-4,
+        fast: bool = True
     ) -> Tuple[Ray, bool, bool]:
     rng = np.random.default_rng(seed)
 
     unit_dir = incoming_ray.orientation / np.linalg.norm(incoming_ray.orientation)
     unit_normal = surface_normal / np.linalg.norm(surface_normal)
 
+    NdotL = np.dot(surface_normal, incoming_ray.orientation)
+
     reflectance = calculate_reflectance(
         np.degrees(np.arccos(-np.dot(unit_normal, unit_dir))),
         current_refactive_index,
         incoming_refactive_index,
     )
+
+    def reflect_ray(normal, direction, origin):
+        if fast:
+            return calculate_surface_reflection_ray_cheap(normal, direction, origin, roughness, sampler, bias)
+        else:
+            return calculate_surface_reflection_ray(normal, direction, origin, roughness, sampler, bias)
     
     # Decide between reflection and refraction based on reflectance
     if rng.random() < reflectance:
         # Reflect
-        final_dir = reflect_ray(unit_normal, unit_dir)
-        final_origin = new_origin + unit_normal * bias
-        did_reflect = True
-    else:
-        # Refract
-        refracted = refract_ray(unit_normal, unit_dir, incoming_refactive_index, current_refactive_index)
-        if not refracted is None:
-            final_dir = refracted
-            final_origin = new_origin - unit_normal * bias
-            did_reflect = False
-        else: # Total internal reflection
-            final_dir = reflect_ray(unit_normal, unit_dir)
-            final_origin = new_origin + unit_normal * bias
-            did_reflect = True
+        return reflect_ray(unit_normal, unit_dir, new_origin + unit_normal * bias), True, NdotL >= 0
     
-    # Create the new ray
-    redirected_ray = Ray(
-        origin=final_origin,
-        orientation=final_dir,
-        name=f"{incoming_ray.name}_bounce"
-    )
+    # Refract
+    refracted_vector = calculate_refraction_vector(unit_normal, unit_dir, incoming_refactive_index, current_refactive_index)
+    if not refracted_vector is None:
+        redirected_ray = Ray(
+            origin=new_origin - unit_normal * bias,
+            orientation=refracted_vector,
+            name=f"{incoming_ray.name}_bounce"
+        )
 
-    NdotL = np.dot(surface_normal, incoming_ray.orientation)
+        return redirected_ray, False, NdotL >= 0.0
     
-    return redirected_ray, did_reflect, NdotL >= 0.0
+    # Total internal reflection occurred
+    return reflect_ray(unit_normal, unit_dir, new_origin + unit_normal * bias), True, NdotL >= 0
 
 """
 Luminance module: Provides classes for color representation, light rays, materials, and light sources.
