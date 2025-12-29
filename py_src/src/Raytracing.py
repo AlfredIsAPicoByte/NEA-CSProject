@@ -9,7 +9,7 @@ from Camera import VCamera, CameraType
 from Geometry import VObject
 from Reflections import calculate_reflection_vector
 from Refractions import REFRACTIVE_INDICES
-from Luminance import Color, Material, LightSource, calculate_redirection_ray
+from Luminance import Color, Material, MaterialType, LightSource, calculate_redirection_ray, attenuate_color, attenuate_sqr_distance
 from RenderingAlgorithims import Algorithm, RenderStats, register_algorithm
 from Sampling import SamplingManager, SampleSettings, Sampler, Sample, RandomSampler, reconstruct_pixel
 
@@ -136,8 +136,8 @@ class ShadingStrategy(ABC):
         ray: TracingRay,
         hit_info: HitInfo,
         current_depth: int,
-        trace_function: Callable,
-        interaction_function: Callable,
+        trace_function: Callable[[Scene, TracingRay, int], Color],
+        interaction_function: Callable[[TracingRay, HitInfo, Optional[float]], Optional[float]],
         seed: Optional[float] = None
     ) -> Color:
         ...
@@ -287,20 +287,19 @@ class RayMarchingIntersection(IntersectionStrategy):
             point = ray.point_at(distance_traveled)
             dist_obj = scene.distance_estimator(point)
 
-            # support either (dist, obj) or single distance return
-            if isinstance(dist_obj, tuple):
-                distance_to_closest, closest_object = dist_obj
-            else:
-                distance_to_closest, closest_object = dist_obj, None
+            if dist_obj is None:
+                break
+            
+            distance_to_closest, closest_object = dist_obj
 
-            normal = closest_object.shape.GetNormal(point) if closest_object and hasattr(closest_object, "shape") and hasattr(closest_object.shape, "GetNormal") else np.array([0.0, 1.0, 0.0])
+            surface_normal = closest_object.shape.GetNormal(point) if closest_object and hasattr(closest_object, "shape") and hasattr(closest_object.shape, "GetNormal") else np.array([0.0, 1.0, 0.0])
             
             if distance_to_closest <= self.epsilon:
                 return HitInfo(
                     did_hit=True,
                     hit_point=point,
                     incoming_direction=None,
-                    surface_normal=normal,
+                    surface_normal=surface_normal,
                     distance=distance_traveled,
                     obj=closest_object,
                 )
@@ -309,7 +308,7 @@ class RayMarchingIntersection(IntersectionStrategy):
             if distance_traveled >= self.max_distance:
                 break
 
-        return HitInfo(False, None, None, None, float('inf'), None)
+        return HitInfo(False)
 
 # Interaction implementations
 class SimpleMaterialInteraction(InteractionStrategy):
@@ -349,11 +348,14 @@ class SimpleMaterialInteraction(InteractionStrategy):
                 incoming_refactive_index=material.ior,
                 seed=seed,
                 bias=self.bias,
-                fast=True
+                fast=False
             )
 
             if not did_reflect and is_inside:
                 current_throughput = material.get_volumetric_component(current_throughput, hit_info.distance)
+            
+            if material.type == MaterialType.EMISSIVE:
+                current_throughput = attenuate_color(material.get_emissive_component(), attenuate_sqr_distance(hit_info.distance))
 
         except Exception:
             new_ray = Ray(
@@ -374,7 +376,16 @@ class SimpleMaterialInteraction(InteractionStrategy):
 
 # Shading implementations
 class RecursiveLambertShading(ShadingStrategy):
-    def shade(self, scene: Scene, ray: TracingRay, hit_info: HitInfo, depth: int, trace_function: Callable, interaction_function: Callable, seed: Optional[float] = None) -> Color:
+    def shade(
+            self,
+            scene: Scene,
+            ray: TracingRay,
+            hit_info: HitInfo,
+            depth: int,
+            trace_function: Callable[[Scene, TracingRay, int], Color],
+            interaction_function: Callable[[TracingRay, HitInfo, Optional[float]], Optional[float]],
+            seed: Optional[int]
+        ) -> Color:
         """
         Calculates the color of a point on an object, including direct lighting and recursive reflections.
         """
@@ -389,7 +400,7 @@ class RecursiveLambertShading(ShadingStrategy):
         view_dir = -ray.orientation
         
         # 2. Resolve Material
-        material: Optional[Material] = getattr(hit_info.object, "material", None) or getattr(hit_info.object.shape, "material", None) if hasattr(hit_info.object, "shape") else None
+        material: Optional[Material] = getattr(hit_info.object.shape, "material", None) if hasattr(hit_info.object, "shape") else None
         
         if not material:
             return Color(1, 0, 1) # Error Pink
@@ -426,7 +437,7 @@ class RecursiveLambertShading(ShadingStrategy):
                     # We use a white probe to get the material's pure attenuation color
                     probe_color = Color(1.0, 1.0, 1.0) # use scene probes in the future
                     
-                    new_ray = interaction_function(ray, hit_info.object, point, seed)
+                    new_ray = interaction_function(ray, hit_info.object, seed)
 
                     # B. Recursive Trace
                     # This calls 'self._trace_ray' which you passed in
@@ -435,10 +446,9 @@ class RecursiveLambertShading(ShadingStrategy):
                     # C. Combine
                     # Result = Light from world * Material Attenuation
                     indirect_light = incoming_light * getattr(new_ray, "throughput", probe_color)
-                    indirect_light *= (1 - roughness)
                 except Exception as e:
                     # If optical redirection fails, skip indirect lighting
-                    print("Redirection failed:", e)
+                    print("Indirect light failed:", e)
                     indirect_light = Color(0.0, 0.0, 0.0)
 
         # --- 5. Final Composition ---
@@ -476,7 +486,7 @@ class Raytracer(Algorithm):
 
         self.stats = TracingStats()
 
-    def _trace_ray(self, scene: Scene, ray: TracingRay, depth: int) -> Color:
+    def _trace_ray(self, scene: Scene, ray: TracingRay, depth: int, seed: Optional[int]) -> Color:
         """
         The recursive engine. It takes a ray, finds what it hits, and calculates the color.
         If the surface is reflective, this function will be called again by the shader.
@@ -490,12 +500,10 @@ class Raytracer(Algorithm):
 
         if hit.object is not None and hit.hit:
             self.stats.hits += 1
-            return self.shader.shade(scene, ray, hit, depth, self._trace_ray, self.interactor.interact)
+            return self.shader.shade(scene, ray, hit, depth, self._trace_ray, self.interactor.interact, seed)
 
-        try:
-            return scene.get_background_color(np.asarray(ray.orientation))
-        except Exception:
-            return Color(0.0, 0.0, 0.0)
+        # The ray missed all scene objects
+        return scene.get_background_color(np.asarray(ray.orientation))
 
     def render(
         self,
@@ -541,7 +549,7 @@ class Raytracer(Algorithm):
                          continue
 
                 # Trace
-                final_color = self._trace_ray(scene, ray, MAX_DEPTH)
+                final_color = self._trace_ray(scene, ray, MAX_DEPTH, seed)
                 
                 # FIX 3: Calculate proper Sample UVs if missing from the Ray
                 # We reconstruct 'u' and 'v' from the ray orientation if the generator didn't save them.

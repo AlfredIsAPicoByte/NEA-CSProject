@@ -96,7 +96,7 @@ class PostProcessingPipeline:
         return img_array + (blurred_final * intensity)
 
     @staticmethod
-    def apply_chromatic_aberration(img_array: np.ndarray, direction: np.ndarray, strength: float = 2.0) -> np.ndarray:
+    def apply_chromatic_aberration(img_array: np.ndarray, strength: float = 2.0) -> np.ndarray:
         """
         Phase 2: Lens Imperfections.
         Shifts Red and Blue channels in opposite directions.

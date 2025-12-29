@@ -364,21 +364,23 @@ class Material:
         )
     
     @classmethod
-    def create_glass(cls, albedo: Color, roughness: float = 0.0, metallicness: float = 0.0, ior: float = 1.5):
+    def create_glass(cls, albedo: Color, absorption_color: Color, roughness: float = 0.0, metallicness: float = 0.0, ior: float = 1.5, absorption_strength: float = 1):
         """
         Creates a dielectric transparent material.
         """
         return cls(
             albedo_color=albedo,
+            absorption_color=absorption_color,
             roughness=roughness,
             metallicness=metallicness,
             ior=ior,
+            absorption_strength=absorption_strength,
             is_transparent=True,
             type=MaterialType.GLASS
         )
     
     @classmethod
-    def create_transparent(cls, albedo: Color, roughness: float = 0.5, opacity: float = 0.5):
+    def create_transparent(cls, albedo: Color):
         """
         Creates a 'thin' transparent material (alpha blending), like a ghost or a hologram.
         This does not use IOR/Refraction logic, just simple opacity.
@@ -386,8 +388,6 @@ class Material:
 
         return cls(
             albedo_color=albedo,
-            roughness=roughness,
-            opacity=opacity,
             is_transparent=True,
             type=MaterialType.TRANSPARENT
         )
@@ -399,8 +399,9 @@ class Material:
         """
         return cls(
             albedo_color=albedo,
+            roughness=0,
             emissive_intensity=intensity,
-            type=MaterialType.EMISSIVE
+            type=MaterialType.EMISSIVE,
         )
 
     def apply_material(
@@ -436,6 +437,12 @@ class Material:
             light_attenuation = attenuate_sqr_distance(light_dist) # Using inverse square law for point lights
             light_intensity = light.intensity * light_attenuation
 
+            kS = _schlick_fresnel(
+                    np.clip(np.dot(surface_normal, view_dir), 0.0, 1.0),
+                    self.get_metallic_component().to_np_ndarray()
+                )                               # Specular fraction (Reflected)
+            kD = 1.0 - kS                       # Diffuse fraction (Absorbed/Refracted) 
+
             if self.type == MaterialType.TRANSPARENT:
                 visibility = 1.0
             else:
@@ -447,15 +454,19 @@ class Material:
             # Material response based on type
             if self.type == MaterialType.DIFFUSE:
                 diffuse_component = self.get_diffuse_component(surface_normal, light_dir, light_intensity)
+                if not self.metallic > 0:
+                    diffuse_component *= Color.from_array(kD)
                 final_color += diffuse_component * visibility
 
             if self.type == MaterialType.SPECULAR:
                 diffuse_component = self.get_diffuse_component(surface_normal, light_dir, light_intensity)
-                specular_component = self.get_specular_component(surface_normal, light_dir, light_intensity, view_dir)
+                specular_component = self.get_specular_component(surface_normal, light_dir, light_intensity, view_dir) * Color.from_array(kS)
+                if not self.metallic > 0:
+                    diffuse_component *= Color.from_array(kD)
                 final_color += (diffuse_component + specular_component) * visibility
 
             if self.type == MaterialType.GLASS:
-                specular_component = self.get_specular_component(surface_normal, light_dir, light_intensity, view_dir)
+                specular_component = self.get_specular_component(surface_normal, light_dir, light_intensity, view_dir) * Color.from_array(kS)
                 final_color += specular_component * visibility
 
             if self.type == MaterialType.TRANSPARENT:
@@ -463,8 +474,7 @@ class Material:
                 final_color += transparent_component * visibility
 
         if self.type == MaterialType.EMISSIVE:
-            emissive_component = self.get_emissive_component()
-            final_color = emissive_component
+            return self.get_emissive_component()
         
         return final_color
 
@@ -569,7 +579,7 @@ class Material:
         """
         Calculates the transparency color contribution of the material.
         """
-        return lerp(incoming_color, self.albedo, 1 - self.opacity)
+        return lerp(incoming_color, self.albedo, 1 - self.albedo.a)
 
     def apply_ambient_color(self, surface_normal: np.ndarray, view_dir: np.ndarray, ambient_color: Color, ambient_intensity: float) -> Color:
         """
@@ -583,6 +593,22 @@ class Material:
         return (
             f"Material()"
         )
+    
+def _schlick_fresnel(cos_theta: float, f0: np.ndarray) -> np.ndarray:
+    """
+    Calculates the portion of light that is reflected (Specular) vs. absorbed/refracted (Diffuse).
+    
+    Args:
+        cos_theta: The dot product of View Vector and Surface Normal (N dot V).
+                Must be clamped between 0.0 and 1.0.
+        f0: The base reflectivity of the material at 0 degrees incidence.
+            For non-metals (dielectrics), this is usually constant (e.g., 0.04).
+            For metals, this is the surface color itself.
+    
+    Returns:
+        The reflection coefficient (F), a value between 0.0 and 1.0.
+    """
+    return f0 + (1.0 - f0) * ((1.0 - cos_theta) ** 5)
 
 def calculate_redirection_ray(
         incoming_ray: Ray,

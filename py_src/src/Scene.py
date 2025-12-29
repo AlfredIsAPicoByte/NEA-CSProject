@@ -5,7 +5,7 @@ from math import atan2, asin, pi, floor
 from PrimaryStructures import Ray, HitInfo
 from Camera import VCamera
 from Geometry import VObject
-from Luminance import LightSource, Color
+from Luminance import LightSource, Color, ColorGradient
 
 class Scene:
     def __init__(self, name: str = "Scene", camera: Optional[VCamera] = None, **kwargs):
@@ -34,7 +34,7 @@ class Scene:
     def get_lights(self):
         return list(self.lights)
 
-    def distance_estimator(self, point: np.ndarray) -> Tuple[float, Optional[VObject]]:
+    def distance_estimator(self, point: np.ndarray) -> Optional[Tuple[float, VObject]]:
         """Return either a scalar distance or (distance, object). RayMarchingIntersection expects either."""
         min_d = float("inf")
         closest = None
@@ -46,6 +46,10 @@ class Scene:
             if d < min_d:
                 min_d = d
                 closest = obj
+
+        if closest is None:
+            return None
+        
         return (min_d, closest)
     
     def get_closest_intersection(self, ray: Ray) -> HitInfo:
@@ -83,58 +87,53 @@ class Scene:
     def get_background_color(self, direction) -> Color:
         """
         Return the background color based on the ray's direction vector.
-        Handles Solid Color, ColorGradient (Skybox), or Texture Map (Equirectangular).
+        Handles Solid Color, ColorGradient (Skybox), or Texture Map safely.
         """
-        # 1. Safe Access to Background Property
+        # 1. Safe Access to Background
         bg = getattr(self, 'background_color', None)
         if bg is None:
-            return Color(0.0, 0.0, 0.0) # Default Black
+            return Color(0.0, 0.0, 0.0)
 
-        # 2. Resolve Direction Vector
-        # We need a normalized numpy array direction vector
-        try:
-            dir_vec = np.array(direction, dtype=float)
-            if dir_vec.shape != (3,):
-                 raise ValueError("Invalid shape")
-        except (ValueError, TypeError):
-            # Fallback: If direction is invalid (e.g. None), use Camera Forward
-            camera = getattr(self, "camera", None)
-            if camera and hasattr(camera, "transform"):
-                dir_vec = camera.transform.forward
-            else:
-                dir_vec = np.array([0.0, 0.0, 1.0]) # Absolute Z forward fallback
+        # 2. Get the Class Name (Avoids NameError if classes aren't imported)
+        bg_type_name = type(bg).__name__
 
-        # Normalize logic (safeguard against zero-length vectors)
-        norm = np.linalg.norm(dir_vec)
-        if norm > 1e-6:
-            dir_vec = dir_vec / norm
-        else:
-            dir_vec = np.array([0.0, 1.0, 0.0]) # Default UP if zero vector
+        # 3. Handle ColorGradient (Skybox)
+        if bg_type_name == 'ColorGradient':
+            # Resolve Direction
+            try:
+                dir_vec = np.array(direction, dtype=float)
+                norm = np.linalg.norm(dir_vec)
+                if norm > 1e-6:
+                    dir_vec = dir_vec / norm
+                else:
+                    dir_vec = np.array([0.0, 1.0, 0.0])
+            except (ValueError, TypeError):
+                dir_vec = np.array([0.0, 1.0, 0.0])
 
-        # 3. Handle ColorGradient (Skybox / Vertical Gradient)
-        # Using type name string check avoids circular import issues if they exist
-        if type(bg).__name__ == 'ColorGradient' or hasattr(bg, 'get_color'):
-            # Calculate 't' for vertical gradient mapping
-            # Map Y (Up) from [-1, 1] to [0, 1]
+            # Map Y [-1, 1] to [0, 1]
             t = 0.5 * (dir_vec[1] + 1.0)
             return bg.get_color(t)
 
-        # 4. Handle Texture Map (Environment / HDRI Map)
-        # Checks if it's a numpy array (image data)
+        # 4. Handle Texture Map (Numpy Array)
         elif isinstance(bg, np.ndarray):
+            # Resolve Direction (Reuse logic or recalculate)
+            dir_vec = np.array(direction, dtype=float)
+            norm = np.linalg.norm(dir_vec)
+            if norm > 1e-6: dir_vec /= norm
+            
             return self._sample_equirectangular_map(bg, dir_vec)
 
         # 5. Handle Solid Color (Color Object)
-        elif isinstance(bg, Color):
+        # We check the name OR the instance to be safe
+        elif bg_type_name == 'Color' or isinstance(bg, Color):
             return bg
 
         # 6. Handle Solid Color (Tuple/List fallback)
         elif isinstance(bg, (tuple, list)) and len(bg) == 3:
             return Color(bg[0], bg[1], bg[2])
 
-        # Default fallback
         return Color(0.0, 0.0, 0.0)
-
+    
     def _sample_equirectangular_map(self, texture: np.ndarray, direction: np.ndarray) -> Color:
         """
         Samples a 2D texture using Spherical (Equirectangular) mapping.

@@ -122,7 +122,7 @@ class HitInfo:
             incoming_direction: Optional[np.ndarray] = None,
             surface_normal: Optional[np.ndarray] = None,
             distance: Optional[float] = None,
-            obj: Optional[object] = None
+            obj: Optional["VObject"] = None
         ):
         # Primary boolean flag - use `hit` for clarity
         self.hit = bool(did_hit)
