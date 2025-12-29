@@ -699,6 +699,22 @@ class PBRMaterial:
         return (
             f"Material()"
         )
+    
+def _schlick_fresnel(cos_theta: float, f0: np.ndarray) -> np.ndarray:
+    """
+    Calculates the portion of light that is reflected (Specular) vs. absorbed/refracted (Diffuse).
+    
+    Args:
+        cos_theta: The dot product of View Vector and Surface Normal (N dot V).
+                Must be clamped between 0.0 and 1.0.
+        f0: The base reflectivity of the material at 0 degrees incidence.
+            For non-metals (dielectrics), this is usually constant (e.g., 0.04).
+            For metals, this is the surface color itself.
+    
+    Returns:
+        The reflection coefficient (F), a value between 0.0 and 1.0.
+    """
+    return f0 + (1.0 - f0) * ((1.0 - cos_theta) ** 5)
 
 def schlick_fresnel(cos_theta: float, f0: np.ndarray) -> np.ndarray:
     """

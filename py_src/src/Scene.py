@@ -5,7 +5,7 @@ from math import atan2, asin, pi, floor
 from PrimaryStructures import Ray, HitInfo
 from Camera import VCamera
 from Geometry import VObject
-from Luminance import LightSource, Color
+from Luminance import LightSource, Color, ColorGradient
 
 class Scene:
     def __init__(self, name: str = "Scene", camera: Optional[VCamera] = None, **kwargs):
@@ -170,7 +170,7 @@ class Scene:
             norm = np.linalg.norm(dir_vec)
             if norm > 1e-6: dir_vec /= norm
             
-            return Color(*self._sample_equirectangular_map(bg, dir_vec))
+            return self._sample_equirectangular_map(bg, dir_vec)
 
         # 5. Handle Solid Color (Color Object)
         # We check the name OR the instance to be safe
@@ -180,10 +180,9 @@ class Scene:
         elif isinstance(bg, (tuple, list)) and len(bg) == 3:
             return Color(*bg)
 
-        # Invisivle fallback
-        return Color(0.0, 0.0, 0.0, 0.0)
+        return Color(0.0, 0.0, 0.0)
     
-    def _sample_equirectangular_map(self, texture: np.ndarray, direction: np.ndarray) -> np.ndarray:
+    def _sample_equirectangular_map(self, texture: np.ndarray, direction: np.ndarray) -> Color:
         """
         Samples a 2D texture using Spherical (Equirectangular) mapping.
         Texture is assumed to be a numpy array of shape (H, W, 3).
@@ -211,7 +210,7 @@ class Scene:
         if texture.dtype.kind in 'iu': # int or uint
             pixel = pixel / 255.0
             
-        return Color(pixel[0], pixel[1], pixel[2])
+        return Color(*pixel)
     
     def clear_objects(self):
         self.objects.clear()
