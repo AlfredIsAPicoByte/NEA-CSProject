@@ -5,7 +5,7 @@ from math import atan2, asin, pi, floor
 from PrimaryStructures import Ray, HitInfo
 from Camera import VCamera
 from Geometry import VObject
-from Luminance import LightSource, Color, ColorGradient
+from Luminance import LightSource, Color, Material
 
 class Scene:
     def __init__(self, name: str = "Scene", camera: Optional[VCamera] = None, **kwargs):
@@ -34,39 +34,68 @@ class Scene:
     def get_lights(self):
         return list(self.lights)
 
-    def distance_estimator(self, point: np.ndarray) -> Optional[Tuple[float, VObject]]:
-        """Return either a scalar distance or (distance, object). RayMarchingIntersection expects either."""
+    def distance_estimator(self, point: np.ndarray, ignore: Optional[VObject]) -> Tuple[Optional[VObject], float]:
+        """
+        Evaluates the Scene SDF. Returns (closest_object, distance).
+        Used by the Ray Marcher.
+        """
         min_d = float("inf")
         closest = None
+        
         for obj in self.objects:
+            # 1. Ignore: remove an object from the chacke (for glass materials)
+            if ignore is obj:
+                continue
+
+            # 2. Safety Check: Only call SignedDistance on shapes that support it
+            if not hasattr(obj.shape, 'SignedDistance'):
+                continue
+                
             try:
                 d = obj.shape.SignedDistance(point)
             except Exception:
                 continue
+            
+            # 3. Standard SDF Union (Min)
             if d < min_d:
                 min_d = d
                 closest = obj
-
-        if closest is None:
-            return None
         
-        return (min_d, closest)
+        return (closest, min_d)
     
     def get_closest_intersection(self, ray: Ray) -> HitInfo:
-        """Return a `HitInfo` describing the closest intersection (or hit=False if none)."""
+        """
+        Analytical Intersection (Ray-Sphere, Ray-Plane).
+        Returns a `HitInfo` describing the closest intersection.
+        """
         closest_obj = None
         closest_hit = None
         min_distance = float("inf")
+        
+        # CRITICAL: Threshold to ignore self-intersections.
+        # Any hit closer than this is considered a numerical error.
+        epsilon = 1e-5
 
         for obj in self.objects:
+            # 1. Safety Check: Only call intersect on analytical shapes
+            if not hasattr(obj.shape, 'intersect'):
+                continue
+
             try:
                 hit_point = obj.shape.intersect(ray)
             except Exception:
                 hit_point = None
 
             if hit_point is not None:
-                distance = np.linalg.norm(hit_point - ray.origin)
-                if distance < min_distance:
+                # 2. Calculate Distance
+                # Note: It is faster if your intersect() returns 't' (distance) directly,
+                # but calculating norm here works fine for now.
+                dist_vec = hit_point - ray.origin
+                distance = np.linalg.norm(dist_vec)
+                
+                # 3. Check bounds (Closest valid hit)
+                # MUST check distance > epsilon to prevent "Shadow Acne"
+                if distance > epsilon and distance < min_distance:
                     min_distance = distance
                     closest_obj = obj
                     closest_hit = hit_point
@@ -74,15 +103,26 @@ class Scene:
         if closest_obj is None or closest_hit is None:
             return HitInfo(False)
 
-        # Attempt to get a surface normal if the shape provides one
-        normal = None
-        try:
-            if hasattr(closest_obj.shape, 'GetNormal'):
-                normal = closest_obj.shape.GetNormal(closest_hit)
-        except Exception:
-            normal = None
+        # 4. Resolve Normal
+        normal = np.array([0.0, 1.0, 0.0]) # Default up fallback
+        if hasattr(closest_obj.shape, 'GetNormal'):
+            normal = closest_obj.shape.GetNormal(closest_hit)
+            
+            # Normalize safely
+            nm = np.linalg.norm(normal)
+            if nm > 1e-6:
+                normal = normal / nm
 
-        return HitInfo(hit=True, point=closest_hit, direction=ray.orientation, normal=normal, distance=min_distance, obj=closest_obj)
+        # 5. Return HitInfo
+        # Naming 'object' matches the access pattern in 'is_occluded'
+        return HitInfo(
+            hit=True, 
+            point=closest_hit, 
+            direction=ray.orientation, 
+            normal=normal, 
+            distance=min_distance, 
+            object=closest_obj 
+        )
     
     def get_background_color(self, direction) -> Color:
         """
@@ -188,12 +228,11 @@ class Scene:
             from PrimaryStructures import Ray
             ray = Ray(origin, dir_norm)
             hit_info = self.get_closest_intersection(ray)
-            if hit_info.hit and getattr(hit_info, 'object', None) is not None and hit_info.point is not None:
-                # If the hit object's material is opaque and the hit is closer than the light
-                if not hit_info.object.material.is_transparent:
-                    hit_dist = np.linalg.norm(hit_info.point - origin)
-                    if hit_dist < (dist_to_light - epsilon):
-                        return True
+            v_object: Optional[VObject] = hit_info.object
+            if hit_info.hit and v_object is not None and hit_info.point is not None:
+                hit_dist = np.linalg.norm(hit_info.point - origin)
+                if hit_dist < (dist_to_light - epsilon):
+                    return True
         except Exception:
             # geometry intersection may not be supported; fall back to distance estimator below
             pass
@@ -203,19 +242,16 @@ class Scene:
             distance_traveled = 0.0
             for _ in range(max_steps):
                 sample_point = origin + dir_norm * distance_traveled
-                de = self.distance_estimator(sample_point)
-                # distance_estimator may return (dist, obj) or dist only
-                if isinstance(de, tuple):
-                    d, _ = de
-                else:
-                    d = de
-                if d <= epsilon:
-                    # hit something before reaching the light -> occluded
-                    return True
-                distance_traveled += d
-                if distance_traveled >= dist_to_light:
-                    # reached light without hitting anything
-                    return False
+                v_object, dist = self.distance_estimator(sample_point)
+
+                if v_object is not None:
+                    if dist <= epsilon:
+                        # hit something before reaching the light -> occluded
+                        return True
+                    distance_traveled += dist
+                    if distance_traveled >= dist_to_light:
+                        # reached light without hitting anything
+                        return False
             # exceeded max steps without reaching the light - treat as occluded
             return True
 

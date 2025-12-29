@@ -225,7 +225,7 @@ def calculate_refractive_index(
         angle_of_incidence: float,
         angle_of_refraction: float,
         refractive_index_incident: float,
-        bias: float = 1e-4
+        bias: float = 1e-8
     ) -> float:
     """
     Calculate the refractive index of the second medium based on the law of refraction.
@@ -244,7 +244,7 @@ def calculate_refractive_index_incident(
         angle_of_incidence: float,
         angle_of_refraction: float,
         refractive_index: float,
-        bias: float = 1e-4
+        bias: float = 1e-8
     ) -> float:
     """
     Calculate the refractive index of the first medium based on the law of refraction.
@@ -309,7 +309,7 @@ def calculate_refraction_vector(
         direction: np.ndarray,
         refractive_index_incident: float,
         refractive_index: float,
-        bias: float = 1e-4
+        bias: float = 1e-8
     ) -> Optional[np.ndarray]:
     """
     Calculate the outgoing angle of the refracted ray.

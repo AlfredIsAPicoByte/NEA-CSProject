@@ -138,7 +138,7 @@ class ShadingStrategy(ABC):
         current_depth: int,
         trace_function: Callable[[Scene, TracingRay, int], Color],
         interaction_function: Callable[[TracingRay, HitInfo, Optional[float]], Optional[float]],
-        seed: Optional[float] = None
+        seed: Optional[int] = None
     ) -> Color:
         ...
     
@@ -285,12 +285,10 @@ class RayMarchingIntersection(IntersectionStrategy):
 
         for _ in range(self.max_steps):
             point = ray.point_at(distance_traveled)
-            dist_obj = scene.distance_estimator(point)
+            closest_object, distance_to_closest = scene.distance_estimator(point, ignore=getattr(ray, "previous_obj", None))
 
-            if dist_obj is None:
+            if closest_object is None and closest_object is not getattr(ray, "previous_obj", None): # ignore the object if it is the previous
                 break
-            
-            distance_to_closest, closest_object = dist_obj
 
             surface_normal = closest_object.shape.GetNormal(point) if closest_object and hasattr(closest_object, "shape") and hasattr(closest_object.shape, "GetNormal") else np.array([0.0, 1.0, 0.0])
             
@@ -312,18 +310,20 @@ class RayMarchingIntersection(IntersectionStrategy):
 
 # Interaction implementations
 class SimpleMaterialInteraction(InteractionStrategy):
-    def interact(self, ray: TracingRay, hit_info: HitInfo, seed: Optional[float]) -> Optional[TracingRay]:
+    def interact(self, ray: TracingRay, hit_info: HitInfo, seed: Optional[int]) -> Optional[TracingRay]:
         # 1. Resolve Material
-        material: Material = getattr(hit_info.object, "material", None) or getattr(hit_info.object.shape, "material", None) if hasattr(hit_info.object, "shape") else None
+        v_object: VObject = hit_info.object
+        
+        material: Material = getattr(v_object.shape, "material", None)
         if not material:
             return None
 
         # 2. Calculate Context (Normal)
         # We need the normal to decide reflection/refraction
-        if hasattr(hit_info.object.shape, "GetNormal"):
-            normal: np.ndarray = hit_info.object.shape.GetNormal(hit_info.point)
+        if hasattr(v_object.shape, "GetNormal"):
+            normal: np.ndarray = v_object.shape.GetNormal(hit_info.point)
         else:
-            return None
+            normal = np.array([0.0, 1.0, 0.0])
 
         # 3. Calculate Origin Offset (Prevent Shadow Acne)
         new_origin = hit_info.point + (normal * self.bias)
@@ -333,12 +333,13 @@ class SimpleMaterialInteraction(InteractionStrategy):
 
         # 4. Invoke the Material's Logic (with robust handling)
         current_throughput = getattr(ray, "throughput", Color(1.0, 1.0, 1.0))
+        pdf = 0
 
         # Attempt to let the material produce the redirected ray & attenuation.
         # If the material implementation raises or returns a malformed orientation,
         # we fall back to a safe perfect-reflection ray.
         try:
-            new_ray, did_reflect, is_inside = calculate_redirection_ray(
+            new_ray, pdf, did_reflect, is_inside = calculate_redirection_ray(
                 incoming_ray=ray,
                 surface_normal=normal,
                 new_origin=new_origin,
@@ -354,7 +355,7 @@ class SimpleMaterialInteraction(InteractionStrategy):
             if not did_reflect and is_inside:
                 current_throughput = material.get_volumetric_component(current_throughput, hit_info.distance)
             
-            if material.type == MaterialType.EMISSIVE:
+            if material.is_transparent:
                 current_throughput = attenuate_color(material.get_emissive_component(), attenuate_sqr_distance(hit_info.distance))
 
         except Exception:
@@ -363,12 +364,14 @@ class SimpleMaterialInteraction(InteractionStrategy):
                 orientation=calculate_reflection_vector(normal, ray.orientation)
             )
 
-        # 5. Convert/Return TracingRay and Update Throughput
+        # 5. Convert/Return TracingRay and Update Throughput     
         next_ray = TracingRay(
             origin=new_ray.origin,
             orientation=new_ray.orientation,
             name=f"{ray.name}_bounce",
             throughput=current_throughput,
+            pdf=pdf,
+            previous_obj=v_object,
             depth=getattr(ray, "depth", 0) + 1
         )
 
@@ -382,8 +385,8 @@ class RecursiveLambertShading(ShadingStrategy):
             ray: TracingRay,
             hit_info: HitInfo,
             depth: int,
-            trace_function: Callable[[Scene, TracingRay, int], Color],
-            interaction_function: Callable[[TracingRay, HitInfo, Optional[float]], Optional[float]],
+            trace_function: Callable[[Scene, TracingRay, int, Optional[int]], Color],
+            interaction_function: Callable[[TracingRay, HitInfo, Optional[int]], Optional[TracingRay]],
             seed: Optional[int]
         ) -> Color:
         """
@@ -391,16 +394,18 @@ class RecursiveLambertShading(ShadingStrategy):
         """
         # --- 1. Setup Geometry Context ---
         point = ray.point_at(hit_info.distance)
+        v_object: VObject = hit_info.object
         
         # Safely get normal
-        if not hasattr(hit_info.object, "shape") or not hasattr(hit_info.object.shape, "GetNormal"):
+        if not hasattr(v_object, "shape") or not hasattr(v_object.shape, "GetNormal"):
             return Color(1, 0, 1)  # Error Pink
 
-        normal = hit_info.object.shape.GetNormal(point)
+        normal = v_object.shape.GetNormal(point)
         view_dir = -ray.orientation
+        view_dir = view_dir / np.linalg.norm(view_dir)
         
         # 2. Resolve Material
-        material: Optional[Material] = getattr(hit_info.object.shape, "material", None) if hasattr(hit_info.object, "shape") else None
+        material: Optional[Material] = getattr(v_object.shape, "material", None) if hasattr(v_object, "shape") else None
         
         if not material:
             return Color(1, 0, 1) # Error Pink
@@ -431,25 +436,31 @@ class RecursiveLambertShading(ShadingStrategy):
             is_transparent = getattr(material, "is_transparent", False)
             
             # Only compute indirect lighting if material is transparent or is not completely diffuse
-            if is_transparent or roughness > 0.99:
-                try:
-                    # A. Probe the material to get the bounce ray
-                    # We use a white probe to get the material's pure attenuation color
-                    probe_color = Color(1.0, 1.0, 1.0) # use scene probes in the future
+            if is_transparent or roughness < 0.99:
+                # A. Probe the material to get the bounce ray
+                # We use a white probe to get the material's pure attenuation color
+                probe_color = Color(1.0, 1.0, 1.0) # use scene probes in the future
                     
-                    new_ray = interaction_function(ray, hit_info.object, seed)
-
+                new_ray = interaction_function(ray, hit_info, seed)
+                incoming_light = Color(0.0, 0.0, 0.0)
+                if new_ray is not None:
                     # B. Recursive Trace
                     # This calls 'self._trace_ray' which you passed in
-                    incoming_light = trace_function(scene, new_ray, depth - 1)
+                    incoming_light = trace_function(scene, new_ray, depth - 1, seed)
 
-                    # C. Combine
-                    # Result = Light from world * Material Attenuation
-                    indirect_light = incoming_light * getattr(new_ray, "throughput", probe_color)
-                except Exception as e:
-                    # If optical redirection fails, skip indirect lighting
-                    print("Indirect light failed:", e)
-                    indirect_light = Color(0.0, 0.0, 0.0)
+                # C. 
+                pdf = getattr(new_ray, "pdf", 0)
+                throughput = getattr(new_ray, "throughput", probe_color)
+                brdf_val = material.evaluate_brdf(normal, view_dir, new_ray.orientation)
+                cos_theta = max(np.dot(normal, new_ray.orientation), 0.0)
+                if pdf > 0:
+                    throughput_factor = (brdf_val * cos_theta) / pdf
+                else:
+                    throughput_factor = 0
+
+                # C. Combine
+                # Result = Light from world * Material Attenuation
+                indirect_light = incoming_light * throughput * throughput_factor
 
         # --- 5. Final Composition ---
         final_color = direct_light + indirect_light
@@ -529,12 +540,11 @@ class Raytracer(Algorithm):
         def _gen_rays(region=None, seed=None):
             return self.ray_generator.generate(scene.camera, region=region, seed=seed)
 
-        def process_rays(rays):
+        def process_rays(rays: List[TracingRay]):
             for ray in rays:
                 # SKIP invalid rays
                 if ray is None: continue
 
-                # FIX 2: Ensure we have valid pixel coordinates
                 x = getattr(ray, "pixel_x", -1)
                 y = getattr(ray, "pixel_y", -1)
                 

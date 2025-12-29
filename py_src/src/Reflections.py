@@ -54,7 +54,7 @@ def calculate_reflection_angle(
 def calculate_reflection_vector(
         normal: np.ndarray,
         direction: np.ndarray,
-        bias: float = 1e-4
+        bias: float = 1e-8
     ) -> np.ndarray:
     """
     Compute reflected ray direction using law of reflection.
@@ -78,8 +78,12 @@ def calculate_surface_reflection_ray(
         origin: np.ndarray,
         roughness: float,
         sampler: Sampler,
-        bias: float = 1e-4
+        bias: float = 1e-8
     ) -> Tuple[Ray, float]:
+    """
+        Generates a reflection ray using GGX Importance Sampling.
+        Returns: (Ray, PDF)
+    """
     # 1. Get Random Samples (u, v)
     # These determine "where" on the roughness hemisphere we pick a direction
     u, v = sampler.next_2d()
@@ -117,36 +121,11 @@ def calculate_surface_reflection_ray(
     # Calculate Probability Density Function (PDF)
     # This is needed for the color math (throughput) to balance correctly.
     # (Simplified for demonstration)
-    pdf = (2.0 * dot_v_h) / (cos_theta * alpha * alpha) # Approximation
+    pdf = (2.0 * dot_v_h) / ((cos_theta * alpha * alpha) + bias) # Approximation
 
     new_ray = Ray(origin=new_origin, orientation=reflection_dir, name="reflection")
     
     return new_ray, pdf
-
-def calculate_surface_reflection_ray_cheap(
-        normal: np.ndarray,
-        direction: np.ndarray,
-        origin: np.ndarray,
-        roughness: float,
-        sampler: Sampler,
-        bias: float = 1e-4
-    ) -> Tuple[Ray, float]:
-    # 1. Calculate PERFECT reflection
-    perfect_reflection_vec = calculate_reflection_vector(normal, direction)
-
-    rand_x, rand_y = sampler.next_2d()
-    rand_z = sampler.next_1d()
-    random_vec = np.array([rand_x, rand_y, rand_z]) - 0.5
-    random_vec = _unit(random_vec)
-
-    fuzzed_reflection_vec = perfect_reflection_vec + (random_vec * roughness)
-    fuzzed_reflection_vec = _unit(fuzzed_reflection_vec)
-
-    return (Ray(
-        origin=origin + (normal * bias),
-        orientation=fuzzed_reflection_vec
-    ), 1)
-
 """
 Reflection module: Provides functions to calculate reflection angles and reflected ray directions based on the law of reflection.
 """

@@ -1,4 +1,8 @@
 import numpy as np
+import sys, os
+import time
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from src.PrimaryStructures import Transform
 from src.Geometry import Sphere, Cube, Cuboid, VObject
@@ -8,17 +12,17 @@ from src.Luminance import LightSource, Color, ColorGradient, Material
 from src.Refractions import REFRACTIVE_INDICES
 
 def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
-    cam_transform = Transform(np.array([0.0, 1.5, -6.0]), np.array([0, 0.2, 0]), np.ones(3))
+    cam_transform = Transform(np.array([0.0, 1.5, -4.0]), np.array([0, 0.2, 0]), np.ones(3))
     cam = VCamera(cam_transform, fov=70.0, near=0.1, far=86.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
 
-    # Background Gradient: Richer sunset/dusk sky for dramatic lighting
+    # Background Gradient
     sky_colors = [
-        Color.from_hex("#42424E"),
         Color.from_hex("#2D2515"),
+        Color.from_hex("#42424E"),
         Color.from_hex("#5B6791"),
         Color.from_hex("#87BFC6"),
     ]
-    sky_positions = [0.0, 0.3, 0.5, 1.0] 
+    sky_positions = [0.0, 0.4, 0.45, 1.0] 
 
     # Primary Key Light (Sharp, slightly yellow, placed high and to the left for side lighting)
     key_light = LightSource(position=np.array([4.0, 5.0, 0.0]), color=Color.from_hex("#FFEDC7"), intensity=15.0, radius=0.5, name="Key Light")
@@ -27,22 +31,22 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     fill_light = LightSource(position=np.array([-5.0, 2.0, -5.0]), color=Color.from_hex("#C7E5FF"), intensity=3.0, radius=4, name="Fill Light")
 
     # Main Sphere (Mid-Ground): Highly Reflective Metal
-    sphere_shape_1 = Sphere(center=np.array([13.0, 5.0, 22.0]), radius=0.5, name="MainReflectiveBall")
-    mat_metal = Material.create_specular(Color.from_hex("#E0E0E0"), 0.05, 1, 0) # Highly reflective metal
+    sphere_shape_1 = Sphere(center=np.array([3.0, 2.25, 10.0]), radius=4, name="MainReflectiveBall")
+    mat_metal = Material.create_specular(Color.from_hex("#E0E0E0"), 0.05, .5, 1) # Highly reflective metal
     sphere_shape_1.material = mat_metal
 
     # Additional Object 1: Cube (Background/Visual Anchor) - Matte and Rough
-    box_shape = Cube(center=np.array([2.5, 3.0, 4.0]), side_length=2.5, name="BackgroundBox")
+    box_shape = Cube(center=np.array([1.5, 3.0, 4.0]), side_length=2.5, name="BackgroundBox")
     box_shape.transform.rotate(15, np.array([0, 1, 0])) # Simple rotation for visual interest
     mat_matte = Material.create_diffuse(Color.from_hex("#C27A23"), roughness=0.8) # Rough, terracotta-like
     box_shape.material = mat_matte
     
     # Additional Object 2: Small Emissive Sphere (Light Source Helper) - Floating in air
-    sphere_shape_2 = Sphere(center=np.array([-2.0, 2.5, 2.0]), radius=0.3, name="EmissiveOrb")
-    mat_glow = Material.create_emissive(Color(0.5, 0.3, 0.1), 1) # Pure glow
+    sphere_shape_2 = Sphere(center=np.array([4.0, 2.5, 2.0]), radius=1, name="EmissiveOrb")
+    mat_glow = Material.create_emissive(Color.from_hex("#EE1717"), 3) # Pure glow
     sphere_shape_2.material = mat_glow
 
-    cam.transform.look_at(sphere_shape_1.transform.position)
+    cam.transform.look_at(sphere_shape_1.transform.position, [0, 1, 0])
 
     scene = Scene(name="gradient_scene", camera=cam, background_color=ColorGradient(sky_colors, sky_positions))
 
@@ -61,13 +65,13 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
 
     # Sphere at origin
     sphere_shape = Sphere(center=np.array([0.0, 0.0, 0.0]), radius=0.5, name="BallMin")
-    mat = Material.create_diffuse(Color.from_hex("#44A1FF"), 0.2)
+    mat = Material.create_diffuse(Color.from_hex("#227DD7"), 0.2)
     sphere_shape.material = mat
     scene.add_object(VObject(shape=sphere_shape, name="SphereMin"))
 
     # Ground
     ground = Sphere(center=np.array([0.0, -100.5, 0.0]), radius=100.0, name="GroundMin")
-    matg = Material.create_diffuse(Color.from_hex("#808080"), 0.9)
+    matg = Material.create_diffuse(Color.from_hex("#3F3F3F"), 0.9)
     ground.material = matg
     scene.add_object(VObject(shape=ground, name="GroundMin"))
 
@@ -84,13 +88,13 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
 
     # Emissive sphere
     emissive = Sphere(center=np.array([0.8, 1.0, 0.0]), radius=0.3, name="EmissiveOrb")
-    mat_glow = Material.create_emissive(Color(0.3, 0.3, 0.9), 6.7)
+    mat_glow = Material.create_emissive(Color.from_hex("#FFEA62"), 2)
     emissive.material = mat_glow
     scene.add_object(VObject(shape=emissive, name="GlowingSphere"))
 
     # Reflective sphere
     mirror = Sphere(center=np.array([-0.5, 0.5, 0.0]), radius=0.5, name="Mirror")
-    mat_reflect = Material.create_specular(Color.from_hex("#EDEDED"), 0.05, 0.9, 0.1)
+    mat_reflect = Material.create_specular(Color.from_hex("#EDEDED"), roughness=0.1, metallicness=0.5, specular_intensity=1.0, specular_tint_amount=1.0)
     mirror.material = mat_reflect
     scene.add_object(VObject(shape=mirror, name="MirrorSphere"))
 
@@ -113,18 +117,18 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
 
     # Objects: two spheres and box as background
     s1 = Sphere(center=np.array([-0.6, 0.4, 0.5]), radius=0.4, name="StudioBallA")
-    mat1 = Material.create_specular(Color.from_hex("#FFB86B"), 0.2, 0.1, 0.9)
+    mat1 = Material.create_specular(Color.from_hex("#FFB86B"), 0.2, 0.1, 0.9, 0)
     s1.material = mat1
     scene.add_object(VObject(shape=s1, name="StudioBallA"))
 
     s2 = Sphere(center=np.array([0.8, 0.45, 0.2]), radius=0.45, name="StudioBallB")
-    mat2 = Material.create_specular(Color.from_hex("#6B9BFF"), 0.2, 0.4, 0.9)
+    mat2 = Material.create_specular(Color.from_hex("#6B9BFF"), 0.2, 0.4, 0.9, 0)
     s2.material = mat2
     scene.add_object(VObject(shape=s2, name="StudioBallB"))
 
     # Background 
-    box_shape = Cube(center=np.array([0.0, 0.5, 3.0]), side_length=4.0, name="StudioBack")
-    mat_box = Material.create_diffuse(Color.from_hex("#C2C6C9"), roughness=1.0)
+    box_shape = Cube(center=np.array([0.0, 0.5, 6.0]), side_length=6.0, name="StudioBack")
+    mat_box = Material.create_diffuse(Color.from_hex("#BEC3C3"), roughness=1.0)
     box_shape.material = mat_box
     scene.add_object(VObject(shape=box_shape, name="StudioBox"))
 
@@ -170,26 +174,26 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     room_objects.append(floor)
     
     # Ceiling
-    ceiling = Cube(center=np.array([0.0, 5.5, 0.0]), side_length=10.0, name="Ceiling")
+    ceiling = Cube(center=np.array([0.0, 6.5, 0.0]), side_length=10.0, name="Ceiling")
     ceiling.transform.scale = np.array([2.0, 0.1, 2.0])
     ceiling.material = mat_white
     room_objects.append(ceiling)
 
     # Back Wall
-    back = Cube(center=np.array([0.0, 2.5, 5.5]), side_length=10.0, name="BackWall")
-    back.transform.scale = np.array([2.0, 2.0, 0.1])
+    back = Cube(center=np.array([0.0, 3.0, 5.5]), side_length=10.0, name="BackWall")
+    back.transform.scale = np.array([2.0, 3.0, 0.1])
     back.material = mat_white
     room_objects.append(back)
     
     # Left Wall (Red)
-    left = Cube(center=np.array([-5.5, 2.5, 0.0]), side_length=10.0, name="LeftWall")
-    left.transform.scale = np.array([0.1, 2.0, 2.0])
+    left = Cube(center=np.array([-5.5, 3.0, 0.0]), side_length=10.0, name="LeftWall")
+    left.transform.scale = np.array([0.1, 3.0, 2.0])
     left.material = mat_red
     room_objects.append(left)
 
     # Right Wall (Green)
-    right = Cube(center=np.array([5.5, 2.5, 0.0]), side_length=10.0, name="RightWall")
-    right.transform.scale = np.array([0.1, 2.0, 2.0])
+    right = Cube(center=np.array([5.5, 3.0, 0.0]), side_length=10.0, name="RightWall")
+    right.transform.scale = np.array([0.1, 3.0, 2.0])
     right.material = mat_green
     room_objects.append(right)
     
@@ -216,10 +220,10 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     # 5. Lighting
     # A single strong area light on the ceiling (simulating the Cornell Box light patch)
     ceiling_light = LightSource(
-        position=np.array([0.0, 4.8, 0.0]), 
+        position=np.array([0.0, 6, 0.0]), 
         color=Color.from_hex("#FFF0E0"), 
         intensity=25.0, 
-        radius=1.5, 
+        radius=3, 
         name="CeilingLight"
     )
 
@@ -241,7 +245,13 @@ def get_cyberpunk_scene(width: int = 120, height: int = 120) -> Scene:
     cam = VCamera(cam_transform, fov=60.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
     
     # Dark Night Sky
-    scene = Scene(name="cyberpunk_street", camera=cam, background_color=Color.from_hex("#050008"))
+    # Background Gradient
+    sky_colors = [
+        Color.from_hex("#050008"),
+        Color.from_hex("#0B1333"),
+    ]
+    sky_positions = [0.0, 1.0] 
+    scene = Scene(name="cyberpunk_street", camera=cam, background_color=ColorGradient(sky_colors, sky_positions))
 
     # 1. The "Wet" Asphalt Road (Dark, slightly reflective, uneven roughness)
     road = Cube(center=np.array([0.0, -1.0, 0.0]), side_length=20.0, name="WetRoad")
@@ -259,11 +269,15 @@ def get_cyberpunk_scene(width: int = 120, height: int = 120) -> Scene:
     # 3. Background Buildings (Silhouettes)
     bldg_left = Cube(center=np.array([-2.5, 2.0, 2.0]), side_length=4.0, name="BuildingLeft")
     bldg_left.transform.scale = np.array([0.5, 2.0, 0.5])
-    bldg_left.material = Material.create_diffuse(Color.from_hex("#101010"), roughness=0.9)
+    bldg_left.material = Material.create_diffuse(Color.from_hex("#4DBC3E"), roughness=0.9)
     scene.add_object(VObject(shape=bldg_left, name="BldgLeft"))
 
+    bldg_right = Cube(center=np.array([2.5, 1.3, 2.2]), side_length=4.0, name="BuildingRight")
+    bldg_right.transform.scale = np.array([0.65, 1.3, 0.65])
+    bldg_right.material = Material.create_diffuse(Color.from_hex("#E28335"), roughness=0.9)
+    scene.add_object(VObject(shape=bldg_right, name="BldgRight"))
+
     # 4. Lighting (The "Cyberpunk" look relies on split toning)
-    
     # Light A: Hot Pink (Left)
     light_pink = LightSource(
         position=np.array([-3.0, 2.0, -2.0]), 
@@ -275,14 +289,23 @@ def get_cyberpunk_scene(width: int = 120, height: int = 120) -> Scene:
     
     # Light B: Cyan/Electric Blue (Right)
     light_cyan = LightSource(
-        position=np.array([3.0, 1.0, -1.0]), 
+        position=np.array([-2.5, 1.5, 2.0]), 
         color=Color.from_hex("#00F0FF"), 
         intensity=12.0, 
         radius=0.2, 
         name="NeonCyan"
     )
 
-    # Light C: Street light rim (Back)
+    # Light C: Neon Blue (Between buildings)
+    light_blue = LightSource(
+        position=np.array([3.0, 1.0, -1.0]), 
+        color=Color.from_hex("#3700FF"), 
+        intensity=10.0, 
+        radius=0.2, 
+        name="NeonBlue"
+    )
+
+    # Light D: Street light rim (Back)
     light_rim = LightSource(
         position=np.array([0.0, 3.0, 4.0]),
         color=Color.from_hex("#FFFFFF"),
@@ -293,8 +316,8 @@ def get_cyberpunk_scene(width: int = 120, height: int = 120) -> Scene:
 
     scene.add_light(light_pink)
     scene.add_light(light_cyan)
+    scene.add_light(light_blue)
     scene.add_light(light_rim)
-
     return scene
 
 def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
@@ -302,9 +325,9 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
     cam_transform = Transform(np.array([0.0, 1.5, -5.0]), np.array([0.2, 0.0, 0.0]), np.ones(3))
     cam = VCamera(cam_transform, fov=50.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
     
-    scene = Scene(name="material_deck", camera=cam, background_color=Color.from_hex("#575151")) # Neutral gray background
+    scene = Scene(name="material_deck", camera=cam, background_color=Color.from_hex("#000000"))
 
-    # Floor (Checkerboard-ish neutral)
+    # Floor
     floor = Cube(center=np.array([0.0, -1.0, 0.0]), side_length=15.0, name="Floor")
     floor.transform.scale = np.array([2.0, 0.1, 1.0])
     floor.material = Material.create_diffuse(Color.from_hex("#CCCCCC"), roughness=1.0)
@@ -313,31 +336,31 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
     # --- The Spheres ---
     # We will create a Gold material and vary its roughness from left to right.
     
-    base_gold = Color.from_hex("#D4AF37")
+    base_col = Color.from_hex("#D4AF37")
     
     # 1. Perfectly Polished Gold (Mirror)
     s1 = Sphere(center=np.array([-3.0, 0.5, 0.0]), radius=0.6, name="Gold_0.0")
-    s1.material = Material.create_specular(base_gold, roughness=0.0)
+    s1.material = Material.create_specular(base_col, roughness=0.0)
     scene.add_object(VObject(shape=s1, name="S_Mirror"))
 
     # 2. Slightly Brushed Gold
     s2 = Sphere(center=np.array([-1.5, 0.5, 0.0]), radius=0.6, name="Gold_0.25")
-    s2.material = Material.create_specular(base_gold, roughness=0.25)
+    s2.material = Material.create_specular(base_col, roughness=0.25)
     scene.add_object(VObject(shape=s2, name="S_Brushed"))
 
     # 3. Rough Gold
     s3 = Sphere(center=np.array([0.0, 0.5, 0.0]), radius=0.6, name="Gold_0.5")
-    s3.material = Material.create_specular(base_gold, roughness=0.5)
+    s3.material = Material.create_specular(base_col, roughness=0.5)
     scene.add_object(VObject(shape=s3, name="S_Rough"))
 
     # 4. Matte/Dusty Gold
     s4 = Sphere(center=np.array([1.5, 0.5, 0.0]), radius=0.6, name="Gold_0.75")
-    s4.material = Material.create_specular(base_gold, roughness=0.75)
+    s4.material = Material.create_specular(base_col, roughness=0.75)
     scene.add_object(VObject(shape=s4, name="S_Matte"))
     
     # 5. Control: Red Plastic (Dielectric)
     s5 = Sphere(center=np.array([3.0, 0.5, 0.0]), radius=0.6, name="Plastic_Red")
-    s5.material = Material.create_diffuse(Color(0.8, 0.1, 0.1), roughness=0.1)
+    s5.material = Material.create_diffuse(Color.from_hex("#FF4A4A"), roughness=0.1)
     scene.add_object(VObject(shape=s5, name="S_Plastic"))
 
     # Lighting: Standard Studio Setup
@@ -374,12 +397,12 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
 
     # 2. Diamond Sphere (IOR 2.4 - Should bend light heavily)
     s_diamond = Sphere(center=np.array([0.0, 0.5, 0.0]), radius=0.6, name="Diamond")
-    s_diamond.material = Material.create_glass(Color.from_hex("#FFFFFF"), Color(0.9, 0.9, 1.0), 0.0, 0.0, REFRACTIVE_INDICES["diamond"], 0.2)
+    s_diamond.material = Material.create_glass(Color.from_hex("#B9D3E3"), Color(0.9, 0.9, 1.0), 0.0, 0.0, REFRACTIVE_INDICES["diamond"], 0.2)
     scene.add_object(VObject(shape=s_diamond, name="DiamondSphere"))
 
     # 3. Water Sphere / Bubble (IOR 1.33 - Subtle bending)
     s_water = Sphere(center=np.array([1.2, 0.5, 0.0]), radius=0.6, name="Water")
-    s_water.material  = Material.create_glass(Color.from_hex("#FFFFFF"), Color.from_hex("#1F1FFF"), 0.0, 0.0, REFRACTIVE_INDICES["water"], 0.1)
+    s_water.material  = Material.create_glass(Color.from_hex("#A6ADD5"), Color.from_hex("#1F1FFF"), 0.0, 0.0, REFRACTIVE_INDICES["water"], 0.1)
     scene.add_object(VObject(shape=s_water, name="WaterSphere"))
 
     # Lighting

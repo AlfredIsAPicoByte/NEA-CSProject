@@ -1,7 +1,9 @@
 import numpy as np
-from typing import List, Tuple, Dict, Any, Union
+from typing import List, Tuple, Dict, Any
 from scipy.ndimage import gaussian_filter, uniform_filter
+
 from Sampling import SampleSettings, Sample
+from Luminance import clamp
 
 class PostProcessingPipeline:
     @staticmethod
@@ -52,7 +54,7 @@ class PostProcessingPipeline:
         return img_array
 
     @staticmethod
-    def apply_bloom(img_array: np.ndarray, threshold: float = 0.8, intensity: float = 0.5, radius: int = 4, fast: bool = True) -> np.ndarray:
+    def apply_bloom(img_array: np.ndarray, threshold: float = 0.8, softness: float = 0.1, intensity: float = 0.5, radius: int = 4, fast: bool = True) -> np.ndarray:
         """
         Phase 2: Bloom.
         Uses a Separable Box Blur (Two-Pass) to approximate Gaussian Blur efficiently.
@@ -64,7 +66,7 @@ class PostProcessingPipeline:
         luminance = np.dot(img_array[..., :3], [0.299, 0.587, 0.114])
         
         # Soft knee threshold calculation
-        knee = 0.1 # Softness
+        knee = clamp(softness, 0, 1)
         soft = np.maximum(luminance - threshold + knee, 0)
         soft = soft / (2 * knee + 1e-5) # Normalize
         weight = np.maximum(soft, np.maximum(luminance - threshold, 0) / (np.maximum(luminance, 1e-5)))

@@ -1,8 +1,7 @@
 import numpy as np
 from PIL import Image
-from typing import Optional, Callable, List
+from typing import List
 import sys, os
-import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -73,7 +72,7 @@ if __name__ == "__main__":
     sample_settings = SampleSettings(img_w, img_h, 1, PixelFilter.BOX, 2)
     sampling_manager = SamplingManager(sample_settings, "halton")
 
-    generator = JitterRayGenerator(sampling_manager._sampler)
+    generator = JitterRayGenerator(sampling_manager._sampler, 4)
     intersection = RayMarchingIntersection()
     interactor = SimpleMaterialInteraction(sampling_manager._sampler)
     shading = RecursiveLambertShading(ambient_color=Color.from_hex("#24272B"), ambient_intensity=0.67)
@@ -118,7 +117,7 @@ if __name__ == "__main__":
                 # C. Vignette (Darken corners slightly)
                 processed_img = PostProcessingPipeline.apply_vignette(
                     processed_img, 
-                    strength=0
+                    strength=0.1
                 )
 
                 # D. Tone Mapping (Compress HDR values to 0-1)
