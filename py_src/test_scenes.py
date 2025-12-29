@@ -109,7 +109,7 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
 def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     cam_transform = Transform(np.array([0.0, 1.0, -4.0]), np.array([-0.15, 0.0, 0.0]), np.ones(3))
     cam = VCamera(cam_transform, fov=50.0, near=0.1, far=100.0, width=width, height=height, camType=CameraType.PERSPECTIVE)
-    scene = Scene(name="lit_studio", camera=cam, background_color=Color.from_hex("#4b505e"))
+    scene = Scene(name="lit_studio", camera=cam, background_color=Color.from_hex("#151619"))
 
     # Objects: two spheres and box as background
     s1 = Sphere(center=np.array([-0.6, 0.4, 0.5]), radius=0.4, name="StudioBallA")
@@ -129,7 +129,7 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     scene.add_object(VObject(shape=box_shape, name="StudioBox"))
 
     # Lights
-    key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#EEE0BA"), intensity=25.0, radius=10, name="StudioKey")
+    key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#EEE0BA"), intensity=25.0, radius=100, name="StudioKey")
     key.radius = 0.3  # area light radius (for soft shadows)
     scene.add_light(key)
     rim = LightSource(position=np.array([-3.0, 2.0, 1.0]), color=Color.from_hex("#DC97C5"), intensity=10.0, radius=0.75, name="StudioRim")
@@ -361,7 +361,7 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
     scene.add_object(VObject(shape=wall, name="BackWall"))
 
     # Blocker bars (Black cubes to create stripes on the white wall)
-    for i in range(-7, 8):
+    for i in range(-6, 7):
         bar = Cuboid(center=np.array([i, 2.0, 3.5]), dimensions=np.array([1.0, 5.0, 1.0]), name=f"Bar_{i}")
         bar.transform.scale = np.array([0.5, 4.0, 0.1])
         bar.material = Material.create_diffuse(Color(0, 0, 0), 1.0)

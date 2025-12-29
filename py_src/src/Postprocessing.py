@@ -1,7 +1,6 @@
 import numpy as np
-import math
 from typing import List, Tuple, Dict, Any, Union
-from dataclasses import dataclass
+from scipy.ndimage import gaussian_filter, uniform_filter
 from Sampling import SampleSettings, Sample
 
 class PostProcessingPipeline:
@@ -53,15 +52,13 @@ class PostProcessingPipeline:
         return img_array
 
     @staticmethod
-    def apply_bloom_separable(img_array: np.ndarray, threshold: float = 0.8, intensity: float = 0.5, radius: int = 4) -> np.ndarray:
+    def apply_bloom(img_array: np.ndarray, threshold: float = 0.8, intensity: float = 0.5, radius: int = 4, fast: bool = True) -> np.ndarray:
         """
         Phase 2: Bloom.
         Uses a Separable Box Blur (Two-Pass) to approximate Gaussian Blur efficiently.
         Pass 1: Blur Horizontal. Pass 2: Blur Vertical.
         O(W*H) complexity instead of O(W*H*radius^2).
         """
-        height, width, _ = img_array.shape
-        
         # 1. Extract Bright Pass (Soft Threshold)
         # Use simple luminance dot product
         luminance = np.dot(img_array[..., :3], [0.299, 0.587, 0.114])
@@ -74,26 +71,19 @@ class PostProcessingPipeline:
         
         # Apply mask to create bright pass
         bright_pass = img_array * weight[..., np.newaxis]
-
-        # 2. Separable Blur implementation
-        # Note: Scipy.ndimage.gaussian_filter is faster, but this is a dependency-free NumPy implementation.
-        kernel_size = radius * 2 + 1
-        kernel = np.ones(kernel_size) / kernel_size
+        blurred_pass = np.zeros_like(bright_pass)
         
-        # Pass 1: Horizontal Convolve
-        blurred_h = np.zeros_like(bright_pass)
-        for i in range(3): # For R, G, B
-            for r in range(height):
-                blurred_h[r, :, i] = np.convolve(bright_pass[r, :, i], kernel, mode='same')
-                
-        # Pass 2: Vertical Convolve
-        blurred_final = np.zeros_like(blurred_h)
-        for i in range(3):
-            for c in range(width):
-                blurred_final[:, c, i] = np.convolve(blurred_h[:, c, i], kernel, mode='same')
+        # 2. Blur the Bright Pass
+        if fast:
+            b = bright_pass
+            for _ in range(3):
+                b = uniform_filter(b, size=radius*2, mode='reflect')
+            blurred_pass = b
+        else:
+            blurred_pass = gaussian_filter(bright_pass, sigma=radius)
 
         # 3. Additive Blending
-        return img_array + (blurred_final * intensity)
+        return img_array + (blurred_pass * intensity)
 
     @staticmethod
     def apply_chromatic_aberration(img_array: np.ndarray, strength: float = 2.0) -> np.ndarray:
@@ -171,7 +161,7 @@ class PostProcessingPipeline:
         # 2. Effects (Linear Space)
         if pipeline_options.get('bloom_enabled', True):
             print("Applying Bloom...")
-            img = cls.apply_bloom_separable(
+            img = cls.apply_bloom(
                 img, 
                 threshold=pipeline_options.get('bloom_threshold', 0.9),
                 intensity=pipeline_options.get('bloom_intensity', 0.4),

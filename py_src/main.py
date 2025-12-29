@@ -57,7 +57,7 @@ if __name__ == "__main__":
     os.makedirs(OUT_DIR, exist_ok=True)
 
     img_w, img_h = 64, 36 # 256, 144 for higher resolution images
-    enable_post_processing = False
+    enable_post_processing = True
 
     all_scenes = [
         get_minimal_scene(img_w, img_h),
@@ -101,30 +101,31 @@ if __name__ == "__main__":
                 # We chain the effects directly on the numpy array
                 
                 # A. Bloom (Make bright lights glow)
-                processed_img = PostProcessingPipeline.apply_bloom_separable(
+                processed_img = PostProcessingPipeline.apply_bloom(
                     processed_img, 
-                    threshold=1.0, 
+                    threshold=1, 
                     intensity=0.3, 
-                    radius=4
+                    radius=4,
+                    fast=True
                 )
                 
                 # B. Cromatic Aberration (Shifts Red and Blue channels)
                 processed_img = PostProcessingPipeline.apply_chromatic_aberration(
                     processed_img,
-                    strength=2
+                    strength=0.5
                 )
 
-                # B. Vignette (Darken corners slightly)
+                # C. Vignette (Darken corners slightly)
                 processed_img = PostProcessingPipeline.apply_vignette(
                     processed_img, 
-                    strength=0.3
+                    strength=0
                 )
 
-                # C. Tone Mapping (Compress HDR values to 0-1)
+                # D. Tone Mapping (Compress HDR values to 0-1)
                 # Without this, bright spots just clip to white
                 processed_img = PostProcessingPipeline.aces_tone_map(processed_img)
 
-                # D. Gamma Correction (Linear -> sRGB)
+                # E. Gamma Correction (Linear -> sRGB)
                 # Without this, the image looks too dark
                 processed_img = PostProcessingPipeline.gamma_correct(processed_img, gamma=2.2)
 

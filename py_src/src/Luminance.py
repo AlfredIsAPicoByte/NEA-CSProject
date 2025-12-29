@@ -313,6 +313,7 @@ class Material:
             albedo_color: Color = Color(1, 1, 1),
             roughness: float = 0.5,
             metallicness: float = 0.0,
+            specular_intensity: float = 0.0,
             specular_tint_amount: float = 0.0,
             emissive_intensity: float = 1.0,
             ior: float = REFRACTIVE_INDICES["glass"],
@@ -329,6 +330,7 @@ class Material:
         # Surface properties
         self.roughness = clamp(roughness, 0.0, 1.0)
         self.metallic = clamp(metallicness, 0.0, 1.0)
+        self.specular_intensity = clamp(specular_intensity, 0.0, 1.0)
         self.specular_tint_amount = clamp(specular_tint_amount, 0.0, 1.0)
         self.absorption_strength = clamp(absorption_strength, 0.0, 1.0)
         self.opacity = clamp(opacity, 0.0, 1.0)
@@ -340,18 +342,18 @@ class Material:
         self.type = type
 
     @classmethod
-    def create_diffuse(cls, albedo: Color, roughness: float = 0.5, metallicness: float = 0):
+    def create_diffuse(cls, albedo: Color, roughness: float = 0.5):
         """
         Creates a standard non-metallic (dielectric) material like plastic, wood, or chalk.
         """
         return cls(
             albedo_color=albedo,
             roughness=roughness,
-            metallicness=metallicness
+            metallicness=0
         )
 
     @classmethod
-    def create_specular(cls, albedo: Color, roughness: float = 0.2, metallicness: float = 1.0, specular_tint_amount: float = 0.5):
+    def create_specular(cls, albedo: Color, roughness: float = 0.2, metallicness: float = 1.0, specular_intensity: float = 1.0, specular_tint_amount: float = 0.5):
         """
         Creates a reflective material like gold, aluminum, or copper.
         """
@@ -359,6 +361,7 @@ class Material:
             albedo_color=albedo,
             roughness=roughness,
             metallicness=metallicness,
+            specular_intensity=specular_intensity,
             specular_tint_amount=specular_tint_amount,
             type=MaterialType.SPECULAR
         )
@@ -453,24 +456,22 @@ class Material:
 
             # Material response based on type
             if self.type == MaterialType.DIFFUSE:
-                diffuse_component = self.get_diffuse_component(surface_normal, light_dir, light_intensity)
-                if not self.metallic > 0:
-                    diffuse_component *= Color.from_array(kD)
+                diffuse_component = self.get_diffuse_component(light.color, surface_normal, light_dir, light_intensity) * Color.from_array(kD)
                 final_color += diffuse_component * visibility
 
             if self.type == MaterialType.SPECULAR:
-                diffuse_component = self.get_diffuse_component(surface_normal, light_dir, light_intensity)
-                specular_component = self.get_specular_component(surface_normal, light_dir, light_intensity, view_dir) * Color.from_array(kS)
+                diffuse_component = self.get_diffuse_component(light.color, surface_normal, light_dir, light_intensity)
+                specular_component = self.get_specular_component(light.color, surface_normal, light_dir, light_intensity, view_dir) * Color.from_array(kS)
                 if not self.metallic > 0:
                     diffuse_component *= Color.from_array(kD)
                 final_color += (diffuse_component + specular_component) * visibility
 
             if self.type == MaterialType.GLASS:
-                specular_component = self.get_specular_component(surface_normal, light_dir, light_intensity, view_dir) * Color.from_array(kS)
+                specular_component = self.get_specular_component(light.color, surface_normal, light_dir, light_intensity, view_dir) * Color.from_array(kS)
                 final_color += specular_component * visibility
 
             if self.type == MaterialType.TRANSPARENT:
-                transparent_component = self.get_transparency_component()
+                transparent_component = self.get_transparency_component(light.color)
                 final_color += transparent_component * visibility
 
         if self.type == MaterialType.EMISSIVE:
@@ -478,7 +479,7 @@ class Material:
         
         return final_color
 
-    def get_diffuse_component(self, surface_normal: np.ndarray, light_dir: np.ndarray, light_intensity: float) -> Color:
+    def get_diffuse_component(self, incoming_color: Color, surface_normal: np.ndarray, light_dir: np.ndarray, light_intensity: float) -> Color:
         """
         Get the diffuse component (Lambertian). 
         Corrected to respect the Metallic workflow energy conservation.
@@ -490,11 +491,11 @@ class Material:
         
         # 2. ENERGY CONSERVATION: Metals have NO diffuse.
         # As metallic approaches 1.0, diffuse must approach 0.0.
-        diffuse = diffuse * (1.0 - self.metallic)
+        diffuse = incoming_color * diffuse * (1.0 - self.metallic)
         
         return diffuse
 
-    def get_specular_component(self, surface_normal: np.ndarray, light_dir: np.ndarray, light_intensity: float, view_dir: np.ndarray) -> Color:
+    def get_specular_component(self, incoming_color: Color, surface_normal: np.ndarray, light_dir: np.ndarray, light_intensity: float, view_dir: np.ndarray) -> Color:
         """Get the specular component of the material response using the Micro-Facet BRDF."""
         
         # --- 0. Pre-Calculations and Constants ---
@@ -539,7 +540,7 @@ class Material:
             Fs = Color(0.0, 0.0, 0.0) 
 
         # Final Specular Color: Light Intensity * BRDF * Cosine Term
-        specular = light_intensity * Fs * NdotL 
+        specular = incoming_color * self.specular_intensity * Fs * NdotL * light_intensity
         
         return specular
 

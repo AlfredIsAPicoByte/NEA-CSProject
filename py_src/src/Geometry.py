@@ -728,18 +728,37 @@ class Cuboid(Shape3D):
     def __init__(self, center: np.ndarray, dimensions: Tuple[float, float, float], **kwargs):
         super().__init__(**kwargs)
         self.transform.position = np.asarray(center, dtype=float)
+        
+        # Validate dimensions
         if any(d <= 0 for d in dimensions):
             raise ValueError("All dimensions must be > 0")
+            
+        # Store as a tuple for immutability, or array for math
         self.dimensions_tuple = tuple(float(d) for d in dimensions)
 
     def SignedDistance(self, point: np.ndarray) -> float:
+        """
+        Calculates the Signed Distance Function (SDF).
+        NOTE: For non-uniform scaling, this returns a conservative lower bound,
+        not the exact Euclidean distance.
+        """
         p_local = np.abs(_world_to_local_point(point, self.transform))
-        q = p_local - np.array(self.dimensions_tuple) / 2
+        # d is the extent (half-dimensions)
+        d = np.array(self.dimensions_tuple) / 2
+        
+        # q = distance from the positive octant corner
+        q = p_local - d
+        
+        # Standard Box SDF logic
         sdf_local = np.linalg.norm(np.maximum(q, 0)) + min(np.max(q), 0)
+        
+        # Apply scaling (conservative)
         scale = self.transform.get_global_scale()
         return sdf_local * float(np.min(scale))
 
     def CheckRayIntersection(self, ray: "Ray") -> bool:
+        # Optimization: You could rewrite this to return True immediately 
+        # inside the loop logic, but wrapping GetRayIntersections is cleaner.
         return len(self.GetRayIntersections(ray)) > 0
 
     def GetRayIntersections(self, ray: "Ray") -> List[np.ndarray]:
@@ -749,32 +768,59 @@ class Cuboid(Shape3D):
         bounds_max = half
 
         t_min, t_max = -float('inf'), float('inf')
+
+        # Slab method for AABB intersection
         for i in range(3):
+            # Check if ray is not parallel to the slab
             if abs(local_ray.orientation[i]) > 1e-10:
-                t1 = (bounds_min[i] - local_ray.origin[i]) / local_ray.orientation[i]
-                t2 = (bounds_max[i] - local_ray.origin[i]) / local_ray.orientation[i]
+                inv_d = 1.0 / local_ray.orientation[i]
+                t1 = (bounds_min[i] - local_ray.origin[i]) * inv_d
+                t2 = (bounds_max[i] - local_ray.origin[i]) * inv_d
+                
                 t_min = max(t_min, min(t1, t2))
                 t_max = min(t_max, max(t1, t2))
+            
+            # If ray is parallel, it must be inside the slab bounds
             elif local_ray.origin[i] < bounds_min[i] or local_ray.origin[i] > bounds_max[i]:
                 return []
 
+        # Check if a valid intersection interval exists
         if t_min <= t_max and t_max >= -1e-10:
             pts = []
+            # Entry point (if not behind origin)
             if t_min >= -1e-10:
                 pts.append(_local_to_world_point(local_ray.point_at(t_min), self.transform))
+            # Exit point (if distinct and valid)
             if t_max != t_min and t_max >= -1e-10:
                 pts.append(_local_to_world_point(local_ray.point_at(t_max), self.transform))
             return pts
+            
         return []
 
     def GetNormal(self, point: np.ndarray) -> np.ndarray:
         p_local = _world_to_local_point(point, self.transform)
         half = np.array(self.dimensions_tuple) / 2
-        abs_p = np.abs(p_local)
-        dominant = np.argmax(abs_p / half)
+        
+        # Calculate deviation ratio to find the dominant axis
+        # Dividing by half maps the box extents to a [-1, 1] range
+        ratio = np.abs(p_local) / half
+        dominant_axis = np.argmax(ratio)
+        
         local_n = np.zeros(3)
-        local_n[dominant] = np.sign(p_local[dominant])
+        # Sign determines if it's the positive or negative face
+        local_n[dominant_axis] = np.sign(p_local[dominant_axis])
+        
         return _normal_local_to_world(local_n, self.transform)
+    
+    @property
+    def volume(self) -> float:
+        w, h, d = self.dimensions_tuple
+        return w * h * d
+
+    @property
+    def surface_area(self) -> float:
+        w, h, d = self.dimensions_tuple
+        return 2 * (w * h + h * d + w * d)
 
 class Prism(Shape3D):
     def __init__(self, base_polygon: Polygon, height: float, **kwargs):
