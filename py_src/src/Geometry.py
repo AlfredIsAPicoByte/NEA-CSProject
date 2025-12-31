@@ -1,22 +1,23 @@
 from abc import ABC, abstractmethod
 import numpy as np
-from typing import Optional, Tuple, List, Callable
+from typing import Optional, Tuple, List
 from dataclasses import dataclass, field
 
-from PrimaryStructures import Transform, Ray, TracingRay, HitInfo
-from Luminance import Material
+from CommonUtils import ray_world_to_local, world_to_local_point, local_to_world_point, normal_local_to_world
+from PrimaryStructures import Transform, Ray
+from Luminance import PBRMaterial
 
 # Base Class
 class Shape(ABC):
     """
     Abstract base for all shapes.
-    Provides transform, material, and naming.
+    Provides transform, PBRMaterial, and naming.
     """
     def __init__(self, name: str = "Shape", transform: Optional["Transform"] = None, 
-                 material: Optional["Material"] = None, **kwargs):
+                 PBRMaterial: Optional["PBRMaterial"] = None, **kwargs):
         self.name = name
         self.transform = transform or Transform(np.zeros(3), np.zeros(3), np.ones(3))
-        self.material = material
+        self.PBRMaterial = PBRMaterial
         
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -129,39 +130,8 @@ class Shape(ABC):
     def scale(self, factor: np.ndarray):
         self.enlarge(factor)
 
-    def __repr__(self):
+    def _repr__(self):
         return f"{self.__class__.__name__}(name={self.name})"
-
-# --- Transform helpers -------------------------------------------------
-def _world_to_local_point(point: np.ndarray, transform: Transform) -> np.ndarray:
-    M = transform.model_matrix
-    inv = np.linalg.inv(M)
-    p_h = np.asarray([point[0], point[1], point[2], 1.0], dtype=float)
-    local = inv @ p_h
-    return local[:3]
-
-def _local_to_world_point(point: np.ndarray, transform: Transform) -> np.ndarray:
-    M = transform.model_matrix
-    p_h = np.asarray([point[0], point[1], point[2], 1.0], dtype=float)
-    world = M @ p_h
-    return world[:3]
-
-def _world_to_local_direction(direction: np.ndarray, transform: Transform) -> np.ndarray:
-    lin = transform.model_matrix[:3, :3]
-    inv_lin = np.linalg.inv(lin)
-    return inv_lin @ direction
-
-def _ray_world_to_local(ray: Ray, transform: Transform) -> Ray:
-    origin_local = _world_to_local_point(ray.origin, transform)
-    dir_local = _world_to_local_direction(ray.orientation, transform)
-    return Ray(origin_local, dir_local, name=ray.name)
-
-def _normal_local_to_world(normal_local: np.ndarray, transform: Transform) -> np.ndarray:
-    lin = transform.model_matrix[:3, :3]
-    world_n = np.linalg.inv(lin).T @ normal_local
-    return world_n / (np.linalg.norm(world_n) + 1e-12)
-
-# -----------------------------------------------------------------------
 
 # 2D Shapes
 class Shape2D(Shape):
@@ -244,7 +214,7 @@ class Circle(Shape2D):
         from math import pi
         return 2 * pi * self.radius
 
-    def __repr__(self):
+    def _repr__(self):
         return f"Circle(center={self.transform.position}, radius={self.radius})"
 
 class Triangle(Shape2D):
@@ -256,7 +226,7 @@ class Triangle(Shape2D):
         self.transform.position = (self.v1 + self.v2 + self.v3) / 3
         self._validate()
 
-    def _validate(self, bias: float = 1e-6):
+    def validate(self, bias: float = 1e-6):
         """Check for degeneracy."""
         area = self.area
         if area < bias:
@@ -344,7 +314,7 @@ class Triangle(Shape2D):
                 np.linalg.norm(self.v3 - self.v2) +
                 np.linalg.norm(self.v1 - self.v3))
 
-    def __repr__(self):
+    def _repr__(self):
         return f"Triangle(v1={self.v1}, v2={self.v2}, v3={self.v3})"
 
 class Polygon(Shape2D):
@@ -418,7 +388,7 @@ class Polygon(Shape2D):
             perim += np.linalg.norm(v2 - v1)
         return perim
 
-    def __repr__(self):
+    def _repr__(self):
         return f"Polygon({len(self.vertices)} vertices)"
 
 class Plane(Shape2D):
@@ -467,7 +437,7 @@ class Plane(Shape2D):
     def perimeter(self) -> float:
         return float('inf')
 
-    def __repr__(self):
+    def _repr__(self):
         return f"Plane(point={self.point}, normal={self.normal})"
 
 class ClippedPlane(Plane):
@@ -487,7 +457,7 @@ class ClippedPlane(Plane):
                 valid_points.append(pt)
         return valid_points
     
-    def _point_in_bounds(self, point: np.ndarray) -> bool:
+    def point_in_bounds(self, point: np.ndarray) -> bool:
         # Simple bounding box check (could be improved for arbitrary polygons)
         xs = [b[0] for b in self.bounds]
         ys = [b[1] for b in self.bounds]
@@ -514,7 +484,7 @@ class ClippedPlane(Plane):
             perim += np.linalg.norm(v2 - v1)
         return perim
 
-    def __repr__(self):
+    def _repr__(self):
         return f"ClippedPlane(point={self.point}, normal={self.normal}, bounds={len(self.bounds)} vertices)"
 
 # 3D Shapes
@@ -554,14 +524,14 @@ class Sphere(Shape3D):
 
     def signed_distance(self, point: np.ndarray) -> float:
         # Transform point into local/object space (handles position, rotation and scale)
-        p_local = _world_to_local_point(point, self.transform)
+        p_local = world_to_local_point(point, self.transform)
         sdf_local = np.linalg.norm(p_local) - self.radius
         # Approximate world-space distance by scaling with the smallest global scale
         scale = self.transform.get_global_scale()
         return sdf_local * float(np.min(scale))
 
     def check_ray_intersection(self, ray: Ray) -> bool:
-        local_ray = _ray_world_to_local(ray, self.transform)
+        local_ray = ray_world_to_local(ray, self.transform)
         d = local_ray.orientation
         s = local_ray.origin
         a = np.dot(d, d)
@@ -573,7 +543,7 @@ class Sphere(Shape3D):
         if not self.check_ray_intersection(ray):
             return []
 
-        local_ray = _ray_world_to_local(ray, self.transform)
+        local_ray = ray_world_to_local(ray, self.transform)
         d = local_ray.orientation
         s = local_ray.origin
         a = np.dot(d, d)
@@ -586,7 +556,7 @@ class Sphere(Shape3D):
             if t < -bias:
                 return []
             local_pt = local_ray.point_at(t)
-            return [_local_to_world_point(local_pt, self.transform)]
+            return [local_to_world_point(local_pt, self.transform)]
 
         sqrt_disc = np.sqrt(discriminant)
         t1 = (-b - sqrt_disc) / (2 * a)
@@ -595,18 +565,18 @@ class Sphere(Shape3D):
         world_pts = []
         for t in sorted(ts):
             local_pt = local_ray.point_at(t)
-            world_pts.append(_local_to_world_point(local_pt, self.transform))
+            world_pts.append(local_to_world_point(local_pt, self.transform))
         return world_pts
 
     def get_normal(self, point: np.ndarray, bias: float = 1e-12) -> np.ndarray:
         # Compute normal in local space then transform to world space correctly
-        p_local = _world_to_local_point(point, self.transform)
+        p_local = world_to_local_point(point, self.transform)
         local_n = p_local / (np.linalg.norm(p_local) + bias)
-        return _normal_local_to_world(local_n, self.transform)
+        return normal_local_to_world(local_n, self.transform)
 
     def get_tangent(self, point: np.ndarray, bias: float = 1e-12) -> np.ndarray:
         # Compute tangent in local space and transform it to world
-        p_local = _world_to_local_point(point, self.transform)
+        p_local = world_to_local_point(point, self.transform)
         local_n = p_local / (np.linalg.norm(p_local) + bias)
         # pick local arbitrary axis
         if abs(local_n[0]) < 0.9:
@@ -638,10 +608,10 @@ class Sphere(Shape3D):
             y = 1 - (i / (resolution - 1)) * 2
             r = np.sqrt(max(1 - y * y, 0))
             local_pt = self.radius * np.array([np.cos(theta) * r, y, np.sin(theta) * r])
-            points.append(_local_to_world_point(local_pt, self.transform))
+            points.append(local_to_world_point(local_pt, self.transform))
         return points
 
-    def __repr__(self):
+    def _repr__(self):
         return f"Sphere(center={self.transform.position}, radius={self.radius})"
 
 class Cube(Shape3D):
@@ -654,7 +624,7 @@ class Cube(Shape3D):
 
     def signed_distance(self, point: np.ndarray) -> float:
         # Work in local/object space for correct handling of rotation & scale
-        p_local = _world_to_local_point(point, self.transform)
+        p_local = world_to_local_point(point, self.transform)
         abs_p = np.abs(p_local)
         half = self.side_length / 2
         q = abs_p - half
@@ -667,7 +637,7 @@ class Cube(Shape3D):
     
     def get_ray_intersections(self, ray: Ray, bias: float = 1e-10) -> List[np.ndarray]:
         # Transform ray to local/object space and intersect with axis-aligned cube centered at origin
-        local_ray = _ray_world_to_local(ray, self.transform)
+        local_ray = ray_world_to_local(ray, self.transform)
         half = self.side_length / 2
         bounds_min = -np.ones(3) * half
         bounds_max = np.ones(3) * half
@@ -685,21 +655,21 @@ class Cube(Shape3D):
         if t_min <= t_max and t_max >= -bias:
             pts = []
             if t_min >= -bias:
-                pts.append(_local_to_world_point(local_ray.point_at(t_min), self.transform))
+                pts.append(local_to_world_point(local_ray.point_at(t_min), self.transform))
             if t_max != t_min and t_max >= -bias:
-                pts.append(_local_to_world_point(local_ray.point_at(t_max), self.transform))
+                pts.append(local_to_world_point(local_ray.point_at(t_max), self.transform))
             return pts
         return []
 
     def get_normal(self, point: np.ndarray) -> np.ndarray:
         # Compute normal in local space (axis-aligned cube) and transform to world
-        p_local = _world_to_local_point(point, self.transform)
+        p_local = world_to_local_point(point, self.transform)
         half = self.side_length / 2
         abs_p = np.abs(p_local)
         dominant = np.argmax(abs_p)
         local_n = np.zeros(3)
         local_n[dominant] = np.sign(p_local[dominant])
-        return _normal_local_to_world(local_n, self.transform)
+        return normal_local_to_world(local_n, self.transform)
 
     def get_tangent(self, point: np.ndarray, bias: float = 1e-12) -> np.ndarray:
         normal = self.get_normal(point)
@@ -718,7 +688,7 @@ class Cube(Shape3D):
     def surface_area(self) -> float:
         return 6 * (self.side_length ** 2)
 
-    def __repr__(self):
+    def _repr__(self):
         return f"Cube(transform={self.transform}, side_length={self.side_length})"
 
 class Cuboid(Shape3D):
@@ -739,7 +709,7 @@ class Cuboid(Shape3D):
         NOTE: For non-uniform scaling, this returns a conservative lower bound,
         not the exact Euclidean distance.
         """
-        p_local = np.abs(_world_to_local_point(point, self.transform))
+        p_local = np.abs(world_to_local_point(point, self.transform))
         # d is the extent (half-dimensions)
         d = np.array(self.dimensions_tuple) / 2
         
@@ -759,7 +729,7 @@ class Cuboid(Shape3D):
         return len(self.get_ray_intersections(ray)) > 0
 
     def get_ray_intersections(self, ray: Ray, bias: float = 1e-10) -> List[np.ndarray]:
-        local_ray = _ray_world_to_local(ray, self.transform)
+        local_ray = ray_world_to_local(ray, self.transform)
         half = np.array(self.dimensions_tuple) / 2
         bounds_min = -half
         bounds_max = half
@@ -786,16 +756,16 @@ class Cuboid(Shape3D):
             pts = []
             # Entry point (if not behind origin)
             if t_min >= -bias:
-                pts.append(_local_to_world_point(local_ray.point_at(t_min), self.transform))
+                pts.append(local_to_world_point(local_ray.point_at(t_min), self.transform))
             # Exit point (if distinct and valid)
             if t_max != t_min and t_max >= -bias:
-                pts.append(_local_to_world_point(local_ray.point_at(t_max), self.transform))
+                pts.append(local_to_world_point(local_ray.point_at(t_max), self.transform))
             return pts
             
         return []
 
     def get_normal(self, point: np.ndarray) -> np.ndarray:
-        p_local = _world_to_local_point(point, self.transform)
+        p_local = world_to_local_point(point, self.transform)
         half = np.array(self.dimensions_tuple) / 2
         
         # Calculate deviation ratio to find the dominant axis
@@ -807,7 +777,7 @@ class Cuboid(Shape3D):
         # Sign determines if it's the positive or negative face
         local_n[dominant_axis] = np.sign(p_local[dominant_axis])
         
-        return _normal_local_to_world(local_n, self.transform)
+        return normal_local_to_world(local_n, self.transform)
     
     @property
     def volume(self) -> float:
@@ -855,7 +825,7 @@ class Prism(Shape3D):
     def convex_hull(self, resolution: int = 100) -> List[np.ndarray]:
         raise NotImplementedError("Prism convex hull not yet implemented")
 
-    def __repr__(self):
+    def _repr__(self):
         return f"Prism(base_polygon={self.base_polygon}, height={self.height})"
 
 class Pyramid(Shape3D):
@@ -894,7 +864,7 @@ class Pyramid(Shape3D):
     def convex_hull(self, resolution: int = 100) -> List[np.ndarray]:
         raise NotImplementedError("Pyramid convex hull not yet implemented")
 
-    def __repr__(self):
+    def _repr__(self):
         return f"Pyramid(base_polygon={self.base_polygon}, height={self.height})"
 
 class Capsule(Shape3D):
@@ -952,22 +922,22 @@ class Capsule(Shape3D):
     def convex_hull(self, resolution: int = 100) -> List[np.ndarray]:
         raise NotImplementedError("Capsule convex hull not yet implemented")
 
-    def __repr__(self):
+    def _repr__(self):
         return f"Capsule(point1={self.point1}, point2={self.point2}, radius={self.radius})"
 
 # VObject & Factories
 @dataclass
 class VObject:
-    """Visual object combining shape, transform, material etc."""
+    """Visual object combining shape, transform, PBRMaterial etc."""
     shape: Shape
     transform: Optional["Transform"] = None
-    material: Optional["Material"] = None
+    PBRMaterial: Optional["PBRMaterial"] = None
     name: str = "VObject"
 
     children: List["VObject"] = field(default_factory=list)
     parent: Optional["VObject"] = None
 
-    def __post_init__(self):
+    def _post_init__(self):
         if self.transform is None:
             self.transform = Transform(np.zeros(3), np.zeros(3), np.ones(3))
 
@@ -1034,7 +1004,7 @@ class VObject:
         factor = np.asarray(factor, dtype=float)
         self.transform.enlarge(factor, space="local")
 
-    def __repr__(self):
+    def _repr__(self):
         return f"VObject(name={self.name}, shape={self.shape})"
 
 class ShapeFactory(ABC):
@@ -1165,6 +1135,6 @@ Classes:
 - Circle, Triangle, Polygon, Plane, ClippedPlane: Concrete 2D shape implementations.
 - Sphere, Cube, Cuboid, Prism, Pyramid, Capsule: Concrete 3D shape implementations.
 - GeometryMixin, RayIntersectionMixin, SurfacePropertiesMixin: Mixins for geometric queries.
-- VObject: Combines shape with transform and material for rendering.
+- VObject: Combines shape with transform and PBRMaterial for rendering.
 - ShapeFactory and its subclasses: Factories for creating shape instances. 
 """

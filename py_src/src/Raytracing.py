@@ -4,24 +4,25 @@ from typing import Optional, List, Tuple, Callable
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+from CommonUtils import lerp, unit, attenuate_distance_exponential
 from PrimaryStructures import HitInfo, TracingRay
 from Scene import Scene
 from Camera import VCamera, CameraType
 from Geometry import Shape, VObject, get_transformed_exit_point
 from Reflections import calculate_reflection_vector
-from Refractions import REFRACTIVE_INDICES
-from Luminance import Color, Material, MaterialType, LightSource, calculate_redirection_ray, schlick_fresnel, lerp
+from Refractions import calculate_refraction_vector, REFRACTIVE_INDICES
+from Luminance import Color, PBRMaterial, MaterialType, LightSource, calculate_fresnel_ratio, schlick_fresnel
 from RenderingAlgorithims import Algorithm, RenderStats, register_algorithm
 from Sampling import SamplingManager, SampleSettings, Sampler, Sample, RandomSampler, reconstruct_pixel
 from MemoryUtils import get_process_id, get_memory_mb
 
 # Strategy interfaces for ray generation, intersection, and shading
-class RayGenerator(ABC):
+class RayGenerationStrategy(ABC):
     def __init__(
             self,
-            gen_sampler: Sampler = RandomSampler()  
+            pixel_sampler: Optional[Sampler] = None
         ):
-        self.gen_sampler = gen_sampler
+        self.pixel_sampler = pixel_sampler if pixel_sampler is not None else RandomSampler()
 
     """Abstract base class for ray generation strategies."""
     @abstractmethod
@@ -69,9 +70,9 @@ class RayGenerator(ABC):
 class IntersectionStrategy(ABC):
     def __init__(
             self,
-            epsilon: float = 1e-4,
-            max_distance: float = 100.0,
-            max_steps: int = 256
+            epsilon: float = 1e-4,          # Hit Threshold
+            max_steps: int = 128,           # Performance Cap
+            max_distance: float = 1000.0,   # Far Clip Plane
         ):
         self.epsilon = epsilon
         self.max_distance = max_distance
@@ -88,11 +89,9 @@ class IntersectionStrategy(ABC):
 class InteractionStrategy(ABC):
     def __init__(
             self,
-            surface_sampler: Sampler = RandomSampler(),
-            scene_refractive_index: float = REFRACTIVE_INDICES["air"]
+            surface_sampler: Optional[Sampler] = None
         ):
-        self.surface_sampler = surface_sampler
-        self.scene_ior = scene_refractive_index
+        self.surface_sampler = surface_sampler if surface_sampler is not None else RandomSampler()
 
     @abstractmethod
     def interact(self, ray: TracingRay, hit_info: HitInfo, seed: Optional[int] = None, bias: float = 1e-4) -> Optional[TracingRay]:
@@ -176,7 +175,7 @@ class ShadingStrategy(ABC):
         return visibility
 
 # Ray generation implementations
-class JitterRayGenerator(RayGenerator):
+class JitterRayGenerator(RayGenerationStrategy):
     """
     Generate camera rays with per-pixel jitter (anti-aliasing).
     - Iterates over the requested region.
@@ -204,7 +203,7 @@ class JitterRayGenerator(RayGenerator):
 
         rays: List[TracingRay] = []
 
-        self.gen_sampler.seed = seed
+        self.pixel_sampler.seed = seed
 
         # 2. Iterate over pixels
         for y in range(y_start, y_start + region_h):
@@ -213,7 +212,7 @@ class JitterRayGenerator(RayGenerator):
                 # The SamplingManager returns a list of Sample objects (offsets 0.0-1.0)
                 # matching the configured Samples Per Pixel (SPP).
 
-                pixel_samples = self.gen_sampler.get_samples_per_pixel(x, y)
+                pixel_samples = self.pixel_sampler.get_samples_per_pixel(x, y)
                 for i, sample in enumerate(pixel_samples):
                     # Calculate Global Normalized Coordinates [0, 1]
                     # We add the sample offset (0.0 to 1.0) to the integer pixel coordinate
@@ -264,6 +263,9 @@ class JitterRayGenerator(RayGenerator):
 
 # Ray intersection implementations
 class RayMarchingIntersection(IntersectionStrategy):
+    """
+    Find hits between rays and objects using the Ray Marching method.
+    """
     def find_hit(self, scene: Scene, ray: TracingRay) -> HitInfo:
         # --- LOGIC BRANCH A: Ray is escaping an object ---
         if getattr(ray, "is_inside", False):
@@ -350,6 +352,21 @@ class RayMarchingIntersection(IntersectionStrategy):
         return HitInfo(False)
 
 class InverseSDFStrategy(IntersectionStrategy):
+    """
+    Find hits between rays and objects using the Inverse SDF method.
+    """
+    def __init__(
+            self,
+            epsilon: float = 1e-4,
+            max_steps: int = 128,
+            max_distance: float = 1000,
+            step_relaxation: float = 0.9,   # Step Safety Factor
+            use_bounding_box: bool = True   # Optimization Flag
+        ):
+        super().__init__(epsilon, max_steps, max_distance)
+        self.step_relaxation = step_relaxation
+        self.use_bounding_box = use_bounding_box
+
     def find_hit(self, scene: Scene, ray: TracingRay) -> "HitInfo":
         closest_hit = HitInfo(did_hit=False, distance=float('inf'))
         
@@ -478,146 +495,220 @@ class InverseSDFStrategy(IntersectionStrategy):
 # Interaction implementations
 class TerminalInteraction(InteractionStrategy):
     """
-    A 'Null' interaction. The ray is absorbed or the calculation is finished.
-    
-    Use this for:
-    1. Debug Views (X-Ray, Normals, Depth) where shading is self-contained.
-    2. Matte/Black hole materials.
-    3. Light sources (if they don't reflect).
+    A 'Null' interaction.
+    The ray is absorbed or the calculation is finished.
+    - Debug Views (X-Ray, Normals, Depth) where shading is self-contained.
+    - Matte/Black hole materials.
+    - Light sources (if they don't reflect).
     """
-    def interact(self, ray: "TracingRay", hit_info: "HitInfo", seed: Optional[int] = None, bias: float = 1e-4) -> Optional["TracingRay"]:
-        # We return None to signal the end of the light path.
-        # The ShadingStrategy has already calculated the final color.
-        return None
+    def __init__(
+            self,
+            surface_sampler: Sampler = None, # Default handled in base
+            allow_passthrough: bool = False,   # If True, ray continues straight through
+            opacity: float = 1.0,              # 1.0 = Solid, 0.0 = Invisible
+        ):
+        super().__init__(surface_sampler=surface_sampler)
+        self.allow_passthrough = allow_passthrough
+        self.opacity = max(0.0, min(opacity, 1.0)) # Clamp 0-1
 
-class PassthroughInteraction(InteractionStrategy):
-    """
-    The ray passes perfectly straight through the object, ignoring refraction.
-    Useful for 'Ghost' objects or volumetric overlays.
-    """
-    def interact(self, ray: TracingRay, hit_info: HitInfo, seed: Optional[int] = None, bias: float = 1e-4) -> Optional["TracingRay"]:
+    def interact(
+        self, 
+        ray: TracingRay, 
+        hit_info: HitInfo, 
+        seed: Optional[int] = None, 
+        bias: float = 1e-4
+    ) -> Optional["TracingRay"]:
         
-        # Spawn a new ray continuing in the exact same direction
-        # We push it slightly forward to avoid self-intersection
+        # Case 1: Standard Terminal Interaction (Solid Wall)
+        if not self.allow_passthrough:
+            return None
+
+        # Case 2: Passthrough / Ghost Mode
+        # We handle opacity stochastically (Russian Roulette).
+        # This is standard for path tracers to avoid branching rays.
+        
+        rng = np.random.default_rng(seed)
+        
+        # If opacity is 0.5, there is a 50% chance the ray is absorbed (Hit),
+        # and a 50% chance it passes through (Miss).
+        if self.opacity > 0.0:
+            # Generate a random number [0.0, 1.0)
+            if rng.random() < self.opacity:
+                # Ray is absorbed by the "smoke/ghost"
+                return None
+
+        # If we survive the opacity check (or opacity is 0), the ray passes through.
+        # It continues in the EXACT same direction.
+        
+        # Push ray slightly forward to avoid self-intersection with the exit point
         next_origin = hit_info.point + (ray.orientation * bias)
         
         return TracingRay(
             origin=next_origin,
-            orientation=ray.orientation,
-            is_inside=ray.is_inside # Maintain current state
+            orientation=ray.orientation, # Maintain original direction
+            is_inside=ray.is_inside      # Maintain current medium state
         )
 
-class SimpleMaterialInteraction(InteractionStrategy):
-    def interact(self, ray: TracingRay, hit_info: HitInfo, seed: Optional[int], bias: float = 1e-4) -> Optional[TracingRay]:
-        # 1. Resolve Material
-        v_object: VObject = hit_info.object
-        material: Material = getattr(v_object.shape, "material", None)
-        if not material:
-            return None
-
-        # 2. Initialize State
-        current_throughput = getattr(ray, "throughput", Color(1.0, 1.0, 1.0))
+class PassthroughInteraction(InteractionStrategy):
+    """
+    A passthrough interaction. 
+    The ray passes perfectly straight through the object, ignoring refraction.
+    - 'Ghost' objects (semi-transparent overlays).
+    - Volumetric boundaries (fog containers).
+    - Debugging geometry without occluding the scene.
+    """
+    def __init__(
+        self,
+        surface_sampler: Optional[Sampler] = None,
+        opacity_cutoff: float = 0.0, # 0.0 = Invisible/Clear, 1.0 = Opaque (Absorbs ray)
+    ):
+        # Initialize base to handle samplers/IOR if needed later
+        super().__init__(surface_sampler)
+        self.opacity_cutoff = np.clip(opacity_cutoff, 0.0, 1.0)
+    
+    def interact(
+        self, 
+        ray: TracingRay, 
+        hit_info: HitInfo, 
+        seed: Optional[int] = None, 
+        bias: float = 1e-4
+    ) -> Optional["TracingRay"]:
         
-        # --- PHASE A: Volumetric Absorption (The journey SO FAR) ---
-        if getattr(ray, "is_inside", False):
-            if hasattr(material, "get_volumetric_component"):
-                current_throughput = material.get_volumetric_component(current_throughput, hit_info.distance)
+        # 1. Stochastic Opacity Check (Russian Roulette)
+        # If opacity is 0.5, 50% of rays are blocked, 50% pass through.
+        # This simulates semi-transparency without splitting rays.
+        if self.opacity_cutoff > 0.0:
+            rng = np.random.default_rng(seed)
+            if rng.random() < self.opacity_cutoff:
+                return None # Ray is absorbed/blocked by the "smoke"
 
-        # --- PHASE B: Calculate Redirection ---
-        # Initialize variables to ensure they exist if 'try' fails
-        new_ray_dir = None
-        pdf = 0.0
-        did_reflect = True
-        is_next_ray_inside = False
-
-        try:
-            if getattr(ray, "is_inside", False):
-                new_ray, pdf, did_reflect, is_next_ray_inside = calculate_redirection_ray(
-                    incoming_ray=ray,
-                    surface_normal=hit_info.normal,
-                    hit_point=hit_info.point,
-                    roughness=material.roughness,
-                    sampler=self.surface_sampler,
-                    refactive_index_incident=material.ior,
-                    refactive_index=self.scene_ior,
-                    seed=seed,
-                    fast=False
-                )
-            else:
-                new_ray, pdf, did_reflect, is_next_ray_inside = calculate_redirection_ray(
-                    incoming_ray=ray,
-                    surface_normal=hit_info.normal,
-                    hit_point=hit_info.point,
-                    roughness=material.roughness,
-                    sampler=self.surface_sampler,
-                    refactive_index_incident=self.scene_ior,
-                    refactive_index=material.ior,
-                    seed=seed,
-                    fast=False
-                )
-            new_ray_dir = new_ray.orientation
-        except Exception:
-            # Fallback: Perfect Reflection
-            # We explicitly set the variables needed below, rather than creating a Ray object
-            new_ray_dir = calculate_reflection_vector(hit_info.normal, ray.orientation)
-            pdf = 1.0
-            is_next_ray_inside = getattr(ray, "is_inside", False)
-            did_reflect = True
-
-        # --- PHASE C: Apply Bias (Prevent Acne) ---
-        dot_prod = np.dot(new_ray_dir, hit_info.normal)
+        # 2. Passthrough Logic
+        # We spawn a new ray continuing in the exact same direction.
         
-        if dot_prod > 0:
-            new_origin = hit_info.point + (hit_info.normal * bias)
+        # Push ray slightly forward to avoid self-intersection
+        next_origin = hit_info.point + (ray.orientation * bias)
+        
+        return TracingRay(
+            origin=next_origin,
+            orientation=ray.orientation, # Keep exact direction
+            is_inside=ray.is_inside      # Maintain medium state (don't toggle)
+        )
+
+class StandardInteraction(InteractionStrategy):
+    """
+    A unified PBR-style interaction.
+    - Can simulate: Mirrors, Glass, Matte, Metal, and Glossy surfaces.
+    """
+    def __init__(
+        self,
+        surface_sampler: Optional[Sampler] = None,
+        scene_ior: float = REFRACTIVE_INDICES["air"]
+    ):
+        super().__init__(surface_sampler)
+        self.scene_ior = scene_ior
+
+    def interact(
+        self, 
+        ray: TracingRay, 
+        hit_info: HitInfo, 
+        seed: Optional[int] = None, 
+        bias: float = 1e-4
+    ) -> Optional[TracingRay]:
+        rng = np.random.default_rng(seed)
+        material: PBRMaterial = hit_info.object.material
+
+       # 1. Determine Optical Density (IOR)
+        # Are we entering the glass or leaving it?
+        if ray.is_inside:
+            n1 = material.data.ior         # Inside glass
+            n2 = 1.0                  # Outside (Air/Vacuum)
+            normal = -hit_info.normal # Flip normal to point inward
         else:
-            new_origin = hit_info.point - (hit_info.normal * bias)
+            n1 = 1.0                  # Air
+            n2 = material.data.ior         # Glass
+            normal = hit_info.normal
 
-        # --- PHASE D: Material Tinting ---
-        if material.type != MaterialType.EMISSIVE:
-            F0 = material.get_metallic_component()
-            base_tint = Color(1.0, 1.0, 1.0)
-            
-            view_dir = -ray.orientation
-            cos_theta = max(np.dot(view_dir, hit_info.normal), 0.0)
-            fresnel_color = Color.from_array(schlick_fresnel(cos_theta, F0.to_np_ndarray()))
-            
-            if did_reflect:
-                # --- REFLECTION CASE ---
-                # Metals tint reflections with their Albedo.
-                # Dielectrics (Glass/Plastic) reflect White (handled by F0).
-                
-                base_tint = Color(1.0, 1.0, 1.0)
-                if material.type == MaterialType.SPECULAR:
-                    base_tint = lerp(Color(1.0, 1.0, 1.0), material.albedo, material.metallic)
-                
-                # Energy = Fresnel * Intensity
-                tint = base_tint * fresnel_color * material.specular_intensity
-                
-            else:
-                # --- REFRACTION CASE (Transmission) ---
-                # Conservation of Energy: Transmitted = 1.0 - Reflected
-                transmission_factor = Color(1.0, 1.0, 1.0) - fresnel_color
-                
-                # Glass Albedo acts as a transmission filter (e.g. green glass)
-                tint = material.albedo * transmission_factor
-
-            current_throughput = current_throughput * tint
-
-        # 3. Create Next Ray
-        next_ray = TracingRay(
-            origin=new_origin,
-            orientation=new_ray_dir,
-            throughput=current_throughput,
-            pdf=pdf,
-            depth=getattr(ray, "depth", 0) + 1,
-            is_inside=is_next_ray_inside,
-            name=f"{ray.name}_{'refl' if did_reflect else 'refr'}"
+        # 2. Calculate Fresnel Chance (Schlick)
+        # "reflection_chance" acts as the probability for Russian Roulette
+        reflection_chance = calculate_fresnel_ratio(
+            ray.orientation, normal, n1, n2
         )
 
-        return next_ray
+        # 3. Decision: Reflect or Refract? (Russian Roulette)
+        # We start with the assumption based on the dice roll.
+        do_refract = rng.random() > reflection_chance
+        
+        new_ray = None
+        pdf = 0.0
+        
+        # --- PATH A: Attempt Refraction ---
+        if do_refract:
+            new_ray, pdf = material.calculate_refraction_ray(
+                incoming_ray=ray,
+                surface_normal=normal,
+                new_origin=hit_info.point,
+                sampler=Sampler(rng), # Wrap rng if needed
+                ior_incident=n1,
+                ior_transmitted=n2
+            )
+            
+            # CHECK: Did Total Internal Reflection (TIR) occur?
+            # If calculate_refraction_ray returns None, physics says we MUST reflect.
+            if new_ray is None:
+                do_refract = False # Fallback to reflection
+
+        # --- PATH B: Reflection ---
+        # Note: This is NOT an 'else'. If refraction failed above, we enter this block.
+        if not do_refract:
+            new_ray, pdf = material.calculate_microfacet_reflection(
+                incoming_ray=ray,
+                surface_normal=normal,
+                new_origin=hit_info.point,
+                sampler=Sampler(rng)
+            )
+
+        # 4. Finalize the Ray
+        if new_ray:
+            # Transfer the recursion depth and 'inside' status
+            new_ray.depth = ray.depth + 1
+            
+            # If we successfully refracted, toggle the 'is_inside' flag
+            if do_refract:
+                new_ray.is_inside = not ray.is_inside
+            else:
+                new_ray.is_inside = ray.is_inside
+
+            # 5. Calculate Throughput (Color Tint)
+            # This is crucial for the Shader to know how much light to keep.
+            # We normalize by the PDF to balance the Monte Carlo equation.
+            
+            # If we Reflected: We keep the Fresnel amount (F)
+            # If we Refracted: We keep the Transmission amount (1 - F)
+            
+            # Simplify: In pure Russian Roulette, we divide by the probability 
+            # of picking that path to keep the energy unbiased.
+            if do_refract:
+                 # Energy = (1-F) / Probability(Refract)
+                 weight = (1.0 - reflection_chance) / (1.0 - reflection_chance)
+                 new_ray.throughput = Color(1,1,1) * weight # equals 1.0 (white)
+            else:
+                 # Energy = F / Probability(Reflect)
+                 # Note: If this was a forced TIR fallback, probability is effectively 1.0
+                 weight = reflection_chance / reflection_chance if reflection_chance > 0 else 0
+                 new_ray.throughput = Color(1,1,1) * 1.0
+
+            # (Optional) Tinting: 
+            # If you want colored glass reflection, multiply throughput by base color here.
+            # new_ray.throughput *= material.albedo 
+
+        return new_ray
 
 # Shading implementations
 class RecursiveLambertShading(ShadingStrategy):
+    """
+    Standard recursive shading. 
+    Handles Direct Light (Shadow Rays) and Indirect Light (Reflection/Refraction Rays).
+    """
     def shade(
             self,
             scene: Scene,
@@ -630,118 +721,76 @@ class RecursiveLambertShading(ShadingStrategy):
             seed: Optional[int]
         ) -> Color:
         
-        # --- 1. Setup Geometry Context ---
-        point = ray.point_at(hit_info.distance)
-        v_object: VObject = hit_info.object
+        v_object = hit_info.object
+        material = v_object.material
         
-        if not hasattr(v_object, "shape") or not hasattr(v_object.shape, "GetNormal"):
-            return Color(1, 0, 1)
-
-        normal = v_object.shape.get_normal(point)
-        view_dir = -ray.orientation
-        view_dir = view_dir / np.linalg.norm(view_dir)
-        
-        material: Optional[Material] = getattr(v_object.shape, "material", None)
-        if not material:
-            return Color(1, 0, 1)
-
-        # --- 2. Calculate Self-Emission (The Glow) ---
-        # FIX A: We must explicitly add the object's own light.
-        # This ensures the yellow orb glows when seen by the camera AND by reflections.
-        emissive_light = Color(0, 0, 0)
+        # --- 1. Emission (The Glow) ---
+        # Added first so even if we stop recursing, we see the light.
+        final_color = Color(0, 0, 0)
         if material.type == MaterialType.EMISSIVE:
-            if hasattr(material, "get_emissive_component"):
-                emissive_light = material.get_emissive_component()
+             final_color += material.get_emissive_component()
+             # Emissive materials usually don't reflect/receive shadow, so we can return early
+             if self.skip_lighting_on_emissive: return final_color
 
-        # --- 3. Direct Lighting (Shadows from Light Sources) ---
-        direct_light = Color(0, 0, 0)
+        # --- 2. Direct Lighting (Next Event Estimation) ---
+        view_dir = -unit(ray.orientation)
         
-        # We classify materials into "Simple Reflective" vs "Complex Matte"
-        # FIX B: Treat ALL Specular/Glass as "Simple" to avoid the broken BRDF math.
-        # This forces the mirror (roughness 0.1) to use the simple recursion logic.
-        is_simple_reflective = (material.type == MaterialType.GLASS) or (material.type == MaterialType.SPECULAR)
+        # We assume 'evaluate_direct_light' handles the loop over lights & shadow checks
+        def visibility_checker(p1, p2):
+             if not self.enable_shadows: return 1.0
+             return 0.0 if scene.is_occluded(p1, p2, self.shadow_bias) else 1.0
 
-        if not is_simple_reflective:
-            def check_visibility(hit_point, light_pos):
-                if not self.enable_shadows: return 1.0
-                return 0.0 if scene.is_occluded(hit_point, light_pos, bias=self.shadow_bias) else 1.0
+        direct_light = material.evaluate_direct_light(
+            scene.lights, hit_info, view_dir, visibility_checker
+        )
+        final_color += direct_light
 
-            direct_light = material.apply_material(scene.get_lights(), hit_info, view_dir, check_visibility)
-            
-            if self.ambient_enabled:
-                ambient_col = getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03))
-                ambient_intensity = getattr(scene, "ambient_intensity", 0.1)
-                direct_light += material.apply_ambient_color(ambient_col, ambient_intensity)
+        # --- 3. Ambient (Optional) ---
+        if self.ambient_enabled:
+            final_color += material.get_ambient_color(scene.ambient_color, scene.ambient_intensity)
 
-        # --- 4. Indirect Lighting (Reflections/Refractions) ---
-        indirect_light = Color(0.0, 0.0, 0.0)
-
+        # --- 4. Indirect Lighting (Recursion) ---
+        # The 'interaction_function' calculates the physics of the bounce.
+        # It performs Russian Roulette (Reflect OR Refract) and sets 'new_ray.throughput'.
         if current_depth > 0:
             new_ray = interaction_function(ray, hit_info, seed)
 
             if new_ray is not None:
-                # Trace the bounce
+                # Recursively trace the new path
                 incoming_light = trace_function(scene, new_ray, current_depth - 1, seed)
-
-                # Combine based on strategy
-                if is_simple_reflective:
-                    # FIX B (Part 2): For Metals/Glass, we rely on the 'throughput' calculated
-                    # in interact() to handle the color/tint. We don't need complex PDF math here.
-                    throughput = getattr(new_ray, "throughput", Color(1,1,1))
-                    indirect_light = incoming_light * throughput
-                    
-                    if self.type == MaterialType.GLASS:
-                        # 1. Calculate View-Angle Fresnel (How mirror-like is the edge?)
-                        F0 = self.get_metallic_component()
-                        NdotV = max(0.0, np.dot(hit_info.normal, view_dir))
-                        
-                        # Calculate F_view using Schlick approximation
-                        F_view = F0 + (Color(1.0, 1.0, 1.0) - F0) * (1.0 - NdotV)**5
-                        
-                        # 2. Get the Background (Refraction)
-                        background_color = self.get_transparency_component(indirect_light)
-                        
-                        # 3. Mix: The background is blocked by the reflection
-                        # Conservation of Energy: Refraction = (1 - Fresnel)
-                        final_color += background_color * (Color(1.0, 1.0, 1.0) - F_view)
-
-                    elif self.type == MaterialType.TRANSPARENT:
-                        # Simple Alpha Blending (Decals, etc.)
-                        background_color = self.get_transparency_component(indirect_light)
-                        final_color += background_color
                 
-                else:
-                    # For Diffuse/Matte materials, we use the Rendering Equation Estimator
-                    pdf = getattr(new_ray, "pdf", 0.0)
-                    throughput = getattr(new_ray, "throughput", Color(1,1,1))
-                    
-                    if pdf > 1e-5:
-                        brdf_val = material.evaluate_brdf(normal, view_dir, new_ray.orientation)
-                        cos_theta = max(np.dot(normal, new_ray.orientation), 0.0)
-                        
-                        weight = (brdf_val * cos_theta) / pdf
-                        indirect_light = incoming_light * weight * throughput
+                # Apply the throughput (Color tint * Cosine Term / PDF)
+                # This handles the Glass "Darkening" or Metal "Tinting" automatically.
+                throughput = getattr(new_ray, "throughput", Color(1,1,1))
+                final_color += incoming_light * throughput
 
-        # --- 5. Composition & Volumetrics ---
-        # Add Emission + Direct + Indirect
-        final_color = emissive_light + direct_light + indirect_light
-        
-        # Apply Volumetric Absorption (if the ray traveled through glass to get here)
+        # --- 5. Volumetrics (Beer's Law) ---
+        # If the ray passed THROUGH an object to get here, absorb some color.
         if getattr(ray, "is_inside", False):
             final_color = material.get_volumetric_component(final_color, hit_info.distance)
 
         return final_color
 
 class XRayThicknessShading(ShadingStrategy):
+    """
+    Renders objects based on their thickness. 
+    Useful for medical visualization, sub-surface scattering approximation, or sci-fi energy shields.
+    """
     def __init__(
         self,
-        thickness_scale: float = 0.5, # Controls brightness (lower = darker/thicker looking)
-        invert_gamma: bool = False,   # If True, thicker parts look darker (absorption)
-        **kwargs
+        density: float = 1.0,                               # Beer's Law coefficient (Higher = rapid absorption)
+        absorption_color: Color = Color(0.2, 0.8, 1.0),     # The color of the object material
+        invert_style: bool = True,                          # True = Sci-Fi (Thick is Bright), False = Glass (Thick is Dark)
+        rim_power: float = 3.0,                             # Edge highlighting strength (0.0 to disable)
+        rim_color: Color = Color(1.0, 1.0, 1.0),            # Color of the edge highlight
+        max_thickness: float = 10.0                         # Clamping value to prevent infinite vals on open meshes
     ):
-        super().__init__(**kwargs)
-        self.thickness_scale = thickness_scale
-        self.invert_gamma = invert_gamma
+        self.density = density
+        self.absorption_color = absorption_color
+        self.invert_style = invert_style
+        self.rim_power = rim_power
+        self.rim_color = rim_color
+        self.max_thickness = max_thickness
 
     def shade(
         self,
@@ -753,54 +802,76 @@ class XRayThicknessShading(ShadingStrategy):
         intersection_function: Callable[[Scene, TracingRay], HitInfo],
         interaction_function: Callable[[TracingRay, HitInfo, Optional[float]], Optional[TracingRay]],
         seed: Optional[int] = None,
-        bias: float = 1e-3
+        bias: float = 1e-4
     ) -> Color:
-        # 1. Background Check (Use Black for contrast)
-        if not hit_info.did_hit:
-            return Color(0.0, 0.0, 0.0)
+        # 1. Setup Vectors
+        # Normal pointing OUT of the surface
+        normal = hit_info.normal
+        view_dir = -ray.orientation
+        view_dir = view_dir / np.linalg.norm(view_dir)
 
-        # 2. Calculate Exit Point
-        ray_origin_inside = hit_info.point + (ray.orientation * bias)
+        # 2. Calculate Thickness (The "Through" Ray)
+        # We push the origin slightly INSIDE the object (opposite to normal) to avoid self-intersection at the entry.
+        # Note: If geometry is single-sided planes, this might fail. Assumes closed volume.
+        inside_origin = hit_info.point - (normal * bias) 
         
-        exit_ray = TracingRay(
-            origin=ray_origin_inside,
+        # Ray travels in the EXACT same direction as the camera ray
+        inside_ray = TracingRay(
+            origin=inside_origin, 
             orientation=ray.orientation,
-            is_inside=True
+            depth=ray.depth # Keep depth to prevent infinite recursion bugs
         )
 
-        shape: Optional[Shape] = getattr(hit_info.object, "shape", None)
-        if shape is None:
-            # Error: Object has no shape?
-            return Color(1.0, 0.0, 1.0) # Magenta Error
-        
-        iso_scene = Scene()
-        iso_scene.add_object(shape)
-        exit_hit = intersection_function(iso_scene, exit_ray)
+        # Find where the ray leaves the object
+        exit_hit = intersection_function(scene, inside_ray)
 
-        # 3. Calculate Thickness
         thickness = 0.0
-        if exit_hit.did_hit:
+        if exit_hit.hit:
             thickness = exit_hit.distance
         else:
-            # Infinite/Leaky geometry detected
-            return Color(1.0, 0.0, 0.0) # Red Alert
+            # Ray didn't hit anything inside (Open mesh? Plane?). 
+            # Fallback: Assume some arbitrary thickness or 0.
+            thickness = 0.0
 
-        # 4. Visualize
-        # Use exponential falloff (Beer's Law) for better volumetric perception
-        # High density = Darker centers
-        density = self.thickness_scale # e.g. 0.5
-        transmission = np.exp(-thickness * density)
-        
-        if self.invert_gamma:
-            # "Medical X-Ray" style: Bones are White, Empty is Dark
-            # We invert the transmission
-            val = 1.0 - transmission
-            return Color(val, val, val)
+        # Clamp thickness for safety
+        thickness = min(thickness, self.max_thickness)
+
+        # 3. Apply Beer's Law (Attenuation)
+        # Transmission = exp(-density * distance)
+        # Result is 1.0 (Thin) to 0.0 (Thick)
+        transmission = attenuate_distance_exponential(thickness, self.density)
+
+        # 4. Determine Core Color
+        final_color = Color(0,0,0)
+
+        if self.invert_style:
+            # --- SCI-FI / ADDITIVE STYLE ---
+            # Thicker parts glow brighter (like accumulating energy)
+            # Intensity = 1.0 - transmission (0.0 at edge, 1.0 at center)
+            intensity = 1.0 - transmission
+            final_color = self.absorption_color * intensity
         else:
-            # "Glowing Gel" style: Thick parts absorb light (darker)
-            # Thin edges let light through (brighter)
-            val = transmission
-            return Color(val, val, val)
+            # --- ABSORPTION / SUBTRACTIVE STYLE ---
+            # Thicker parts absorb light (look darker/tinted)
+            # This mimics looking through colored glass or liquid.
+            # We assume a white background light source for this visualization.
+            final_color = self.absorption_color * transmission
+
+        # 5. Add Rim Lighting (Fresnel-like effect)
+        # Highlighting edges makes x-ray geometry readable.
+        if self.rim_power > 0.0:
+            # NdotV: 1.0 looking straight on, 0.0 at glancing angle
+            NdotV = max(0.0, np.dot(normal, view_dir))
+            
+            # Invert: 0.0 at center, 1.0 at edge
+            rim_factor = 1.0 - NdotV
+            
+            # Power curve to tighten the rim
+            rim_intensity = rim_factor ** self.rim_power
+            
+            final_color += self.rim_color * rim_intensity
+
+        return final_color
 
 # Stats for ray tracing
 @dataclass
@@ -880,7 +951,7 @@ class Raytracer(Algorithm):
         self,
         max_depth: int = 4,
         sampling_manager: Optional[SamplingManager] = None,
-        ray_generator: Optional[RayGenerator] = None,
+        ray_generator: Optional[RayGenerationStrategy] = None,
         intersection_strategy: Optional[IntersectionStrategy] = None,
         interaction_strategy: Optional[InteractionStrategy] = None,
         shading_strategy: Optional[ShadingStrategy] = None,
@@ -892,9 +963,9 @@ class Raytracer(Algorithm):
         self.sampling_manager = sampling_manager
         self.sample_settings = sample_settings or SampleSettings()
 
-        self.ray_generator: RayGenerator = ray_generator if ray_generator is not None else JitterRayGenerator()
+        self.ray_generator: RayGenerationStrategy = ray_generator if ray_generator is not None else JitterRayGenerator()
         self.intersector: IntersectionStrategy = intersection_strategy if intersection_strategy is not None else RayMarchingIntersection()
-        self.interactor: InteractionStrategy = interaction_strategy if interaction_strategy is not None else SimpleMaterialInteraction()
+        self.interactor: InteractionStrategy = interaction_strategy if interaction_strategy is not None else StandardInteraction()
         self.shader: ShadingStrategy = shading_strategy if shading_strategy is not None else RecursiveLambertShading()
         
         self.max_depth = max_depth
@@ -937,93 +1008,109 @@ class Raytracer(Algorithm):
         scene: Scene,
         seed: Optional[int] = None,
         region: Optional[Tuple[int, int, int, int]] = None,
+        tile_size: int = 64
     ) -> List[Color]:
         self.stats.start_timer()
+        self.stats.rays_primary = 0
+        self.stats.rays_shadow = 0
+        self.stats.rays_reflection = 0
+        self.stats.rays_refraction = 0
         
         cam = scene.camera
-        if cam is None:
-            raise ValueError("No camera provided")
+        if cam is None: raise ValueError("No camera provided in Scene")
 
-        cam_w, cam_h = cam.width, cam.height
-        
-        self.sample_settings.width = cam_w
-        self.sample_settings.height = cam_h
+        # Determine Render Bounds
+        if region:
+            rx, ry, rw, rh = region
+        else:
+            rx, ry, rw, rh = 0, 0, cam.width, cam.height
 
-        # FIX 1: Storage - Use a simplified structure if possible, but we will stick 
-        # to your list logic for now. 
-        # Warning: High SPP will crash memory here.
-        pixel_samples_and_colors = [[] for _ in range(cam_w * cam_h)]
+        # Initialize full image buffer (Black)
+        # We use a 1D array to store the final result
+        full_image_pixels = [Color(0,0,0) for _ in range(rw * rh)]
 
-        def _gen_rays(region=None, seed=None):
-            r = self.ray_generator.generate(scene.camera, region=region, seed=seed)
-            self.stats.rays_primary = len(r)
-            return r
+        self.sample_settings.width = cam.width
+        self.sample_settings.height = cam.height
 
-        def process_rays(rays: List[TracingRay]):
-            for ray in rays:
-                # SKIP invalid rays
-                if ray is None: continue
-
-                x = getattr(ray, "pixel_x", -1)
-                y = getattr(ray, "pixel_y", -1)
+        # --- TILE LOOP ---
+        # Iterate over the image in blocks (tiles)
+        for tile_y in range(ry, ry + rh, tile_size):
+            for tile_x in range(rx, rx + rw, tile_size):
                 
-                # Bounds check
-                if not (0 <= x < cam_w and 0 <= y < cam_h):
-                    continue
-
-                # Region check
-                if region:
-                     rx, ry, rw, rh = region
-                     if not (rx <= x < rx + rw and ry <= y < ry + rh):
-                         continue
-
-                # Trace
-                final_color = self._trace_ray(scene, ray, self.max_depth, seed)
+                # Calculate current tile dimensions (handle edges)
+                current_w = min(tile_size, (rx + rw) - tile_x)
+                current_h = min(tile_size, (ry + rh) - tile_y)
                 
-                if hasattr(ray, 'sample_u'):
-                    s_u, s_v = ray.sample_u, ray.sample_v
-                else:
-                    s_u = (x + 0.5) / cam_w
-                    s_v = (y + 0.5) / cam_h
-
-                sample = Sample(s_u, s_v, 1.0)
+                # Define tile region: (x, y, w, h)
+                tile_region = (tile_x, tile_y, current_w, current_h)
                 
-                pixel_idx = int(y * cam_w + x)
-                pixel_samples_and_colors[pixel_idx].append((sample, final_color))
+                # 1. Generate Rays for this Tile ONLY
+                rays = self.ray_generator.generate(cam, region=tile_region, seed=seed)
+                self.stats.rays_primary += len(rays)
 
-        # --- EXECUTION ---
-        rays = _gen_rays(region=region, seed=seed)
-        process_rays(rays)
+                # 2. Local Storage for this Tile
+                # Map: (local_tile_index) -> List[(Sample, Color)]
+                tile_samples = [[] for _ in range(current_w * current_h)]
 
-        # --- RECONSTRUCTION ---
-        pixel_colors: List[Color] = []
-        
-        # We iterate purely by index to keep the flattened list structure correct
-        for pixel_idx in range(len(pixel_samples_and_colors)):
-            samples_and_colors = pixel_samples_and_colors[pixel_idx]
-            
-            # Calculate x, y from index for the filter context
-            y = pixel_idx // cam_w
-            x = pixel_idx % cam_w
+                # 3. Trace Rays
+                for ray in rays:
+                    if ray is None: continue
+                    
+                    # Global Coordinates
+                    px, py = getattr(ray, "pixel_x", -1), getattr(ray, "pixel_y", -1)
+                    
+                    # Convert to Local Tile Coordinates
+                    local_x = px - tile_x
+                    local_y = py - tile_y
 
-            if not samples_and_colors:
-                pixel_colors.append(Color(0, 0, 0))
-                continue
+                    # Safety Check
+                    if not (0 <= local_x < current_w and 0 <= local_y < current_h):
+                        continue
 
-            samples = [sc[0] for sc in samples_and_colors]
-            # Convert Color objects to numpy arrays for the reconstructor math
-            colors = [np.array([sc[1].r, sc[1].g, sc[1].b]) for sc in samples_and_colors]
-            
-            # Note: This reconstruction is still strictly "Bucketed" 
-            # (only looks at samples inside this pixel). 
-            reconstructed = reconstruct_pixel(x, y, samples, colors, self.sample_settings)
-            
-            pixel_colors.append(Color(reconstructed[0], reconstructed[1], reconstructed[2]))
-        
+                    # Trace
+                    pixel_color = self._trace_ray(scene, ray, self.max_depth, seed)
+
+                    # Create Sample Object
+                    s_u = getattr(ray, "sample_u", (px + 0.5) / cam.width)
+                    s_v = getattr(ray, "sample_v", (py + 0.5) / cam.height)
+                    sample = Sample(s_u, s_v, 1.0) # weight 1.0
+
+                    # Store in Local Tile Buffer
+                    local_idx = local_y * current_w + local_x
+                    tile_samples[local_idx].append((sample, pixel_color))
+
+                # 4. Reconstruct Tile (Resolve samples to final color)
+                for i in range(len(tile_samples)):
+                    samples_and_colors = tile_samples[i]
+                    
+                    if not samples_and_colors: continue
+
+                    # Calculate Global Pixel Index
+                    local_y_in_tile = i // current_w
+                    local_x_in_tile = i % current_w
+                    
+                    global_x = tile_x + local_x_in_tile
+                    global_y = tile_y + local_y_in_tile
+                    
+                    # Reconstruct
+                    samples = [sc[0] for sc in samples_and_colors]
+                    colors = [np.array([sc[1].r, sc[1].g, sc[1].b]) for sc in samples_and_colors]
+                    
+                    # Note: You need to import/define 'reconstruct_pixel'
+                    rec_rgb = reconstruct_pixel(global_x, global_y, samples, colors, self.sample_settings)
+                    final_color = Color(rec_rgb[0], rec_rgb[1], rec_rgb[2])
+
+                    # Write to Final Image Buffer
+                    # Calculate index in the *region* buffer
+                    final_idx = (global_y - ry) * rw + (global_x - rx)
+                    full_image_pixels[final_idx] = final_color
+
+                # 5. End of Tile - Memory for 'tile_samples' and 'rays' is freed here automatically
+
         self.stats.stop_timer()
         self.stats.print_verbose_report()
 
-        return pixel_colors
+        return full_image_pixels
 
     def __repr__(self):
         return f"Raytracer(ray_generator={self.ray_generator}, intersector={self.intersector}, interactor={self.interactor}, shader={self.shader})"
