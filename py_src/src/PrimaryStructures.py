@@ -111,6 +111,18 @@ class Ray:
     def __repr__(self):
         return f"Ray(origin={self.origin}, orientation={self.orientation})"
 
+# Define a ray that holds the ray and data
+class TracingRay(Ray):
+    def __init__(self, origin: np.ndarray, orientation: np.ndarray, name: str = "Ray", **kwargs):
+        super().__init__(origin, orientation, name)
+        
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    def __repr__(self):
+        return f"TracingRay(name={self.name}, origin={self.origin}, orientation={self.orientation})"
+    pass
+
 class HitInfo:
     """
     Stores information about a ray-object intersection.

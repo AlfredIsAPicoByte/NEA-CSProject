@@ -1,6 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Optional, Dict, Type, Any, List, Tuple
 
 from Luminance import Color
@@ -8,9 +9,26 @@ from Scene import Scene
 
 @dataclass
 class RenderStats:
-    
-    time_taken_seconds: float = 0.0
     memory_usage: float = 0.0  # in MB
+    
+    # --- Timing (Internal use) ---
+    time_taken_seconds: float = 0.0
+    _start_time: float = field(default=0.0, repr=False)
+
+    def start_timer(self):
+        self._start_time = time.perf_counter()
+
+    def stop_timer(self):
+        self.time_taken_seconds = time.perf_counter() - self._start_time
+
+    def __add__(self, other: 'RenderStats') -> 'RenderStats':
+        new_stats = RenderStats()
+
+        # Max/Avg specific fields
+        new_stats.time_taken_seconds = max(self.time_taken_seconds, other.time_taken_seconds)
+        new_stats.memory_usage = max(self.memory_usage, other.memory_usage)
+
+        return new_stats
 
 class Algorithm(ABC):
     """

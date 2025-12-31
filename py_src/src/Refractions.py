@@ -312,30 +312,48 @@ def calculate_refraction_vector(
         bias: float = 1e-8
     ) -> Optional[np.ndarray]:
     """
-    Calculate the outgoing angle of the refracted ray.
-
-    Attributes:
-        surface_normal (ndarray): the surface_normal of the surface of interaction
-        incoming_ray (Ray): the incoming ray
+    Calculate the outgoing angle of the refracted ray using Snell's Law.
+    Handles both entering and exiting cases by ensuring the normal opposes the ray.
     """
-    unit_normal = _unit(surface_normal, bias)
+    # 1. Normalize inputs
     unit_direction = _unit(direction, bias)
+    unit_normal = _unit(surface_normal, bias)
 
-    cos_theta_i = -np.dot(unit_normal, unit_direction)
-    sin_theta_i2 = 1.0 - cos_theta_i ** 2
+    # 2. Check orientation: Are we entering or exiting?
+    # Dot product > 0 means the ray and normal point in the same direction (Exiting).
+    dt = np.dot(unit_direction, unit_normal)
+    
+    # If we are exiting, the normal is pointing 'out' with the ray.
+    # We need to flip it to point 'in' against the ray for the formula to work.
+    if dt > 0:
+        eff_normal = -unit_normal
+        cos_theta_i = dt # dot(I, N) is already positive here
+    else:
+        eff_normal = unit_normal
+        cos_theta_i = -dt # We want positive cosine (angle < 90)
 
-    n_ratio = Ratio(refractive_index_incident , refractive_index)
-    sin_theta_t2 = n_ratio.value ** 2 * sin_theta_i2
+    # 3. Calculate Ratio (eta)
+    # The caller is responsible for swapping n1/n2 based on 'is_inside',
+    # so we just divide the incident by the transmission index.
+    eta = refractive_index_incident / refractive_index
+
+    # 4. Check for Total Internal Reflection (TIR)
+    # sin^2(theta_t) = eta^2 * sin^2(theta_i)
+    # sin^2(theta_i) = 1 - cos^2(theta_i)
+    sin_theta_t2 = (eta * eta) * (1.0 - cos_theta_i * cos_theta_i)
 
     if sin_theta_t2 > 1.0:
-        # Total internal reflection occurred
+        # TIR: The ray cannot escape; it reflects entirely inside.
         return None
 
+    # 5. Calculate Refraction Vector
+    # T = eta * I + (eta * cos_i - sqrt(1 - sin_t^2)) * N
     cos_theta_t = math.sqrt(1.0 - sin_theta_t2)
-    refracted_vector = n_ratio.value * unit_direction + (n_ratio.value * cos_theta_i - cos_theta_t) * unit_normal
-    refracted_vector = _unit(refracted_vector, bias)
+    
+    refracted_vector = (eta * unit_direction) + \
+                       ((eta * cos_theta_i) - cos_theta_t) * eff_normal
 
-    return refracted_vector
+    return _unit(refracted_vector, bias)
 
 """
 Refraction module: Provides functions to calculate refraction angles, refractive indices, and refracted ray directions based on Snell's Law.

@@ -15,9 +15,26 @@ class PixelFilter(Enum):
 class SampleSettings:
     width: int = 800
     height: int = 600
-    size: int = 1
+    samples_per_pixel: int = 1
     filter_type: PixelFilter = PixelFilter.BOX
     filter_width: float = 2.0  # Radius in pixels for the filter
+
+    def __post_init__(self):
+        # 1. Validate Dimensions
+        if self.width <= 0 or self.height <= 0:
+            raise ValueError(f"Resolution must be positive. Got {self.width}x{self.height}")
+
+        # 2. Validate Sampling
+        if self.samples_per_pixel < 1:
+            raise ValueError(f"Samples per pixel must be >= 1. Got {self.samples_per_pixel}")
+        
+        # 3. Validate Filter Width
+        if self.filter_width <= 0:
+            raise ValueError(f"Filter width must be positive. Got {self.filter_width}")
+
+        # 4. Optional: Type Checking (Dataclasses don't enforce types by default)
+        if not isinstance(self.filter_type, PixelFilter):
+            raise TypeError(f"filter_type must be a PixelFilter Enum, got {type(self.filter_type)}")
     
 @dataclass
 class Sample:
@@ -114,11 +131,9 @@ class Sampler(ABC):
     - next_1d/next_2d: supply samples in [0,1)
     - clone: produce independent sampler for thread/worker
     """
-    def __init__(self, samples_per_pixel: int = 1, **kwargs):
-        self.samples_per_pixel = samples_per_pixel
-
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+    def __init__(self, sample_settings: SampleSettings = SampleSettings(), seed: Optional[int] = None):
+        self.seed = seed
+        self.settings = sample_settings
 
     @abstractmethod
     def start_pixel(self, x: int, y: int) -> None:
@@ -139,12 +154,15 @@ class Sampler(ABC):
     @abstractmethod
     def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
         ...
+    
+    def set_samples_per_pixel(self, spp: int) -> None:
+        self.settings.samples_per_pixel = max(spp, 1)
 
-    def get_samples_for_pixel(self, x: int, y:int) -> List[Sample]:
+    def get_samples_per_pixel(self, x: int, y:int) -> List[Sample]:
         """Utility to get all samples for a pixel as Sample(u,v) list."""
         self.start_pixel(x, y)
         out: List[Sample] = []
-        for _ in range(self.samples_per_pixel):
+        for _ in range(self.settings.samples_per_pixel):
             u, v = self.next_2d()
             out.append(Sample(u, v))
         return out
@@ -163,9 +181,9 @@ class Sampler(ABC):
 
     def get_sample_by_index(self, index: int, image_width: int, image_height: int) -> Sample:
         """Utility to get a single sample by linear index over the image."""
-        total_pixels = image_width * image_height
-        pixel_index = index // self.samples_per_pixel
-        sample_index = index % self.samples_per_pixel
+        pixel_index = index // self.settings.samples_per_pixel
+        sample_index = index % self.settings.samples_per_pixel
+
         x = pixel_index % image_width
         y = pixel_index // image_width
         self.start_pixel(x, y)
@@ -175,9 +193,9 @@ class Sampler(ABC):
 
 class RandomSampler(Sampler):
     """Independent RNG sampler, deterministic with base seed + pixel coords."""
-    def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
-        super().__init__(samples_per_pixel)
-        self._rng = np.random.default_rng()
+    def __init__(self, sample_settings: SampleSettings = SampleSettings(), seed: Optional[int] = None):
+        super().__init__(sample_settings, seed)
+        self._rng = np.random.default_rng(seed)
         self._x = 0
         self._y = 0
 
@@ -191,7 +209,7 @@ class RandomSampler(Sampler):
         return (self._rng.random(), self._rng.random())
 
     def clone(self, seed: Optional[int] = None) -> "RandomSampler":
-        return RandomSampler(self.samples_per_pixel, seed)
+        return RandomSampler(self.settings, seed)
 
     def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
         self.start_pixel(x, y)
@@ -201,17 +219,16 @@ class RandomSampler(Sampler):
 
 class StratifiedSampler(Sampler):
     """Stratified 2D sampler (square grid) with per-cell jitter."""
-    def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
-        super().__init__(samples_per_pixel)
-        self._base_seed = 0 if seed is None else int(seed)
-        self._rng =np.random.default_rng(seed)
+    def __init__(self, sample_settings: SampleSettings = SampleSettings(), seed: Optional[int] = None):
+        super().__init__(sample_settings, seed)
+        self._rng = np.random.default_rng(seed)
         self._x = 0
         self._y = 0
         self._current = 0
         self._rebuild_grid()
 
     def _rebuild_grid(self):
-        n = max(1, int(math.ceil(math.sqrt(self.samples_per_pixel))))
+        n = max(1, int(math.ceil(math.sqrt(self.settings.samples_per_pixel))))
         self._nx = n
         self._ny = n
 
@@ -222,7 +239,6 @@ class StratifiedSampler(Sampler):
     def start_pixel(self, x: int, y: int) -> None:
         self._x = x; self._y = y
         self._current = 0
-        self._rng.seed((self._base_seed, x, y))
 
     def next_1d(self) -> float:
         return self._rng.random()
@@ -239,11 +255,11 @@ class StratifiedSampler(Sampler):
         return (u, v)
 
     def clone(self, seed: Optional[int] = None) -> "StratifiedSampler":
-        return StratifiedSampler(self.samples_per_pixel, seed if seed is not None else self._base_seed)
+        return StratifiedSampler(self.settings, seed)
 
     def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
         self.start_pixel(x, y)
-        n = max(1, int(math.ceil(math.sqrt(self.samples_per_pixel))))
+        n = max(1, int(math.ceil(math.sqrt(self.settings.samples_per_pixel))))
         i = sample_idx % n
         j = sample_idx // n
         if j >= n:
@@ -253,8 +269,8 @@ class StratifiedSampler(Sampler):
         return dx, dy
 
 class HaltonSampler(Sampler):
-    def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
-        super().__init__(samples_per_pixel)
+    def __init__(self, sample_settings: SampleSettings = SampleSettings(), seed: Optional[int] = None):
+        super().__init__(sample_settings, seed)
         self._index = 0
 
     @staticmethod
@@ -293,8 +309,8 @@ class HaltonSampler(Sampler):
 
 class AdaptiveSampler(Sampler):
     """Placeholder for an adaptive sampler implementation."""
-    def __init__(self, samples_per_pixel: int = 1, seed: Optional[int] = None):
-        super().__init__(samples_per_pixel)
+    def __init__(self, sample_settings: SampleSettings = SampleSettings(), seed: Optional[int] = None):
+        super().__init__(sample_settings, seed)
         # Implementation would go here
 
     def start_pixel(self, x: int, y: int) -> None:
@@ -307,7 +323,7 @@ class AdaptiveSampler(Sampler):
         return (np.random(), np.random())
 
     def clone(self, seed: Optional[int] = None) -> "AdaptiveSampler":
-        return AdaptiveSampler(self.samples_per_pixel, seed)
+        return AdaptiveSampler(self.settings, seed)
 
     def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
         return (np.random(), np.random())
@@ -320,70 +336,95 @@ _SAMPLER_REGISTRY: dict[str, type[Sampler]] = {
     "adaptive": AdaptiveSampler,
 }
 
-def create_sampler(name: str, samples_per_pixel: int = 1, seed: Optional[int] = None) -> Sampler:
+def create_sampler(name: str, sample_settings: SampleSettings = SampleSettings(), seed: Optional[int] = None) -> Sampler:
     cls = _SAMPLER_REGISTRY.get(name.lower())
     if cls is None:
         raise ValueError(f"Unknown sampler: {name}")
-    return cls(samples_per_pixel, seed)
+    return cls(sample_settings, seed)
 
 class SamplingManager:
     """
     High-level manager combining settings and sampler use.
-    Use get_samples_for_pixel(x,y) to obtain a list of Sample(u,v).
     """
-    def __init__(self, sample_settings: SampleSettings, sampler_name: str | None = None, seed: Optional[int] = None, precompute: bool = False):
-        self.sample_settings = sample_settings
+    def __init__(self, sample_settings: 'SampleSettings', sampler_name: str | None = None, seed: Optional[int] = None, precompute: bool = False):
+        self.settings = sample_settings
         self.seed = seed
         self.sampler_name = sampler_name if sampler_name is not None else "random"
-        self._spp = max(1, self.sample_settings.size)
-        self._sampler = create_sampler(self.sampler_name, self._spp, seed)
-        # Precompute samples if requested (disabled by default to save memory)
-        self.samples: List[Tuple[float, float]] = []
+        
+        self._spp = self.settings.samples_per_pixel
+        
+        self._sampler = create_sampler(self.sampler_name, sample_settings, seed)
+
         self._precompute = bool(precompute)
+        self.precomputed_samples: List[Sample] = []
+        
         if self._precompute:
-            self._precompute_samples()
-    
-    def _precompute_samples(self):
-        self.samples = []
-        sampler = self._sampler.clone(self.seed)
-        for y in range(self.sample_settings.height):
-            for x in range(self.sample_settings.width):
-                sampler.start_pixel(x, y)
+            self._do_precompute()
+
+    def _do_precompute(self):
+        """Generates all samples upfront. Warning: High Memory Usage."""
+        print(f"Precomputing samples for {self.settings.width}x{self.settings.height} image...")
+        self.precomputed_samples = []
+
+        # Use a single local sampler instance for the loop
+        # We typically clone once at the start to ensure thread safety if this runs in parallel
+        if hasattr(self._sampler, "clone"):
+             local_sampler = self._sampler.clone(self.seed)
+        else:
+             local_sampler = self._sampler
+
+        for y in range(self.settings.height):
+            for x in range(self.settings.width):
+                local_sampler.start_pixel(x, y)
                 for _ in range(self._spp):
-                    u, v = sampler.next_2d()
-                    self.samples.append((u, v))
+                    u, v = local_sampler.next_2d()
+                    self.precomputed_samples.append(Sample(u, v))
 
-    def get_precomputed_samples(self, count: int = 0, offset: int = 0) -> List[Tuple[float, float]]:
-        """Return a slice of the precomputed sample list."""
-        if count <= 0:
-            return self.samples[offset:]
-        return self.samples[offset:offset + count]
-
-    # Provide the interface the renderer expects: get_samples_for_pixel(x,y) -> List[Sample]
-    def get_samples_for_pixel(self, x: int, y: int) -> List[Sample]:
-        # If precomputed, slice out samples for this pixel
+    def get_samples_per_pixel(self, x: int, y: int) -> List[Sample]:
+        """
+        Returns the list of samples (u,v) for a specific pixel coordinate.
+        """
+        # --- PATH A: Precomputed (Fast access, High RAM) ---
         if self._precompute:
-            start = (y * self.sample_settings.width + x) * self._spp
-            slice_uv = self.samples[start:start + self._spp]
-            return [Sample(u, v) for (u, v) in slice_uv]
+            # Calculate flat index
+            # FIX: Corrected typo 'samples_per_pixel' -> 'samples_per_pixel'
+            pixel_index = (y * self.settings.width) + x
+            start_idx = pixel_index * self._spp
+            
+            # Safety Check
+            if start_idx + self._spp > len(self.precomputed_samples):
+                return [] 
+                
+            return self.precomputed_samples[start_idx : start_idx + self._spp]
 
-        # Otherwise generate on-demand from the underlying sampler (clone per-call for safety)
-        sampler = self._sampler.clone(self.seed) if hasattr(self._sampler, "clone") else self._sampler
+        # --- PATH B: On-Demand (Low RAM, Slightly Slower) ---
+        
+        # Avoid cloning per-pixel if possible. 
+        # Ideally, samplers are lightweight. If 'clone' is expensive, this line is a bottleneck.
+        # However, for thread safety in a renderer, we often MUST clone or use thread-local storage.
+        if hasattr(self._sampler, "clone"):
+            current_sampler = self._sampler.clone(self.seed)
+        else:
+            current_sampler = self._sampler
+
+        # Reset sampler state for this specific pixel
         try:
-            sampler.start_pixel(x, y)
+            current_sampler.start_pixel(x, y)
         except Exception:
-            # best-effort
             pass
 
         out: List[Sample] = []
         for _ in range(self._spp):
             try:
-                u, v = sampler.next_2d()
+                u, v = current_sampler.next_2d()
             except Exception:
-                u = np.random()
-                v = np.random()
+                # 4. FIX: Correct Numpy Syntax
+                u = np.random.random()
+                v = np.random.random()
+            
             out.append(Sample(u, v))
+            
         return out
 
     def __repr__(self):
-        return f"SamplingManager(sampler={self.sampler_name}, spp={self._spp}, settings={self.sample_settings})"
+        return f"SamplingManager(sampler={self.sampler_name}, spp={self._spp})"

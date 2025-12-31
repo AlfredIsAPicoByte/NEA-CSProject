@@ -6,9 +6,9 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from src.RenderingAlgorithims import Algorithm
-from src.Raytracing import Raytracer, JitterRayGenerator, RayMarchingIntersection, SimpleMaterialInteraction, RecursiveLambertShading
+from src.Raytracing import Raytracer, JitterRayGenerator, RayMarchingIntersection, InverseSDFStrategy, SimpleMaterialInteraction, RecursiveLambertShading, XRayThicknessShading
 from src.Sampling import SamplingManager, SampleSettings, PixelFilter
-from src.Postprocessing import PostProcessingPipeline
+from src.PostProcessing import PostProcessingPipeline
 from src.Scene import Scene
 from src.Luminance import Color
 
@@ -56,7 +56,6 @@ if __name__ == "__main__":
     os.makedirs(OUT_DIR, exist_ok=True)
 
     img_w, img_h = 64, 36 # 256, 144 for higher resolution images
-    enable_post_processing = True
 
     all_scenes = [
         get_minimal_scene(img_w, img_h),
@@ -72,64 +71,70 @@ if __name__ == "__main__":
     sample_settings = SampleSettings(img_w, img_h, 1, PixelFilter.BOX, 2)
     sampling_manager = SamplingManager(sample_settings, "halton")
 
-    generator = JitterRayGenerator(sampling_manager._sampler, 4)
-    intersection = RayMarchingIntersection()
+    generator = JitterRayGenerator(sampling_manager._sampler)
+    intersection = RayMarchingIntersection(max_distance=100)
+    test_intersection = InverseSDFStrategy(max_distance=100)
     interactor = SimpleMaterialInteraction(sampling_manager._sampler)
-    shading = RecursiveLambertShading(ambient_color=Color.from_hex("#24272B"), ambient_intensity=0.67)
+    shading = RecursiveLambertShading(ambient_color=Color.from_hex("#24272B"), ambient_intensity=0.3, shadow_samples=8)
+    test_shading = XRayThicknessShading()
 
     raytracer = Raytracer(
+        max_depth=4,
         sampling_manager=sampling_manager,
         ray_generator=generator,
-        intersection_strategy=intersection,
+        intersection_strategy=test_intersection,
         interaction_strategy=interactor,
-        shading_strategy=shading
+        shading_strategy=test_shading,
+        custom_background=Color(0.0, 0.0, 0.0),
+        enable_scene_background=True
     )
 
     for scene in all_scenes:
         sanitized_name = scene.name.replace(" ", "_").lower()
-        out_path = os.path.join(OUT_DIR, f"{sanitized_name}.png")
-        print(f"Rendering '{scene.name}' -> {out_path} ({scene.camera.width}x{scene.camera.height})")
+        out_path = os.path.join(OUT_DIR, f"{sanitized_name}")
+        print(f"Rendering '{scene.name}' -> {OUT_DIR} ({scene.camera.width}x{scene.camera.height})")
         
         try:
             # 1. Render to Float Array
             raw_img_data = render_process(scene, raytracer)
+            save_image(raw_img_data, out_path=out_path + "_raw.png")
 
             # 2. Post-Process (The Pipeline)
             processed_img = raw_img_data
-            if enable_post_processing:
-                # We chain the effects directly on the numpy array
-                
-                # A. Bloom (Make bright lights glow)
-                processed_img = PostProcessingPipeline.apply_bloom(
-                    processed_img, 
-                    threshold=1, 
-                    intensity=0.3, 
-                    radius=4,
-                    fast=True
-                )
-                
-                # B. Cromatic Aberration (Shifts Red and Blue channels)
-                processed_img = PostProcessingPipeline.apply_chromatic_aberration(
-                    processed_img,
-                    strength=0.5
-                )
+            # We chain the effects directly on the numpy array
+            
+            # A. Bloom (Make bright lights glow)
+            processed_img = PostProcessingPipeline.apply_bloom(
+                processed_img, 
+                threshold=0.8, 
+                intensity=0.05,
+                softness=0.75,
+                radius=1.5,
+                fast=False
+            )
+            
+            # B. Cromatic Aberration (Shifts Red and Blue channels)
+            processed_img = PostProcessingPipeline.apply_chromatic_aberration(
+                processed_img,
+                strength=0
+            )
 
-                # C. Vignette (Darken corners slightly)
-                processed_img = PostProcessingPipeline.apply_vignette(
-                    processed_img, 
-                    strength=0.1
-                )
+            # C. Vignette (Darken corners slightly)
+            processed_img = PostProcessingPipeline.apply_vignette(
+                processed_img, 
+                strength=0.2
+            )
 
-                # D. Tone Mapping (Compress HDR values to 0-1)
-                # Without this, bright spots just clip to white
-                processed_img = PostProcessingPipeline.aces_tone_map(processed_img)
+            # D. Tone Mapping (Compress HDR values to 0-1)
+            # Without this, bright spots just clip to white
+            processed_img = PostProcessingPipeline.aces_tone_map(processed_img)
 
-                # E. Gamma Correction (Linear -> sRGB)
-                # Without this, the image looks too dark
-                processed_img = PostProcessingPipeline.gamma_correct(processed_img, gamma=2.2)
+            # E. Gamma Correction (Linear -> sRGB)
+            # Without this, the image looks too dark
+            processed_img = PostProcessingPipeline.gamma_correct(processed_img, gamma=2.0)
 
             # 3. Save Image
-            save_image(processed_img, out_path=out_path)
+            save_image(processed_img, out_path=out_path + ".png")
             print("-" * 50)
             
         except Exception as e:

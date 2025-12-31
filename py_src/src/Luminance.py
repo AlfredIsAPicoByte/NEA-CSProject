@@ -373,10 +373,10 @@ class Material:
         """
         return cls(
             albedo_color=albedo,
-            absorption_color=absorption_color,
             roughness=roughness,
             metallicness=metallicness,
             ior=ior,
+            absorption_color=absorption_color,
             absorption_strength=absorption_strength,
             is_transparent=True,
             type=MaterialType.GLASS
@@ -402,7 +402,6 @@ class Material:
         """
         return cls(
             albedo_color=albedo,
-            roughness=0,
             emissive_intensity=intensity,
             type=MaterialType.EMISSIVE,
         )
@@ -418,14 +417,14 @@ class Material:
         """
         Calculates the full color of the material by iterating over all lights in the scene.
         """
-        final_color = Color(0.0, 0.0, 0.0, 1.0)
+        if self.type == MaterialType.EMISSIVE:
+            return self.get_emissive_component()
+        
         surface_normal = hit_info.normal
         hit_point = hit_info.point
 
+        direct_light_color = Color(0, 0, 0)
         for light in scene_lights:
-            if self.type == MaterialType.EMISSIVE:
-                break  # Emissive materials do not respond to external light sources
-
             light_dir = light.get_light_direction(hit_point)
             light_dist = np.linalg.norm(light.position - hit_point)
 
@@ -440,12 +439,6 @@ class Material:
             light_attenuation = attenuate_sqr_distance(light_dist) # Using inverse square law for point lights
             light_intensity = light.intensity * light_attenuation
 
-            kS = _schlick_fresnel(
-                    np.clip(np.dot(surface_normal, view_dir), 0.0, 1.0),
-                    self.get_metallic_component().to_np_ndarray()
-                )                               # Specular fraction (Reflected)
-            kD = 1.0 - kS                       # Diffuse fraction (Absorbed/Refracted) 
-
             if self.type == MaterialType.TRANSPARENT:
                 visibility = 1.0
             else:
@@ -456,28 +449,23 @@ class Material:
 
             # Material response based on type
             if self.type == MaterialType.DIFFUSE:
-                diffuse_component = self.get_diffuse_component(light.color, surface_normal, light_dir, light_intensity) * Color.from_array(kD)
-                final_color += diffuse_component * visibility
+                diffuse = self.get_diffuse_component(light.color, light_intensity * visibility, light_dir, surface_normal) 
+                direct_light_color += diffuse
 
             if self.type == MaterialType.SPECULAR:
-                diffuse_component = self.get_diffuse_component(light.color, surface_normal, light_dir, light_intensity)
-                specular_component = self.get_specular_component(light.color, surface_normal, light_dir, light_intensity, view_dir)
-                final_color += (diffuse_component + specular_component) * visibility
+                diffuse = self.get_diffuse_component(light.color, light_intensity * visibility, light_dir, surface_normal)
+                specular = self.get_specular_component(light.color, light_intensity * visibility, light_dir, surface_normal, view_dir)
+                direct_light_color += diffuse + specular
 
             if self.type == MaterialType.GLASS:
-                specular_component = self.get_specular_component(light.color, surface_normal, light_dir, light_intensity, view_dir)
-                final_color += specular_component * visibility
+                specular = self.get_specular_component(light.color, light_intensity * visibility, light_dir, surface_normal, view_dir)
+                direct_light_color += specular
 
-            if self.type == MaterialType.TRANSPARENT:
-                transparent_component = self.get_transparency_component(light.color)
-                final_color += transparent_component * visibility
-
-        if self.type == MaterialType.EMISSIVE:
-            return self.get_emissive_component()
+        final_color = direct_light_color
         
         return final_color
 
-    def get_diffuse_component(self, incoming_color: Color, surface_normal: np.ndarray, light_dir: np.ndarray, light_intensity: float) -> Color:
+    def get_diffuse_component(self, light_color: Color, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray) -> Color:
         """
         Get the diffuse component (Lambertian). 
         Corrected to respect the Metallic workflow energy conservation.
@@ -489,16 +477,17 @@ class Material:
         
         # 2. ENERGY CONSERVATION: Metals have NO diffuse.
         # As metallic approaches 1.0, diffuse must approach 0.0.
-        diffuse = incoming_color * diffuse * (1.0 - self.metallic)
+        diffuse = light_color * diffuse * (1.0 - self.metallic)
         
         return diffuse
 
-    def get_specular_component(self, incoming_color: Color, surface_normal: np.ndarray, light_dir: np.ndarray, light_intensity: float, view_dir: np.ndarray) -> Color:
+    def get_specular_component(self, light_color: Color, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray, bias: float = 1e-4) -> Color:
         """Get the specular component of the material response using the Micro-Facet BRDF."""
         
         # --- 0. Pre-Calculations and Constants ---
-        alpha = self.roughness * self.roughness
-        alpha_sq = alpha * alpha
+        safe_roughness = max(self.roughness, bias)
+        alpha = safe_roughness ** 2
+        alpha_sq = alpha ** 2
         
         # Halfway Vector (H)
         H = (light_dir + view_dir)
@@ -538,149 +527,108 @@ class Material:
             Fs = Color(0.0, 0.0, 0.0) 
 
         # Final Specular Color: Light Intensity * BRDF * Cosine Term
-        specular = incoming_color * self.specular_intensity * Fs * NdotL * light_intensity
+        specular = light_color * Fs * NdotL * light_intensity * self.specular_intensity
         
         return specular
 
     def get_metallic_component(self, bias: float = 1e-4) -> Color:
         """
-        Calculates the F0 (Base Reflectivity) using Disney's specular tint model.
+        Calculates the F0 (Base Reflectivity) for Fresnel calculations.
         """
-        # 1. Calculate the tint for the dielectric (non-metal) part
-        # Normalize albedo to get just the hue/saturation
-        luminance = self.albedo.r * 0.3 + self.albedo.g * 0.6 + self.albedo.b * 0.1
-        tint_color = self.albedo / (luminance + bias) # Avoid divide by zero
+        # --- 1. Dielectric (Non-Metal) F0 ---
+        # Base reflectivity for plastic/glass/water is approx 0.04 (Linear Grey)
+        F0_dielectric = Color(0.04, 0.04, 0.04)
         
-        # Mix between white (standard plastic) and the tint color based on a 'specular_tint' float slider
-        F0_dielectric_base = Color(0.04, 0.04, 0.04)
-        F0_dielectric_tinted = F0_dielectric_base * tint_color
+        # If the material is very dark, we don't want the F0 to drop to 0.
+        # So we ensure the tinted version maintains some brightness if needed, 
+        # but usually just using Albedo is fine for the tint *color*.
+        # For correct magnitude, we just lerp the *color* of the 0.04 base.
         
-        # If self.specular_tint_amount is 0.0, use white. If 1.0, use the tint.
-        F0_dielectric_final = lerp(F0_dielectric_base, F0_dielectric_tinted, self.specular_tint_amount)
+        # Lerp between Grey (0.04, 0.04, 0.04) and Tinted (0.04 * AlbedoColor)
+        # Note: We normalize albedo to preserve the 0.04 intensity magnitude.
+        max_val = max(self.albedo.r, self.albedo.g, self.albedo.b, bias)
+        albedo_normalized = self.albedo / max_val
+        
+        F0_dielectric_tinted = F0_dielectric * albedo_normalized
+        
+        # Apply the Specular Tint Slider
+        F0_final_dielectric = lerp(F0_dielectric, F0_dielectric_tinted, self.specular_tint_amount)
 
-        # 2. Final Blend using Metallic
-        # If metal, use Albedo. If dielectric, use our new custom tinted F0.
-        return F0_dielectric_final * (1.0 - self.metallic) + self.albedo * self.metallic
+        # --- 2. Metallic F0 ---
+        # Metals use their Albedo directly as F0
+        F0_metal = self.albedo
+
+        # --- 3. Final Blend ---
+        # Lerp between Dielectric (0.04) and Metal (Albedo)
+        final_F0 = lerp(F0_final_dielectric, F0_metal, self.metallic)
+        
+        return final_F0
 
     def get_emissive_component(self) -> Color:
         """Get the emissive color of the material."""
         return self.albedo * self.emissive_intensity
 
-    def get_volumetric_component(self, incoming_color: Color, distance: float) -> Color:
+    def get_volumetric_component(self, light_color: Color, distance: float) -> Color:
         """
         Calculates the volumetric attenuation of light passing through the material
         """
-        transmittance = attenuate_distance_exponential(distance, decay_rate=self.absorption_strength)
-        absorbance = 1.0 - transmittance
-        return attenuate_color(self.absorption_color, absorbance) * attenuate_color(incoming_color, transmittance)
+        sigma = (np.array([1.0, 1.0, 1.0]) - self.absorption_color) * self.absorption_strength
+        
+        # Calculate attenuation per channel
+        # e.g. If Red has high sigma, exp(-high * dist) -> 0.0 (Red is blocked)
+        attenuation = attenuate_distance_exponential(distance, sigma)
+        
+        return light_color * attenuation
 
-    def get_transparency_component(self, incoming_color: Color) -> Color:
+    def get_transparency_component(self, light_color: Color) -> Color:
         """
         Calculates the transparency color contribution of the material.
         """
-        return lerp(incoming_color, self.albedo, 1 - self.albedo.a)
+        return lerp(light_color, self.albedo, 1 - self.albedo.a)
 
-    def apply_ambient_color(self, surface_normal: np.ndarray, view_dir: np.ndarray, ambient_color: Color, ambient_intensity: float) -> Color:
+    def apply_ambient_color(self, ambient_color: Color, ambient_intensity: float) -> Color:
         """
         Calculates the ambient color contribution of the material.
         """
-        NdotV = max(0.0, np.dot(surface_normal, view_dir))
-        ambient = ambient_color * ambient_intensity * NdotV * self.albedo
+        ambient = ambient_color * ambient_intensity * self.albedo
         return ambient
 
-    def evaluate_brdf(self, normal: np.ndarray, view_dir: np.ndarray, light_dir: np.ndarray) -> Color:
+    def evaluate_brdf(self, normal: np.ndarray, view_dir: np.ndarray, light_dir: np.ndarray, bias: float = 1e-4) -> Color:
         """
         Returns the BRDF value (ratio of radiance). 
         Does NOT include NdotL or Light Intensity.
         """
-        # --- 1. Vectors & Dot Products ---
-        N = normal
         V = view_dir
         L = light_dir
         
         H = (V + L)
         # Safety check for degenerate vectors
         h_len = np.linalg.norm(H)
-        if h_len < 1e-6:
+        if h_len < bias:
             return Color(0, 0, 0)
         H = H / h_len
 
         # Clamp dot products to avoid negative values (lighting from behind surface)
-        NdotL = max(np.dot(N, L), 1e-5)
-        NdotV = max(np.dot(N, V), 1e-5)
-        NdotH = max(np.dot(N, H), 1e-5)
-        VdotH = max(np.dot(V, H), 1e-5)
-
-        # --- 2. Parameters ---
-        roughness = max(self.roughness, 0.01) # Prevent divide by zero
-        alpha = roughness * roughness
-        alpha2 = alpha * alpha
-        
-        # --- 3. Specular Term (Cook-Torrance) ---
-        
-        # D (Normal Distribution Function - GGX)
-        denom_d = (NdotH * NdotH * (alpha2 - 1.0) + 1.0)
-        D = alpha2 / (np.pi * denom_d * denom_d)
-
-        # G (Geometric Shadowing - Smith-Schlick-GGX)
-        # Note: k is different for Direct Lighting vs IBL. This is for Direct.
-        k = (roughness + 1.0) ** 2 / 8.0
-        
-        def g_sub(n_dot_x, k_val):
-            return n_dot_x / (n_dot_x * (1.0 - k_val) + k_val)
-            
-        G = g_sub(NdotL, k) * g_sub(NdotV, k)
+        VdotH = max(np.dot(V, H), bias)
 
         # F (Fresnel - Schlick)
         F0 = self.get_metallic_component()
         
         # Compute Fresnel Term (F is a Color because F0 is a Color)
-        # F = F0 + (1 - F0) * (1 - VdotH)^5
-        pow5 = (1.0 - VdotH) ** 5
-        # Manual Color math to ensure safety
-        f_r = F0.r + (1.0 - F0.r) * pow5
-        f_g = F0.g + (1.0 - F0.g) * pow5
-        f_b = F0.b + (1.0 - F0.b) * pow5
-        F_color = Color(f_r, f_g, f_b)
+        F_color = Color.from_array(schlick_fresnel(VdotH, F0.to_np_ndarray()))
 
-        # Cook-Torrance Numerator & Denominator
-        # Specular = (D * G * F) / (4 * NdotL * NdotV)
-        denom_spec = 4.0 * NdotL * NdotV
-        spec_factor = (D * G) / denom_spec
-        
-        specular_term = F_color * spec_factor * self.specular_intensity
+        # Compute PBR Terms
+        specular_term = self.get_specular_component(F_color, 1, light_dir, normal, view_dir)
+        diffuse_term = self.get_diffuse_component(F_color, 1, light_dir, normal) * (1.0/np.pi)
 
-        # --- 4. Diffuse Term (Lambertian) ---
-        
-        # Energy Conservation: 
-        # The light that wasn't reflected (Specular) is available for Diffuse.
-        # kS = F (Fresnel)
-        # kD = 1.0 - kS
-        
-        kd_r = (1.0 - f_r) * (1.0 - self.metallic)
-        kd_g = (1.0 - f_g) * (1.0 - self.metallic)
-        kd_b = (1.0 - f_b) * (1.0 - self.metallic)
-        
-        # Lambert = Albedo / Pi
-        diffuse_term = self.albedo * (1.0 / np.pi)
-        
-        # Multiply kD * diffuse
-        final_diffuse_r = kd_r * diffuse_term.r
-        final_diffuse_g = kd_g * diffuse_term.g
-        final_diffuse_b = kd_b * diffuse_term.b
-        
-        final_diffuse = Color(final_diffuse_r, final_diffuse_g, final_diffuse_b)
-
-        # --- 5. Final Combination ---
-        # Note: NdotL is NOT applied here. It is applied in the lighting loop.
-        return final_diffuse + specular_term
+        return diffuse_term + specular_term
 
     def __repr__(self):
         return (
             f"Material()"
         )
     
-def _schlick_fresnel(cos_theta: float, f0: np.ndarray) -> np.ndarray:
+def schlick_fresnel(cos_theta: float, f0: np.ndarray) -> np.ndarray:
     """
     Calculates the portion of light that is reflected (Specular) vs. absorbed/refracted (Diffuse).
     
@@ -702,11 +650,10 @@ def calculate_redirection_ray(
         new_origin: np.ndarray,
         roughness: float,
         sampler: Sampler,
-        current_refactive_index: float = REFRACTIVE_INDICES['glass'],
-        incoming_refactive_index: float = REFRACTIVE_INDICES['air'],
+        refractive_index_incident: float = REFRACTIVE_INDICES['air'],
+        refactive_index: float = REFRACTIVE_INDICES['glass'],
         seed: Optional[int] = None,
-        bias: float = 1e-4,
-        fast: bool = True
+        bias: float = 1e-4
     ) -> Tuple[Ray, float, bool, bool]:
     rng = np.random.default_rng(seed)
 
@@ -717,17 +664,24 @@ def calculate_redirection_ray(
 
     reflectance = calculate_reflectance(
         np.degrees(np.arccos(-np.dot(unit_normal, unit_dir))),
-        current_refactive_index,
-        incoming_refactive_index,
+        refractive_index_incident,
+        refactive_index,
     )
+
+    if reflectance is None:
+        # Total internal reflection occurred
+        print("Total internal reflection")
+        return *calculate_surface_reflection_ray(unit_normal, unit_dir, new_origin, roughness, sampler), True, NdotL >= 0
 
     # Decide between reflection and refraction based on reflectance
     if rng.random() < reflectance:
         # Reflect
+        print("Reflection")
         return *calculate_surface_reflection_ray(unit_normal, unit_dir, new_origin, roughness, sampler), True, NdotL >= 0
     
     # Refract
-    refracted_vector = calculate_refraction_vector(unit_normal, unit_dir, incoming_refactive_index, current_refactive_index)
+    print("Refracting")
+    refracted_vector = calculate_refraction_vector(unit_normal, unit_dir, refractive_index_incident, refactive_index)
     if not refracted_vector is None:
         redirected_ray = Ray(
             origin=new_origin - unit_normal * bias,
@@ -735,9 +689,11 @@ def calculate_redirection_ray(
             name=f"{incoming_ray.name}_bounce"
         )
 
+        print("Refracted")
         return redirected_ray, False, NdotL >= 0.0
     
     # Total internal reflection occurred
+    print("Total internal reflection")
     return *calculate_surface_reflection_ray(unit_normal, unit_dir, new_origin, roughness, sampler), True, NdotL >= 0
 
 """
