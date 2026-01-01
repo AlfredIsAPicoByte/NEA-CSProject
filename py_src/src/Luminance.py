@@ -6,6 +6,7 @@ from PrimaryStructures import Ray, HitInfo
 from Reflections import calculate_surface_reflection_ray
 from Refractions import calculate_refraction_vector, calculate_reflectance, REFRACTIVE_INDICES
 from Sampling import Sampler
+import logging
 
 def clamp(value, min_value: float|int = 0.0, max_value: float|int = 1.0):
     return max(min_value, min(value, max_value))
@@ -670,17 +671,17 @@ def calculate_redirection_ray(
 
     if reflectance is None:
         # Total internal reflection occurred
-        print("Total internal reflection")
+        logging.debug("Total internal reflection (no refracted vector)")
         return *calculate_surface_reflection_ray(unit_normal, unit_dir, new_origin, roughness, sampler), True, NdotL >= 0
 
     # Decide between reflection and refraction based on reflectance
     if rng.random() < reflectance:
         # Reflect
-        print("Reflection")
+        logging.debug("Redirecting: chosen reflection by Fresnel")
         return *calculate_surface_reflection_ray(unit_normal, unit_dir, new_origin, roughness, sampler), True, NdotL >= 0
     
     # Refract
-    print("Refracting")
+    logging.debug("Redirecting: chosen refraction path")
     refracted_vector = calculate_refraction_vector(unit_normal, unit_dir, refractive_index_incident, refactive_index)
     if not refracted_vector is None:
         redirected_ray = Ray(
@@ -689,11 +690,11 @@ def calculate_redirection_ray(
             name=f"{incoming_ray.name}_bounce"
         )
 
-        print("Refracted")
+        logging.debug("Successfully refracted")
         return redirected_ray, False, NdotL >= 0.0
     
     # Total internal reflection occurred
-    print("Total internal reflection")
+    logging.debug("Total internal reflection (fallback reflection)")
     return *calculate_surface_reflection_ray(unit_normal, unit_dir, new_origin, roughness, sampler), True, NdotL >= 0
 
 """

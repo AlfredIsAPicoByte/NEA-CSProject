@@ -1,4 +1,4 @@
-from typing import List, Tuple, Optional
+from typing import Callable, List, Tuple, Optional
 import numpy as np
 from math import atan2, asin, pi, floor
 
@@ -55,9 +55,16 @@ class Scene:
             
             try:
                 # 2. Check if object has a Signed Distance Function
-                if hasattr(obj.shape, "SignedDistance"):
-                    d = obj.shape.SignedDistance(point)
-                
+                # Support several common method namings used across shapes
+                sdf_fn = None
+                if hasattr(obj.shape, "signed_distance") and callable(getattr(obj.shape, "signed_distance")):
+                    sdf_fn: Callable[[np.ndarray], float] = getattr(obj.shape, "signed_distance")
+                    break
+
+                if sdf_fn is not None:
+                    # Ensure the function returns a float distance for the provided point
+                    d = float(sdf_fn(point))
+
                 # 3. Fallback for non-SDF objects (e.g. Triangle Meshes)
                 # We approximate them using their Bounding Sphere to keep the Ray Marcher alive.
                 # If we don't do this, the Ray Marcher will ignore meshes entirely.
@@ -67,7 +74,7 @@ class Scene:
                     radius = obj.shape.get_bounding_sphere_radius()
                     dist_to_center = np.linalg.norm(point - center)
                     d = dist_to_center - radius
-                    
+
             except Exception:
                 # If math fails on one object, don't crash the whole renderer
                 continue

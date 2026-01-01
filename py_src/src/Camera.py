@@ -31,10 +31,18 @@ class VCamera:
     """
     A virtual camera class used to store properties and process calculations.
     """
-    def __init__ (self, transform: Transform, fov: float, near: float, far: float, width: int, height: int, camType: CameraType = CameraType.PERSPECTIVE, camMode: CameraMode = CameraMode.FIRST_PERSON, name: str = "Camera", id: int = 0):
-        """
-        Initializes the Camera with the given parameters.
-        """
+    def __init__ (
+            self,
+            transform: Transform,
+            fov: float,
+            near: float,
+            far: float,
+            resolution_width: int,
+            resolution_height: int,
+            camera_type: CameraType = CameraType.PERSPECTIVE,
+            camera_mode: CameraMode = CameraMode.FIRST_PERSON,
+            name: str = "Camera"
+        ):
         self.transform = transform
 
         if fov <= 0:
@@ -46,17 +54,16 @@ class VCamera:
         self.near = near
         self.far = far
 
-        self.type = camType
-        self.mode = camMode
+        self.type = camera_type
+        self.mode = camera_mode
 
-        if width <= 0 or height <= 0:
+        if resolution_width <= 0 or resolution_height <= 0:
             raise ValueError("Width and Height must be greater than 0")
-        self.width = width
-        self.height = height
-        self.aspect = Ratio(width, height)
+        self.resolution_width = resolution_width
+        self.resolution_height = resolution_height
+        self.aspect_ratio = Ratio(resolution_width, resolution_height)
 
         self.name = name
-        self.id = id
 
     def get_view_matrix(self) -> np.ndarray:
         # The view matrix is typically the inverse of the camera's global transform
@@ -66,7 +73,7 @@ class VCamera:
         if self.type == CameraType.PERSPECTIVE:
             # Perspective projection matrix calculation
             f = 1.0 / (self.fov / 2).tan()
-            aspect = float(self.aspect)
+            aspect = float(self.aspect_ratio)
             near, far = self.near, self.far
             m = np.array([
                 [f / aspect, 0, 0, 0],
@@ -77,7 +84,7 @@ class VCamera:
             return m
         elif self.type == CameraType.ORTHOGRAPHIC:
             # Orthographic projection matrix calculation
-            right = self.aspect * self.fov
+            right = self.aspect_ratio * self.fov
             left = -right
             top = self.fov
             bottom = -top
@@ -96,14 +103,14 @@ class VCamera:
         return self.get_projection_matrix() * self.get_view_matrix()
     
     def resize(self, width: float, height: float):
-        self.width = width
-        self.height = height
-        self.aspect = Ratio(width, height)
+        self.resolution_width = width
+        self.resolution_height = height
+        self.aspect_ratio = Ratio(width, height)
 
     def resize_aspect(self, aspect: Ratio, scale: float = 1.0):
-        self.aspect = aspect
-        self.width = int(aspect.width * scale)
-        self.height = int(aspect.height * scale)
+        self.aspect_ratio = aspect
+        self.resolution_width = int(aspect.width * scale)
+        self.resolution_height = int(aspect.height * scale)
 
     def get_frustum_planes(self) -> dict:
         """
@@ -133,7 +140,7 @@ class VCamera:
         return {
             "fov_radians": np.radians(self.fov),
             "fov_degrees": self.fov,
-            "aspect": float(self.aspect),
+            "aspect": float(self.aspect_ratio),
             "near": float(self.near),
             "far": float(self.far),
         }
@@ -155,12 +162,12 @@ class VCamera:
         Returns: (origin, direction) both as np.ndarray
         """
         # Normalized device coordinates
-        ndc_x = (2.0 * screen_x) / self.width - 1.0
-        ndc_y = 1.0 - (2.0 * screen_y) / self.height  # Flip Y for OpenGL
+        ndc_x = (2.0 * screen_x) / self.resolution_width - 1.0
+        ndc_y = 1.0 - (2.0 * screen_y) / self.resolution_height  # Flip Y for OpenGL
         
         # Inverse projection to get view-space coordinates
         proj_inv = np.linalg.inv(self.get_projection_matrix())
-        view_x = ndc_x * np.tan(np.radians(self.fov / 2)) * float(self.aspect)
+        view_x = ndc_x * np.tan(np.radians(self.fov / 2)) * float(self.aspect_ratio)
         view_y = ndc_y * np.tan(np.radians(self.fov / 2))
         
         # View-space ray
@@ -193,8 +200,8 @@ uniform float uFOV;           // Field of view (radians)
 
     def __repr__(self):
         return (f"VCamera(name={self.name}, type={self.type.name}, mode={self.mode.name}, "
-                f"fov={self.fov}, aspect={self.aspect}, near={self.near}, far={self.far}, "
-                f"res={self.width}x{self.height})")
+                f"fov={self.fov}, aspect={self.aspect_ratio}, near={self.near}, far={self.far}, "
+                f"res={self.resolution_width}x{self.resolution_height})")
 
 """
 Camera module: Providing the Camera class with properties, projection types and movement modes.

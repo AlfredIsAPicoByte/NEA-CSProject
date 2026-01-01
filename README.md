@@ -17,3 +17,32 @@ Welcome to the Raycasting for potatoes project! This project explores the fascin
 - **C++**: For performance-critical components and the application functions.
 - **Graphics Libraries**: OpenGL for handling 2D/3D objects.
 - **Window Management**: GLFW for handling the user interfaces and user inputs.
+
+## Quickstart (Python)
+
+A short quickstart to activate the project virtual environment and run the renderer.
+
+- Activate the virtual environment (bash/zsh):
+
+```bash
+source .venv/bin/activate
+```
+
+- Install Python dependencies:
+
+```bash
+pip install -r py_src/requirements.txt
+```
+
+- Run the renderer (writes images into `benchmark/simple_scene`):
+
+```bash
+python py_src/main.py
+```
+
+- Or run without activating the venv (explicit path):
+
+```bash
+/workspaces/NEA-CSProject/.venv/bin/python -m pip install -r py_src/requirements.txt
+/workspaces/NEA-CSProject/.venv/bin/python py_src/main.py
+```

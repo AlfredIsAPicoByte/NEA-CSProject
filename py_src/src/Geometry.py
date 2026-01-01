@@ -31,8 +31,8 @@ class Shape(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    def signed_distance(self, ray: Ray) -> float:
-        """Signed distance for rays (negative inside, positive outside)."""
+    def check_ray_intersection(self, ray: Ray) -> bool:
+        """Return True if the Ray intersects the shape (analytical intersection helper)."""
         raise NotImplementedError
 
     def get_distance(self, point: np.ndarray) -> float:
@@ -197,7 +197,7 @@ class Circle(Shape2D):
     def signed_distance(self, point: np.ndarray) -> float:
         return np.linalg.norm(point - self.transform.position) - self.radius
 
-    def signed_distance(self, ray: Ray) -> bool:
+    def check_ray_intersection(self, ray: Ray) -> bool:
         d = ray.orientation
         s = ray.origin - self.transform.position
         a = np.dot(d, d)
