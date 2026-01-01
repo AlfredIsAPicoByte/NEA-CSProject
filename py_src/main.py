@@ -6,7 +6,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from src.RenderingAlgorithims import Algorithm
-from src.Raytracing import Raytracer, JitterRayGenerator, RayMarchingIntersection, InverseSDFStrategy, SimpleMaterialInteraction, RecursiveLambertShading, XRayThicknessShading
+from src.Raytracing import Raytracer, JitterRayGenerator, RayMarchingIntersection, InverseSDFStrategy, TerminalInteraction, StandardInteraction, RecursiveLambertShading, XRayThicknessShading
 from src.Sampling import SamplingManager, SampleSettings, PixelFilter
 from src.PostProcessing import PostProcessingPipeline
 from src.Scene import Scene
@@ -74,16 +74,17 @@ if __name__ == "__main__":
     generator = JitterRayGenerator(sampling_manager._sampler)
     intersection = RayMarchingIntersection(max_distance=100)
     test_intersection = InverseSDFStrategy(max_distance=100)
-    interactor = SimpleMaterialInteraction(sampling_manager._sampler)
+    interactor = StandardInteraction(sampling_manager._sampler)
+    test_interactor = TerminalInteraction(sampling_manager._sampler)
     shading = RecursiveLambertShading(ambient_color=Color.from_hex("#24272B"), ambient_intensity=0.3, shadow_samples=8)
     test_shading = XRayThicknessShading()
 
     raytracer = Raytracer(
-        max_depth=4,
+        max_depth=1,
         sampling_manager=sampling_manager,
         ray_generator=generator,
         intersection_strategy=test_intersection,
-        interaction_strategy=interactor,
+        interaction_strategy=test_interactor,
         shading_strategy=test_shading,
         custom_background=Color(0.0, 0.0, 0.0),
         enable_scene_background=True
@@ -91,7 +92,7 @@ if __name__ == "__main__":
 
     for scene in all_scenes:
         sanitized_name = scene.name.replace(" ", "_").lower()
-        out_path = os.path.join(OUT_DIR, f"{sanitized_name}")
+        out_path = os.path.join(OUT_DIR, f"{sanitized_name}_python")
         print(f"Rendering '{scene.name}' -> {OUT_DIR} ({scene.camera.width}x{scene.camera.height})")
         
         try:

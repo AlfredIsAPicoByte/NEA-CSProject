@@ -5,7 +5,7 @@ from math import atan2, asin, pi, floor
 from PrimaryStructures import Ray, HitInfo
 from Camera import VCamera
 from Geometry import VObject
-from Luminance import LightSource, Color, Material
+from Luminance import LightSource, Color
 
 class Scene:
     def __init__(self, name: str = "Scene", camera: Optional[VCamera] = None, **kwargs):
