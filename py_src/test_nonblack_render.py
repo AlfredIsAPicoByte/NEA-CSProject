@@ -2,7 +2,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
 from test_scenes import get_minimal_scene
-from src.Raytracing import Raytracer, JitterRayGenerator, RayMarchingIntersection, SimpleMaterialInteraction, RecursiveLambertShading
+from src.Raytracing import Raytracer, JitterRayGenerator, RayMarchingIntersection, StandardInteraction, RecursiveLambertShading
 from src.Sampling import SamplingManager, SampleSettings, PixelFilter
 
 
@@ -16,7 +16,7 @@ def test_minimal_scene_not_all_background():
         sampling_manager=sampling_manager,
         ray_generator=JitterRayGenerator(sampling_manager._sampler),
         intersection_strategy=RayMarchingIntersection(max_distance=100),
-        interaction_strategy=SimpleMaterialInteraction(sampling_manager._sampler),
+        interaction_strategy=StandardInteraction(sampling_manager._sampler),
         shading_strategy=RecursiveLambertShading(),
         custom_background=scene.get_background_color((0, 0, -1)),
         enable_scene_background=True

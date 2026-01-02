@@ -11,7 +11,7 @@ sys.path.insert(0, current_dir)
 # --- 1. IMPORTS ---
 from src.PrimaryStructures import Ray, Transform, Ratio
 from src.Geometry import VObject, Sphere, SphereFactory, CircleFactory, ShapeFactory
-from src.Luminance import Color, LightSource, ColorGradient, Material
+from src.Luminance import LightSource, Color, ColorGradient, PBRMaterial
 from src.Camera import VCamera, CameraType
 from src.Scene import Scene
 from src.Raytracing import BasicLambertShading, Raytracer
@@ -124,13 +124,13 @@ def test_camera_logic():
     transform = Transform(np.zeros(3), np.zeros(3), np.ones(3))
     cam = VCamera(transform, 90, 0.1, 1000, 1440, 810)
     
-    cam.aspect.simplify()
-    assert cam.aspect.width == 16 and cam.aspect.height == 9 # Assuming internally simplified
-    
+    cam.aspect_ratio.simplify()
+    assert cam.aspect_ratio.width == 16 and cam.aspect_ratio.height == 9 # Assuming internally simplified
+
     # Test Resize
     cam.resize_aspect(Ratio(4, 3), 110)
-    cam.aspect.simplify()
-    assert cam.aspect.width == 4 and cam.aspect.height == 3
+    cam.aspect_ratio.simplify()
+    assert cam.aspect_ratio.width == 4 and cam.aspect_ratio.height == 3
 
 def test_ray_shape_intersection():
     sphere = SphereFactory().create(np.zeros(3), 1)
@@ -171,14 +171,17 @@ def test_ambient_lighting():
         fov=60,
         near=0.1,
         far=100,
-        width=4, height=4,
-        camera_type=CameraType.PERSPECTIVE)
+        resolution_width=4, resolution_height=4,
+        camera_type=CameraType.PERSPECTIVE
+    )
     light = LightSource(position=np.array([10,10,-10]), color=Color(1,1,1), intensity=0.5)
-    material = Material.create_diffuse(
+    material = PBRMaterial.create_diffuse(
         albedo=Color(0.8, 0.8, 0.8),
         roughness=0.5,
-    )
-    sphere = VObject(SphereFactory().create(np.array([0,0,0]), 1), Transform(np.zeros(3), np.zeros(3), np.ones(3)), material)
+    ).data
+    sphere = VObject(SphereFactory().create(np.array([0,0,0]), 1), Transform(np.zeros(3), np.zeros(3), np.ones(3)))
+    # Attach PBR data to shape for compatibility
+    sphere.shape.material = material
     scene = Scene(name="ambient_test", camera=cam, objects=[sphere], lights=[
         light
     ], background_color=Color(0, 0, 0))
