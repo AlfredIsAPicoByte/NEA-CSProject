@@ -265,10 +265,34 @@ class Triangle(Shape2D):
         self.normal = unit(np.cross(edge1, edge2))
         self.transform.position = (self.v1 + self.v2 + self.v3) / 3.0
 
+    def validate(self, bias: float = 1e-6):
+        """Check for degeneracy."""
+        area = self.area
+        if area < bias:
+            raise ValueError("Triangle is degenerate (collinear or zero area)")
+    
+    def signed_distance(self, point: np.ndarray) -> float:
+        """Unsigned distance to triangle (simplified: distance to closest edge/vertex)."""
+        # For exact signed distance, would need plane equation + edge tests
+        return self.get_distance(point)
+
+    def get_distance(self, point: np.ndarray, bias: float = 1e-10) -> float:
+        def point_to_segment_dist(p, a, b):
+            ab = b - a
+            ap = p - a
+            ab_sq = np.dot(ab, ab)
+            if ab_sq < bias:
+                return np.linalg.norm(ap)
+            t = np.clip(np.dot(ap, ab) / ab_sq, 0, 1)
+            return np.linalg.norm(p - (a + t * ab))
+        
+        d1 = point_to_segment_dist(point, self.v1, self.v2)
+        d2 = point_to_segment_dist(point, self.v2, self.v3)
+        d3 = point_to_segment_dist(point, self.v3, self.v1)
+        return min(d1, d2, d3)
+
     @classmethod
     def unit_sdf(cls, point: np.ndarray) -> float:
-        # Unit Right Triangle SDF logic (simplified placeholder for brevity)
-        # Real implementation is complex, see previous response
         return max(abs(point[2]), max(point[0], max(point[1], 1 - point[0] - point[1])) if point[0]>0 and point[1]>0 else 0)
 
     def convex_hull(self, resolution: int = 0) -> List[np.ndarray]:
@@ -280,13 +304,45 @@ class Triangle(Shape2D):
         # ... logic for distance to triangle ...
         return 0.0 # Placeholder: Insert full logic from previous step
 
-    # ... (Include intersection methods from previous response) ...
-    def check_ray_intersection(self, ray: Ray) -> bool:
-        # Moller-Trumbore logic
-        return True # Placeholder
+    def check_ray_intersection(self, ray: Ray, bias: float = 1e-10) -> bool:
+        edge1 = self.v2 - self.v1
+        edge2 = self.v3 - self.v1
+        h = np.cross(ray.orientation, edge2)
+        a = np.dot(edge1, h)
+        
+        if abs(a) < bias:
+            return False
+        
+        f = 1.0 / a
+        s = ray.origin - self.v1
+        u = f * np.dot(s, h)
+        if u < 0 or u > 1:
+            return False
+        
+        q = np.cross(s, edge1)
+        v = f * np.dot(ray.orientation, q)
+        if v < 0 or u + v > 1:
+            return False
+        
+        t = f * np.dot(edge2, q)
+        return t > bias
 
-    def get_ray_intersections(self, ray: Ray) -> List[np.ndarray]:
-        return [] # Placeholder
+    def get_ray_intersections(self, ray: Ray, bias: float = 1e-10) -> List[np.ndarray]:
+        if not self.check_ray_intersection(ray):
+            return []
+        
+        edge1 = self.v2 - self.v1
+        edge2 = self.v3 - self.v1
+        h = np.cross(ray.orientation, edge2)
+        a = np.dot(edge1, h)
+        f = 1.0 / a
+        s = ray.origin - self.v1
+        u = f * np.dot(s, h)
+        q = np.cross(s, edge1)
+        v = f * np.dot(ray.orientation, q)
+        t = f * np.dot(edge2, q)
+        
+        return [ray.point_at(t)] if t > bias else []
 
     def get_normal(self, point: np.ndarray) -> np.ndarray:
         return self.normal
@@ -640,13 +696,80 @@ class Cube(Shape3D):
                     
         return corners
 
-    # ... (Standard Cube methods) ...
-    def check_ray_intersection(self, ray: Ray) -> bool:
-        # Slab method
-        return True
+    def check_ray_intersection(self, ray: Ray, local_min: float = -0.5, local_max: float = 0.5) -> bool:
+        """
+        Checks intersection using the Slab Method against a local AABB.
+        Defaults to a unit cube centered at origin (-0.5 to 0.5).
+        """
+        # 1. Transform Ray to Local Space
+        # Note: We do NOT normalize the local_dir. This allows 't' to match world units.
+        local_origin = self.inverse_transform_point(ray.origin)
+        local_dir = self.inverse_transform_direction(ray.direction, normalize=False)
+        
+        # 2. Slab Method Setup
+        # Avoid division by zero: replace 0 with a tiny epsilon or use numpy's inf handling
+        with np.errstate(divide='ignore'):
+            inv_dir = 1.0 / local_dir
+            
+        t1 = (local_min - local_origin) * inv_dir
+        t2 = (local_max - local_origin) * inv_dir
 
-    def get_ray_intersections(self, ray: Ray) -> List[np.ndarray]:
-        return []
+        # 3. Find intersection interval
+        t_min = np.minimum(t1, t2)
+        t_max = np.maximum(t1, t2)
+        
+        # Largest 'entry' time and smallest 'exit' time across all axes
+        t_enter = np.max(t_min)
+        t_exit  = np.min(t_max)
+
+        # 4. Check validity
+        # Hit if t_exit >= t_enter and the hit is in front of the ray (t_exit >= 0)
+        return t_exit >= t_enter and t_exit >= 0
+
+    def get_ray_intersections(self, ray: Ray, local_min: float = -0.5, local_max: float = 0.5) -> List[np.ndarray]:
+        """
+        Returns a list of intersection points (in World Space) using the Slab Method.
+        Returns 0, 1, or 2 points sorted by distance.
+        """
+        # 1. Transform Ray to Local Space
+        local_origin = self.inverse_transform_point(ray.origin)
+        local_dir = self.inverse_transform_direction(ray.direction, normalize=False)
+
+        # 2. Slab Method
+        with np.errstate(divide='ignore'):
+            inv_dir = 1.0 / local_dir
+        
+        t1 = (local_min - local_origin) * inv_dir
+        t2 = (local_max - local_origin) * inv_dir
+        
+        t_min = np.minimum(t1, t2)
+        t_max = np.maximum(t1, t2)
+        
+        t_enter = np.max(t_min)
+        t_exit  = np.min(t_max)
+        
+        # 3. Validate Intersection
+        if t_exit < t_enter or t_exit < 0:
+            return []
+            
+        intersections = []
+        
+        # 4. Calculate World Points
+        # Because we didn't normalize local_dir, these 't' values apply directly to the World Ray.
+        # P_world = Origin_world + t * Direction_world
+        
+        # Check entry point (must be >= 0 to be valid)
+        if t_enter >= 0:
+            p_enter = ray.origin + (ray.direction * t_enter)
+            intersections.append(p_enter)
+            
+        # Check exit point (only if it's distinct from entry, e.g. not a grazing edge, and valid)
+        # Using a small epsilon for float comparison
+        if t_exit >= 0 and (len(intersections) == 0 or abs(t_exit - t_enter) > 1e-6):
+            p_exit = ray.origin + (ray.direction * t_exit)
+            intersections.append(p_exit)
+            
+        return intersections
 
     def get_normal(self, point: np.ndarray) -> np.ndarray:
         # Box normal logic
@@ -822,7 +945,7 @@ class VObject:
     def __post_init__(self):
         if self.transform is None:
             # Assuming Transform is defined
-            self.transform = Transform(np.zeros(3), np.zeros(3), np.ones(3))
+            self.transform = Transform(np.zeros(3), np.array(0, 0, 1), np.ones(3))
         
         # Ensure the shape (if present) shares this transform or follows it
         # Depending on your architecture, you might want: 
@@ -839,134 +962,6 @@ class VObject:
         if child in self.children:
             self.children.remove(child)
             child.parent = None
-
-    def get_world_to_local_matrix(self) -> np.ndarray:
-        """
-        Computes the matrix that transforms World Space coordinates 
-        to this object's Local Space.
-        Formula: Inverse(ParentWorldMatrix * LocalMatrix)
-        """
-        # 1. Get the full forward matrix (Local -> World)
-        # This uses the property we defined earlier
-        forward_mat = self.world_matrix
-        
-        # 2. Calculate the inverse
-        # Note: If you have a scaling factor of 0, this will raise an error.
-        try:
-            inv_mat = np.linalg.inv(forward_mat)
-        except np.linalg.LinAlgError:
-            print(f"Warning: VObject '{self.name}' has a singular matrix (scale=0?). Returning Identity.")
-            return np.eye(4)
-            
-        return inv_mat
-
-    def inverse_transform_point(self, point_world: np.ndarray) -> np.ndarray:
-        """
-        Transforms a point from World Space into this object's Local Space.
-        Affected by Translation, Rotation, and Scale.
-        
-        Args:
-            point_world: np.array [x, y, z]
-        """
-        inv_mat = self.get_world_to_local_matrix()
-        
-        # Convert to homogeneous coordinates [x, y, z, 1.0]
-        # w=1.0 ensures translation is applied
-        p_homogenous = np.append(point_world, 1.0)
-        
-        # Multiply: Matrix * Vector
-        p_local_h = np.dot(inv_mat, p_homogenous)
-        
-        # Return Cartesian [x, y, z]
-        return p_local_h[:3]
-
-    def inverse_transform_direction(self, direction_world: np.ndarray) -> np.ndarray:
-        """
-        Transforms a direction vector from World Space into Local Space.
-        Affected by Rotation and Scale, but **NOT Translation**.
-        """
-        inv_mat = self.get_world_to_local_matrix()
-        
-        # Convert to homogeneous coordinates [x, y, z, 0.0]
-        # w=0.0 ensures translation is IGNORED
-        d_homogenous = np.append(direction_world, 0.0)
-        
-        d_local_h = np.dot(inv_mat, d_homogenous)
-        
-        return d_local_h[:3]
-    
-    def transform_normal(self, normal: np.ndarray) -> np.ndarray:
-        """
-        Correctly transforms a surface normal, handling non-uniform scaling.
-        """
-        # 1. Extract the top-left 3x3 (Rotation & Scale)
-        upper_left_3x3 = self.world_matrix[:3, :3]
-        
-        # 2. Calculate Inverse Transpose
-        # Math: (M^-1)^T
-        normal_matrix = np.linalg.inv(upper_left_3x3).T
-        
-        # 3. Multiply
-        transformed_normal = normal_matrix @ normal
-        
-        # 4. Re-normalize (scaling might have changed the length)
-        return transformed_normal / np.linalg.norm(transformed_normal)
-
-    @property
-    def world_matrix(self) -> np.ndarray:
-        """
-        Computes the full 4x4 Model Matrix (Local -> World).
-        Recursive: Parent_World_Matrix * Local_Matrix
-        """
-        # Get local matrix from the Transform component
-        # Assuming transform.get_matrix() returns a 4x4 numpy array
-        local_mat = self.transform.get_base_matrix() 
-        
-        if self.parent:
-            parent_mat = self.parent.world_matrix
-            return np.dot(parent_mat, local_mat)
-        
-        return local_mat
-
-    @property
-    def world_position(self) -> np.ndarray:
-        """
-        Get absolute world position extracted from the World Matrix.
-        Correctly accounts for parent rotation and scale.
-        """
-        mat = self.world_matrix
-        # The translation is usually the last column of the matrix
-        return mat[:3, 3]
-
-    @property
-    def position(self) -> np.ndarray:
-        """Get local position (relative to parent)."""
-        return self.transform.position
-
-    @position.setter
-    def position(self, value: np.ndarray) -> None:
-        """Set local position."""
-        self.transform.position = np.asarray(value, dtype=float)
-
-    @property
-    def rotation(self) -> np.ndarray:
-        """Get local rotation."""
-        return self.transform.rotation
-
-    @rotation.setter
-    def rotation(self, value: np.ndarray) -> None:
-        """Set local rotation."""
-        self.transform.rotation = np.asarray(value, dtype=float)
-
-    @property
-    def scale(self) -> np.ndarray:
-        """Get local scale."""
-        return self.transform.scale
-
-    @scale.setter
-    def scale(self, value: np.ndarray) -> None:
-        """Set local scale."""
-        self.transform.scale = np.asarray(value, dtype=float)
 
     def __repr__(self):
         shape_name = self.shape.name if self.shape else "None"
