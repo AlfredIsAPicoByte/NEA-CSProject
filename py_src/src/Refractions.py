@@ -1,7 +1,8 @@
 import numpy as np
 import math
-from typing import Tuple, Optional
-from PrimaryStructures import Ratio
+from typing import Optional
+
+from CommonUtils import unit, deg_to_rad, safe_asin, rad_to_deg
 
 REFRACTIVE_INDICES = {
     # --- Common Gases (at STP) ---
@@ -106,23 +107,6 @@ REFRACTIVE_INDICES = {
 
 SPEED_OF_LIGHT = 299792458 # m/s in a vacuum
 
-def _safe_norm(v: np.ndarray, eps: float = 1e-8) -> float:
-    return np.linalg.norm(v) + eps
-
-def _unit(v: np.ndarray, eps: float = 1e-8) -> np.ndarray:
-    return v / _safe_norm(v, eps)
-
-def _deg_to_rad(deg: float) -> float:
-    return math.radians(deg)
-
-def _rad_to_deg(rad: float) -> float:
-    return math.degrees(rad)
-
-def _safe_asin(value: float) -> Optional[float]:
-    if value > 1.0 or value < -1.0:
-        return None
-    return math.asin(value)
-
 def convert_SI_speed_to_index(
         speed: float,
         speed_of_light: float = SPEED_OF_LIGHT
@@ -163,15 +147,15 @@ def calculate_angle_of_refraction(
         refractive_index_incident (float): The refractive index of the first medium.
         refractive_index (float): The refractive index of the second medium.
     """
-    angle_of_incidence_rad = _deg_to_rad(angle_of_incidence)
+    angle_of_incidence_rad = deg_to_rad(angle_of_incidence)
 
     sin_theta_t = (refractive_index_incident / refractive_index) * math.sin(angle_of_incidence_rad)
-    asin_result = _safe_asin(sin_theta_t)
+    asin_result = safe_asin(sin_theta_t)
 
     if asin_result is None:
         return None
 
-    return _rad_to_deg(asin_result)
+    return rad_to_deg(asin_result)
 
 def calculate_reflectance(
         incident_angle: float,
@@ -192,8 +176,8 @@ def calculate_reflectance(
       # Total internal reflection occured
       return None
     
-    incident_rad = _deg_to_rad(incident_angle)
-    transmission_rad = _deg_to_rad(transmission_angle_deg)
+    incident_rad = deg_to_rad(incident_angle)
+    transmission_rad = deg_to_rad(transmission_angle_deg)
     cos_incident = math.cos(incident_rad)
     cos_transmission = math.cos(transmission_rad)
 
@@ -235,8 +219,8 @@ def calculate_refractive_index(
         angle_of_refraction (float): The angle of refraction in degrees.
         refractive_index_incident (float): The refractive index of the first medium.
     """
-    angle_inc_rad = _deg_to_rad(angle_of_incidence)
-    angle_ref_rad = _deg_to_rad(angle_of_refraction)
+    angle_inc_rad = deg_to_rad(angle_of_incidence)
+    angle_ref_rad = deg_to_rad(angle_of_refraction)
 
     return (refractive_index_incident * math.sin(angle_inc_rad)) / (math.sin(angle_ref_rad) + bias)
 
@@ -254,8 +238,8 @@ def calculate_refractive_index_incident(
         angle_of_refraction (float): The angle of refraction in degrees.
         refractive_index (float): The refractive index of the second medium.
     """
-    angle_inc_rad = _deg_to_rad(angle_of_incidence)
-    angle_ref_rad = _deg_to_rad(angle_of_refraction)
+    angle_inc_rad = deg_to_rad(angle_of_incidence)
+    angle_ref_rad = deg_to_rad(angle_of_refraction)
 
     # From Snell: n1*sin(theta1) = n2*sin(theta2) => n1 = n2*sin(theta2)/sin(theta1)
     return refractive_index * math.sin(angle_ref_rad) / (math.sin(angle_inc_rad) + bias)
@@ -265,7 +249,7 @@ def calculate_critical_angle(
         refractive_index: float
     ) -> float:
     """
-    Calculate the critical angle for total internal reflection.
+    Calculate the critical angle for total internal reflection in degrees.
 
     Attributes:
         refractive_index_incident (float): The refractive index of the first medium.
@@ -312,30 +296,48 @@ def calculate_refraction_vector(
         bias: float = 1e-8
     ) -> Optional[np.ndarray]:
     """
-    Calculate the outgoing angle of the refracted ray.
-
-    Attributes:
-        surface_normal (ndarray): the surface_normal of the surface of interaction
-        incoming_ray (Ray): the incoming ray
+    Calculate the outgoing angle of the refracted ray using Snell's Law.
+    Handles both entering and exiting cases by ensuring the normal opposes the ray.
     """
-    unit_normal = _unit(surface_normal, bias)
-    unit_direction = _unit(direction, bias)
+    # 1. Normalize inputs
+    unit_direction = unit(direction, bias)
+    unit_normal = unit(surface_normal, bias)
 
-    cos_theta_i = -np.dot(unit_normal, unit_direction)
-    sin_theta_i2 = 1.0 - cos_theta_i ** 2
+    # 2. Check orientation: Are we entering or exiting?
+    # Dot product > 0 means the ray and normal point in the same direction (Exiting).
+    dt = np.dot(unit_direction, unit_normal)
+    
+    # If we are exiting, the normal is pointing 'out' with the ray.
+    # We need to flip it to point 'in' against the ray for the formula to work.
+    if dt > 0:
+        eff_normal = -unit_normal
+        cos_theta_i = dt # dot(I, N) is already positive here
+    else:
+        eff_normal = unit_normal
+        cos_theta_i = -dt # We want positive cosine (angle < 90)
 
-    n_ratio = Ratio(refractive_index_incident , refractive_index)
-    sin_theta_t2 = n_ratio.value ** 2 * sin_theta_i2
+    # 3. Calculate Ratio (eta)
+    # The caller is responsible for swapping n1/n2 based on 'is_inside',
+    # so we just divide the incident by the transmission index.
+    eta = refractive_index_incident / refractive_index
+
+    # 4. Check for Total Internal Reflection (TIR)
+    # sin^2(theta_t) = eta^2 * sin^2(theta_i)
+    # sin^2(theta_i) = 1 - cos^2(theta_i)
+    sin_theta_t2 = (eta * eta) * (1.0 - cos_theta_i * cos_theta_i)
 
     if sin_theta_t2 > 1.0:
-        # Total internal reflection occurred
+        # TIR: The ray cannot escape; it reflects entirely inside.
         return None
 
+    # 5. Calculate Refraction Vector
+    # T = eta * I + (eta * cos_i - sqrt(1 - sin_t^2)) * N
     cos_theta_t = math.sqrt(1.0 - sin_theta_t2)
-    refracted_vector = n_ratio.value * unit_direction + (n_ratio.value * cos_theta_i - cos_theta_t) * unit_normal
-    refracted_vector = _unit(refracted_vector, bias)
+    
+    refracted_vector = (eta * unit_direction) + \
+                       ((eta * cos_theta_i) - cos_theta_t) * eff_normal
 
-    return refracted_vector
+    return unit(refracted_vector, bias)
 
 """
 Refraction module: Provides functions to calculate refraction angles, refractive indices, and refracted ray directions based on Snell's Law.

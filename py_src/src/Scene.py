@@ -1,11 +1,11 @@
-from typing import List, Tuple, Optional
+from typing import Callable, List, Tuple, Optional
 import numpy as np
 from math import atan2, asin, pi, floor
 
 from PrimaryStructures import Ray, HitInfo
 from Camera import VCamera
 from Geometry import VObject
-from Luminance import LightSource, Color, Material
+from Luminance import LightSource, Color
 
 class Scene:
     def __init__(self, name: str = "Scene", camera: Optional[VCamera] = None, **kwargs):
@@ -34,29 +34,52 @@ class Scene:
     def get_lights(self):
         return list(self.lights)
 
-    def distance_estimator(self, point: np.ndarray, ignore: Optional[VObject]) -> Tuple[Optional[VObject], float]:
+    def distance_estimator(self, point: np.ndarray, exclude_obj: Optional[VObject] = None) -> Tuple[Optional[VObject], float]:
         """
-        Evaluates the Scene SDF. Returns (closest_object, distance).
-        Used by the Ray Marcher.
+        Evaluates the Scene SDF to find the closest object and the distance to it.
+        
+        Args:
+            point: The 3D point to check.
+            exclude_obj: (Optional) An object to ignore. 
+                         Crucial for preventing self-shadowing (shadow acne).
         """
         min_d = float("inf")
         closest = None
         
         for obj in self.objects:
-            # 1. Ignore: remove an object from the chacke (for glass materials)
-            if ignore is obj:
-                continue
-
-            # 2. Safety Check: Only call SignedDistance on shapes that support it
-            if not hasattr(obj.shape, 'SignedDistance'):
+            # 1. Skip the object we are starting from (Self-Shadowing fix)
+            if exclude_obj is not None and obj is exclude_obj:
                 continue
                 
+            d = float("inf")
+            
             try:
-                d = obj.shape.SignedDistance(point)
+                # 2. Check if object has a Signed Distance Function
+                # Support several common method namings used across shapes
+                sdf_fn = None
+                if hasattr(obj.shape, "signed_distance") and callable(getattr(obj.shape, "signed_distance")):
+                    sdf_fn: Callable[[np.ndarray], float] = getattr(obj.shape, "signed_distance")
+                    break
+
+                if sdf_fn is not None:
+                    # Ensure the function returns a float distance for the provided point
+                    d = float(sdf_fn(point))
+
+                # 3. Fallback for non-SDF objects (e.g. Triangle Meshes)
+                # We approximate them using their Bounding Sphere to keep the Ray Marcher alive.
+                # If we don't do this, the Ray Marcher will ignore meshes entirely.
+                elif hasattr(obj.shape, "get_bounding_sphere_radius"):
+                    # Simple sphere distance approximation
+                    center = obj.transform.position # Assuming global position
+                    radius = obj.shape.get_bounding_sphere_radius()
+                    dist_to_center = np.linalg.norm(point - center)
+                    d = dist_to_center - radius
+
             except Exception:
+                # If math fails on one object, don't crash the whole renderer
                 continue
             
-            # 3. Standard SDF Union (Min)
+            # 4. Update Closest
             if d < min_d:
                 min_d = d
                 closest = obj
@@ -105,7 +128,7 @@ class Scene:
 
         # 4. Resolve Normal
         normal = np.array([0.0, 1.0, 0.0]) # Default up fallback
-        if hasattr(closest_obj.shape, 'GetNormal'):
+        if hasattr(closest_obj.shape, 'GetNormal') and callable(closest_obj.shape.GetNormal):
             normal = closest_obj.shape.GetNormal(closest_hit)
             
             # Normalize safely

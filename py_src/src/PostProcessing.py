@@ -1,17 +1,67 @@
 import numpy as np
 from typing import List, Tuple, Dict, Any
+from dataclasses import dataclass, field
 from scipy.ndimage import gaussian_filter, uniform_filter
 
 from Sampling import SampleSettings, Sample
 from Luminance import clamp
+
+@dataclass
+class BloomSettings:
+    enabled: bool = False
+    threshold: float = 1.0
+    softness: float = 0.5
+    intensity: float = 0.8
+    radius: int = 4
+    fast: bool = True
+
+@dataclass
+class ChromaticAberrationSettings:
+    enabled: bool = False
+    strength: float = 0.005 # strength is usually a small float, not int
+
+@dataclass
+class VignetteSettings:
+    enabled: bool = False
+    strength: float = 0.5
+    curve: float = 1.0
+
+@dataclass
+class AcesToneMapSettings:
+    enabled: bool = True
+
+@dataclass
+class CustomToneMapSettings:
+    enabled: bool = False
+    # ACES approximate constants (Knarkowicz)
+    a: float = 2.51
+    b: float = 0.03
+    c: float = 2.43
+    d: float = 0.59
+    e: float = 0.14
+
+@dataclass
+class GammaSettings:
+    enabled: bool = True
+    gamma: float = 2.2
+
+@dataclass
+class PostProcessingSettings:
+    # We use default_factory to ensure every new instance gets its own fresh settings
+    bloom: BloomSettings = field(default_factory=BloomSettings)
+    chromatic_abberation: ChromaticAberrationSettings = field(default_factory=ChromaticAberrationSettings)
+    vignette: VignetteSettings = field(default_factory=VignetteSettings)
+    aces_tone_map: AcesToneMapSettings = field(default_factory=AcesToneMapSettings)
+    custom_tone_map: CustomToneMapSettings = field(default_factory=CustomToneMapSettings)
+    gamma_correction: GammaSettings = field(default_factory=GammaSettings)
 
 class PostProcessingPipeline:
     @staticmethod
     def reconstruct_from_samples(
         width: int,
         height: int,
-        pixel_samples_and_colors: List[List[Tuple['Sample', np.ndarray]]], # Using string 'Sample' for forward ref
-        settings: 'SampleSettings'
+        pixel_samples_and_colors: List[List[Tuple[Sample, np.ndarray]]], # Using string 'Sample' for forward ref
+        settings: SampleSettings
     ) -> np.ndarray:
         """
         Phase 1: Film Reconstruction.
@@ -88,23 +138,22 @@ class PostProcessingPipeline:
         return img_array + (blurred_pass * intensity)
 
     @staticmethod
-    def apply_chromatic_aberration(img_array: np.ndarray, strength: float = 2.0) -> np.ndarray:
+    def apply_chromatic_aberration(img_array: np.ndarray, strength: int = 2) -> np.ndarray:
         """
         Phase 2: Lens Imperfections.
-        Shifts Red and Blue channels in opposite directions.
+        int(strength)s Red and Blue channels in opposite directions.
         """
-        shift = int(strength)
-        if shift == 0: return img_array
+        if int(strength) == 0: return img_array
         
         out_img = np.copy(img_array)
         
-        # Shift Red Left
-        out_img[:, :-shift, 0] = img_array[:, shift:, 0]
-        out_img[:, -shift:, 0] = img_array[:, -1:, 0] # Clamp edge
+        # int(strength) Red Left
+        out_img[:, :-int(strength), 0] = img_array[:, int(strength):, 0]
+        out_img[:, -int(strength):, 0] = img_array[:, -1:, 0] # Clamp edge
         
-        # Shift Blue Right
-        out_img[:, shift:, 2] = img_array[:, :-shift, 2]
-        out_img[:, :shift, 2] = img_array[:, :1, 2]   # Clamp edge
+        # int(strength) Blue Right
+        out_img[:, int(strength):, 2] = img_array[:, :-int(strength), 2]
+        out_img[:, :int(strength), 2] = img_array[:, :1, 2]   # Clamp edge
         
         return out_img
 
@@ -137,6 +186,10 @@ class PostProcessingPipeline:
         return np.clip((img_array * (a * img_array + b)) / (img_array * (c * img_array + d) + e), 0.0, 1.0)
 
     @staticmethod
+    def custom_tone_map(img_array: np.ndarray, a: float, b: float, c: float, d: float, e: float) -> np.ndarray:
+        return np.clip((img_array * (a * img_array + b)) / (img_array * (c * img_array + d) + e), 0.0, 1.0)
+
+    @staticmethod
     def gamma_correct(img_array: np.ndarray, gamma: float = 2.2) -> np.ndarray:
         """
         Phase 4: Gamma Correction.
@@ -145,49 +198,77 @@ class PostProcessingPipeline:
         return np.power(np.maximum(img_array, 0.0), 1.0 / gamma)
 
     @classmethod
-    def process_and_export(cls, 
-                           pixel_samples: List[List[Tuple['Sample', np.ndarray]]], 
-                           settings: 'SampleSettings',
-                           pipeline_options: Dict[str, Any]
-                           ) -> np.ndarray:
+    def process_and_export(
+            cls, 
+            pixel_samples: List[List[Tuple[Sample, np.ndarray]]], 
+            sample_settings: SampleSettings,
+            pipeline_settings: PostProcessingSettings
+            
+        ) -> np.ndarray:
         """
         Master function to run the entire pipeline from Raw Samples -> Saved 8-bit Image.
         """
-        width = settings.width
-        height = settings.height
+        width = sample_settings.width
+        height = sample_settings.height
         
         # 1. Reconstruct (Raw Samples -> Float Image)
-        print("Reconstructing image from samples...")
-        img = cls.reconstruct_from_samples(width, height, pixel_samples, settings)
+        print(" > Reconstructing image from samples")
+        img = cls.reconstruct_from_samples(width, height, pixel_samples, sample_settings)
         
         # 2. Effects (Linear Space)
-        if pipeline_options.get('bloom_enabled', True):
+        print(" > Applying visual effects")
+        if pipeline_settings.bloom.enabled:
             print("Applying Bloom...")
             img = cls.apply_bloom(
                 img, 
-                threshold=pipeline_options.get('bloom_threshold', 0.9),
-                intensity=pipeline_options.get('bloom_intensity', 0.4),
-                radius=pipeline_options.get('bloom_radius', 3)
+                threshold=pipeline_settings.bloom.threshold,
+                intensity=pipeline_settings.bloom.intensity,
+                softness=pipeline_settings.bloom.softness,
+                radius=pipeline_settings.bloom.radius,
+                fast=pipeline_settings.bloom.fast
             )
 
-        if pipeline_options.get('chromatic_aberration_enabled', False):
+        if pipeline_settings.chromatic_abberation.enabled:
             print("Applying Chromatic Aberration...")
-            img = cls.apply_chromatic_aberration(img, strength=2.0)
+            img = cls.apply_chromatic_aberration(
+                img,
+                strength=pipeline_settings.chromatic_abberation.strength
+            )
 
-        if pipeline_options.get('vignette_enabled', True):
+        if pipeline_settings.vignette.enabled:
             print("Applying Vignette...")
-            img = cls.apply_vignette(img, strength=0.4)
+            img = cls.apply_vignette(
+                img,
+                strength=pipeline_settings.vignette.strength,
+                curve=pipeline_settings.vignette.curve,
+            )
 
         # 3. Tone Mapping (HDR -> LDR)
-        print("Tone Mapping...")
-        img = cls.aces_tone_map(img)
+        print(" > Tone Mapping")
+        if pipeline_settings.aces_tone_map.enabled:
+            print("Applying ACES tone mapping...")
+            img = cls.aces_tone_map(img)
+        elif pipeline_settings.custom_tone_map.enabled:
+            print("Applying custom tone mapping...")
+            img = cls.custom_tone_map(
+                img, 
+                a=pipeline_settings.custom_tone_map.a,
+                b=pipeline_settings.custom_tone_map.b,
+                c=pipeline_settings.custom_tone_map.c,
+                d=pipeline_settings.custom_tone_map.d,
+                e=pipeline_settings.custom_tone_map.e
+            )
 
         # 4. Gamma Correction
-        print("Gamma Correcting...")
-        img = cls.gamma_correct(img)
+        print(" > Gamma Correcting")
+        if pipeline_settings.gamma_correction.enabled:
+            img = cls.gamma_correct(
+                img,
+                gamma=pipeline_settings.gamma_correction.gamma
+            )
 
         # 5. Quantize (Float -> 8-bit Int)
-        print("Quantizing...")
+        print(" > Quantizing")
         img_8bit = np.clip(img * 255.0, 0, 255).astype(np.uint8)
         
         return img_8bit
