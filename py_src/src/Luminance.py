@@ -1,247 +1,172 @@
-import numpy as np
 from math import cos, sin, sqrt
+import numpy as np
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import Callable, List, Tuple, Optional
+from typing import Callable, List, Tuple, Optional, Union
+import bisect
 
 from CommonUtils import clamp, lerp, unit, orthonormal_basis, attenuate_sqr_distance, attenuate_distance_exponential
 from PrimaryStructures import Ray, HitInfo
 from Reflections import calculate_reflection_vector
 from Refractions import calculate_refraction_vector, calculate_reflectance, REFRACTIVE_INDICES
 from Sampling import Sampler
-import logging
 
+@dataclass
 class Color:
-    def __init__(self, r=0.0, g=0.0, b=0.0, a=1.0, clamp=False):
-        # Robust initialization: Handle case where 'r' is actually a list/array/Color
-        if hasattr(r, "__len__") and len(r) == 3:
-            # If input is a tuple/list/array (e.g. from numpy)
-            self.rgba = np.array([float(r[0]), float(r[1]), float(r[2]), float(r[3])], dtype=np.float32)
-        elif hasattr(r, "rgba"):
-            # If input is another Color object (Copy Constructor)
-            self.rgba = np.array(r.rgba, dtype=np.float32)
-        else:
-            # Standard initialization
-            self.rgba = np.array([float(r), float(g), float(b), float(a)], dtype=np.float32)
+    """
+    A data class representing a color with red, green, and blue components.
+    Internal representation uses floats from 0.0 to 1.0.
+    """
+    r: float
+    g: float
+    b: float
+    a: float = 1.0  # Alpha channel (opacity), defaults to 1.0
 
-        if clamp:
-            self.clamp()
-    
     def clamp(self):
-        """Clamp the RGBA values to be within [0.0, 1.0]."""
-        self.rgba = np.clip(self.rgba, 0.0, 1.0)
-        return self
-    
-    @classmethod
-    def from_hex(cls, hex_str: str, clamp: bool = False):
-        """Create a Color object from a hex string."""
-        hex_str = hex_str.strip().lstrip('#')
-        if len(hex_str) not in (6, 8):
-            raise ValueError("Hex color must be 6 (RGB) or 8 (RGBA) characters long.")
+        """Clamps internal RGBA values to be between 0.0 and 1.0."""
+        self.r = clamp(self.r)
+        self.g = clamp(self.g)
+        self.b = clamp(self.b)
+        self.a = clamp(self.a)
 
-        r = int(hex_str[0:2], 16) / 255.0
-        g = int(hex_str[2:4], 16) / 255.0
-        b = int(hex_str[4:6], 16) / 255.0
-        a = int(hex_str[6:8], 16) / 255.0 if len(hex_str) == 8 else 1.0
-
-        rgba = np.array([r, g, b, a], dtype=float)
-        return cls(*rgba, clamp)
+    # --- Constructors ---
 
     @classmethod
-    def from_array(cls, arr, clamp: bool = False):
-        """Create a Color object from an array-like input."""
-        if len(arr) not in (3, 4):
-            raise ValueError("Array must have 3 (RGB) or 4 (RGBA) elements.")
-        r, g, b = arr[0], arr[1], arr[2]
-        a = arr[3] if len(arr) == 4 else 1.0
-        return cls(r, g, b, a, clamp)
-    
-    @classmethod
-    def from_rgb255(cls, red: int = 0, green: int = 0, blue: int = 0, alpha: int = 255, clamp: bool = True):
-        """Create a Color object from 0-255 RGB(A) values."""
-        return cls(red / 255.0, green / 255.0, blue / 255.0, alpha / 255.0, clamp)
-    
-    @staticmethod
-    def average_colors(colors: List['Color']) -> 'Color':
-        if not colors:
-            return Color() # Return black if list is empty
-            
-        sum_r, sum_g, sum_b, sum_a = 0.0, 0.0, 0.0, 0.0
+    def from_hex(cls, hex_str: str):
+        """Creates a Color from a hex string (e.g., '#FF5733' or 'FF5733')."""
+        hex_str = hex_str.lstrip('#')
+        if len(hex_str) != 6:
+            raise ValueError(f"Invalid hex string: {hex_str}")
         
-        for c in colors:
-            sum_r += c.red
-            sum_g += c.green
-            sum_b += c.blue
-            sum_a += c.alpha
-            
-        N = len(colors)
-        return Color(
-            sum_r / N,
-            sum_g / N,
-            sum_b / N,
-            sum_a / N
+        r, g, b = tuple(int(hex_str[i:i+2], 16) for i in (0, 2, 4))
+        return cls(r / 255.0, g / 255.0, b / 255.0)
+
+    @classmethod
+    def from_hsv(cls, h: float, s: float, v: float, a: float = 1.0):
+        """Creates a Color from HSV values (0.0 - 1.0)."""
+        r, g, b = cls.hsv_to_rgb(h, s, v)
+        return cls(r, g, b, a)
+
+    @classmethod
+    def from_int_rgb(cls, r: int, g: int, b: int, a: int = 255):
+        """Creates a Color from 0-255 integer values."""
+        return cls(r / 255.0, g / 255.0, b / 255.0, a / 255.0)
+
+    # --- Output / Conversions ---
+
+    def to_hex(self) -> str:
+        """Returns the hex string representation (e.g., '#FF0000')."""
+        return '#{:02x}{:02x}{:02x}'.format(
+            int(self.r * 255), int(self.g * 255), int(self.b * 255)
         )
 
-    @property
-    def red(self): return self.rgba[0]
-    @red.setter
-    def red(self, value): self.rgba[0] = value
-    @property
-    def green(self): return self.rgba[1]
-    @green.setter
-    def green(self, value): self.rgba[1] = value
-    @property
-    def blue(self): return self.rgba[2]
-    @blue.setter
-    def blue(self, value): self.rgba[2] = value
-    @property
-    def alpha(self): return self.rgba[3]
-    @alpha.setter
-    def alpha(self, value): self.rgba[3] = value
+    def to_hsv(self) -> Tuple[float, float, float]:
+        """Returns a tuple of (Hue, Saturation, Value)."""
+        return self.rgb_to_hsv(self.r, self.g, self.b)
 
-    # Legacy alias support (fixes "object has no attribute 'r'")
-    @property
-    def r(self): return self.rgba[0]
-    @property
-    def g(self): return self.rgba[1]
-    @property
-    def b(self): return self.rgba[2]
-    @property
-    def a(self): return self.rgba[3]
-    
-    @property
-    def components(self): return self.rgba
+    def to_int_rgb(self) -> Tuple[int, int, int]:
+        """Returns a tuple of integers (0-255)."""
+        return (int(self.r * 255), int(self.g * 255), int(self.b * 255))
 
-    def __add__(self, other):
-        if type(other).__name__ == 'Color' or isinstance(other, Color):
-             return Color(self.red + other.red, self.green + other.green, self.blue + other.blue, self.alpha + other.alpha)
-        elif isinstance(other, (int, float, np.floating)):
-             return Color(self.red + other, self.green + other, self.blue + other, self.alpha)
-        raise TypeError("Unsupported operand type(s) for +: 'Color' and '{}'".format(type(other)))
-    def __sub__(self, other):
-        if type(other).__name__ == 'Color' or isinstance(other, Color):
-             return Color(self.red - other.red, self.green - other.green, self.blue + other.blue, self.alpha + other.alpha)
-        elif isinstance(other, (int, float, np.floating)):
-             return Color(self.red - other, self.green - other, self.blue - other, self.alpha)
-        raise TypeError("Unsupported operand type(s) for +: 'Color' and '{}'".format(type(other)))
-    def __mul__(self, other):
-        # 1. Color * Color (Hadamard product - this is where your error lies)
+    def to_np_array(self, include_alpha=False) -> np.ndarray:
+        """Returns a numpy array of the color."""
+        if include_alpha:
+            return np.array([self.r, self.g, self.b, self.a], dtype=np.float32)
+        return np.array([self.r, self.g, self.b], dtype=np.float32)
+
+    # --- Arithmetic Operations ---
+
+    def __add__(self, other: Union['Color', float]):
+        """Adds two colors (additive blending) or adds a scalar to brightness."""
         if isinstance(other, Color):
-            # Ensure the attributes (red, green, blue, alpha) are correctly accessed
-            return Color(self.red * other.red, self.green * other.green, 
-                         self.blue * other.blue, self.alpha * other.alpha)
-        
-        # 2. Color * scalar 
-        elif isinstance(other, (int, float, np.floating)):
-            return Color(self.red * other, self.green * other, 
-                         self.blue * other, self.alpha * other)
-        
-        # 3. Color * list
-        elif isinstance(other, (list, tuple, set)):
-            return Color(
-                self.red * other[0],
-                self.green * other[1],
-                self.blue * other[2],
-                self.alpha * other[3] 
-            )
-        
-        # 4. Check for "Color-like" object (Duck Typing)
-        # We try to access .red, .green, .blue. If it fails, it's not a color.
-        try:
-            return Color(self.red * other.red, self.green * other.green, 
-                         self.blue * other.blue, self.alpha * other.alpha)
-        except AttributeError:
-            pass # Not a color-like object, continue to error
-                         
-        # If the operand is neither a Color nor a scalar, raise an error
-        raise TypeError("Unsupported operand type(s) for *: 'Color' and '{}'".format(type(other).__name__))
-    def __rmul__(self, other):
-        """
-        Handles reverse multiplication: scalar * Color.
-        Delegates the work to __mul__ to reuse the correct logic.
-        """
-        # Since multiplication is commutative (scalar * vector = vector * scalar),
-        # we can simply call the forward multiplication method.
-        # This will correctly handle the case where 'other' is a scalar.
-        return self.__mul__(other)
-        
-        # Note: We do NOT need the checks for 'Color' types in __rmul__ 
-        # because the method is only called if the left operand (other) 
-        # doesn't support the operation, which is typically true for scalars.
-    def __truediv__(self, other):
-        # Color / scalar
-        if isinstance(other, (int, float, np.floating)):
-            return Color(self.red / other, self.green / other, self.blue / other, self.alpha / other)
-        # Color / Color -> component-wise
+            return Color(self.r + other.r, self.g + other.g, self.b + other.b, self.a)
+        elif isinstance(other, (int, float)):
+            return Color(self.r + other, self.g + other, self.b + other, self.a)
+        return NotImplemented
+
+    def __sub__(self, other: Union['Color', float]):
+        """Subtracts a color or scalar."""
         if isinstance(other, Color):
-            return Color(self.red / other.red, self.green / other.green, self.blue / other.blue, self.alpha / other.alpha)
-        raise TypeError("Unsupported operand type(s) for /: 'Color' and '{}'".format(type(other)))
-    def __neg__(self):
-        """Negate color (invert)."""
-        return Color(1.0 - self.red, 1.0 - self.green, 1.0 - self.blue, self.alpha)
-    def __eq__(self, other):
-        return np.array_equal(self.rgba, other.rgba)
-    def __iter__(self):
-        yield from self.rgba
-        
-    def to_hex(self, include_alpha=True):
-        r, g, b, a = (self.rgba * 255).astype(int)
-        return f"#{r:02X}{g:02X}{b:02X}{a:02X}" if include_alpha else f"#{r:02X}{g:02X}{b:02X}"
-    def to_np_ndarray(self):
-        return self.rgba.copy()
-    def to_rgb255(self):
-        r, g, b, a = (self.rgba * 255).astype(int)
-        return (r, g, b)
+            return Color(self.r - other.r, self.g - other.g, self.b - other.b, self.a)
+        elif isinstance(other, (int, float)):
+            return Color(self.r - other, self.g - other, self.b - other, self.a)
+        return NotImplemented
+
+    def __mul__(self, scale: float):
+        """Multiplies color by a scalar (adjusts brightness)."""
+        if isinstance(scale, (int, float)):
+            return Color(self.r * scale, self.g * scale, self.b * scale, self.a)
+        return NotImplemented
+
+    def __truediv__(self, scale: float):
+        """Divides color by a scalar."""
+        if isinstance(scale, (int, float)) and scale != 0:
+            return Color(self.r / scale, self.g / scale, self.b / scale, self.a)
+        return NotImplemented
 
     def __repr__(self):
-        return f"Color(red={self.red:.2f}, green={self.green:.2f}, blue={self.blue:.2f}, alpha={self.alpha:.2f})"
+        return f"Color(r={self.r:.2f}, g={self.g:.2f}, b={self.b:.2f}, hex={self.to_hex()})"
 
-def attenuate_color(color, factor: float) -> Color:
-    """Return a new Color attenuated by the given factor."""
-    # Note: 'color' is used to access the specific instance properties
-    return Color(
-        clamp(color.red * factor),
-        clamp(color.green * factor),
-        clamp(color.blue * factor),
-        color.alpha
-    )
-
+@dataclass(slots=True)
 class ColorGradient:
-    def __init__(self, colors: List[Color], positions: List[float]):
-        if len(colors) != len(positions):
-            raise ValueError("Colors and positions must have the same length.")
-        if any(p < 0.0 or p > 1.0 for p in positions):
-            raise ValueError("Positions must be in the range [0.0, 1.0].")
-        if sorted(positions) != positions:
-            raise ValueError("Positions must be in ascending order.")
+    colors: np.ndarray
+    positions: np.ndarray
+
+    def __post_init__(self):
+        """
+        Args:
+            positions: List of floats between 0.0 and 1.0 (must be sorted).
+            colors: List of numpy arrays (e.g. [R, G, B, A]).
+        """
+        if len(self.positions) != len(self.colors):
+            raise ValueError("Positions and colors must have the same length.")
         
-        self.colors = colors
-        self.positions = positions
+        # Ensure sorted data for binary search logic
+        sorted_pairs = sorted(zip(self.positions, self.colors), key=lambda x: x[0])
+        self.positions = np.array([p for p, c in sorted_pairs], dtype=float)
+        self.colors = np.array([c for p, c in sorted_pairs], dtype=float)
 
     def get_color(
-            self,
-            t: float,
-            interpolation_function: Callable[[float], float] = lambda x: x # Linear by default
-        ) -> Color:
-        """Get interpolated color at position t in [0.0, 1.0]."""
-        t = clamp(t)
-        for i in range(1, len(self.positions)):
-            if t <= self.positions[i]:
-                t0, t1 = self.positions[i-1], self.positions[i]
-                c0, c1 = self.colors[i-1], self.colors[i]
+        self, 
+        t: float, 
+        interpolation_function: Callable[[float], float] = lambda x: x
+    ) -> np.ndarray:
+        """
+        Get interpolated color at position t in [0.0, 1.0].
+        Optimized using NumPy vectorization and bisect for speed.
+        """
+        # 1. Clamp t
+        t = max(0.0, min(1.0, t))
 
-                factor = interpolation_function((t - t0) / (t1 - t0) if t1 > t0 else 0.0)
+        # 2. Fast Path: Boundaries
+        if t <= self.positions[0]:
+            return self.colors[0]
+        if t >= self.positions[-1]:
+            return self.colors[-1]
 
-                r = c0.red + factor * (c1.red - c0.red)
-                g = c0.green + factor * (c1.green - c0.green)
-                b = c0.blue + factor * (c1.blue - c0.blue)
-                a = c0.alpha + factor * (c1.alpha - c0.alpha)
+        # 3. Find the segment using binary search (faster than loop for many stops)
+        # bisect_right returns the insertion point to maintain order. 
+        # For t, it gives us the index of the first position > t.
+        idx = bisect.bisect_right(self.positions, t)
+        
+        # The segment is between idx-1 and idx
+        t0, t1 = self.positions[idx-1], self.positions[idx]
+        c0, c1 = self.colors[idx-1], self.colors[idx]
 
-                return Color(r, g, b, a)
-        return self.colors[-1]
+        # 4. Calculate factor
+        denom = t1 - t0
+        if denom < 1e-8: # Avoid division by zero
+            return c1
+            
+        local_t = (t - t0) / denom
+        factor = interpolation_function(local_t)
+
+        # 5. Vectorized Linear Interpolation (Lerp)
+        # Calculates R, G, B, A simultaneously
+        return lerp(c0, c1, factor)
         
 class LightSource:
-    def __init__(self, position: np.ndarray, color: Color, intensity: float = 1.0, radius: float = 1.0, name: str = "Light Source"):
+    def __init__(self, position: np.ndarray, color: np.ndarray, intensity: float = 1.0, radius: float = 1.0, name: str = "Light Source"):
         self.position = position
         self.color = color
         self.intensity = intensity
@@ -273,7 +198,7 @@ class PBRMaterialData:
     name: str = "DefaultMat"
     
     # --- PBR Parameters ---
-    albedo: Color = field(default_factory=lambda: Color(1, 1, 1))
+    albedo: np.ndarray = field(default_factory=lambda: Color(1.0, 1.0, 1.0).to_np_array())
     roughness: float = 0.7
     metallic: float = 0.0
     specular_intensity: float = 0.5
@@ -282,11 +207,11 @@ class PBRMaterialData:
     
     # --- Transparency/Volume Parameters ---
     transmission: float = 0.0      # 0=Opaque, 1=Glass
-    absorption_color: Color = field(default_factory=lambda: Color(1, 1, 1))
+    absorption_color: np.ndarray = field(default_factory=lambda: Color(1.0, 1.0, 1.0).to_np_array())
     absorption_density: float = 0.0
     
     # --- Emissive ---
-    emission: Color = field(default_factory=lambda: Color(0, 0, 0))
+    emission: np.ndarray = field(default_factory=lambda: Color(0.0, 0.0, 0.0).to_np_array())
     emission_intensity: float = 0.0
 
     # --- Flags ----
@@ -300,7 +225,7 @@ class PBRMaterial:
         self.data = data
 
     @classmethod
-    def create_diffuse(cls, albedo: Color, roughness: float = 0.5):
+    def create_diffuse(cls, albedo: np.ndarray, roughness: float = 0.5):
         """
         Creates a standard non-metallic (dielectric) material like plastic, wood, or chalk.
         """
@@ -316,7 +241,7 @@ class PBRMaterial:
         return cls(data)
 
     @classmethod
-    def create_specular(cls, albedo: Color, roughness: float = 0.2, metallicness: float = 1.0, specular_intensity: float = 1.0, specular_tint_amount: float = 0.5):
+    def create_specular(cls, albedo: np.ndarray, roughness: float = 0.2, metallicness: float = 1.0, specular_intensity: float = 1.0, specular_tint_amount: float = 0.5):
         """
         Creates a reflective material like gold, aluminum, or copper.
         """
@@ -333,7 +258,7 @@ class PBRMaterial:
         return cls(data)
 
     @classmethod
-    def create_glass(cls, albedo: Color, absorption_color: Color, roughness: float = 0.0, metallicness: float = 0.0, ior: float = 1.5, absorption_density: float = 1.0):
+    def create_glass(cls, albedo: np.ndarray, absorption_color: np.ndarray, roughness: float = 0.0, metallicness: float = 0.0, ior: float = 1.5, absorption_density: float = 1.0):
         """
         Creates a dielectric transparent material (Refractive).
         """
@@ -355,7 +280,7 @@ class PBRMaterial:
         return cls(data)
 
     @classmethod
-    def create_transparent(cls, albedo: Color):
+    def create_transparent(cls, albedo: np.ndarray):
         """
         Creates a "See-Through" material using Alpha Blending (Ghosts, Holograms, Decals).
         Different from Glass because it does not refract light.
@@ -371,7 +296,7 @@ class PBRMaterial:
         return cls(data)
 
     @classmethod
-    def create_emissive(cls, color: Color, intensity: float = 1.0):
+    def create_emissive(cls, color: np.ndarray, intensity: float = 1.0):
         """
         Creates a glowing material (Light Bulb, Neon Sign).
         """
@@ -392,7 +317,7 @@ class PBRMaterial:
             view_dir: np.ndarray,
             visibility_function: Callable[[np.ndarray, np.ndarray], float],
             bias: float = 1e-4
-        ) -> Color:
+        ) -> np.ndarray:
         """
         Calculates the Direct Lighting (Shadows + Light Sources) for this material.
         Enforces Energy Conservation (Reflected + Diffuse <= Incoming).
@@ -412,63 +337,35 @@ class PBRMaterial:
             light_dir = light.get_light_direction(hit_point)
             dist = np.linalg.norm(light.position - hit_point)
             
-            # Optimization: Skip lights that are too close or behind the surface
+            # Optimization: Skip lights that are too close (singularities)
             if dist <= bias: continue
             
-            NdotL = max(0.0, np.dot(surface_normal, light_dir))
-            
-            # Translucent materials (Glass/Thin) can be lit from behind
-            if NdotL <= 0.0 and not self.is_transparent and self.type != MaterialType.GLASS:
+            # --- B. Visibility Check (Shadows) ---
+            # If the light is blocked by another object, we skip it.
+            visibility = visibility_function(hit_point, light.position)
+            if visibility <= 0.0:
                 continue
 
-            # --- Visibility (Shadows) ---
-            if self.type == MaterialType.TRANSPARENT:
-                visibility = 1.0 # Simple transparency ignores shadows
-            else:
-                visibility = visibility_function(hit_point, light.position)
-
-            if visibility <= 0.0: continue
-
-            # --- Attenuation ---
+            # --- C. Lighting Calculations ---
+            # 1. Attenuation: Light gets weaker over distance (Inverse Square Law)
             attenuation = attenuate_sqr_distance(dist)
-            incoming_radiance = light.color * light.intensity * attenuation * visibility
-
-            # --- PBR Response (The Core Math) ---
-            # 1. Calculate Fresnel (kS - Specular Fraction)
-            H = unit(view_dir + light_dir)
-            VdotH = max(0.0, np.dot(view_dir, H))
             
-            F0 = self.get_metallic_component()
-            kS = self.get_fresnel_component(VdotH, f0=F0)
-
-            # 2. Calculate Diffuse Fraction (kD)
-            # Conservation of Energy: kD = 1.0 - kS
-            # If 90% reflects (kS), only 10% is left for diffuse (kD).
-            kD = Color(1.0, 1.0, 1.0) - kS
+            # 2. Cosine Law: Light hits weaker at glancing angles
+            NdotL = max(0.0, np.dot(surface_normal, light_dir))
             
-            # Metals absorb all refracted light (no diffuse)
-            kD = kD * (1.0 - self.metallic)
+            # If light is behind the surface, skip (unless it's translucent, handled separately)
+            if NdotL <= 0.0:
+                continue
 
-            # 3. Evaluate BRDF Terms
-            diffuse_term = Color(0,0,0)
-            specular_term = Color(0,0,0)
+            # 3. Incoming Radiance (Li)
+            # Intensity * Color * Attenuation * Visibility
+            incoming_radiance = light.intensity * attenuation * visibility
+            
+            accumulated_light += light.evaluate_brdf(light.intensity, light_dir, surface_normal, view_dir)
+            
+        return accumulated_light.to_np_array()
 
-            if self.type != MaterialType.GLASS:
-                 # Standard Lambertian Diffuse
-                 diffuse_term = self.albedo * (1.0 / np.pi)
-
-            if self.type == MaterialType.SPECULAR or self.type == MaterialType.GLASS or self.metallic > 0:
-                 # Cook-Torrance Specular
-                 specular_term = self.get_specular_brdf(kS, light_dir, view_dir, surface_normal)
-
-            # 4. Final Combination
-            # Out = (kD * Diffuse + Specular) * Light * NdotL
-            light_contribution = (kD * diffuse_term + specular_term) * incoming_radiance * NdotL
-            accumulated_light += light_contribution
-
-        return accumulated_light
-
-    def get_diffuse_component(self, light_color: Color, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray) -> Color:
+    def get_diffuse_component(self, light_color: np.ndarray, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray) -> np.ndarray:
         """
         Get the diffuse component (Lambertian). 
         Corrected to respect the Metallic workflow energy conservation.
@@ -484,7 +381,7 @@ class PBRMaterial:
         
         return diffuse
 
-    def get_specular_component(self, light_color: Color, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray, bias: float = 1e-4) -> Color:
+    def get_specular_component(self, light_color: np.ndarray, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray, bias: float = 1e-4) ->  np.ndarray:
         """Get the specular component of the material response using the Micro-Facet BRDF."""
         
         # --- 0. Pre-Calculations and Constants ---
@@ -494,7 +391,7 @@ class PBRMaterial:
         
         # Halfway Vector (H)
         H = (light_dir + view_dir)
-        H = H / np.linalg.norm(H) 
+        H = unit(H) 
         
         # Dot Products (must be clamped to avoid negative light/view angles)
         NdotH = max(0.0, np.dot(surface_normal, H))
@@ -534,7 +431,7 @@ class PBRMaterial:
         
         return specular
 
-    def get_metallic_component(self, bias: float = 1e-4) -> Color:
+    def get_metallic_component(self, bias: float = 1e-4) ->  np.ndarray:
         """
         Calculates the F0 (Base Reflectivity) for Fresnel calculations.
         """
@@ -563,22 +460,22 @@ class PBRMaterial:
 
         # --- 3. Final Blend ---
         # Lerp between Dielectric (0.04) and Metal (Albedo)
-        final_F0 = lerp(F0_final_dielectric, F0_metal, self.metallic)
+        final_F0: Color = lerp(F0_final_dielectric, F0_metal, self.metallic)
         
-        return final_F0
+        return final_F0.to_np_array()
 
-    def get_fresnel_component(self, cos_theta: float) -> Color:
+    def get_fresnel_component(self, cos_theta: float) ->  np.ndarray:
         """
         Calculates the portion of light that is reflected (Specular) vs. absorbed/refracted (Diffuse).
         """
         f0 = self.get_metallic_component().to_np_ndarray()
-        return Color.from_array(schlick_fresnel(cos_theta, f0))
+        return schlick_fresnel(cos_theta, f0)
 
-    def get_emissive_component(self) -> Color:
+    def get_emissive_component(self) -> np.ndarray:
         """Get the emissive color of the material."""
         return self.albedo * self.emissive_intensity
 
-    def get_volumetric_component(self, light_color: Color, distance: float) -> Color:
+    def get_volumetric_component(self, light_color: np.ndarray, distance: float) ->  np.ndarray:
         """
         Calculates the volumetric attenuation of light passing through the material
         """
@@ -590,13 +487,13 @@ class PBRMaterial:
         
         return light_color * attenuation
 
-    def get_transparency_component(self, light_color: Color) -> Color:
+    def get_transparency_component(self, light_color: np.ndarray) ->  np.ndarray:
         """
         Calculates the transparency color contribution of the material.
         """
         return lerp(light_color, self.albedo, 1 - self.albedo.a)
 
-    def get_ambient_color(self, ambient_color: Color, ambient_intensity: float) -> Color:
+    def get_ambient_color(self, ambient_color: np.ndarray, ambient_intensity: float) ->  np.ndarray:
         """
         Calculates the ambient color contribution of the material.
         """
@@ -750,7 +647,7 @@ class PBRMaterial:
 
         return Ray(origin=final_origin, orientation=final_dir, name="microfacet_refraction"), pdf
 
-    def evaluate_brdf(self, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray, bias: float = 1e-4) -> Color:
+    def evaluate_brdf(self, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray, bias: float = 1e-4) ->  np.ndarray:
         """
         Returns the BRDF value (ratio of radiance).
         """
@@ -809,8 +706,8 @@ def calculate_fresnel_ratio(
     """
     # 1. Calculate Cosine of the Incident Angle
     # Ensure vectors are normalized
-    unit_incident = incident_dir / np.linalg.norm(incident_dir)
-    unit_normal = normal / np.linalg.norm(normal)
+    unit_incident = unit(incident_dir)
+    unit_normal = unit(normal)
     
     # cos_theta is usually -dot(view, normal).
     # Since incident_dir points INTO the surface, we negate it.
