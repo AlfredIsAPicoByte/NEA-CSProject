@@ -13,7 +13,7 @@ def clamp(value, min_value: float|int = 0.0, max_value: float|int = 1.0):
     """
     return max(min_value, min(value, max_value))
 
-def lerp(a, b, t):
+def lerp(a, b, t: float):
     """
     Linear Interpolation. Blends between value 'a' and 'b' based on factor 't'.
     t=0 returns a, t=1 returns b, t=0.5 returns the average.

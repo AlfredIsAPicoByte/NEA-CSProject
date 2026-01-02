@@ -16,7 +16,7 @@ class Scene:
 
         # Ambient lighting defaults (can be overridden via kwargs)
         # small neutral ambient to avoid complete black shadows by default
-        self.ambient_color: Color = Color(0.03, 0.03, 0.03)
+        self.ambient_color: np.ndarray = np.array([0.03, 0.03, 0.03])
         self.ambient_intensity: float = 0.1
 
         for key, value in kwargs.items():
@@ -59,21 +59,7 @@ class Scene:
                 sdf_fn = None
                 if hasattr(obj.shape, "signed_distance") and callable(getattr(obj.shape, "signed_distance")):
                     sdf_fn: Callable[[np.ndarray], float] = getattr(obj.shape, "signed_distance")
-                    break
-
-                if sdf_fn is not None:
-                    # Ensure the function returns a float distance for the provided point
                     d = float(sdf_fn(point))
-
-                # 3. Fallback for non-SDF objects (e.g. Triangle Meshes)
-                # We approximate them using their Bounding Sphere to keep the Ray Marcher alive.
-                # If we don't do this, the Ray Marcher will ignore meshes entirely.
-                elif hasattr(obj.shape, "get_bounding_sphere_radius"):
-                    # Simple sphere distance approximation
-                    center = obj.transform.position # Assuming global position
-                    radius = obj.shape.get_bounding_sphere_radius()
-                    dist_to_center = np.linalg.norm(point - center)
-                    d = dist_to_center - radius
 
             except Exception:
                 # If math fails on one object, don't crash the whole renderer
@@ -124,7 +110,7 @@ class Scene:
                     closest_hit = hit_point
 
         if closest_obj is None or closest_hit is None:
-            return HitInfo(False)
+            return HitInfo.miss()
 
         # 4. Resolve Normal
         normal = np.array([0.0, 1.0, 0.0]) # Default up fallback
@@ -147,7 +133,7 @@ class Scene:
             object=closest_obj 
         )
     
-    def get_background_color(self, direction) -> Color:
+    def get_background_color(self, direction) -> np.ndarray:
         """
         Return the background color based on the ray's direction vector.
         Handles Solid Color, ColorGradient (Skybox), or Texture Map safely.
@@ -197,7 +183,7 @@ class Scene:
 
         return Color(0.0, 0.0, 0.0)
     
-    def _sample_equirectangular_map(self, texture: np.ndarray, direction: np.ndarray) -> Color:
+    def _sample_equirectangular_map(self, texture: np.ndarray, direction: np.ndarray) -> np.ndarray:
         """
         Samples a 2D texture using Spherical (Equirectangular) mapping.
         Texture is assumed to be a numpy array of shape (H, W, 3).

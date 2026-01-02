@@ -46,3 +46,9 @@ python py_src/main.py
 /workspaces/NEA-CSProject/.venv/bin/python -m pip install -r py_src/requirements.txt
 /workspaces/NEA-CSProject/.venv/bin/python py_src/main.py
 ```
+
+Tip: to reduce memory and runtime during automated tests or CI, you can disable post-processing with:
+
+```bash
+python py_src/main.py --no-post
+```
