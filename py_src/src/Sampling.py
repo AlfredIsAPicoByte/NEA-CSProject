@@ -4,7 +4,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Union
 
 class PixelFilter(Enum):
     BOX = 0
@@ -43,43 +43,46 @@ class Sample:
     w: float = 1.0
 
 def evaluate_filter_weight(
-    settings: SampleSettings, 
-    dist_x: float, 
-    dist_y: float
-) -> float:
+settings: SampleSettings, 
+    dist_x: np.ndarray, 
+    dist_y: np.ndarray
+) -> np.ndarray:
     """
-    Calculates the weight of a sample based on its distance from the pixel center.
-    dist_x, dist_y are in 'pixel units' (not normalized 0-1).
+    Calculates weights for a batch of samples using NumPy broadcasting.
     """
-    # 1. Check bounds (if sample is outside filter radius, weight is 0)
-    # Note: Box filters usually ignore radius or use 0.5, but generic filters use a radius.
-    if abs(dist_x) > settings.filter_width or abs(dist_y) > settings.filter_width:
-        return 0.0
-
+    # 1. Mask out samples beyond filter radius
+    # (Box usually ignores radius, but we clamp for safety)
+    mask = (np.abs(dist_x) <= settings.filter_width) & (np.abs(dist_y) <= settings.filter_width)
+    
+    # Default weights (0.0 outside, placeholder inside)
+    weights = np.zeros_like(dist_x)
+    
     ftype = settings.filter_type
 
-    # --- BOX FILTER ---
-    # All samples within the pixel square get equal weight.
     if ftype == PixelFilter.BOX:
-        # Standard Box is usually just 1.0 inside the boundary
-        return 1.0
+        # Box is 1.0 everywhere inside the mask
+        weights[mask] = 1.0
 
-    # --- TENT FILTER (Triangle) ---
-    # Linear falloff: 1.0 at center, 0.0 at radius
     elif ftype == PixelFilter.TENT:
-        wx = max(0.0, 1.0 - abs(dist_x) / settings.filter_width)
-        wy = max(0.0, 1.0 - abs(dist_y) / settings.filter_width)
-        return wx * wy
+        # 1.0 at center, 0.0 at radius
+        wx = 1.0 - (np.abs(dist_x[mask]) / settings.filter_width)
+        wy = 1.0 - (np.abs(dist_y[mask]) / settings.filter_width)
+        # Clip negative values just in case
+        weights[mask] = np.maximum(0.0, wx) * np.maximum(0.0, wy)
 
-    # --- GAUSSIAN FILTER ---
-    # Exponential falloff: Creates very smooth images
     elif ftype == PixelFilter.GAUSSIAN:
-        alpha = 2.0  # Controls "pointiness" of the bell curve
-        exp_x = math.exp(-alpha * (dist_x * dist_x)) - math.exp(-alpha * (settings.filter_width**2))
-        exp_y = math.exp(-alpha * (dist_y * dist_y)) - math.exp(-alpha * (settings.filter_width**2))
-        return max(0.0, exp_x * exp_y)
+        alpha = 2.0
+        fw_sq = settings.filter_width**2
+        
+        # Helper for exp calc
+        def gaussian_1d(d):
+            return np.exp(-alpha * (d * d)) - math.exp(-alpha * fw_sq)
 
-    return 1.0
+        gx = gaussian_1d(dist_x[mask])
+        gy = gaussian_1d(dist_y[mask])
+        weights[mask] = np.maximum(0.0, gx * gy)
+
+    return weights
 
 def reconstruct_pixel(
     pixel_x: int,
@@ -91,116 +94,78 @@ def reconstruct_pixel(
     """
     Combines many samples into one final pixel color using the chosen filter.
     """
-    
-    # Accumulators
-    final_color = np.array([0.0, 0.0, 0.0])
-    total_weight = 0.0
-    
-    # Center of the pixel in normalized coordinates (0.0 to 1.0)
-    # We add 0.5 to target the *center* of the pixel grid cell
-    center_u = (pixel_x + 0.5) / settings.width
-    center_v = (pixel_y + 0.5) / settings.height
-
-    for sample, color in zip(samples, colors):
-        # 1. Calculate distance from pixel center in PIXEL UNITS
-        #    (We multiply by width/height to convert 0..1 back to 0..800)
-        dist_x = (sample.u - center_u) * settings.width
-        dist_y = (sample.v - center_v) * settings.height
-
-        # 2. Get the filter weight (how much this sample contributes)
-        #    We multiply by sample.w to respect adaptive sampling weights if they exist
-        filter_w = evaluate_filter_weight(settings, dist_x, dist_y)
-        combined_weight = filter_w * sample.w
-
-        # 3. Accumulate
-        if combined_weight > 0:
-            final_color += color * combined_weight
-            total_weight += combined_weight
-
-    # 4. Normalize
-    #    If total_weight is 0 (e.g. no samples hit), return black or ambient
-    if total_weight > 0:
-        return final_color / total_weight
-    else:
+    if not samples:
         return np.array([0.0, 0.0, 0.0])
 
-class Sampler(ABC):
-    """
-    Sampler abstraction used by render algorithms.
-    - start_pixel: set pixel/tile context (used for per-pixel seeding, stratification offsets)
-    - next_1d/next_2d: supply samples in [0,1)
-    - clone: produce independent sampler for thread/worker
-    """
-    def __init__(self, sample_settings: SampleSettings = SampleSettings(), seed: Optional[int] = None):
-        self.seed = seed
-        self.settings = sample_settings
-
-    @abstractmethod
-    def start_pixel(self, x: int, y: int) -> None:
-        ...
-
-    @abstractmethod
-    def next_1d(self) -> float:
-        ...
-
-    @abstractmethod
-    def next_2d(self) -> Tuple[float, float]:
-        ...
-
-    @abstractmethod
-    def clone(self, seed: Optional[int] = None) -> "Sampler":
-        ...
-
-    @abstractmethod
-    def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
-        ...
+    # 1. Convert lists to NumPy arrays for speed
+    # (N,) arrays for coordinates
+    u_coords = np.array([s.u for s in samples])
+    v_coords = np.array([s.v for s in samples])
+    sample_weights = np.array([s.w for s in samples])
     
-    def set_samples_per_pixel(self, spp: int) -> None:
-        self.settings.samples_per_pixel = max(spp, 1)
+    # (N, 3) array for colors
+    color_stack = np.stack(colors) 
 
-    def get_samples_per_pixel(self, x: int, y:int) -> List[Sample]:
-        """Utility to get all samples for a pixel as Sample(u,v) list."""
-        self.start_pixel(x, y)
-        out: List[Sample] = []
-        for _ in range(self.settings.samples_per_pixel):
-            u, v = self.next_2d()
-            out.append(Sample(u, v))
-        return out
+    # 2. Calculate Distances (Pixel Units)
+    # Center of the pixel is +0.5
+    center_u = (pixel_x + 0.5) / settings.width
+    center_v = (pixel_y + 0.5) / settings.height
+    
+    dist_x = (u_coords - center_u) * settings.width
+    dist_y = (v_coords - center_v) * settings.height
 
-    def get_samples_for_region(self, region: Tuple[int, int, int, int]) -> List[Sample]:
-        """Utility to get all samples for a region (x0,y0,x1,y1) as Sample(u,v) list."""
-        x0, y0, x1, y1 = region
-        out: List[Sample] = []
-        for y in range(y0, y1):
-            for x in range(x0, x1):
-                self.start_pixel(x, y)
-                for _ in range(self.samples_per_pixel):
-                    u, v = self.next_2d()
-                    out.append(Sample(u, v))
-        return out
+    # 3. Calculate Weights (Vectorized)
+    filter_weights = evaluate_filter_weight(settings, dist_x, dist_y)
+    
+    # Combine filter weight with inherent sample weight
+    final_weights = filter_weights * sample_weights
 
-    def get_sample_by_index(self, index: int, image_width: int, image_height: int) -> Sample:
-        """Utility to get a single sample by linear index over the image."""
-        pixel_index = index // self.settings.samples_per_pixel
-        sample_index = index % self.settings.samples_per_pixel
+    # 4. Accumulate
+    total_weight = np.sum(final_weights)
+    
+    if total_weight <= 0.0:
+        return np.array([0.0, 0.0, 0.0])
+        
+    # Broadcasting: (N, 1) * (N, 3) -> Sum over axis 0 -> (3,)
+    weighted_colors = color_stack * final_weights[:, np.newaxis]
+    final_color = np.sum(weighted_colors, axis=0)
+    
+    return final_color / total_weight
 
-        x = pixel_index % image_width
-        y = pixel_index // image_width
-        self.start_pixel(x, y)
-        for _ in range(sample_index + 1):
-            u, v = self.next_2d()
-        return Sample(u, v)
+class Sampler:
+    """
+    Base Sampler. Can act as a persistent wrapper for an RNG.
+    Compatible with both Pixel Generation (settings-aware) and Monte Carlo (rng-aware).
+    """
+    def __init__(
+        self, 
+        input_source: Union[SampleSettings, np.random.Generator, None] = None, 
+        seed: Optional[int] = None
+    ):
+        # Handle Polymorphic Initialization
+        self.settings = SampleSettings()
+        self._rng: np.random.Generator = None # type: ignore
 
-class RandomSampler(Sampler):
-    """Independent RNG sampler, deterministic with base seed + pixel coords."""
-    def __init__(self, sample_settings: SampleSettings = SampleSettings(), seed: Optional[int] = None):
-        super().__init__(sample_settings, seed)
-        self._rng = np.random.default_rng(seed)
-        self._x = 0
-        self._y = 0
+        # Case 1: Passed an existing RNG (High Perf mode for Raytracer)
+        if isinstance(input_source, np.random.Generator):
+            self._rng = input_source
+        
+        # Case 2: Passed Settings (Standard mode for Pixel Generation)
+        elif isinstance(input_source, SampleSettings):
+            self.settings = input_source
+            self._rng = np.random.default_rng(seed)
+            
+        # Case 3: Default
+        else:
+            self._rng = np.random.default_rng(seed)
 
     def start_pixel(self, x: int, y: int) -> None:
-        self._x = x; self._y = y
+        """Reset internal state for a new pixel (used by Stratified/Halton)."""
+        pass
+
+    def random_float(self) -> float:
+        """Alias for next_1d, used by Raytracer."""
+        return self._rng.random()
 
     def next_1d(self) -> float:
         return self._rng.random()
@@ -208,71 +173,72 @@ class RandomSampler(Sampler):
     def next_2d(self) -> Tuple[float, float]:
         return (self._rng.random(), self._rng.random())
 
-    def clone(self, seed: Optional[int] = None) -> "RandomSampler":
+    def clone(self, seed: Optional[int] = None) -> "Sampler":
+        # Cloning usually resets to a generic RandomSampler unless overridden
         return RandomSampler(self.settings, seed)
 
-    def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
+    def set_samples_per_pixel(self, spp: int) -> None:
+        self.settings.samples_per_pixel = max(spp, 1)
+
+    def get_samples_per_pixel(self, x: int, y: int) -> List[Sample]:
+        """Generate all samples for a specific pixel."""
         self.start_pixel(x, y)
-        for _ in range(sample_idx + 1):
-            dx, dy = self.next_2d()
-        return dx, dy
+        out = []
+        for i in range(self.settings.samples_per_pixel):
+            u, v = self.sample_pixel(x, y, i)
+            out.append(Sample(u, v))
+        return out
+
+    def sample_pixel(self, x: int, y: int, sample_idx: int) -> Tuple[float, float]:
+        """Get the specific u,v for sample index i in pixel x,y."""
+        return self.next_2d()
+        
+class RandomSampler(Sampler):
+    """Pure random sampling (White Noise). Good for high sample counts."""
+    def sample_pixel(self, x: int, y: int, sample_idx: int) -> Tuple[float, float]:
+        return (self._rng.random(), self._rng.random())
 
 class StratifiedSampler(Sampler):
-    """Stratified 2D sampler (square grid) with per-cell jitter."""
-    def __init__(self, sample_settings: SampleSettings = SampleSettings(), seed: Optional[int] = None):
-        super().__init__(sample_settings, seed)
-        self._rng = np.random.default_rng(seed)
-        self._x = 0
-        self._y = 0
-        self._current = 0
+    """
+    Jittered Grid Sampling. Reduces noise by ensuring samples are well-distributed.
+    
+    """
+    def __init__(self, settings: SampleSettings = SampleSettings(), seed: Optional[int] = None):
+        super().__init__(settings, seed)
         self._rebuild_grid()
 
     def _rebuild_grid(self):
-        n = max(1, int(math.ceil(math.sqrt(self.settings.samples_per_pixel))))
-        self._nx = n
-        self._ny = n
+        # Determine grid size (NxN)
+        self._grid_side = max(1, int(math.ceil(math.sqrt(self.settings.samples_per_pixel))))
 
     def set_samples_per_pixel(self, spp: int) -> None:
         super().set_samples_per_pixel(spp)
         self._rebuild_grid()
 
-    def start_pixel(self, x: int, y: int) -> None:
-        self._x = x; self._y = y
-        self._current = 0
-
-    def next_1d(self) -> float:
-        return self._rng.random()
-
-    def next_2d(self) -> Tuple[float, float]:
-        i = self._current % self._nx
-        j = self._current // self._nx
-        if j >= self._ny:
-            # exhausted, fall back to random
-            return (self._rng.random(), self._rng.random())
-        u = (i + self._rng.random()) / self._nx
-        v = (j + self._rng.random()) / self._ny
-        self._current += 1
-        return (u, v)
-
-    def clone(self, seed: Optional[int] = None) -> "StratifiedSampler":
-        return StratifiedSampler(self.settings, seed)
-
-    def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
-        self.start_pixel(x, y)
-        n = max(1, int(math.ceil(math.sqrt(self.settings.samples_per_pixel))))
+    def sample_pixel(self, x: int, y: int, sample_idx: int) -> Tuple[float, float]:
+        # Map linear index to grid coordinates
+        # e.g., index 5 in a 3x3 grid might be row 1, col 2
+        n = self._grid_side
         i = sample_idx % n
         j = sample_idx // n
+        
+        # If we run out of grid slots (spp > n*n), fall back to random
         if j >= n:
             return (self._rng.random(), self._rng.random())
-        dx = (i + self._rng.random()) / n
-        dy = (j + self._rng.random()) / n
-        return dx, dy
+            
+        # Jitter within the grid cell
+        jitter_x = self._rng.random()
+        jitter_y = self._rng.random()
+        
+        # Normalize to 0..1 range
+        u = (i + jitter_x) / n
+        v = (j + jitter_y) / n
+        
+        return u, v
 
 class HaltonSampler(Sampler):
-    def __init__(self, sample_settings: SampleSettings = SampleSettings(), seed: Optional[int] = None):
-        super().__init__(sample_settings, seed)
-        self._index = 0
-
+    """Low Discrepancy Sequence. Good for progressive rendering."""
+    
     @staticmethod
     def _halton(index: int, base: int) -> float:
         result = 0.0
@@ -284,27 +250,12 @@ class HaltonSampler(Sampler):
             f /= base
         return result
 
-    def start_pixel(self, x: int, y: int) -> None:
-        # per-pixel offset can be applied; keep simple
-        self._index = 1
-
-    def next_1d(self) -> float:
-        v = self._halton(self._index, 2)
-        self._index += 1
-        return v
-
-    def next_2d(self) -> Tuple[float, float]:
-        v = (self._halton(self._index, 2), self._halton(self._index, 3))
-        self._index += 1
-        return v
-
-    def clone(self, seed: Optional[int] = None) -> "HaltonSampler":
-        return HaltonSampler(self.samples_per_pixel, seed)
-
-    def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
-        # Use sample_idx+1 to avoid zero index in Halton
-        u = self._halton(sample_idx + 1, 2)
-        v = self._halton(sample_idx + 1, 3)
+    def sample_pixel(self, x: int, y: int, sample_idx: int) -> Tuple[float, float]:
+        # We add 1 because Halton(0) is always 0, which can be problematic at edges
+        # We also mix in x/y to decorrelate adjacent pixels slightly (simple scramble)
+        idx = sample_idx + 1 + (x * 499) + (y * 503) 
+        u = self._halton(idx, 2)
+        v = self._halton(idx, 3)
         return u, v
 
 class AdaptiveSampler(Sampler):
@@ -343,88 +294,16 @@ def create_sampler(name: str, sample_settings: SampleSettings = SampleSettings()
     return cls(sample_settings, seed)
 
 class SamplingManager:
-    """
-    High-level manager combining settings and sampler use.
-    """
-    def __init__(self, sample_settings: 'SampleSettings', sampler_name: str | None = None, seed: Optional[int] = None, precompute: bool = False):
+    """Factory and Manager for sampling strategies."""
+    def __init__(self, sample_settings: SampleSettings, sampler_name: str = "random", seed: Optional[int] = None):
         self.settings = sample_settings
-        self.seed = seed
-        self.sampler_name = sampler_name if sampler_name is not None else "random"
-        
-        self._spp = self.settings.samples_per_pixel
-        
-        self._sampler = create_sampler(self.sampler_name, sample_settings, seed)
+        self.sampler = create_sampler(sampler_name, sample_settings, seed)
 
-        self._precompute = bool(precompute)
-        self.precomputed_samples: List[Sample] = []
-        
-        if self._precompute:
-            self._do_precompute()
-
-    def _do_precompute(self):
-        """Generates all samples upfront. Warning: High Memory Usage."""
-        print(f"Precomputing samples for {self.settings.width}x{self.settings.height} image...")
-        self.precomputed_samples = []
-
-        # Use a single local sampler instance for the loop
-        # We typically clone once at the start to ensure thread safety if this runs in parallel
-        if hasattr(self._sampler, "clone"):
-             local_sampler = self._sampler.clone(self.seed)
-        else:
-             local_sampler = self._sampler
-
-        for y in range(self.settings.height):
-            for x in range(self.settings.width):
-                local_sampler.start_pixel(x, y)
-                for _ in range(self._spp):
-                    u, v = local_sampler.next_2d()
-                    self.precomputed_samples.append(Sample(u, v))
+    @property
+    def _sampler(self):
+        """Backward-compatible alias for the internal sampler instance."""
+        return self.sampler
 
     def get_samples_per_pixel(self, x: int, y: int) -> List[Sample]:
-        """
-        Returns the list of samples (u,v) for a specific pixel coordinate.
-        """
-        # --- PATH A: Precomputed (Fast access, High RAM) ---
-        if self._precompute:
-            # Calculate flat index
-            # FIX: Corrected typo 'samples_per_pixel' -> 'samples_per_pixel'
-            pixel_index = (y * self.settings.width) + x
-            start_idx = pixel_index * self._spp
-            
-            # Safety Check
-            if start_idx + self._spp > len(self.precomputed_samples):
-                return [] 
-                
-            return self.precomputed_samples[start_idx : start_idx + self._spp]
-
-        # --- PATH B: On-Demand (Low RAM, Slightly Slower) ---
-        
-        # Avoid cloning per-pixel if possible. 
-        # Ideally, samplers are lightweight. If 'clone' is expensive, this line is a bottleneck.
-        # However, for thread safety in a renderer, we often MUST clone or use thread-local storage.
-        if hasattr(self._sampler, "clone"):
-            current_sampler = self._sampler.clone(self.seed)
-        else:
-            current_sampler = self._sampler
-
-        # Reset sampler state for this specific pixel
-        try:
-            current_sampler.start_pixel(x, y)
-        except Exception:
-            pass
-
-        out: List[Sample] = []
-        for _ in range(self._spp):
-            try:
-                u, v = current_sampler.next_2d()
-            except Exception:
-                # 4. FIX: Correct Numpy Syntax
-                u = np.random.random()
-                v = np.random.random()
-            
-            out.append(Sample(u, v))
-            
-        return out
-
-    def __repr__(self):
-        return f"SamplingManager(sampler={self.sampler_name}, spp={self._spp})"
+        # Delegate to the strategy
+        return self.sampler.get_samples_per_pixel(x, y)
