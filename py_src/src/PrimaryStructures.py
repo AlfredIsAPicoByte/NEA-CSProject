@@ -1,19 +1,32 @@
 from math import cos, sin, acos, gcd
 import numpy as np
-from typing import Optional, Tuple
+from typing import Optional, Any
+from dataclasses import dataclass, field
 
+from CommonUtils import unit
+
+def unit_vector(v):
+    norm = np.linalg.norm(v)
+    return v / norm if norm > 0 else v
+
+@dataclass(slots=True)
 class Ray:
-    def __init__(self, origin: np.ndarray, orientation: np.ndarray, name: str = "Ray"):
-        """
-        A ray defined by an origin point and an orientation vector.
-        """
-        if np.linalg.norm(orientation) == 0:
-            raise ValueError("Orientation vector cannot be zero-length")
+    origin: np.ndarray
+    orientation: np.ndarray
+    name: str = "Ray"
 
-        self.origin = np.asarray(origin, dtype=float)
-        self._orientation = None
-        self.orientation = orientation  # uses property setter (normalizes)
-        self.name = name
+    def __post_init__(self):
+        """
+        Dataclasses run this AFTER the auto-generated __init__.
+        We use this to enforce normalization logic.
+        """
+        # Safety check for zero-length vector
+        if np.linalg.norm(self.orientation) == 0:
+            # Fallback to a safe default (e.g., Up) to prevent crash
+            object.__setattr__(self, 'orientation', np.array([0.0, 1.0, 0.0]))
+        else:
+            # Normalize and re-assign (bypass frozen check if frozen=True, though unnecessary here)
+            object.__setattr__(self, 'orientation', unit_vector(self.orientation))
 
     @property
     def orientation(self) -> np.ndarray:
@@ -52,7 +65,7 @@ class Ray:
         if np.linalg.norm(to_point) == 0:
             return True
         
-        to_point_normalized = to_point / np.linalg.norm(to_point)
+        to_point_normalized = unit(to_point)
         return np.allclose(to_point_normalized, self.orientation )
 
     def check_point_in_front(self, point: np.ndarray):
@@ -79,7 +92,7 @@ class Ray:
         if self.orientation .shape[0] != 3 or axis.shape[0] != 3:
             raise ValueError("Rotate only supports 3D vectors")
         
-        axis = axis / np.linalg.norm(axis)
+        axis = unit(axis)
         cos_a = cos(angle)
         sin_a = sin(angle)
         ux, uy, uz = axis
@@ -112,48 +125,117 @@ class Ray:
         return f"Ray(origin={self.origin}, orientation={self.orientation})"
 
 # Define a ray that holds the ray and data
+@dataclass(slots=True)
 class TracingRay(Ray):
-    def __init__(self, origin: np.ndarray, orientation: np.ndarray, name: str = "Ray", **kwargs):
-        super().__init__(origin, orientation, name)
-        
-        for k, v in kwargs.items():
-            setattr(self, k, v)
+    """
+    A Ray that carries extra state for the recursive path tracing engine.
+    """
+    depth: int = 0
+    pixel_x: int = -1
+    pixel_y: int = -1
+    
+    # How much light this ray carries (Color multiplier)
+    # Storing as object to avoid import cycles with 'Color' class
+    throughput: object = field(default_factory=lambda: np.array([1.0, 1.0, 1.0, 1.0])) 
+    
+    # Is the ray currently traveling inside a medium (like glass)?
+    is_inside: bool = False
+    
+    # UV Coordinates for sub-pixel sampling
+    sample_u: float = 0.5
+    sample_v: float = 0.5
 
     def __repr__(self):
         return f"TracingRay(name={self.name}, origin={self.origin}, orientation={self.orientation})"
     pass
 
+class RayPool:
+    def __init__(self, block_size=10000):
+        self._pool = []
+        self._block_size = block_size
+
+    def get_ray(self, origin, orientation, x, y):
+        if self._pool:
+            ray = self._pool.pop()
+            
+            ray.origin = origin
+            ray.orientation = orientation
+            ray.pixel_x = x
+            ray.pixel_y = y
+            ray.depth = 0
+            ray.is_inside = False
+            ray.throughput = np.ndarray([1.0, 1.0, 1.0])
+            return ray
+        else:
+            # Create new if pool is empty
+            return TracingRay(origin, orientation, x, y, ...)
+
+    def return_ray(self, ray: TracingRay):
+        self._pool.append(ray)
+
+@dataclass(slots=True)
 class HitInfo:
     """
     Stores information about a ray-object intersection.
     """
+    # --- 1. Define ALL storage fields here ---
+    
+    # Did we hit something?
+    hit: bool = False
+    
+    # Distance along the ray (for Z-buffer/sorting)
+    distance: float = float('inf')
+    
+    # World-space coordinate of intersection
+    point: Optional[np.ndarray] = None
+    
+    # Surface normal at intersection
+    normal: Optional[np.ndarray] = None
+    
+    # The incoming ray direction (useful for shading calculations)
+    direction: Optional[np.ndarray] = None
+    
+    # The object we hit (for material lookup)
+    obj: Optional[Any] = None
+    
+    # Texture coordinates
+    uv: Optional[np.ndarray] = None
+
+    # --- 2. Custom Init to handle your specific naming logic ---
     def __init__(
-            self,
-            did_hit: bool,
-            hit_point: Optional[np.ndarray] = None,
-            incoming_direction: Optional[np.ndarray] = None,
-            surface_normal: Optional[np.ndarray] = None,
-            distance: Optional[float] = None,
-            obj: Optional["VObject"] = None
-        ):
-        # Primary boolean flag - use `hit` for clarity
-        self.hit = bool(did_hit)
-        # Backwards-compatible alias
-        self.did_hit = self.hit
+        self,
+        did_hit: bool,
+        point: Optional[np.ndarray] = None,
+        direction: Optional[np.ndarray] = None,
+        normal: Optional[np.ndarray] = None,
+        distance: float = float('inf'),
+        obj: Optional[Any] = None,
+        uv: Optional[np.ndarray] = None
+    ):
+        # Assign directly to the SLOTS defined above.
+        object.__setattr__(self, 'hit', bool(did_hit))
+        object.__setattr__(self, 'point', point)
+        object.__setattr__(self, 'distance', distance)
+        object.__setattr__(self, 'obj', obj)
+        object.__setattr__(self, 'uv', uv)
 
-        self.point = hit_point
-        # direction is typically the incoming ray direction
-        self.direction = incoming_direction / np.linalg.norm(incoming_direction) if incoming_direction is not None else None
-        self.normal = surface_normal / np.linalg.norm(surface_normal) if surface_normal is not None else None
-        self.distance = distance
-        # Optional reference to the object that was hit
-        self.object = obj
+        if direction is not None:
+            norm_dir = unit(direction)
+            object.__setattr__(self, 'direction', norm_dir)
+        else:
+            object.__setattr__(self, 'direction', None)
 
-    def __repr__(self):
-        return (
-            f"HitInfo(hit={self.hit}, point={self.point}, normal={self.normal}, "
-            f"distance={self.distance}, object={getattr(self, 'object', None)})"
-        )
+        if normal is not None:
+            norm_surf = unit(normal)
+            object.__setattr__(self, 'normal', norm_surf)
+        else:
+            object.__setattr__(self, 'normal', None)
+
+    @classmethod
+    def miss(cls):
+        """Fast helper to create a Miss."""
+        # Uses the defaults defined in init arguments
+        return cls(did_hit=False)
 
 class Transform:
     """
@@ -242,13 +324,18 @@ class Transform:
         return rot_z @ rot_y @ rot_x
 
     def _make_transform_matrix(self, position: np.ndarray, rotation: np.ndarray, scale: np.ndarray) -> np.ndarray:
+        """
+        Build a 4x4 transform matrix from position, euler rotation (radians, ZYX order),
+        and scale vector. Returns a numpy ndarray shape (4,4).
+        """
+        # Compose transform: T * R * S
         R = self._rotation_matrix_from_euler(rotation)
-        M = np.eye(4)
-        # Apply Scale first, then Rotation
-        M[:3, :3] = R @ np.diag(scale) 
-        # Apply Translation
-        M[:3, 3] = position
-        return M
+        S = np.diag([scale[0], scale[1], scale[2]])
+        # Create 4x4 matrices
+        mat = np.eye(4, dtype=float)
+        mat[:3, :3] = R @ S
+        mat[:3, 3] = position
+        return mat
 
     def get_local_matrix(self) -> np.ndarray:
         """Returns the local (offset) transformation matrix (4x4) built from local_position/local_rotation/local_scale."""
@@ -319,7 +406,7 @@ class Transform:
             right = np.array([1, 0, 0])
         else:
             right = np.cross(world_up, forward)
-            right = right / np.linalg.norm(right)
+            right = unit(right)
         
         up = np.cross(forward, right)
 
@@ -450,20 +537,18 @@ class Ratio:
         self.height = height
 
     def simplify(self):
-        """
-        Reduces the ratio to its simplest integer form.
-        Example: 1920/1080 -> 16/9
-        """
-        # We must convert to integers to find the GCD
+        """Simplify this Ratio in-place and return self (e.g., 1920/1080 -> 16/9)."""
         w_int = int(self.width)
         h_int = int(self.height)
 
-        # Calculate Greatest Common Divisor
         divisor = gcd(w_int, h_int)
+        if divisor == 0:
+            return self
 
-        # Update the stored values
-        self.width = w_int / divisor
-        self.height = h_int / divisor
+        # Use integer division to keep them integral
+        self.width = w_int // divisor
+        self.height = h_int // divisor
+        return self
 
     def __add__(self, other):
         if not isinstance(other, Ratio):
