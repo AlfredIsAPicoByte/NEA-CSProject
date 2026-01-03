@@ -60,7 +60,7 @@ if __name__ == "__main__":
     OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    img_w, img_h = 64, 36 # 256, 144 for higher resolution images
+    img_w, img_h = 16, 9 # 256, 144 for higher resolution images
 
     all_scenes = [
         get_minimal_scene(img_w, img_h),
