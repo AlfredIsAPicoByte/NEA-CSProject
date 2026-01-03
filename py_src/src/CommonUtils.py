@@ -61,56 +61,6 @@ def orthonormal_basis(n: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     b = np.cross(n, t)
     return t, b
 
-def world_to_local_point(point: np.ndarray, transform: Transform) -> np.ndarray:
-    """
-    Transforms a 3D position from World Space to Object Local Space.
-    Used to test intersections against unit primitives (like a unit sphere at 0,0,0).
-    """
-    M = transform.get_global_matrix()
-    inv = np.linalg.inv(M)
-    p_h = np.asarray([point[0], point[1], point[2], 1.0], dtype=float)
-    local = inv @ p_h
-    return local[:3]
-
-def local_to_world_point(point: np.ndarray, transform: Transform) -> np.ndarray:
-    """
-    Transforms a 3D position from Object Local Space back to World Space.
-    Used to calculate the actual hit point in the scene.
-    """
-    M = transform.model_matrix
-    p_h = np.asarray([point[0], point[1], point[2], 1.0], dtype=float)
-    world = M @ p_h
-    return world[:3]
-
-def world_to_local_direction(direction: np.ndarray, transform: Transform) -> np.ndarray:
-    """
-    Transforms a direction vector into Local Space.
-    Unlike points, directions are NOT affected by translation (position), only rotation and scale.
-    """
-    lin = transform.model_matrix[:3, :3]
-    inv_lin = np.linalg.inv(lin)
-    return inv_lin @ direction
-
-def ray_world_to_local(ray: Ray, transform: Transform) -> Ray:
-    """
-    Helper that transforms an entire Ray (Origin + Direction) into Local Space.
-    """
-    # Import locally to avoid circular dependency if Ray is defined in the same module structure
-    from PrimaryStructures import Ray 
-    
-    origin_local = world_to_local_point(ray.origin, transform)
-    dir_local = world_to_local_direction(ray.orientation, transform)
-    return Ray(origin_local, dir_local, name=ray.name)
-
-def normal_local_to_world(normal_local: np.ndarray, transform: Transform, bias: float = 1e-12) -> np.ndarray:
-    """
-    Transforms a surface normal from Local to World space.
-    Uses the 'Inverse Transpose' matrix to ensure normals stay perpendicular even with non-uniform scaling.
-    """
-    lin = transform.model_matrix[:3, :3]
-    world_n = np.linalg.inv(lin).T @ normal_local
-    return world_n / (np.linalg.norm(world_n) + bias)
-
 def attenuate_distance_coefficents(distance: float, a: float = 0.0, b: float = 0.0, c: float = 1.0) -> float:
     """
     Calculates light intensity drop-off using the standard graphics quadratic formula:

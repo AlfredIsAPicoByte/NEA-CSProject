@@ -3,7 +3,7 @@ import numpy as np
 from typing import Optional, Union, List, Callable
 from dataclasses import dataclass, field
 
-from CommonUtils import unit, ray_world_to_local, world_to_local_point, local_to_world_point, normal_local_to_world
+from CommonUtils import unit
 from PrimaryStructures import Transform, Ray
 from Luminance import PBRMaterial
 
@@ -593,9 +593,7 @@ class Sphere(Shape3D):
             local_pt = np.array([x, y, z]) * self.radius
             
             # 2. Transform to world space (handles rotation/position)
-            # Note: We manually apply rotation/translation here if not using matrix helpers
-            # Assuming self.transform has a method or we do it manually:
-            world_pt = local_to_world_point(local_pt, self.transform)
+            world_pt = self.transform.transform_point(local_pt)
             points.append(world_pt)
             
         return points
@@ -673,7 +671,7 @@ class Cube(Shape3D):
 
     def signed_distance(self, point: np.ndarray) -> float:
         # OBB Distance
-        local_p = world_to_local_point(point, self.transform)
+        local_p = self.transform.inverse_transform_point(point)
         d = np.abs(local_p) - (self.side_length / 2.0)
         dist = np.linalg.norm(np.maximum(d, 0.0)) + min(max(d[0], max(d[1], d[2])), 0.0)
         return dist * self.get_min_uniform_scale()
@@ -691,7 +689,7 @@ class Cube(Shape3D):
             for y in [-1, 1]:
                 for z in [-1, 1]:
                     local_pt = np.array([x * half, y * half, z * half])
-                    world_pt = local_to_world_point(local_pt, self.transform)
+                    world_pt = self.transform.transform_point(local_pt)
                     corners.append(world_pt)
                     
         return corners
@@ -773,10 +771,10 @@ class Cube(Shape3D):
 
     def get_normal(self, point: np.ndarray) -> np.ndarray:
         # Box normal logic
-        local_p = world_to_local_point(point, self.transform)
+        local_p = self.transform.inverse_transform_point(point)
         dominant = np.argmax(np.abs(local_p))
         n = np.zeros(3); n[dominant] = np.sign(local_p[dominant])
-        return normal_local_to_world(n, self.transform)
+        return self.transform.transform_normal(n)
 
     def get_tangent(self, point: np.ndarray) -> np.ndarray:
         n = self.get_normal(point)
