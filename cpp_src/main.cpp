@@ -157,6 +157,16 @@ int main()
 	auto sword = std::make_shared<ModelMeshAdapter>(swordPtr, 0);
 	sword->SetName("Sword");
 
+	auto dountPtr = std::make_shared<Model>("custom_donut/scene.gltf");
+	glm::vec3 donutPos = glm::vec3(0.0f, 1.0f, 0.0f);
+	glm::vec3 donutScale = glm::vec3(0.5f);
+	glm::mat4 donutModelMatrix = glm::mat4(1.0f);
+	donutModelMatrix = glm::translate(donutModelMatrix, donutPos);
+	donutModelMatrix = glm::scale(donutModelMatrix, donutScale);
+	dountPtr->SetModelMatricesForAllMeshes(std::vector<glm::mat4>{ donutModelMatrix });
+	auto dount = std::make_shared<ModelMeshAdapter>(dountPtr, 0);
+	dount->SetName("Donut");
+
 	Time time;
 	Camera camera(windowWidth, windowHeight, glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, -1.0f));
 	camera.fov = 60.0f;
