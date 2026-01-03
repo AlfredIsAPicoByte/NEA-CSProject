@@ -10,9 +10,9 @@ from Scene import Scene
 from Camera import VCamera
 from Geometry import Shape, VObject, AABB, BVHNode 
 from Refractions import REFRACTIVE_INDICES
-from Luminance import Color, PBRMaterial, MaterialType, calculate_fresnel_ratio, Color
+from Luminance import Color, PBRMaterial, MaterialType, calculate_fresnel_ratio
 from RenderingAlgorithims import Algorithm, RenderStats, register_algorithm, update_memory_stats
-from Sampling import SamplingManager, SampleSettings, Sampler, Sample, reconstruct_pixel, RandomSampler, RandomSampler
+from Sampling import SamplingManager, SampleSettings, Sampler, Sample, reconstruct_pixel, RandomSampler
 
 # TODO: Pool tracing rays and hit info to reduce memory useage at runtime
 # TODO: Localise stat updates, dont use global referenced up until the end of the logic
@@ -185,48 +185,6 @@ class RayMarchingIntersection(IntersectionStrategy):
             ray: TracingRay,
             stats: Optional["TracingStats"] = None
         ) -> HitInfo:
-        # --- LOGIC BRANCH A: Ray is escaping an object ---
-        if getattr(ray, "is_inside", False):
-            closest_object, _ = scene.distance_estimator(ray.origin)
-
-            if closest_object is not None:
-                obj_matrix = closest_object.transform.get_global_matrix()
-                inv_obj_matrix = np.linalg.inv(obj_matrix)
-                
-                _, exit_point = closest_object.shape.inverse_signed_distance(
-                    ray.origin, 
-                    ray.orientation,
-                    64
-                )
-                
-                if exit_point is not None:
-                    dist_to_exit = np.linalg.norm(exit_point - ray.origin)
-                    normal = None
-                    if hasattr(closest_object.shape, "get_normal"):
-                        normal = closest_object.shape.get_normal(exit_point)
-                    else:
-                        normal = np.array([0.0, 1.0, 0.0])
-
-                    # Update stats
-                    if stats is not None:
-                        stats.triangle_tests += 1
-
-                    # Return using the canonical HitInfo fields used elsewhere:
-                    return HitInfo(
-                        did_hit=True,
-                        point=exit_point,
-                        direction=ray.orientation,
-                        normal=-normal,
-                        distance=dist_to_exit,
-                        obj=closest_object
-                    )
-            
-            # If we failed to find an exit (infinite solid?), return Miss
-            if stats is not None:
-                stats.missed_rays += 1
-            return HitInfo.miss()
-
-        # --- LOGIC BRANCH B: Standard Raymarching (Outside) ---
         distance_traveled = 0.0
 
         for _ in range(self.max_steps):
@@ -1109,27 +1067,37 @@ class TracingStats(RenderStats):
         self.max_depth_reached = max(self.max_depth_reached, other.max_depth_reached)
         return self
 
+    def format_report(self) -> str:
+        """
+        Generates a formatted string report suitable for saving to a .txt file.
+        """
+        lines = []
+        lines.append(f"=== Extended Tracing Stats ===")
+        lines.append(f"Time: {self.time_taken_seconds:.3f}s | Mem: {self.memory_usage:.2f}MB")
+        lines.append(f"-------------------------")
+        lines.append(f"Ray Traffic:")
+        lines.append(f"  - Total:       {self.total_rays:,}")
+        lines.append(f"  - Primary:     {self.rays_primary:<10,} ({self.rays_primary/max(1,self.total_rays)*100:.1f}%)")
+        lines.append(f"  - Shadow:      {self.rays_shadow:<10,} (Lights used: {self.lights_sampled:,})")
+        lines.append(f"  - Bounce:      {(self.rays_reflection+self.rays_refraction):<10,}")
+        lines.append(f"-------------------------")
+        lines.append(f"BVH Health:")
+        lines.append(f"  - AABB Tests:      {self.aabb_tests:,}")
+        lines.append(f"  - Tri Tests:       {self.triangle_tests:,}")
+        lines.append(f"  - Nodes Visited:   {self.bvh_nodes_visited:,}")
+        lines.append(f"  - Cost/Ray:        {self.intersections_per_ray:.2f} (Target: < 50)")
+        lines.append(f"  - Culling Ratio:   {self.culling_efficiency:.2f} (Target: > 2.0)")
+        lines.append(f"-------------------------")
+        lines.append(f"Path Diagnostics:")
+        lines.append(f"  - Max Depth Hit:   {self.max_depth_reached}")
+        lines.append(f"  - Roulette Kills:  {self.roulette_kills:,}")
+        lines.append(f"  - NaN Errors:      {self.nan_errors}")
+        
+        return "\n".join(lines)
+    
     def print_verbose_report(self):
-        print(f"\n=== Extended Tracing Stats ===")
-        print(f"Time: {self.time_taken_seconds:.3f}s | Mem: {self.memory_usage:.2f}MB")
-        print(f"-------------------------")
-        print(f"Ray Traffic:")
-        print(f"  - Total:       {self.total_rays:,}")
-        print(f"  - Primary:     {self.rays_primary:<10,} ({self.rays_primary/max(1,self.total_rays)*100:.1f}%)")
-        print(f"  - Shadow:      {self.rays_shadow:<10,} (Lights used: {self.lights_sampled:,})")
-        print(f"  - Bounce:      {(self.rays_reflection+self.rays_refraction):<10,}")
-        print(f"-------------------------")
-        print(f"BVH Health:")
-        print(f"  - AABB Tests:      {self.aabb_tests:,}")
-        print(f"  - Tri Tests:       {self.triangle_tests:,}")
-        print(f"  - Nodes Visited:   {self.bvh_nodes_visited:,}")
-        print(f"  - Cost/Ray:        {self.intersections_per_ray:.2f} (Target: < 50)")
-        print(f"  - Culling Ratio:   {self.culling_efficiency:.2f} (Target: > 2.0)")
-        print(f"-------------------------")
-        print(f"Path Diagnostics:")
-        print(f"  - Max Depth Hit:   {self.max_depth_reached}")
-        print(f"  - Roulette Kills:  {self.roulette_kills:,}")
-        print(f"  - NaN Errors:      {self.nan_errors}")
+        print()
+        print(self.format_report())
 
 # Raytracer using strategies
 @register_algorithm("raytracer")

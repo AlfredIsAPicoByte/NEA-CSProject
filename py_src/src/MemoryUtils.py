@@ -34,7 +34,6 @@ def get_current_memory_usage() -> float:
     mem_bytes = process.memory_info().rss 
     return mem_bytes / (1024 * 1024)  # Convert to MB
 
-
 def track_performance(func):
     @wraps(func)
     def wrapper(*args, **kwargs):

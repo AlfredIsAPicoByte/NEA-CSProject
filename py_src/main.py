@@ -7,7 +7,7 @@ import gc
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from src.RenderingAlgorithims import Algorithm
-from src.Raytracing import Raytracer, JitterRayGenerator, RayMarchingIntersection, InverseSDFIntersection, TerminalInteraction, StandardInteraction, RecursiveLambertShading, XRayThicknessShading, TracingStats
+from src.Raytracing import Raytracer, JitterRayGenerator, RayMarchingIntersection, BVHIntersection, TerminalInteraction, StandardInteraction, RecursiveLambertShading, XRayThicknessShading, TracingStats
 from src.Sampling import SamplingManager, SampleSettings, PixelFilter
 
 PostProcessingPipeline = None
@@ -78,8 +78,7 @@ if __name__ == "__main__":
     sampling_manager = SamplingManager(sample_settings)
 
     generator = JitterRayGenerator()
-    intersection = RayMarchingIntersection(max_distance=100)
-    test_intersection = InverseSDFIntersection(max_distance=100)
+    intersection = RayMarchingIntersection()
     interactor = StandardInteraction()
     test_interactor = TerminalInteraction()
     shading = RecursiveLambertShading(ambient_color=Color.from_hex("#24272B"), ambient_intensity=0.3, shadow_samples=8)
@@ -89,7 +88,7 @@ if __name__ == "__main__":
         max_depth=1,
         sampling_manager=sampling_manager,
         ray_generator=generator,
-        intersection_strategy=test_intersection,
+        intersection_strategy=intersection,
         interaction_strategy=test_interactor,
         shading_strategy=test_shading,
         custom_background=Color(1.0, 1.0, 1.0),
@@ -110,17 +109,24 @@ if __name__ == "__main__":
         try:
             # 1. Render to Float Array (profile memory during render)
             mem_report_path = out_path + "_mem.txt"
+            stats_report_path = out_path + "_stats.txt"
             with MemoryProfiler(enable_tracemalloc=True, top=6) as mp:
                 raw_img_data = render_process(scene, raytracer)
-            # Print and persist memory profile per-scene
-            print(mp.format_report())
+            
+            try:
+                with open(stats_report_path, "w") as f:
+                    f.write(raytracer.stats.format_report())
+                    print(" + Wrote rendering statistics")
+            except Exception:
+                print(" / Failed to write rendering statistics")
+                pass
             try:
                 with open(mem_report_path, "w") as f:
                     f.write(mp.format_report())
+                    print(" + Wrote memory report")
             except Exception:
+                print(" / Failed to write memory report")
                 pass
-
-            raytracer.stats.print_verbose_report()
 
             save_image(raw_img_data, out_path=out_path + "_raw.png")
 

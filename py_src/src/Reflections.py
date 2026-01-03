@@ -1,10 +1,6 @@
 import numpy as np
-import math
-from typing import Tuple
 
-from CommonUtils import unit, orthonormal_basis
-from PrimaryStructures import Ray
-from Sampling import Sampler
+from CommonUtils import unit
 
 def calculate_incident_angle(
         normalAngle: float,

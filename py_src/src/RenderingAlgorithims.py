@@ -1,7 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 import time
-import numpy as np
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Type, Any, Tuple, List
 

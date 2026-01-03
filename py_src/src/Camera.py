@@ -180,7 +180,7 @@ class VCamera:
         return {
             "fov_radians": np.radians(self.fov),
             "fov_degrees": self.fov,
-            "aspect": float(self.aspect_ratio),
+            "aspect": float(self.aspect_ratio.value()),
             "near": float(self.near),
             "far": float(self.far),
         }
@@ -206,7 +206,7 @@ class VCamera:
             
             # 2. Origin shifts along the camera plane
             height_size = self.ortho_scale # or self.fov if reusing that field
-            width_size = height_size * self.aspect_ratio
+            width_size = height_size * self.aspect_ratio.value
 
             # Map 0..1 to -Width/2 .. +Width/2
             offset_x = (u - 0.5) * width_size
