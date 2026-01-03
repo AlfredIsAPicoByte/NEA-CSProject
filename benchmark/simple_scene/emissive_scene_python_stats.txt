@@ -1,0 +1,21 @@
+
+=== Extended Tracing Stats ===
+Time: 0.836s | Mem: 149.89MB
+-------------------------
+Ray Traffic:
+  - Total:       144
+  - Primary:     144        (100.0%)
+  - Shadow:      0          (Lights used: 0)
+  - Bounce:      0         
+-------------------------
+BVH Health:
+  - AABB Tests:      0
+  - Tri Tests:       3,088
+  - Nodes Visited:   0
+  - Cost/Ray:        21.44 (Target: < 50)
+  - Culling Ratio:   0.00 (Target: > 2.0)
+-------------------------
+Path Diagnostics:
+  - Max Depth Hit:   0
+  - Roulette Kills:  0
+  - NaN Errors:      0

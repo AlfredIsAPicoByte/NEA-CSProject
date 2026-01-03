@@ -2,190 +2,191 @@
 
 Model::Model(const char* file)
 {
+    LoadModel(std::string(file));
+}
+
+void Model::LoadModel(const std::string& filePath)
+{
     namespace fs = std::filesystem;
-	try {
-		fs::path requested(file);
+    try {
+        fs::path requested(filePath);
 
-		// Try a few likely candidates relative to the running CWD
-		std::vector<fs::path> candidates = {
-			fs::current_path() / requested,
-			fs::current_path() / "models" / requested,
-			fs::current_path() / "cpp_src" / "src" / "models" / requested,
-			fs::current_path().parent_path() / "cpp_src" / "src" / "models" / requested
-		};
+        // Try a few likely candidates relative to the running CWD
+        std::vector<fs::path> candidates = {
+            fs::current_path() / requested,
+            fs::current_path() / "models" / requested,
+        };
 
-		fs::path model_path;
-		for (auto &c : candidates) {
-			if (fs::exists(c)) { model_path = fs::canonical(c); break; }
-		}
+        fs::path resolved_path;
+        for (auto &c : candidates) {
+            if (fs::exists(c)) { resolved_path = fs::canonical(c); break; }
+        }
 
-		// fallback: walk up parent directories and search under each root for the filename
-		if (model_path.empty()) {
-			fs::path root = fs::current_path();
-			int maxUp = 6;
-			for (int depth = 0; depth < maxUp && !root.empty(); ++depth) {
-				// try common models folder under this root
-				fs::path candidate = root / "cpp_src" / "src" / "models" / requested.filename();
-				if (fs::exists(candidate)) { model_path = fs::canonical(candidate); break; }
+        // fallback: walk up parent directories
+        if (resolved_path.empty()) {
+            fs::path root = fs::current_path();
+            int maxUp = 6;
+            for (int depth = 0; depth < maxUp && !root.empty(); ++depth) {
+                fs::path candidate = root / "cpp_src" / "src" / "models" / requested.filename();
+                if (fs::exists(candidate)) { resolved_path = fs::canonical(candidate); break; }
 
-				// recursive search under this root (limited depth)
-				for (auto &entry : fs::recursive_directory_iterator(root)) {
-					if (!entry.is_regular_file()) continue;
-					if (entry.path().filename() == requested.filename()) { model_path = entry.path(); break; }
-				}
-				if (!model_path.empty()) break;
+                for (auto &entry : fs::recursive_directory_iterator(root)) {
+                    if (!entry.is_regular_file()) continue;
+                    if (entry.path().filename() == requested.filename()) { resolved_path = entry.path(); break; }
+                }
+                if (!resolved_path.empty()) break;
 
-				if (root.has_parent_path()) root = root.parent_path(); else break;
-			}
-		}
+                if (root.has_parent_path()) root = root.parent_path(); else break;
+            }
+        }
 
-		if (model_path.empty()) {
-			throw std::runtime_error(std::string("Model file not found: ") + requested.string());
-		}
+        if (resolved_path.empty()) {
+            throw std::runtime_error("Model file not found: " + requested.string());
+        }
 
-		AppendMessage("Model path: " + model_path.string());
+        AppendMessage("Model path: " + resolved_path.string());
 
-		// store resolved model path for later (used to resolve .bin and images)
-		this->modelPath = model_path;
+        // Store resolved paths
+        this->modelPath = resolved_path;
+        this->file = filePath; // Store the original request string or resolved path, up to preference
 
-		std::string text = get_file_contents(model_path.string().c_str());
-
+        // Parse modelJSON
+        std::string text = get_file_contents(resolved_path.string().c_str());
         try {
-            JSON = json::parse(text);
+            modelJSON = json::parse(text);
         } catch (const json::parse_error& pex) {
-            throw std::runtime_error(std::string("JSON parse error: ") + pex.what());
+            throw std::runtime_error(std::string("modelJSON parse error: ") + pex.what());
         }
 
-        if (!JSON.contains("asset")) {
-            throw std::runtime_error("Model JSON missing 'asset' section");
+        if (!modelJSON.contains("asset")) {
+            throw std::runtime_error("Model modelJSON missing 'asset' section");
         }
-        AppendMessage("Loaded model generator: " + JSON["asset"]["generator"].get<std::string>());
+        AppendMessage("Loaded model generator: " + modelJSON["asset"]["generator"].get<std::string>());
 
-        this->file = file;
+        // Load Binary Data
         data = getData();
 
         // Traverse all nodes
         traverseNode(0);
+
     } catch (const std::exception& e) {
-        AppendError(std::string("Error loading model '") + file + "': " + e.what());
-        throw; // rethrow to be handled by caller
+        AppendError(std::string("Error loading model '") + filePath + "': " + e.what());
+        throw; 
     }
 }
-
 void Model::loadMesh(unsigned int indMesh)
 {
-	// Get all accessor indices
-	unsigned int posAccInd = JSON["meshes"][indMesh]["primitives"][0]["attributes"]["POSITION"];
-	unsigned int normalAccInd = JSON["meshes"][indMesh]["primitives"][0]["attributes"]["NORMAL"];
-	unsigned int texAccInd = JSON["meshes"][indMesh]["primitives"][0]["attributes"]["TEXCOORD_0"];
-	unsigned int indAccInd = JSON["meshes"][indMesh]["primitives"][0]["indices"];
+    // Get all accessor indices
+    unsigned int posAccInd = modelJSON["meshes"][indMesh]["primitives"][0]["attributes"]["POSITION"];
+    unsigned int normalAccInd = modelJSON["meshes"][indMesh]["primitives"][0]["attributes"]["NORMAL"];
+    unsigned int texAccInd = modelJSON["meshes"][indMesh]["primitives"][0]["attributes"]["TEXCOORD_0"];
+    unsigned int indAccInd = modelJSON["meshes"][indMesh]["primitives"][0]["indices"];
 
-	// Use accessor indices to get all vertices components
-	std::vector<float> posVec = getFloats(JSON["accessors"][posAccInd]);
-	std::vector<glm::vec3> positions = groupFloatsVec3(posVec);
-	std::vector<float> normalVec = getFloats(JSON["accessors"][normalAccInd]);
-	std::vector<glm::vec3> normals = groupFloatsVec3(normalVec);
-	std::vector<float> texVec = getFloats(JSON["accessors"][texAccInd]);
-	std::vector<glm::vec2> texUVs = groupFloatsVec2(texVec);
+    // Use accessor indices to get all vertices components
+    std::vector<float> posVec = getFloats(modelJSON["accessors"][posAccInd]);
+    std::vector<glm::vec3> positions = groupFloatsVec3(posVec);
+    std::vector<float> normalVec = getFloats(modelJSON["accessors"][normalAccInd]);
+    std::vector<glm::vec3> normals = groupFloatsVec3(normalVec);
+    std::vector<float> texVec = getFloats(modelJSON["accessors"][texAccInd]);
+    std::vector<glm::vec2> texUVs = groupFloatsVec2(texVec);
 
-	// Combine all the vertex components and also get the indices and textures
-	std::vector<Vertex> vertices = assembleVertices(positions, normals, texUVs);
-	std::vector<GLuint> indices = getIndices(JSON["accessors"][indAccInd]);
-	std::vector<Texture> textures = getTextures();
+    // Combine all the vertex components and also get the indices and textures
+    std::vector<Vertex> vertices = assembleVertices(positions, normals, texUVs);
+    std::vector<GLuint> indices = getIndices(modelJSON["accessors"][indAccInd]);
+    std::vector<Texture> textures = getTextures();
 
-	// Compute tangents for normal mapping
-	computeTangents(vertices, indices);
+    // Compute tangents for normal mapping
+    computeTangents(vertices, indices);
 
-	// Combine the vertices, indices, and textures into a mesh
-	meshes.push_back(Mesh(vertices, indices, textures));
+    // Combine the vertices, indices, and textures into a mesh
+    meshes.push_back(Mesh(vertices, indices, textures));
 
-	// after loading a mesh's vertices:
-	bool hasUV = false;
-	for (auto &v : vertices) { if (v.TexCoords.x != 0.0f || v.TexCoords.y != 0.0f) { hasUV = true; break; } }
-	if (!hasUV) {
-	    AppendMessage("Warning: mesh has no UVs; textures will not apply.");
-	}
+    // Check for missing UVs
+    bool hasUV = false;
+    for (auto &v : vertices) { if (v.TexCoords.x != 0.0f || v.TexCoords.y != 0.0f) { hasUV = true; break; } }
+    if (!hasUV) {
+        AppendMessage("Warning: mesh has no UVs; textures will not apply.");
+    }
 }
 
 void Model::traverseNode(unsigned int nextNode, glm::mat4 matrix)
 {
-	// Current node
-	json node = JSON["nodes"][nextNode];
+    // Current node
+    json node = modelJSON["nodes"][nextNode];
 
-	// Get translation if it exists
-	glm::vec3 translation = glm::vec3(0.0f, 0.0f, 0.0f);
-	if (node.find("translation") != node.end())
-	{
-		float transValues[3];
-		for (unsigned int i = 0; i < node["translation"].size(); i++)
-			transValues[i] = (node["translation"][i]);
-		translation = glm::make_vec3(transValues);
-	}
-	// Get quaternion if it exists
-	glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-	if (node.find("rotation") != node.end())
-	{
-		float rotValues[4] =
-		{
-			node["rotation"][3],
-			node["rotation"][0],
-			node["rotation"][1],
-			node["rotation"][2]
-		};
-		rotation = glm::make_quat(rotValues);
-	}
-	// Get scale if it exists
-	glm::vec3 scale = glm::vec3(1.0f, 1.0f, 1.0f);
-	if (node.find("scale") != node.end())
-	{
-		float scaleValues[3];
-		for (unsigned int i = 0; i < node["scale"].size(); i++)
-			scaleValues[i] = (node["scale"][i]);
-		scale = glm::make_vec3(scaleValues);
-	}
-	// Get matrix if it exists
-	glm::mat4 matNode = glm::mat4(1.0f);
-	if (node.find("matrix") != node.end())
-	{
-		float matValues[16];
-		for (unsigned int i = 0; i < node["matrix"].size(); i++)
-			matValues[i] = (node["matrix"][i]);
-		matNode = glm::make_mat4(matValues);
-	}
+    // Get translation if it exists
+    glm::vec3 translation = glm::vec3(0.0f, 0.0f, 0.0f);
+    if (node.contains("translation"))
+    {
+        float transValues[3];
+        for (unsigned int i = 0; i < node["translation"].size(); i++)
+            transValues[i] = (node["translation"][i]);
+        translation = glm::make_vec3(transValues);
+    }
+    // Get quaternion if it exists
+    glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    if (node.contains("rotation"))
+    {
+        float rotValues[4] =
+        {
+            node["rotation"][3],
+            node["rotation"][0],
+            node["rotation"][1],
+            node["rotation"][2]
+        };
+        rotation = glm::make_quat(rotValues);
+    }
+    // Get scale if it exists
+    glm::vec3 scale = glm::vec3(1.0f, 1.0f, 1.0f);
+    if (node.contains("scale"))
+    {
+        float scaleValues[3];
+        for (unsigned int i = 0; i < node["scale"].size(); i++)
+            scaleValues[i] = (node["scale"][i]);
+        scale = glm::make_vec3(scaleValues);
+    }
+    // Get matrix if it exists
+    glm::mat4 matNode = glm::mat4(1.0f);
+    if (node.contains("matrix"))
+    {
+        float matValues[16];
+        for (unsigned int i = 0; i < node["matrix"].size(); i++)
+            matValues[i] = (node["matrix"][i]);
+        matNode = glm::make_mat4(matValues);
+    }
 
-	// Initialize matrices
-	glm::mat4 trans = glm::mat4(1.0f);
-	glm::mat4 rot = glm::mat4(1.0f);
-	glm::mat4 sca = glm::mat4(1.0f);
+    // Initialize matrices
+    glm::mat4 trans = glm::mat4(1.0f);
+    glm::mat4 rot = glm::mat4(1.0f);
+    glm::mat4 sca = glm::mat4(1.0f);
 
-	// Use translation, rotation, and scale to change the initialized matrices
-	trans = glm::translate(trans, translation);
-	rot = glm::mat4_cast(rotation);
-	sca = glm::scale(sca, scale);
+    // Use translation, rotation, and scale to change the initialized matrices
+    trans = glm::translate(trans, translation);
+    rot = glm::mat4_cast(rotation);
+    sca = glm::scale(sca, scale);
 
-	// Multiply all matrices together
-	glm::mat4 matNextNode = matrix * matNode * trans * rot * sca;
+    // Multiply all matrices together
+    glm::mat4 matNextNode = matrix * matNode * trans * rot * sca;
 
-	// Check if the node contains a mesh and if it does load it
-	if (node.find("mesh") != node.end())
-	{
-		matricesMeshes.push_back(matNextNode);
+    // Check if the node contains a mesh and if it does load it
+    if (node.contains("mesh"))
+    {
+        matricesMeshes.push_back(matNextNode);
+        loadMesh(node["mesh"]);
+    }
 
-		loadMesh(node["mesh"]);
-	}
-
-	// Check if the node has children, and if it does, apply this function to them with the matNextNode
-	if (node.find("children") != node.end())
-	{
-		for (unsigned int i = 0; i < node["children"].size(); i++)
-			traverseNode(node["children"][i], matNextNode);
-	}
+    // Check if the node has children
+    if (node.contains("children"))
+    {
+        for (unsigned int i = 0; i < node["children"].size(); i++)
+            traverseNode(node["children"][i], matNextNode);
+    }
 }
 
 std::vector<unsigned char> Model::getData()
 {
     // Use filesystem to resolve buffer uri relative to the model file location
-    std::string uri = JSON["buffers"][0]["uri"];
+    std::string uri = modelJSON["buffers"][0]["uri"];
     std::filesystem::path binPath = modelPath.parent_path() / uri;
     AppendMessage("Resolved binary path: " + binPath.string());
 
@@ -214,103 +215,102 @@ std::vector<unsigned char> Model::getData()
 
 std::vector<float> Model::getFloats(json accessor)
 {
-	std::vector<float> floatVec;
+    std::vector<float> floatVec;
 
-	// Get properties from the accessor
-	unsigned int buffViewInd = accessor.value("bufferView", 0);
-	unsigned int count = accessor["count"];
-	unsigned int accByteOffset = accessor.value("byteOffset", 0);
-	std::string type = accessor["type"];
+    // Get properties from the accessor
+    unsigned int buffViewInd = accessor.value("bufferView", 0);
+    unsigned int count = accessor["count"];
+    unsigned int accByteOffset = accessor.value("byteOffset", 0);
+    std::string type = accessor["type"];
 
-	// Get properties from the bufferView
-	json bufferView = JSON["bufferViews"][buffViewInd];
-	unsigned int byteOffset = bufferView["byteOffset"];
+    // Get properties from the bufferView
+    json bufferView = modelJSON["bufferViews"][buffViewInd];
+    unsigned int byteOffset = bufferView["byteOffset"];
 
-	// Interpret the type and store it into numPerVert
-	unsigned int numPerVert;
-	if (type == "SCALAR") numPerVert = 1;
-	else if (type == "VEC2") numPerVert = 2;
-	else if (type == "VEC3") numPerVert = 3;
-	else if (type == "VEC4") numPerVert = 4;
-	else throw std::invalid_argument("Type is invalid (not SCALAR, VEC2, VEC3, or VEC4)");
+    // Interpret the type
+    unsigned int numPerVert;
+    if (type == "SCALAR") numPerVert = 1;
+    else if (type == "VEC2") numPerVert = 2;
+    else if (type == "VEC3") numPerVert = 3;
+    else if (type == "VEC4") numPerVert = 4;
+    else throw std::invalid_argument("Type is invalid (not SCALAR, VEC2, VEC3, or VEC4)");
 
-	// Go over all the bytes in the data at the correct place using the properties from above
-	unsigned int beginningOfData = byteOffset + accByteOffset;
-	unsigned int lengthOfData = count * 4 * numPerVert;
-	for (unsigned int i = beginningOfData; i < beginningOfData + lengthOfData; i += 4)
-	{
-		unsigned char bytes[] = { data[i], data[i + 1], data[i + 2], data[i + 3] };
-		float value;
-		std::memcpy(&value, bytes, sizeof(float));
-		floatVec.push_back(value);
-	}
+    // Go over all the bytes in the data
+    unsigned int beginningOfData = byteOffset + accByteOffset;
+    unsigned int lengthOfData = count * 4 * numPerVert;
+    for (unsigned int i = beginningOfData; i < beginningOfData + lengthOfData; i += 4)
+    {
+        unsigned char bytes[] = { data[i], data[i + 1], data[i + 2], data[i + 3] };
+        float value;
+        std::memcpy(&value, bytes, sizeof(float));
+        floatVec.push_back(value);
+    }
 
-	return floatVec;
+    return floatVec;
 }
 
 std::vector<GLuint> Model::getIndices(json accessor)
 {
-	std::vector<GLuint> indices;
+    std::vector<GLuint> indices;
 
-	// Get properties from the accessor
-	unsigned int buffViewInd = accessor.value("bufferView", 0);
-	unsigned int count = accessor["count"];
-	unsigned int accByteOffset = accessor.value("byteOffset", 0);
-	unsigned int componentType = accessor["componentType"];
+    // Get properties from the accessor
+    unsigned int buffViewInd = accessor.value("bufferView", 0);
+    unsigned int count = accessor["count"];
+    unsigned int accByteOffset = accessor.value("byteOffset", 0);
+    unsigned int componentType = accessor["componentType"];
 
-	// Get properties from the bufferView
-	json bufferView = JSON["bufferViews"][buffViewInd];
-	unsigned int byteOffset = bufferView["byteOffset"];
+    // Get properties from the bufferView
+    json bufferView = modelJSON["bufferViews"][buffViewInd];
+    unsigned int byteOffset = bufferView["byteOffset"];
 
-	// Get indices with regards to their type: unsigned int, unsigned short, or short
-	unsigned int beginningOfData = byteOffset + accByteOffset;
-	if (componentType == 5125)
-	{
-		for (unsigned int i = beginningOfData; i < byteOffset + accByteOffset + count * 4; i += 4)
-		{
-			unsigned char bytes[] = { data[i], data[i + 1], data[i + 2], data[i + 3] };
-			unsigned int value;
-			std::memcpy(&value, bytes, sizeof(unsigned int));
-			indices.push_back((GLuint)value);
-		}
-	}
-	else if (componentType == 5123)
-	{
-		for (unsigned int i = beginningOfData; i < byteOffset + accByteOffset + count * 2; i += 2)
-		{
-			unsigned char bytes[] = { data[i], data[i + 1] };
-			unsigned short value;
-			std::memcpy(&value, bytes, sizeof(unsigned short));
-			indices.push_back((GLuint)value);
-		}
-	}
-	else if (componentType == 5122)
-	{
-		for (unsigned int i = beginningOfData; i < byteOffset + accByteOffset + count * 2; i += 2)
-		{
-			unsigned char bytes[] = { data[i], data[i + 1] };
-			short value;
-			std::memcpy(&value, bytes, sizeof(short));
-			indices.push_back((GLuint)value);
-		}
-	}
+    // Get indices with regards to their type: unsigned int, unsigned short, or short
+    unsigned int beginningOfData = byteOffset + accByteOffset;
+    if (componentType == 5125) // unsigned int
+    {
+        for (unsigned int i = beginningOfData; i < byteOffset + accByteOffset + count * 4; i += 4)
+        {
+            unsigned char bytes[] = { data[i], data[i + 1], data[i + 2], data[i + 3] };
+            unsigned int value;
+            std::memcpy(&value, bytes, sizeof(unsigned int));
+            indices.push_back((GLuint)value);
+        }
+    }
+    else if (componentType == 5123) // unsigned short
+    {
+        for (unsigned int i = beginningOfData; i < byteOffset + accByteOffset + count * 2; i += 2)
+        {
+            unsigned char bytes[] = { data[i], data[i + 1] };
+            unsigned short value;
+            std::memcpy(&value, bytes, sizeof(unsigned short));
+            indices.push_back((GLuint)value);
+        }
+    }
+    else if (componentType == 5122) // short
+    {
+        for (unsigned int i = beginningOfData; i < byteOffset + accByteOffset + count * 2; i += 2)
+        {
+            unsigned char bytes[] = { data[i], data[i + 1] };
+            short value;
+            std::memcpy(&value, bytes, sizeof(short));
+            indices.push_back((GLuint)value);
+        }
+    }
 
-	return indices;
+    return indices;
 }
 
 std::vector<Texture> Model::getTextures()
 {
     std::vector<Texture> textures;
 
-    std::string fileStr = std::string(file);
-    std::string fileDirectory = fileStr.substr(0, fileStr.find_last_of('/') + 1);
+    // file is now std::string, so no need to cast
+    std::string fileDirectory = file.substr(0, file.find_last_of('/') + 1);
     AppendMessage("Model directory: " + fileDirectory);
 
     // Go over all images
-    for (unsigned int i = 0; i < JSON["images"].size(); i++)
+    for (unsigned int i = 0; i < modelJSON["images"].size(); i++)
     {
-        // uri of current texture
-        std::string texPath = JSON["images"][i]["uri"];
+        std::string texPath = modelJSON["images"][i]["uri"];
 
         // Check if the texture has already been loaded
         bool skip = false;
@@ -330,7 +330,7 @@ std::vector<Texture> Model::getTextures()
             // Load diffuse texture
             if (texPath.find("baseColor") != std::string::npos)
             {
-				Texture diffuse = Texture((fileDirectory + texPath).c_str(), "diffuse", static_cast<GLuint>(loadedTex.size()));
+                Texture diffuse = Texture((fileDirectory + texPath).c_str(), "diffuse", static_cast<GLuint>(loadedTex.size()));
                 textures.push_back(diffuse);
                 loadedTex.push_back(diffuse);
                 loadedTexName.push_back(texPath);
@@ -338,7 +338,7 @@ std::vector<Texture> Model::getTextures()
              // Load specular texture
              else if (texPath.find("metallicRoughness") != std::string::npos)
              {
-				Texture specular = Texture((fileDirectory + texPath).c_str(), "specular", static_cast<GLuint>(loadedTex.size()));
+                Texture specular = Texture((fileDirectory + texPath).c_str(), "specular", static_cast<GLuint>(loadedTex.size()));
                 textures.push_back(specular);
                 loadedTex.push_back(specular);
                 loadedTexName.push_back(texPath);
@@ -351,32 +351,31 @@ std::vector<Texture> Model::getTextures()
 
 std::vector<Vertex> Model::assembleVertices
 (
-	std::vector<glm::vec3> positions,
-	std::vector<glm::vec3> normals,
-	std::vector<glm::vec2> texUVs
+    std::vector<glm::vec3> positions,
+    std::vector<glm::vec3> normals,
+    std::vector<glm::vec2> texUVs
 )
 {
-	std::vector<Vertex> vertices;
-	for (int i = 0; i < positions.size(); i++)
-	{
-		vertices.push_back
-		(
-			Vertex
-			{
-				positions[i],
-				normals[i],
-				glm::vec3(1.0f, 1.0f, 1.0f),
-				texUVs[i],
-
-			}
-		);
-	}
-	return vertices;
+    std::vector<Vertex> vertices;
+    for (int i = 0; i < positions.size(); i++)
+    {
+        vertices.push_back
+        (
+            Vertex
+            {
+                positions[i],
+                normals[i],
+                glm::vec3(1.0f, 1.0f, 1.0f),
+                texUVs[i],
+                // Tangents will be computed later
+            }
+        );
+    }
+    return vertices;
 }
 
 void Model::computeTangents(std::vector<Vertex>& verts, const std::vector<GLuint>& idx)
 {
-    // accumulate per-vertex tangent (vec3) safely, then write final vec4 (xyz = tangent, w = handedness)
     std::vector<glm::vec3> accumT;
     accumT.resize(verts.size(), glm::vec3(0.0f));
 
@@ -396,35 +395,26 @@ void Model::computeTangents(std::vector<Vertex>& verts, const std::vector<GLuint
         float f = (std::fabs(denom) > 1e-8f) ? 1.0f / denom : 0.0f;
 
         glm::vec3 tangent = f * (edge1 * deltaUV2.y - edge2 * deltaUV1.y);
-        // accumulate tangent (vec3)
         accumT[idx[i + 0]] += tangent;
         accumT[idx[i + 1]] += tangent;
         accumT[idx[i + 2]] += tangent;
     }
 
-    // finalize per-vertex tangent: orthonormalize and compute handedness, then store as vec4
     for (size_t vi = 0; vi < verts.size(); ++vi)
     {
         glm::vec3 T = accumT[vi];
         glm::vec3 N = verts[vi].Normal;
 
-        // If tangent nearly zero, provide a safe default
         if (glm::length2(T) < 1e-8f) {
-            // build any perpendicular vector
             T = glm::normalize(glm::cross(N, glm::vec3(0.0f, 0.0f, 1.0f)));
-            if (glm::length2(T) < 1e-6f) // fallback
+            if (glm::length2(T) < 1e-6f)
                 T = glm::normalize(glm::cross(N, glm::vec3(0.0f, 1.0f, 0.0f)));
         } else {
-            // Gram-Schmidt orthogonalize tangent to normal
             T = glm::normalize(T - N * glm::dot(N, T));
         }
 
         glm::vec3 B = glm::cross(N, T);
-        // compute handedness using original accumulated bitangent sign approximation:
-        // we cannot rely on accumulated bitangent here, but following common approach use
-        // sign of dot(cross(N,T), originalBitangentApprox). Use texture-space bitangent approx:
         float handedness = (glm::dot(B, glm::cross(N, T)) < 0.0f) ? -1.0f : 1.0f;
-        // store tangent.xyz and handedness in w
         verts[vi].Tangent = glm::vec4(T, handedness);
     }
 }
@@ -470,41 +460,80 @@ std::vector<glm::vec4> Model::groupFloatsVec4(std::vector<float> floatVec)
 
 std::vector<Mesh>& Model::GetMeshes()
 {
-	return meshes;
+    return meshes;
 }
 
 glm::mat4 Model::GetModelMatrixForMesh(unsigned int meshIndex) const
 {
-	if (meshIndex >= matricesMeshes.size())
-	{
-		throw std::out_of_range("Mesh index out of range in GetModelMatrixForMesh");
-	}
-	return matricesMeshes[meshIndex];
+    if (meshIndex >= matricesMeshes.size())
+    {
+        throw std::out_of_range("Mesh index out of range in GetModelMatrixForMesh");
+    }
+    return matricesMeshes[meshIndex];
 }
 
 std::vector<glm::mat4> Model::GetModelMatricesForAllMeshes() const
 {
-	return matricesMeshes;
+    return matricesMeshes;
 }
 
 void Model::SetModelMatrixForMesh(unsigned int meshIndex, const glm::mat4& modelMatrix)
 {
-	if (meshIndex >= matricesMeshes.size())
-	{
-		throw std::out_of_range("Mesh index out of range in SetModelMatrixForMesh");
-	}
-	matricesMeshes[meshIndex] = modelMatrix;
+    if (meshIndex >= matricesMeshes.size())
+    {
+        throw std::out_of_range("Mesh index out of range in SetModelMatrixForMesh");
+    }
+    matricesMeshes[meshIndex] = modelMatrix;
 }
 
 void Model::SetModelMatricesForAllMeshes(const std::vector<glm::mat4>& modelMatrices)
 {
-	if (modelMatrices.size() != matricesMeshes.size())
-	{
-		throw std::invalid_argument("Size of modelMatrices does not match number of meshes in SetModelMatricesForAllMeshes");
-	}
-	matricesMeshes = modelMatrices;
+    if (modelMatrices.size() != matricesMeshes.size())
+    {
+        throw std::invalid_argument("Size of modelMatrices does not match number of meshes in SetModelMatricesForAllMeshes");
+    }
+    matricesMeshes = modelMatrices;
 }
 
 void Model::CleanUp() {
+    
+}
+
+void Model::SerializeFields(json& j) const {
+    // 1. Save the file path so we can reload the geometry later
+    j["file_path"] = file;
 	
+    // 2. Save the current state of all mesh matrices
+    // We need to flatten the matrices into arrays of floats
+    std::vector<std::vector<float>> matricesData;
+    for (const auto& mat : matricesMeshes) {
+        const float* pSource = glm::value_ptr(mat);
+        matricesData.emplace_back(pSource, pSource + 16);
+    }
+    j["matrices"] = matricesData;
+    j["constructor"] = "ModelRaw";
+}
+
+void Model::DeserializeFields(const json& j) {
+    // 1. Load the Geometry from file
+    if (j.contains("file_path")) {
+        std::string path = j["file_path"];
+        LoadModel(path); // This re-populates 'meshes' and 'matricesMeshes'
+    }
+	
+    // 2. Restore transformations
+    // (If the user moved specific parts of the model, we overwrite the defaults here)
+    if (j.contains("matrices")) {
+        const auto& matricesData = j["matrices"];
+        
+        // Ensure we don't go out of bounds if the file changed
+        size_t count = std::min(matricesData.size(), matricesMeshes.size());
+        
+        for (size_t i = 0; i < count; i++) {
+            std::vector<float> matRaw = matricesData[i];
+            if (matRaw.size() == 16) {
+                matricesMeshes[i] = glm::make_mat4(matRaw.data());
+            }
+        }
+    }
 }

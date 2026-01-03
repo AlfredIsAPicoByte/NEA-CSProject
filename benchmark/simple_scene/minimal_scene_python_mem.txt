@@ -1,0 +1,10 @@
+Time: 0.7353s | RSS Δ: 22.281 MB
+RSS start: 62.512 MB | RSS end: 84.793 MB
+tracemalloc current: 18179.37 KB | peak: 18317.22 KB
+Top allocations (most recent frame):
+  1. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/lib/_twodim_base_impl.py:247 | 9255.38 KB (10392 allocs)
+  2. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/lib/_twodim_base_impl.py:323 | 8903.56 KB (3464 allocs)
+  3. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1281 | 6.89 KB (126 allocs)
+  4. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1254 | 4.10 KB (75 allocs)
+  5. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/psutil/_pslinux.py:1593 | 3.05 KB (26 allocs)
+  6. /workspaces/NEA-CSProject/py_src/main.py:28 | 1.85 KB (4 allocs)

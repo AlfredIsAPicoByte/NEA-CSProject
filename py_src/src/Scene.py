@@ -1,17 +1,11 @@
-from typing import List, Tuple, Optional
+from typing import Callable, List, Tuple, Optional
 import numpy as np
 from math import atan2, asin, pi, floor
 
-from PrimaryStructures import Ray
+from PrimaryStructures import Ray, HitInfo
 from Camera import VCamera
 from Geometry import VObject
 from Luminance import LightSource, Color, ColorGradient
-
-class BackgroundType:
-    SOLID_COLOR = 0
-    GRADIENT = 1
-    SHPERE_MAP = 2
-    TEXTURE = 3
 
 class Scene:
     def __init__(self, name: str = "Scene", camera: Optional[VCamera] = None, **kwargs):
@@ -40,92 +34,154 @@ class Scene:
     def get_lights(self):
         return list(self.lights)
 
-    def distance_estimator(self, point: np.ndarray) -> Tuple[float, Optional[VObject]]:
-        """Return either a scalar distance or (distance, object). RayMarchingIntersection expects either."""
+    def distance_estimator(self, point: np.ndarray, exclude_obj: Optional[VObject] = None) -> Tuple[Optional[VObject], float]:
+        """
+        Evaluates the Scene SDF to find the closest object and the distance to it.
+        
+        Args:
+            point: The 3D point to check.
+            exclude_obj: (Optional) An object to ignore. 
+                         Crucial for preventing self-shadowing (shadow acne).
+        """
         min_d = float("inf")
         closest = None
+        
         for obj in self.objects:
-            try:
-                d = obj.shape.SignedDistance(point)
-            except Exception:
+            # 1. Skip the object we are starting from (Self-Shadowing fix)
+            if exclude_obj is not None and obj is exclude_obj:
                 continue
+                
+            d = float("inf")
+            
+            try:
+                # 2. Check if object has a Signed Distance Function
+                # Support several common method namings used across shapes
+                sdf_fn = None
+                if hasattr(obj.shape, "signed_distance") and callable(getattr(obj.shape, "signed_distance")):
+                    sdf_fn: Callable[[np.ndarray], float] = getattr(obj.shape, "signed_distance")
+                    d = float(sdf_fn(point))
+
+            except Exception:
+                # If math fails on one object, don't crash the whole renderer
+                continue
+            
+            # 4. Update Closest
             if d < min_d:
                 min_d = d
                 closest = obj
-        return (min_d, closest)
+        
+        return (closest, min_d)
     
-    def get_closest_intersection(self, ray: Ray) -> Tuple[Optional[VObject], Optional[np.ndarray]]:
-        """Return the closest intersected object and the hit point, or (None, None) if no intersection."""
+    def get_closest_intersection(self, ray: Ray) -> HitInfo:
+        """
+        Analytical Intersection (Ray-Sphere, Ray-Plane).
+        Returns a `HitInfo` describing the closest intersection.
+        """
         closest_obj = None
         closest_hit = None
         min_distance = float("inf")
         
+        # CRITICAL: Threshold to ignore self-intersections.
+        # Any hit closer than this is considered a numerical error.
+        epsilon = 1e-5
+
         for obj in self.objects:
-            hit_point = obj.shape.intersect(ray)
+            # 1. Safety Check: Only call intersect on analytical shapes
+            if not hasattr(obj.shape, 'intersect'):
+                continue
+
+            try:
+                hit_point = obj.shape.intersect(ray)
+            except Exception:
+                hit_point = None
+
             if hit_point is not None:
-                distance = np.linalg.norm(hit_point - ray.origin)
-                if distance < min_distance:
+                # 2. Calculate Distance
+                # Note: It is faster if your intersect() returns 't' (distance) directly,
+                # but calculating norm here works fine for now.
+                dist_vec = hit_point - ray.origin
+                distance = np.linalg.norm(dist_vec)
+                
+                # 3. Check bounds (Closest valid hit)
+                # MUST check distance > epsilon to prevent "Shadow Acne"
+                if distance > epsilon and distance < min_distance:
                     min_distance = distance
                     closest_obj = obj
                     closest_hit = hit_point
-        
-        return closest_obj, closest_hit
+
+        if closest_obj is None or closest_hit is None:
+            return HitInfo.miss()
+
+        # 4. Resolve Normal
+        normal = np.array([0.0, 1.0, 0.0]) # Default up fallback
+        if hasattr(closest_obj.shape, 'GetNormal') and callable(closest_obj.shape.GetNormal):
+            normal = closest_obj.shape.GetNormal(closest_hit)
+            
+            # Normalize safely
+            nm = np.linalg.norm(normal)
+            if nm > 1e-6:
+                normal = normal / nm
+
+        # 5. Return HitInfo
+        # Naming 'object' matches the access pattern in 'is_occluded'
+        return HitInfo(
+            hit=True, 
+            point=closest_hit, 
+            direction=ray.orientation, 
+            normal=normal, 
+            distance=min_distance, 
+            object=closest_obj 
+        )
     
-    def get_background_color(self, direction) -> Color:
+    def get_background_color(self, direction: List) -> Color:
         """
         Return the background color based on the ray's direction vector.
-        Handles Solid Color, ColorGradient (Skybox), or Texture Map (Equirectangular).
+        Handles Solid Color, ColorGradient (Skybox), or Texture Map safely.
         """
-        # 1. Safe Access to Background Property
+        # 1. Safe Access to Background
         bg = getattr(self, 'background_color', None)
         if bg is None:
-            return Color(0.0, 0.0, 0.0) # Default Black
+            return Color(0.0, 0.0, 0.0)
 
-        # 2. Resolve Direction Vector
-        # We need a normalized numpy array direction vector
-        try:
-            dir_vec = np.array(direction, dtype=float)
-            if dir_vec.shape != (3,):
-                 raise ValueError("Invalid shape")
-        except (ValueError, TypeError):
-            # Fallback: If direction is invalid (e.g. None), use Camera Forward
-            camera = getattr(self, "camera", None)
-            if camera and hasattr(camera, "transform"):
-                dir_vec = camera.transform.forward
-            else:
-                dir_vec = np.array([0.0, 0.0, 1.0]) # Absolute Z forward fallback
+        # 2. Get the Class Name (Avoids NameError if classes aren't imported)
+        bg_type_name = type(bg).__name__
 
-        # Normalize logic (safeguard against zero-length vectors)
-        norm = np.linalg.norm(dir_vec)
-        if norm > 1e-6:
-            dir_vec = dir_vec / norm
-        else:
-            dir_vec = np.array([0.0, 1.0, 0.0]) # Default UP if zero vector
+        # 3. Handle ColorGradient (Skybox)
+        if bg_type_name == 'ColorGradient':
+            # Resolve Direction
+            try:
+                dir_vec = np.array(direction, dtype=float)
+                norm = np.linalg.norm(dir_vec)
+                if norm > 1e-6:
+                    dir_vec = dir_vec / norm
+                else:
+                    dir_vec = np.array([0.0, 1.0, 0.0])
+            except (ValueError, TypeError):
+                dir_vec = np.array([0.0, 1.0, 0.0])
 
-        # 3. Handle ColorGradient (Skybox / Vertical Gradient)
-        # Using type name string check avoids circular import issues if they exist
-        if type(bg).__name__ == 'ColorGradient' or hasattr(bg, 'get_color'):
-            # Calculate 't' for vertical gradient mapping
-            # Map Y (Up) from [-1, 1] to [0, 1]
+            # Map Y [-1, 1] to [0, 1]
             t = 0.5 * (dir_vec[1] + 1.0)
             return bg.get_color(t)
 
-        # 4. Handle Texture Map (Environment / HDRI Map)
-        # Checks if it's a numpy array (image data)
+        # 4. Handle Texture Map (Numpy Array)
         elif isinstance(bg, np.ndarray):
+            # Resolve Direction (Reuse logic or recalculate)
+            dir_vec = np.array(direction, dtype=float)
+            norm = np.linalg.norm(dir_vec)
+            if norm > 1e-6: dir_vec /= norm
+            
             return self._sample_equirectangular_map(bg, dir_vec)
 
         # 5. Handle Solid Color (Color Object)
-        elif isinstance(bg, Color):
+        # We check the name OR the instance to be safe
+        elif bg_type_name == 'Color' or isinstance(bg, Color):
             return bg
-
-        # 6. Handle Solid Color (Tuple/List fallback)
+        # Tuple/List fallback
         elif isinstance(bg, (tuple, list)) and len(bg) == 3:
-            return Color(bg[0], bg[1], bg[2])
+            return Color(*bg)
 
-        # Default fallback
         return Color(0.0, 0.0, 0.0)
-
+    
     def _sample_equirectangular_map(self, texture: np.ndarray, direction: np.ndarray) -> Color:
         """
         Samples a 2D texture using Spherical (Equirectangular) mapping.
@@ -154,7 +210,7 @@ class Scene:
         if texture.dtype.kind in 'iu': # int or uint
             pixel = pixel / 255.0
             
-        return Color(pixel[0], pixel[1], pixel[2])
+        return Color(*pixel)
     
     def clear_objects(self):
         self.objects.clear()
@@ -179,9 +235,10 @@ class Scene:
         try:
             from PrimaryStructures import Ray
             ray = Ray(origin, dir_norm)
-            closest_obj, hit_point = self.get_closest_intersection(ray)
-            if closest_obj is not None and hit_point is not None:
-                hit_dist = np.linalg.norm(hit_point - origin)
+            hit_info = self.get_closest_intersection(ray)
+            v_object: Optional[VObject] = hit_info.object
+            if hit_info.hit and v_object is not None and hit_info.point is not None:
+                hit_dist = np.linalg.norm(hit_info.point - origin)
                 if hit_dist < (dist_to_light - epsilon):
                     return True
         except Exception:
@@ -193,19 +250,16 @@ class Scene:
             distance_traveled = 0.0
             for _ in range(max_steps):
                 sample_point = origin + dir_norm * distance_traveled
-                de = self.distance_estimator(sample_point)
-                # distance_estimator may return (dist, obj) or dist only
-                if isinstance(de, tuple):
-                    d, _ = de
-                else:
-                    d = de
-                if d <= epsilon:
-                    # hit something before reaching the light -> occluded
-                    return True
-                distance_traveled += d
-                if distance_traveled >= dist_to_light:
-                    # reached light without hitting anything
-                    return False
+                v_object, dist = self.distance_estimator(sample_point)
+
+                if v_object is not None:
+                    if dist <= epsilon:
+                        # hit something before reaching the light -> occluded
+                        return True
+                    distance_traveled += dist
+                    if distance_traveled >= dist_to_light:
+                        # reached light without hitting anything
+                        return False
             # exceeded max steps without reaching the light - treat as occluded
             return True
 

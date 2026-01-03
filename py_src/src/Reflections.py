@@ -1,20 +1,11 @@
 import numpy as np
 
-"""
+from CommonUtils import unit
 
-"""
-
-def calculate_reflection_angle(incidentAngle: float) -> float:
-    """
-    Calculate the reflection angle based on the law of reflection.
-    The reflection angle is equal to the incident angle.
-
-    Attributes:
-        incidentincidentAngle (float): The angle of incidence in degrees.
-    """
-    return incidentAngle
-
-def calculate_incident_angle(normalAngle: float, incomingAngle: float) -> float:
+def calculate_incident_angle(
+        normalAngle: float,
+        incomingAngle: float
+    ) -> float:
     """
     Calculate the angle of incidence based on the normal and incoming angles.
 
@@ -24,7 +15,10 @@ def calculate_incident_angle(normalAngle: float, incomingAngle: float) -> float:
     """
     return abs(incomingAngle - normalAngle)
 
-def reflect_angle(normalAngle: float, incomingAngle: float) -> float:
+def calculate_reflection_angle(
+        normalAngle: float,
+        incomingAngle: float
+    ) -> float:
     """
     Calculate the outgoing angle of the reflected ray based on the law of reflection.
 
@@ -33,16 +27,19 @@ def reflect_angle(normalAngle: float, incomingAngle: float) -> float:
         incomingAngle (float): The angle of the incoming ray in degrees.
     """
     incidentAngle = calculate_incident_angle(normalAngle, incomingAngle)
-    reflectionAngle = calculate_reflection_angle(incidentAngle)
 
     if incomingAngle > normalAngle:
-        outgoingAngle = normalAngle + reflectionAngle
+        outgoingAngle = normalAngle + incidentAngle
     else:
-        outgoingAngle = normalAngle - reflectionAngle
+        outgoingAngle = normalAngle - incidentAngle
 
     return outgoingAngle
 
-def reflect_ray(normal: np.ndarray, ray_direction: np.ndarray) -> np.ndarray:
+def calculate_reflection_vector(
+        normal: np.ndarray,
+        direction: np.ndarray,
+        bias: float = 1e-8
+    ) -> np.ndarray:
     """
     Compute reflected ray direction using law of reflection.
     
@@ -53,9 +50,11 @@ def reflect_ray(normal: np.ndarray, ray_direction: np.ndarray) -> np.ndarray:
     Returns:
         Reflected ray direction (normalized)
     """
-    normal = normal / (np.linalg.norm(normal) + 1e-12)
-    direction = ray_direction / (np.linalg.norm(ray_direction) + 1e-12)
-    
-    dot_product = np.dot(direction, normal)
-    reflected = direction - 2 * dot_product * normal
-    return reflected / (np.linalg.norm(reflected) + 1e-12)
+    unit_normal = unit(normal, bias)
+    unit_direction = unit(direction, bias)
+
+    reflected_direction = unit_direction - 2 * np.dot(unit_direction, unit_normal) * unit_normal
+    return unit(reflected_direction, bias)
+"""
+Reflection module: Provides functions to calculate reflection angles and reflected ray directions based on the law of reflection.
+"""

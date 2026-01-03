@@ -1,29 +1,5 @@
 #include "Light.h"
 
-json Light::ToJSON() const
-{
-    json j;
-    j["position"] = { position.x, position.y, position.z };
-    j["radius"] = radius;
-    j["coneAngles"] = { coneAngles.x, coneAngles.y };
-    j["color"] = { color.x, color.y, color.z };
-    j["intensity"] = intensity;
-    j["direction"] = { direction.x, direction.y, direction.z };
-    j["type"] = type;
-    j["constructor"] = "Light";
-    return j;
-}
-void Light::FromJSON(const json& j)
-{
-    position = glm::vec3(j["position"][0], j["position"][1], j["position"][2]);
-    radius = j["radius"];
-    coneAngles = glm::vec2(j["coneAngles"][0], j["coneAngles"][1]);
-    color = glm::vec3(j["color"][0], j["color"][1], j["color"][2]);
-    intensity = j["intensity"];
-    direction = glm::vec3(j["direction"][0], j["direction"][1], j["direction"][2]);
-    type = j["type"];
-}
-
 void CreateLightsUBO()
 {
     if (g_LightsUBO != 0) return;
@@ -69,4 +45,34 @@ void UpdateLightsUBO(const std::vector<Light>& lights)
 void Light::CleanUp()
 {
     // No per-instance GL resources allocated here
+}
+
+void Light::SerializeFields(json& j) const
+{
+    j["position"] = { position.x, position.y, position.z };
+    j["radius"] = radius;
+    j["coneAngles"] = { coneAngles.x, coneAngles.y };
+    j["color"] = { color.x, color.y, color.z };
+    j["intensity"] = intensity;
+    j["direction"] = { direction.x, direction.y, direction.z };
+    j["type"] = type;
+    j["constructor"] = "Light";
+}
+
+void Light::DeserializeFields(const json& j)
+{
+    if (j.contains("position"))
+        position = glm::vec3(j["position"][0], j["position"][1], j["position"][2]);
+    if (j.contains("radius"))
+        radius = j["radius"];
+    if (j.contains("coneAngles"))
+        coneAngles = glm::vec2(j["coneAngles"][0], j["coneAngles"][1]);
+    if (j.contains("color"))
+        color = glm::vec3(j["color"][0], j["color"][1], j["color"][2]);
+    if (j.contains("intensity"))
+        intensity = j["intensity"];
+    if (j.contains("direction"))
+        direction = glm::vec3(j["direction"][0], j["direction"][1], j["direction"][2]);
+    if (j.contains("type"))
+        type = j["type"];
 }

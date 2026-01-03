@@ -6,24 +6,32 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "Mesh.h"
-#include "IVirtualObject.h"
+#include "IVirtualObject.hpp"
 
 class Model : public IVirtualObject {
 public:
-	// Loads in a model from a file and stores tha information in 'data', 'JSON', and 'file'
+	// Default Constructor
+	Model() = default;
+
+	// Standard Constructor. Loads in a model from a file and stores tha information in 'data', 'modelJSON', and 'file'
 	Model(const char* file);
+
+	// Move constructor
 	Model(Model&& other) noexcept:
 		file(other.file),
 		data(std::move(other.data)),
-		JSON(std::move(other.JSON)),
+		modelJSON(std::move(other.modelJSON)),
 		modelPath(std::move(other.modelPath)),
 		meshes(std::move(other.meshes)),
 		matricesMeshes(std::move(other.matricesMeshes)),
 		loadedTexName(std::move(other.loadedTexName)),
 		loadedTex(std::move(other.loadedTex)) {}
 
+	void LoadModel(const std::string& filePath);
+	
 	std::vector<Mesh>& GetMeshes();
 	glm::mat4 GetModelMatrixForMesh(unsigned int meshIndex) const;
 	std::vector<glm::mat4> GetModelMatricesForAllMeshes() const;
@@ -31,11 +39,14 @@ public:
 	void SetModelMatricesForAllMeshes(const std::vector<glm::mat4>& modelMatrices);
 
 	void CleanUp() override;
+protected:
+	void SerializeFields(json& j) const override;
+    void DeserializeFields(const json& j) override;
 private:
 	// Variables for easy access
 	const char* file;
 	std::vector<unsigned char> data;
-	json JSON;
+	json modelJSON;
 	std::filesystem::path modelPath;
 
 	// All the meshes and model matrices in the model

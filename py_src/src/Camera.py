@@ -1,11 +1,10 @@
 import numpy as np
+import math
 from enum import Enum
+from typing import Tuple
 
+from CommonUtils import unit
 from PrimaryStructures import Transform, Ratio
-
-"""
-
-"""
 
 class CameraType (Enum):
     """
@@ -30,11 +29,24 @@ class CameraMode (Enum):
 class VCamera:
     """
     A virtual camera class used to store properties and process calculations.
+
+    Backwards-compatible constructor supports the following keyword names:
+     - width / height (preferred in tests)
+     - resolution_width / resolution_height (explicit)
+     - camType (alternate name for camera_type)
     """
-    def __init__ (self, transform: Transform, fov: float, near: float, far: float, width: int, height: int, camType: CameraType = CameraType.PERSPECTIVE, camMode: CameraMode = CameraMode.FIRST_PERSON, name: str = "Camera", id: int = 0):
-        """
-        Initializes the Camera with the given parameters.
-        """
+    def __init__ (
+            self,
+            transform: Transform,
+            fov: float = 60,
+            near: float = 0.01,
+            far: float = 1000,
+            resolution_width: int = 10,
+            resolution_height: int = 10,
+            camera_type: CameraType = CameraType.PERSPECTIVE,
+            camera_mode: CameraMode = CameraMode.FIRST_PERSON,
+            name: str = "Camera"
+        ):
         self.transform = transform
 
         if fov <= 0:
@@ -46,64 +58,99 @@ class VCamera:
         self.near = near
         self.far = far
 
-        self.type = camType
-        self.mode = camMode
+        # Allow either camera_type or legacy camType
+        self.type = camera_type
+        self.mode = camera_mode
 
-        if width <= 0 or height <= 0:
+        # Resolve width/height arguments (support both new and old names)
+        w = resolution_width if resolution_width is not None else width
+        h = resolution_height if resolution_height is not None else height
+        if w is None or h is None:
+            raise ValueError("Width and Height must be provided (either as 'width,height' or 'resolution_width,resolution_height')")
+
+        if int(w) <= 0 or int(h) <= 0:
             raise ValueError("Width and Height must be greater than 0")
-        self.width = width
-        self.height = height
-        self.aspect = Ratio(width, height)
+
+        # Store canonical integer attributes used across the codebase
+        self.resolution_width = int(w)
+        self.resolution_height = int(h)
+        # Backwards-compatible properties `width` and `height` are provided below
+        self.aspect_ratio = Ratio(self.resolution_width, self.resolution_height)
 
         self.name = name
-        self.id = id
+
+    # Backwards compatible aliases
+    @property
+    def width(self) -> int:
+        return int(self.resolution_width)
+
+    @property
+    def height(self) -> int:
+        return int(self.resolution_height)
+
+    @width.setter
+    def width(self, val: int):
+        self.resolution_width = int(val)
+        self.aspect_ratio = Ratio(self.resolution_width, self.resolution_height)
+
+    @height.setter
+    def height(self, val: int):
+        self.resolution_height = int(val)
+        self.aspect_ratio = Ratio(self.resolution_width, self.resolution_height)
 
     def get_view_matrix(self) -> np.ndarray:
         # The view matrix is typically the inverse of the camera's global transform
         return np.linalg.inv(np.array(self.transform.get_global_matrix()))
 
     def get_projection_matrix(self) -> np.ndarray:
+        import math
         if self.type == CameraType.PERSPECTIVE:
-            # Perspective projection matrix calculation
-            f = 1.0 / (self.fov / 2).tan()
-            aspect = float(self.aspect)
+            # Perspective projection matrix calculation (column-major as standard)
+            f = 1.0 / math.tan(math.radians(self.fov) / 2.0)
+            aspect = float(self.aspect_ratio.value)
             near, far = self.near, self.far
             m = np.array([
-                [f / aspect, 0, 0, 0],
-                [0, f, 0, 0],
-                [0, 0, (far + near) / (near - far), (2 * far * near) / (near - far)],
-                [0, 0, -1, 0]
-            ])
+                [f / aspect, 0.0, 0.0, 0.0],
+                [0.0, f, 0.0, 0.0],
+                [0.0, 0.0, (far + near) / (near - far), (2.0 * far * near) / (near - far)],
+                [0.0, 0.0, -1.0, 0.0]
+            ], dtype=float)
             return m
         elif self.type == CameraType.ORTHOGRAPHIC:
             # Orthographic projection matrix calculation
-            right = self.aspect * self.fov
-            left = -right
-            top = self.fov
-            bottom = -top
+            # 'fov' here acts as half-height for the orthographic plane
+            half_height = float(self.fov)
+            half_width = half_height * float(self.aspect_ratio.value)
+
+            left = -half_width
+            right = half_width
+            bottom = -half_height
+            top = half_height
+
             near, far = self.near, self.far
             m = np.array([
-                [2 / (right - left), 0, 0, -(right + left) / (right - left)],
-                [0, 2 / (top - bottom), 0, -(top + bottom) / (top - bottom)],
-                [0, 0, -2 / (far - near), -(far + near) / (far - near)],
-                [0, 0, 0, 1]
-            ])
+                [2.0 / (right - left), 0.0, 0.0, -(right + left) / (right - left)],
+                [0.0, 2.0 / (top - bottom), 0.0, -(top + bottom) / (top - bottom)],
+                [0.0, 0.0, -2.0 / (far - near), -(far + near) / (far - near)],
+                [0.0, 0.0, 0.0, 1.0]
+            ], dtype=float)
             return m
         else:
             raise ValueError("Unknown camera type")
 
     def get_camera_matrix (self) -> np.ndarray:
-        return self.get_projection_matrix() * self.get_view_matrix()
+        # Projection * View (standard order)
+        return self.get_projection_matrix() @ self.get_view_matrix()
     
     def resize(self, width: float, height: float):
-        self.width = width
-        self.height = height
-        self.aspect = Ratio(width, height)
+        self.resolution_width = width
+        self.resolution_height = height
+        self.aspect_ratio = Ratio(width, height)
 
     def resize_aspect(self, aspect: Ratio, scale: float = 1.0):
-        self.aspect = aspect
-        self.width = int(aspect.width * scale)
-        self.height = int(aspect.height * scale)
+        self.aspect_ratio = aspect
+        self.resolution_width = int(aspect.width * scale)
+        self.resolution_height = int(aspect.height * scale)
 
     def get_frustum_planes(self) -> dict:
         """
@@ -133,7 +180,7 @@ class VCamera:
         return {
             "fov_radians": np.radians(self.fov),
             "fov_degrees": self.fov,
-            "aspect": float(self.aspect),
+            "aspect": float(self.aspect_ratio.value()),
             "near": float(self.near),
             "far": float(self.far),
         }
@@ -148,32 +195,61 @@ class VCamera:
             "view_projection": (self.get_projection_matrix() @ self.get_view_matrix()).T.tolist(),
         }
 
-    def get_ray_from_screen(self, screen_x: float, screen_y: float) -> tuple:
+    def get_camera_ray(self, u: float, v: float) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Convert screen coordinates (0-width, 0-height) to a world-space ray.
-        Useful for picking/raycasting.
-        Returns: (origin, direction) both as np.ndarray
+        Generates a ray (origin, direction) for UV coordinates (0-1).
         """
-        # Normalized device coordinates
-        ndc_x = (2.0 * screen_x) / self.width - 1.0
-        ndc_y = 1.0 - (2.0 * screen_y) / self.height  # Flip Y for OpenGL
+        # --- ORTHOGRAPHIC ---
+        if self.type == CameraType.ORTHOGRAPHIC:
+            # 1. Direction is always forward
+            direction = self.transform.forward
+            
+            # 2. Origin shifts along the camera plane
+            height_size = self.ortho_scale # or self.fov if reusing that field
+            width_size = height_size * self.aspect_ratio.value
+
+            # Map 0..1 to -Width/2 .. +Width/2
+            offset_x = (u - 0.5) * width_size
+            offset_y = (0.5 - v) * height_size 
+
+            origin = (
+                self.transform.position + 
+                (self.transform.right * offset_x) + 
+                (self.transform.up * offset_y)
+            )
+            return origin, direction
+
+        # --- PERSPECTIVE ---
+        # Geometric approach (Snippet 1 style) is usually faster for CPU raytracing 
+        # than matrix inversion if you aren't caching the inverse matrix.
         
-        # Inverse projection to get view-space coordinates
-        proj_inv = np.linalg.inv(self.get_projection_matrix())
-        view_x = ndc_x * np.tan(np.radians(self.fov / 2)) * float(self.aspect)
-        view_y = ndc_y * np.tan(np.radians(self.fov / 2))
+        # 1. NDC (-1 to 1)
+        ndc_x = (2.0 * u) - 1.0
+        ndc_y = 1.0 - (2.0 * v)
+
+        # 2. Scale by FOV
+        # vertical_fov is in degrees
+        tan_half_fov = math.tan(math.radians(self.fov) / 2.0)
         
-        # View-space ray
-        ray_view = np.array([view_x, view_y, -1.0, 0.0])
+        # Camera Space Direction
+        # Assuming standard camera: Right=+X, Up=+Y, Forward=+Z (or -Z depending on convention)
+        # We use the Basis vectors directly to go straight to World Space
         
-        # Transform to world space
-        view_inv = np.linalg.inv(self.get_view_matrix())
-        ray_world = view_inv @ ray_view
+        x_scale = ndc_x * self.aspect_ratio.value * tan_half_fov
+        y_scale = ndc_y * tan_half_fov
         
-        origin = self.transform.get_global_position()
-        direction = ray_world[:3] / np.linalg.norm(ray_world[:3])
+        # Construct direction in world space by summing basis vectors
+        # This assumes 'forward' is the direction the camera looks.
+        direction = (
+            (self.transform.forward) +         # 1 unit forward
+            (self.transform.right * x_scale) + # Horizontal spread
+            (self.transform.up * y_scale)      # Vertical spread
+        )
         
-        return origin, direction
+        # Normalize
+        direction = direction / np.linalg.norm(direction)
+        
+        return self.transform.position, direction
 
     def export_uniforms(self) -> str:
         """
@@ -193,8 +269,8 @@ uniform float uFOV;           // Field of view (radians)
 
     def __repr__(self):
         return (f"VCamera(name={self.name}, type={self.type.name}, mode={self.mode.name}, "
-                f"fov={self.fov}, aspect={self.aspect}, near={self.near}, far={self.far}, "
-                f"res={self.width}x{self.height})")
+                f"fov={self.fov}, aspect={self.aspect_ratio}, near={self.near}, far={self.far}, "
+                f"res={self.resolution_width}x{self.resolution_height})")
 
 """
 Camera module: Providing the Camera class with properties, projection types and movement modes.

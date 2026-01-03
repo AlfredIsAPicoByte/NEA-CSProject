@@ -2,15 +2,23 @@
 
 Mesh::Mesh(std::vector <Vertex>& vertices, std::vector <GLuint>& indices, std::vector <Texture>& textures)
 {
-    Mesh::vertices = vertices;
-    Mesh::indices = indices;
-    Mesh::textures = textures;
+    this->vertices = vertices;
+    this->indices = indices;
+    this->textures = textures;
 
+    setupMesh();
+}
+
+void Mesh::setupMesh()
+{
+    // This logic is moved here so it can be called after loading from JSON too
     VAO.Bind();
+    
     // Generates Vertex Buffer Object and links it to vertices
     VBO VBO(vertices);
     // Generates Element Buffer Object and links it to indices
     EBO EBO(indices);
+    
     // Links VBO attributes such as coordinates and colors to VAO
     VAO.LinkAttrib(VBO, 0, 3, GL_FLOAT, sizeof(Vertex), (void*)0); // position
     VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float))); // normal
@@ -83,9 +91,12 @@ void Mesh::CleanUp()
     VAO.Delete();
 }
 
-json Mesh::ToJSON() const
+void Mesh::SerializeFields(json& j) const
 {
-    json j;
+    // 1. Call Parent to save Name and Model Matrix
+    IRenderable::SerializeFields(j);
+
+    // 2. Save Mesh Data
     j["vertices"] = json::array();
     for (const auto& v : vertices) {
         json jv;
@@ -97,6 +108,9 @@ json Mesh::ToJSON() const
         j["vertices"].push_back(jv);
     }
     j["indices"] = indices;
+    
+    // Note: Saving Texture IDs (OpenGL Handles) is usually not safe for reloading,
+    // but preserving your logic here. Ideally, you save the texture file paths.
     j["textures"] = json::array();
     for (const auto& t : textures) {
         json jt;
@@ -105,29 +119,47 @@ json Mesh::ToJSON() const
         jt["unit"] = t.unit;
         j["textures"].push_back(jt);
     }
+
     j["constructor"] = "Mesh";
-    return j;
 }
 
-void Mesh::FromJSON(const json& j)
+void Mesh::DeserializeFields(const json& j)
 {
-    vertices.clear();
-    for (const auto& jv : j["vertices"]) {
-        Vertex v;
-        v.Position = glm::vec3(jv["position"][0], jv["position"][1], jv["position"][2]);
-        v.Normal = glm::vec3(jv["normal"][0], jv["normal"][1], jv["normal"][2]);
-        v.Color = glm::vec3(jv["color"][0], jv["color"][1], jv["color"][2]);
-        v.TexCoords = glm::vec2(jv["uv"][0], jv["uv"][1]);
-        v.Tangent = glm::vec4(jv["tangent"][0], jv["tangent"][1], jv["tangent"][2], jv["tangent"][3]);
-        vertices.push_back(v);
+    // 1. Call Parent to load Name and Model Matrix
+    IRenderable::DeserializeFields(j);
+
+    // 2. Load Mesh Data
+    if (j.contains("vertices")) {
+        vertices.clear();
+        for (const auto& jv : j["vertices"]) {
+            Vertex v;
+            v.Position = glm::vec3(jv["position"][0], jv["position"][1], jv["position"][2]);
+            v.Normal = glm::vec3(jv["normal"][0], jv["normal"][1], jv["normal"][2]);
+            v.Color = glm::vec3(jv["color"][0], jv["color"][1], jv["color"][2]);
+            v.TexCoords = glm::vec2(jv["uv"][0], jv["uv"][1]);
+            v.Tangent = glm::vec4(jv["tangent"][0], jv["tangent"][1], jv["tangent"][2], jv["tangent"][3]);
+            vertices.push_back(v);
+        }
     }
-    indices = j["indices"].get<std::vector<GLuint>>();
-    textures.clear();
-    for (const auto& jt : j["textures"]) {
-        Texture t("", "", 0); // dummy initialization
-        t.ID = jt["ID"];
-        t.type = jt["type"].get<std::string>().c_str();
-        t.unit = jt["unit"];
-        textures.push_back(t);
+
+    if (j.contains("indices")) {
+        indices = j["indices"].get<std::vector<GLuint>>();
     }
+
+    if (j.contains("textures")) {
+        textures.clear();
+        for (const auto& jt : j["textures"]) {
+            // Note: This creates dummy textures. 
+            // Real textures usually need to be re-loaded from files unless
+            // the ID is being used as a reference to a Texture Manager.
+            Texture t("", "", 0); 
+            t.ID = jt["ID"];
+            t.type = jt["type"].get<std::string>().c_str();
+            t.unit = jt["unit"];
+            textures.push_back(t);
+        }
+    }
+
+    // 3. IMPORTANT: Re-build the OpenGL buffers now that data is loaded
+    setupMesh();
 }

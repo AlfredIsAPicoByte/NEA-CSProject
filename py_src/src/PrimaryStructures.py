@@ -1,18 +1,32 @@
-from math import cos, sin, acos
+from math import cos, sin, acos, gcd
 import numpy as np
+from typing import Optional, Any
+from dataclasses import dataclass, field
 
+from CommonUtils import unit
+
+def unit_vector(v):
+    norm = np.linalg.norm(v)
+    return v / norm if norm > 0 else v
+
+@dataclass(slots=True)
 class Ray:
-    def __init__(self, origin: np.ndarray, orientation: np.ndarray, name: str = "Ray"):
-        """
-        A ray defined by an origin point and an orientation vector.
-        """
-        if np.linalg.norm(orientation) == 0:
-            raise ValueError("Orientation vector cannot be zero-length")
+    origin: np.ndarray
+    orientation: np.ndarray
+    name: str = "Ray"
 
-        self.origin = np.asarray(origin, dtype=float)
-        self._orientation = None
-        self.orientation = orientation  # uses property setter (normalizes)
-        self.name = name
+    def __post_init__(self):
+        """
+        Dataclasses run this AFTER the auto-generated __init__.
+        We use this to enforce normalization logic.
+        """
+        # Safety check for zero-length vector
+        if np.linalg.norm(self.orientation) == 0:
+            # Fallback to a safe default (e.g., Up) to prevent crash
+            object.__setattr__(self, 'orientation', np.array([0.0, 1.0, 0.0]))
+        else:
+            # Normalize and re-assign (bypass frozen check if frozen=True, though unnecessary here)
+            object.__setattr__(self, 'orientation', unit_vector(self.orientation))
 
     @property
     def orientation(self) -> np.ndarray:
@@ -51,7 +65,7 @@ class Ray:
         if np.linalg.norm(to_point) == 0:
             return True
         
-        to_point_normalized = to_point / np.linalg.norm(to_point)
+        to_point_normalized = unit(to_point)
         return np.allclose(to_point_normalized, self.orientation )
 
     def check_point_in_front(self, point: np.ndarray):
@@ -78,7 +92,7 @@ class Ray:
         if self.orientation .shape[0] != 3 or axis.shape[0] != 3:
             raise ValueError("Rotate only supports 3D vectors")
         
-        axis = axis / np.linalg.norm(axis)
+        axis = unit(axis)
         cos_a = cos(angle)
         sin_a = sin(angle)
         ux, uy, uz = axis
@@ -110,6 +124,120 @@ class Ray:
     def __repr__(self):
         return f"Ray(origin={self.origin}, orientation={self.orientation})"
 
+# Define a ray that holds the ray and data
+@dataclass(slots=True)
+class TracingRay(Ray):
+    """
+    A Ray that carries extra state for the recursive path tracing engine.
+    """
+    depth: int = 0
+    pixel_x: int = -1
+    pixel_y: int = -1
+    
+    # How much light this ray carries (Color multiplier)
+    # Storing as object to avoid import cycles with 'Color' class
+    throughput: object = field(default_factory=lambda: np.array([1.0, 1.0, 1.0, 1.0]))
+    pdf: float = 0
+    
+    # Is the ray currently traveling inside a medium (like glass)?
+    is_inside: bool = False
+    
+    # UV Coordinates for sub-pixel sampling
+    sample_u: float = 0.5
+    sample_v: float = 0.5
+
+    def __repr__(self):
+        return f"TracingRay(name={self.name}, origin={self.origin}, orientation={self.orientation})"
+
+
+class RayPool:
+    def __init__(self, block_size=10000):
+        self._pool = []
+        self._block_size = block_size
+
+    def get_ray(self, origin, orientation, x, y):
+        if self._pool:
+            ray = self._pool.pop()
+            
+            ray.origin = origin
+            ray.orientation = orientation
+            ray.pixel_x = x
+            ray.pixel_y = y
+            ray.depth = 0
+            ray.is_inside = False
+            ray.throughput = np.ndarray([1.0, 1.0, 1.0])
+            return ray
+        else:
+            # Create new if pool is empty
+            return TracingRay(origin, orientation, x, y, ...)
+
+    def return_ray(self, ray: TracingRay):
+        self._pool.append(ray)
+
+@dataclass(slots=True)
+class HitInfo:
+    """
+    Stores information about a ray-object intersection.
+    """
+    # --- 1. Define ALL storage fields here ---
+    
+    # Did we hit something?
+    hit: bool = False
+    
+    # Distance along the ray (for Z-buffer/sorting)
+    distance: float = float('inf')
+    
+    # World-space coordinate of intersection
+    point: Optional[np.ndarray] = None
+    
+    # Surface normal at intersection
+    normal: Optional[np.ndarray] = None
+    
+    # The incoming ray direction (useful for shading calculations)
+    direction: Optional[np.ndarray] = None
+    
+    # The object we hit (for material lookup)
+    obj: Optional[Any] = None
+    
+    # Texture coordinates
+    uv: Optional[np.ndarray] = None
+
+    # --- 2. Custom Init to handle your specific naming logic ---
+    def __init__(
+        self,
+        did_hit: bool,
+        point: Optional[np.ndarray] = None,
+        direction: Optional[np.ndarray] = None,
+        normal: Optional[np.ndarray] = None,
+        distance: float = float('inf'),
+        obj: Optional[Any] = None,
+        uv: Optional[np.ndarray] = None
+    ):
+        # Assign directly to the SLOTS defined above.
+        object.__setattr__(self, 'hit', bool(did_hit))
+        object.__setattr__(self, 'point', point)
+        object.__setattr__(self, 'distance', distance)
+        object.__setattr__(self, 'obj', obj)
+        object.__setattr__(self, 'uv', uv)
+
+        if direction is not None:
+            norm_dir = unit(direction)
+            object.__setattr__(self, 'direction', norm_dir)
+        else:
+            object.__setattr__(self, 'direction', None)
+
+        if normal is not None:
+            norm_surf = unit(normal)
+            object.__setattr__(self, 'normal', norm_surf)
+        else:
+            object.__setattr__(self, 'normal', None)
+
+    @classmethod
+    def miss(cls):
+        """Fast helper to create a Miss."""
+        # Uses the defaults defined in init arguments
+        return cls(did_hit=False)
+
 class Transform:
     """
     Represents a 3D transformation with position, rotation, scale, and hierarchical parent support.
@@ -138,8 +266,7 @@ class Transform:
         self.update_orientations()
 
     def _matrix_to_euler(self, R: np.ndarray) -> np.ndarray:
-        """Converts a 3x3 rotation matrix to ZYX Euler angles (Roll, Pitch, Yaw)."""
-        # Extracts angles assuming rotation order Rz * Ry * Rx
+        """Converts a 3x3 rotation matrix to ZYX Euler angles."""
         sy = np.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
         singular = sy < 1e-6
 
@@ -156,69 +283,41 @@ class Transform:
 
     def update_orientations(self):
         """Updates forward/right/up vectors based on current rotation."""
-        # Use numpy functions
         rx, ry, rz = self.rotation + self.local_rotation
         cx, sx = np.cos(rx), np.sin(rx)
         cy, sy = np.cos(ry), np.sin(ry)
         cz, sz = np.cos(rz), np.sin(rz)
         
-        # Combined rotation matrix (Z * Y * X)
+        # Rotation Matrix (Z * Y * X)
         R = np.array([
             [cy*cz, cz*sx*sy - cx*sz, cx*cz*sy + sx*sz],
             [cy*sz, cx*cz + sx*sy*sz, -cz*sx + cx*sy*sz],
             [-sy,   cy*sx,            cx*cy]
         ])
         
-        # Standard basis vectors
         self.right   = R @ np.array([1, 0, 0])
         self.up      = R @ np.array([0, 1, 0])
         self.forward = R @ np.array([0, 0, 1])
     
     def _rotation_matrix_from_euler(self, euler: np.ndarray) -> np.ndarray:
         rx, ry, rz = euler
-        # Rot X
-        rot_x = np.array([
-            [1, 0, 0],
-            [0, np.cos(rx), -np.sin(rx)],
-            [0, np.sin(rx),  np.cos(rx)]
-        ])
-        # Rot Y
-        rot_y = np.array([
-            [ np.cos(ry), 0, np.sin(ry)],
-            [ 0,          1, 0],
-            [-np.sin(ry), 0, np.cos(ry)]
-        ])
-        # Rot Z
-        rot_z = np.array([
-            [np.cos(rz), -np.sin(rz), 0],
-            [np.sin(rz),  np.cos(rz), 0],
-            [0,           0,          1]
-        ])
+        rot_x = np.array([[1, 0, 0], [0, np.cos(rx), -np.sin(rx)], [0, np.sin(rx), np.cos(rx)]])
+        rot_y = np.array([[np.cos(ry), 0, np.sin(ry)], [0, 1, 0], [-np.sin(ry), 0, np.cos(ry)]])
+        rot_z = np.array([[np.cos(rz), -np.sin(rz), 0], [np.sin(rz), np.cos(rz), 0], [0, 0, 1]])
         return rot_z @ rot_y @ rot_x
 
     def _make_transform_matrix(self, position: np.ndarray, rotation: np.ndarray, scale: np.ndarray) -> np.ndarray:
         R = self._rotation_matrix_from_euler(rotation)
-        M = np.eye(4)
-        # Apply Scale first, then Rotation
-        M[:3, :3] = R @ np.diag(scale) 
-        # Apply Translation
-        M[:3, 3] = position
-        return M
-
-    def get_local_matrix(self) -> np.ndarray:
-        """Returns the local (offset) transformation matrix (4x4) built from local_position/local_rotation/local_scale."""
-        return self._make_transform_matrix(self.local_position, self.local_rotation, self.local_scale)
-        
-    def get_base_matrix(self) -> np.ndarray:
-        """Returns the base/global matrix built from the public position/rotation/scale."""
-        return self._make_transform_matrix(self.position, self.rotation, self.scale)
+        S = np.diag(scale)
+        mat = np.eye(4, dtype=float)
+        mat[:3, :3] = R @ S
+        mat[:3, 3] = position
+        return mat
 
     def get_global_matrix(self) -> np.ndarray:
-        """Returns the global transformation matrix: parent's global @ base @ local."""
+        """Returns the global transformation matrix: parent @ base @ local."""
         base = self._make_transform_matrix(self.position, self.rotation, self.scale)
         local = self._make_transform_matrix(self.local_position, self.local_rotation, self.local_scale)
-        
-        # Order: Base transform is applied first, then Local offsets on top of that
         combined = base @ local 
         
         if self.parent is not None:
@@ -228,121 +327,174 @@ class Transform:
     def get_global_position(self) -> np.ndarray:
         return self.get_global_matrix()[:3, 3]
     
-    def get_global_rotation(self) -> np.ndarray:
-        """Returns an approximation of the global Euler rotation (base + local)."""
-        # Exact Euler extraction from a matrix is non-trivial; return summed euler as a reasonable approximation.
-        if self.parent is not None:
-            parent_rot = self.parent.get_global_rotation()
-        else:
-            parent_rot = np.zeros(3, dtype=float)
-        return parent_rot + (self.rotation + self.local_rotation)
-
-    def get_global_scale(self) -> np.ndarray:
-        """Returns the global scale (element-wise) combining parent, base and local."""
-        base_scale = self.scale * self.local_scale
-        if self.parent is not None:
-            return self.parent.get_global_scale() * base_scale
-        return base_scale
-    
-    @property
-    def model_matrix(self) -> np.ndarray:
-        """Standard property expected by Shape classes (Local -> World)."""
-        return self.get_global_matrix()
-    
     def look_at(self, target_position: np.ndarray, world_up: np.ndarray = None):
-        """
-        Rotates the transform to look at the target position.
-        Updates self.rotation (Euler angles).
-        """
-        if world_up is None:
-            world_up = np.array([0, 1, 0])
-
+        if world_up is None: world_up = np.array([0, 1, 0])
         target_position = np.asarray(target_position, dtype=float)
         
-        # 1. Calculate Forward vector
-        # (Assuming -Z forward convention for cameras, or +Z for objects depending on needs. 
-        # Here we use +Z forward for standard object orientation).
         direction = target_position - self.get_global_position()
         dist = np.linalg.norm(direction)
-        if dist < 1e-6: 
-            return # Prevent errors if target is self
+        if dist < 1e-6: return
 
         forward = direction / dist
-
-        # 2. Calculate Right and Up
         if np.abs(np.dot(forward, world_up)) > 0.999:
             right = np.array([1, 0, 0])
         else:
             right = np.cross(world_up, forward)
-            right = right / np.linalg.norm(right)
+            right = unit(right)
         
         up = np.cross(forward, right)
-
-        # 3. Construct Rotation Matrix (Column-major logic for Object Transform)
-        # [ Right_x  Up_x  Fwd_x ]
-        # [ Right_y  Up_y  Fwd_y ]
-        # [ Right_z  Up_z  Fwd_z ]
+        
+        # Matrix to Euler
         rotation_matrix = np.array([
             [right[0], up[0], forward[0]],
             [right[1], up[1], forward[1]],
             [right[2], up[2], forward[2]]
         ])
-
-        # 4. Convert Matrix to Euler and assign to self.rotation
-        # We subtract local_rotation so the base rotation is correct
+        
         new_euler = self._matrix_to_euler(rotation_matrix)
         self.rotation = new_euler - self.local_rotation
         self.update_orientations()
 
     def translate(self, vector: np.ndarray, space: str = "global"):
-        """
-        Translate this transform.
-        space: "global" (default) updates the public/base position.
-               "local" updates the local_position offset.
-        """
-        if vector.shape != (3,):
-            raise ValueError("Translation vector must be 3D")
-        if space not in ("local", "global"):
-            raise ValueError("space must be 'local' or 'global'")
-        if space == "global":
-            self.position = self.position + vector
-        else:
-            self.local_position = self.local_position + vector
+        if space == "global": self.position += vector
+        else: self.local_position += vector
         self.update_orientations()
 
     def rotate(self, angle: float, axis: np.ndarray, space: str = "global"):
-        """
-        Rotate this transform by a small Euler-like delta constructed from angle * normalized(axis).
-        space: "global" updates the public/base rotation, "local" updates the local_rotation.
-        angle is in radians.
-        """
-        axis = np.asarray(axis, dtype=float)
-        if axis.shape != (3,):
-            raise ValueError("Axis must be 3D")
-        norm = np.linalg.norm(axis)
-        if norm == 0:
-            raise ValueError("Cannot rotate around a zero-length vector")
-        delta = (angle * (axis / norm))
-        if space == "global":
-            self.rotation = self.rotation + delta
-        else:
-            self.local_rotation = self.local_rotation + delta
+        axis = unit(np.asarray(axis, dtype=float))
+        if np.linalg.norm(axis) == 0: return
+        delta = axis * angle
+        if space == "global": self.rotation += delta
+        else: self.local_rotation += delta
         self.update_orientations()
 
     def enlarge(self, vector: np.ndarray, space: str = "global"):
-        """
-        Scale the transform.
-        space: "global" multiplies the public/base scale, "local" multiplies the local_scale.
-        """
-        vec = np.asarray(vector, dtype=float)
-        if vec.shape != (3,):
-            raise ValueError("Scale/enlarge vector must be 3D")
-        if space == "global":
-            self.scale = self.scale * vec
-        else:
-            self.local_scale = self.local_scale * vec
+        if space == "global": self.scale *= vector
+        else: self.local_scale *= vector
         self.update_orientations()
+
+    def transform_point(self, point: np.ndarray) -> np.ndarray:
+        """
+        Applies the full transformation (Scale -> Rotation -> Translation) to a 3D point.
+        Useful for converting object-space vertices to world-space.
+        """
+        # P_world = M * P_local
+        # Homogeneous coordinate w=1 is implied for translation
+        point = np.asarray(point, dtype=float)
+        model_matrix = self.get_global_matrix()
+        
+        # Expand point to 4D homogeneous coordinates [x, y, z, 1]
+        p_hom = np.append(point, 1.0)
+        transformed = model_matrix @ p_hom
+        
+        return transformed[:3] # Return XYZ
+
+    def transform_direction(self, direction: np.ndarray, normalize: bool = False) -> np.ndarray:
+        """
+        Applies only Rotation and Scale to a vector (Translation is ignored).
+        Useful for ray directions or velocity vectors.
+        """
+        direction = np.asarray(direction, dtype=float)
+        model_matrix = self.get_global_matrix()
+        
+        # Extract upper-left 3x3 (Rotation & Scale)
+        rs_matrix = model_matrix[:3, :3]
+        
+        transformed = rs_matrix @ direction
+        
+        if normalize:
+            return unit(transformed)
+        return transformed
+
+    def transform_normal(self, normal: np.ndarray) -> np.ndarray:
+        """
+        Transforms a surface normal vector.
+        Uses the Inverse Transpose of the upper 3x3 matrix to handle non-uniform scaling correctly,
+        ensuring the normal remains perpendicular to the surface.
+        """
+        normal = np.asarray(normal, dtype=float)
+        model_matrix = self.get_global_matrix()
+        
+        # 1. Extract Rotation-Scale matrix (3x3)
+        rs_matrix = model_matrix[:3, :3]
+        
+        # 2. Compute Normal Matrix: (M^-1)^T
+        # This is required because normals transform differently than points/lines under non-uniform scaling.
+        try:
+            norm_matrix = np.linalg.inv(rs_matrix).T
+        except np.linalg.LinAlgError:
+            # Fallback if scale is 0
+            norm_matrix = rs_matrix 
+
+        transformed = norm_matrix @ normal
+        
+        # Normals should almost always be normalized after transformation
+        return unit(transformed)
     
+    def get_inverse_matrix(self) -> np.ndarray:
+        """Returns the inverse of the global transform matrix (World -> Local)."""
+        # Note: For high-performance rendering engines, this is usually cached.
+        try:
+            return np.linalg.inv(self.get_global_matrix())
+        except np.linalg.LinAlgError:
+            # Handle singular matrix (e.g., scale is 0) gracefully
+            return np.eye(4)
+
+    def inverse_transform_point(self, world_point: np.ndarray) -> np.ndarray:
+        """
+        Transforms a point from World Space back to Local Object Space.
+        """
+        world_point = np.asarray(world_point, dtype=float)
+        inv_matrix = self.get_inverse_matrix()
+        
+        # Homogeneous coordinate w=1
+        p_hom = np.append(world_point, 1.0)
+        transformed = inv_matrix @ p_hom
+        
+        return transformed[:3]
+
+    def inverse_transform_direction(self, world_direction: np.ndarray, normalize: bool = False) -> np.ndarray:
+        """
+        Transforms a direction vector from World Space to Local Space.
+        (Rotation and Scale only, ignores Translation).
+        """
+        world_direction = np.asarray(world_direction, dtype=float)
+        inv_matrix = self.get_inverse_matrix()
+        
+        # Extract upper-left 3x3 (Inverse Rotation & Inverse Scale)
+        inv_rs_matrix = inv_matrix[:3, :3]
+        
+        transformed = inv_rs_matrix @ world_direction
+        
+        if normalize:
+            return unit(transformed)
+        return transformed
+
+    def inverse_transform_normal(self, world_normal: np.ndarray) -> np.ndarray:
+        """
+        Transforms a normal vector from World Space to Local Space.
+        
+        Math Note:
+        Forward Normal = (M^-1).T @ local_normal
+        Inverse Normal = (Inverse_Matrix^-1).T @ world_normal
+                       = ((M^-1)^-1).T @ world_normal
+                       = (M).T @ world_normal
+        
+        We use the Transpose of the Forward Model Matrix.
+        """
+        world_normal = np.asarray(world_normal, dtype=float)
+        
+        # Get the Forward Model Matrix (not inverse)
+        model_matrix = self.get_global_matrix()
+        
+        # Extract 3x3 and Transpose it
+        # This handles the non-uniform scaling 'un-skewing' correctly.
+        transpose_matrix = model_matrix[:3, :3].T
+        
+        transformed = transpose_matrix @ world_normal
+        
+        return unit(transformed)
+
     def reflect_axis(self, axis: np.ndarray, space: str = "global"):
         """
         Reflect the transform across the given axis (2D only).
@@ -403,6 +555,20 @@ class Ratio:
             
         self.width = width
         self.height = height
+
+    def simplify(self):
+        """Simplify this Ratio in-place and return self (e.g., 1920/1080 -> 16/9)."""
+        w_int = int(self.width)
+        h_int = int(self.height)
+
+        divisor = gcd(w_int, h_int)
+        if divisor == 0:
+            return self
+
+        # Use integer division to keep them integral
+        self.width = w_int // divisor
+        self.height = h_int // divisor
+        return self
 
     def __add__(self, other):
         if not isinstance(other, Ratio):
@@ -484,10 +650,10 @@ class Ratio:
     
 """
 PrimaryStructures module: Provides datastructures essential for most graphical computations.
-Includes Ray, Transform, and Ratio classes.
 
 Classes:
 - Ray: Represents a ray in 2D/3D space with origin and orientation.
+- HitInfo: Stores information about ray-object intersections.
 - Transform: Represents a 3D transformation with position, rotation, scale, and hierarchical parent support.
 - Ratio: Represents a ratio (fraction) with width and height, supporting basic arithmetic operations and comparisons.
 """
