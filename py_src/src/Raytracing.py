@@ -757,7 +757,7 @@ class StandardInteraction(InteractionStrategy):
         Decide between reflection and refraction (Russian roulette) and generate the next ray.
         Updates ray depth/is_inside and conservative tracing stats counters.
         """
-        material: PBRMaterial = getattr(hit_info.object, "material", None) or getattr(hit_info.object.shape, "material", None) if hasattr(hit_info.object, "shape") else None
+        material: PBRMaterial = getattr(hit_info.obj, "material", None) or getattr(hit_info.obj.shape, "material", None) if hasattr(hit_info.obj, "shape") else None
         if not material:
             return None
 
@@ -780,8 +780,8 @@ class StandardInteraction(InteractionStrategy):
 
         # Try refraction first if decision says so
         if do_refract:
-            new_ray, pdf = material.calculate_refraction_ray(
-                incoming_ray=ray,
+            new_ray, pdf = material.calculate_microfacet_refraction_ray(
+                direction=ray.orientation,
                 surface_normal=normal,
                 new_origin=hit_info.point + normal * bias,
                 sampler=sampler,
@@ -794,15 +794,16 @@ class StandardInteraction(InteractionStrategy):
 
         # Reflection path (or fallback)
         if not do_refract:
-            new_ray, pdf = material.calculate_microfacet_reflection(
-                incoming_ray=ray,
+            new_ray, pdf = material.calculate_microfacet_reflection_ray(
+                direction=ray.orientation,
                 surface_normal=normal,
                 new_origin=hit_info.point + normal * bias,
                 sampler=sampler
             )
 
         if new_ray is not None:
-            new_ray.depth = getattr(ray, "depth", 0) + 1
+            print(ray)
+            new_ray.depth = ray.depth + 1
 
             # Toggle inside flag on refraction
             if do_refract:
@@ -838,21 +839,20 @@ class BasicLambertShading(ShadingStrategy):
             bias: float = 1e-4,
             stats: Optional["TracingStats"] = None
         ) -> Color:
-        
-        if not hasattr(hit_info, 'obj') or hasattr(hit_info.obj, 'shape'):
-            return Color(0, 1, 1)  # Error Pink
+        if not (hit_info.hit or hasattr(hit_info, "obj")):
+            return Color(0.0, 1.0, 1.0) # Cyan for missing object
         
         v_obj: VObject = hit_info.obj
 
         mat = getattr(v_obj, 'material', None)
         if mat is None:
-            return Color(1.0, 0.0, 1.0)
+            return Color(1.0, 0.0, 1.0) # Pink for missing material
             
         # Create a minimal color using ambient only
         ambient: Color = getattr(scene, 'ambient_color', Color(0.03, 0.03, 0.03))
         intensity: float = getattr(scene, 'ambient_intensity', 0.1)
             
-        albedo: Color = getattr(mat, 'albedo', Color(1, 1, 1)) if mat is not None else Color(1, 1, 1)
+        albedo: Color = getattr(mat, 'albedo', Color(1.0, 1.0, 1.0)) if mat is not None else Color(1.0, 1.0, 1.0)
         return ambient * intensity * albedo
 
 class RecursiveLambertShading(ShadingStrategy):
@@ -873,17 +873,17 @@ class RecursiveLambertShading(ShadingStrategy):
             bias: float = 1e-4,
             stats: Optional["TracingStats"] = None
         ) -> Color:
-        if not hit_info.hit or hasattr(hit_info, "obj") or hasattr(hit_info, "normal"):
-            return Color(0.0, 1.0, 1.0)
+        if not (hit_info.hit or hasattr(hit_info, "obj")):
+            return Color(0.0, 1.0, 1.0) # Cyan for missing object
 
         v_object: VObject = hit_info.obj
-        if not hasattr(v_object, "material"):
-            return Color(1.0, 0.0, 1.0)
-        material = v_object.material
+        material: PBRMaterial = v_object.material
+        if material is None:
+            return Color(1.0, 0.0, 1.0) # Pink for missing material
         
         # --- 1. Emission (The Glow) ---
         # Added first so even if we stop recursing, we see the light.
-        final_color = Color(0, 0, 0)
+        final_color = Color(0.0, 0.0, 0.0)
         if material.type == MaterialType.EMISSIVE:
             final_color += material.get_emissive_component()
             # Emissive materials usually don't reflect/receive shadow, so we can return early
@@ -1006,7 +1006,7 @@ class XRayThicknessShading(ShadingStrategy):
         transmission = attenuate_distance_exponential(thickness, self.density)
 
         # 4. Determine Core Color
-        final_color = Color(0, 0, 0)
+        final_color = Color(0.0, 0.0, 0.0)
 
         if self.invert_style:
             # --- SCI-FI / ADDITIVE STYLE ---
@@ -1168,7 +1168,7 @@ class Raytracer(Algorithm):
         If the surface is reflective, this function will be called again by the shader.
         """
         if depth < 0:
-            return Color(0.0, 0.0, 0.0)
+            return Color(1.0, 0.0, 0.0) # Red for depth error
 
         hit_info = self.intersector.find_hit(scene, ray, self.stats)
 
@@ -1286,14 +1286,13 @@ class Raytracer(Algorithm):
                         
                     # Reconstruct
                     samples = [sc[0] for sc in samples_and_colors]
-                    # Convert Color objects to RGB arrays
+                    # Convert Color objects to RGBA arrays
                     colors = []
                     for sc in samples_and_colors:
                         color_obj: Color = sc[1]
-                        color_array = color_obj.to_np_array()[:3]
+                        color_array = color_obj.to_np_array(include_alpha=True)
                         colors.append(color_array)
-                        
-                    # Note: You need to import/define 'reconstruct_pixel'
+                    
                     rec_rgb = reconstruct_pixel(global_x, global_y, samples, colors, self.sample_settings)
                     final_color = Color(*rec_rgb)
 
@@ -1304,6 +1303,5 @@ class Raytracer(Algorithm):
 
         self.stats.pixels_processed = pixels_processed
         self.stats.stop_timer()
-        self.stats.print_verbose_report()
 
         return full_image_pixels

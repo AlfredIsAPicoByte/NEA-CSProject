@@ -146,8 +146,8 @@ def test_background_gradient():
     grad = ColorGradient([Color.from_hex("#000033"), Color.from_hex("#87CEEB")], [0.0, 1.0])
     scene = Scene(name="bg_test", camera=cam, background_color=grad)
     
-    up_color = scene.get_background_color(np.array([0.0, 1.0, 0.0]))
-    down_color = scene.get_background_color(np.array([0.0, -1.0, 0.0]))
+    up_color = scene.get_background_color([0.0, 1.0, 0.0])
+    down_color = scene.get_background_color([0.0, -1.0, 0.0])
     
     # Helper to get array from Color object
     def get_rgb(c):
@@ -174,17 +174,17 @@ def test_ambient_lighting():
         resolution_width=4, resolution_height=4,
         camera_type=CameraType.PERSPECTIVE
     )
-    light = LightSource(position=np.array([10,10,-10]), color=Color(1,1,1), intensity=0.5)
+    light = LightSource(position=np.array([10,10,-10]), color=Color(1.0, 1.0, 1.0), intensity=0.5)
     material = PBRMaterial.create_diffuse(
         albedo=Color(0.8, 0.8, 0.8),
         roughness=0.5,
     ).data
-    sphere = VObject(SphereFactory().create(np.array([0,0,0]), 1), Transform(np.zeros(3), np.zeros(3), np.ones(3)))
+    sphere = VObject(SphereFactory().create(np.array([0, 0, 0]), 1), Transform(np.zeros(3), np.zeros(3), np.ones(3)))
     # Attach PBR data to shape for compatibility
     sphere.shape.material = material
     scene = Scene(name="ambient_test", camera=cam, objects=[sphere], lights=[
         light
-    ], background_color=Color(0, 0, 0))
+    ], background_color=Color(0.0, 0.0, 0.0))
     raytracer = Raytracer(
         max_depth=2,
         sampling_manager=None,
@@ -192,7 +192,7 @@ def test_ambient_lighting():
         intersection_strategy=None,
         interaction_strategy=None,
         shading_strategy=BasicLambertShading(),
-        custom_background=scene.get_background_color((0, 0, -1)),
+        custom_background=scene.get_background_color([0.0, 0.0, -1.0]),
         enable_scene_background=True
     )
     pixels = raytracer.render(scene)

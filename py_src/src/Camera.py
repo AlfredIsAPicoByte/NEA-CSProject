@@ -38,11 +38,11 @@ class VCamera:
     def __init__ (
             self,
             transform: Transform,
-            fov: float,
-            near: float,
-            far: float,
-            resolution_width: int = None,
-            resolution_height: int = None,
+            fov: float = 60,
+            near: float = 0.01,
+            far: float = 1000,
+            resolution_width: int = 10,
+            resolution_height: int = 10,
             camera_type: CameraType = CameraType.PERSPECTIVE,
             camera_mode: CameraMode = CameraMode.FIRST_PERSON,
             name: str = "Camera"

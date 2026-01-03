@@ -121,9 +121,17 @@ class Color:
 
     def __mul__(self, scale: float):
         """Multiplies color by a scalar (adjusts brightness)."""
+        # Support scalar multiplication
         if isinstance(scale, (int, float)):
             return Color(self.r * scale, self.g * scale, self.b * scale, self.a)
+        # Support component-wise color * color multiplication
+        if isinstance(scale, Color):
+            return Color(self.r * scale.r, self.g * scale.g, self.b * scale.b, self.a * scale.a)
         return NotImplemented
+
+    def __rmul__(self, scale: float):
+        """Supports `float * Color` by delegating to __mul__."""
+        return self.__mul__(scale)
 
     def __truediv__(self, scale: float):
         """Divides color by a scalar."""
@@ -251,6 +259,13 @@ class PBRMaterial:
         ):
         self.data = data
 
+    def __getattr__(self, name):
+        """
+        Delegate attribute access to the underlying `data` container for
+        convenience (so callers can use `material.type` or `material.albedo`).
+        """
+        return getattr(self.data, name)
+
     @classmethod
     def create_diffuse(cls, albedo: Color, roughness: float = 0.5):
         """
@@ -355,7 +370,7 @@ class PBRMaterial:
 
         surface_normal = hit_info.normal
         hit_point = hit_info.point
-        accumulated_light = Color(0, 0, 0)
+        accumulated_light = Color(0.0, 0.0, 0.0)
 
         for light in scene_lights:
             # --- Light Calculation ---
@@ -382,11 +397,13 @@ class PBRMaterial:
             if NdotL <= 0.0:
                 continue
 
-            # 3. Incoming Radiance (Li)
-            # Intensity * Color * Attenuation * Visibility
-            incoming_radiance = light.intensity * attenuation * visibility
-            
-            accumulated_light += Color(*self.evaluate_brdf(incoming_radiance, light_dir, surface_normal, view_dir))
+            # 3. Incoming Radiance (Li): Intensity * Attenuation * Visibility
+            incoming_intensity = light.intensity * attenuation * visibility
+
+            # Evaluate BRDF using light color + incoming intensity
+            brdf_color = self.evaluate_brdf(light.color, incoming_intensity, light_dir, surface_normal, view_dir)
+            accumulated_light += brdf_color
+            print(accumulated_light)
             
         return accumulated_light
 
@@ -672,7 +689,7 @@ class PBRMaterial:
 
         return Ray(origin=final_origin, orientation=final_dir, name="microfacet_refraction"), pdf
 
-    def evaluate_brdf(self, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray, bias: float = 1e-4) -> np.ndarray:
+    def evaluate_brdf(self, light_color: Color, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray, bias: float = 1e-4) -> Color:
         """
         Returns the BRDF value (ratio of radiance).
         """
@@ -680,41 +697,22 @@ class PBRMaterial:
         # Safety check for degenerate vectors
         h_len = np.linalg.norm(H)
         if h_len < bias:
-            return Color(0, 0, 0)
+            return Color(0.0, 0.0, 0.0)
         H = H / h_len
 
         # Clamp dot products to avoid negative values (lighting from behind surface)
         VdotH = max(np.dot(view_dir, H), bias)
 
-        # Compute Fresnel Term (F is a Color because F0 is a Color)
-        F_color = self.get_fresnel_component(VdotH)
-
         # Compute PBR Terms
-        specular_term = self.get_specular_component(F_color, light_intensity, light_dir, surface_normal, view_dir)
-        diffuse_term = self.get_diffuse_component(F_color, light_intensity, light_dir, surface_normal) * (1.0/np.pi)
+        specular_term = self.get_specular_component(light_color, light_intensity, light_dir, surface_normal, view_dir)
+        diffuse_term = self.get_diffuse_component(light_color, light_intensity, light_dir, surface_normal) * (1.0/np.pi)
 
         return diffuse_term + specular_term
 
     def __repr__(self):
         return (
-            f"Material()"
+            f"Material(albedo={self.data.albedo}, other={self.data})"
         )
-    
-def _schlick_fresnel(cos_theta: float, f0: np.ndarray) -> np.ndarray:
-    """
-    Calculates the portion of light that is reflected (Specular) vs. absorbed/refracted (Diffuse).
-    
-    Args:
-        cos_theta: The dot product of View Vector and Surface Normal (N dot V).
-                Must be clamped between 0.0 and 1.0.
-        f0: The base reflectivity of the material at 0 degrees incidence.
-            For non-metals (dielectrics), this is usually constant (e.g., 0.04).
-            For metals, this is the surface color itself.
-    
-    Returns:
-        The reflection coefficient (F), a value between 0.0 and 1.0.
-    """
-    return f0 + (1.0 - f0) * ((1.0 - cos_theta) ** 5)
 
 def schlick_fresnel(cos_theta: float, f0: np.ndarray) -> np.ndarray:
     """

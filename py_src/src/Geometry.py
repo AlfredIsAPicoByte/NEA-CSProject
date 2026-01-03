@@ -1012,6 +1012,9 @@ class VObject:
         # Depending on your architecture, you might want: 
         if self.shape:
              self.shape.transform = self.transform
+        # If no material provided on the VObject itself, inherit from the shape
+        if self.material is None and self.shape is not None and hasattr(self.shape, 'material'):
+            self.material = getattr(self.shape, 'material')
 
     def add_child(self, child: "VObject"):
         """Properly links a child to this parent."""
@@ -1026,7 +1029,7 @@ class VObject:
 
     def __repr__(self):
         shape_name = self.shape.name if self.shape else "None"
-        return f"VObject(name='{self.name}', shape={shape_name}, children={len(self.children)})"
+        return f"VObject(name='{self.name}', shape={shape_name}, material={self.material}, children={len(self.children)})"
 
 class ShapeFactory(ABC):
     """Abstract factory for creating shapes."""

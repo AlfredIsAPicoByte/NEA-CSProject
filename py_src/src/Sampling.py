@@ -103,7 +103,7 @@ def reconstruct_pixel(
     v_coords = np.array([s.v for s in samples])
     sample_weights = np.array([s.w for s in samples])
     
-    # (N, 3) array for colors
+    # (N, 4) array for colors
     color_stack = np.stack(colors) 
 
     # 2. Calculate Distances (Pixel Units)
@@ -124,9 +124,9 @@ def reconstruct_pixel(
     total_weight = np.sum(final_weights)
     
     if total_weight <= 0.0:
-        return np.array([0.0, 0.0, 0.0])
+        return np.array([0.0, 0.0, 0.0, 0.0])
         
-    # Broadcasting: (N, 1) * (N, 3) -> Sum over axis 0 -> (3,)
+    # Broadcasting: (N, 1) * (N, 4) -> Sum over axis 0 -> (4,)
     weighted_colors = color_stack * final_weights[:, np.newaxis]
     final_color = np.sum(weighted_colors, axis=0)
     
@@ -196,7 +196,11 @@ class Sampler:
 class RandomSampler(Sampler):
     """Pure random sampling (White Noise). Good for high sample counts."""
     def sample_pixel(self, x: int, y: int, sample_idx: int) -> Tuple[float, float]:
-        return (x + self._rng.random(), y + self._rng.random())
+        # Return normalized coordinates in [0,1] across the full image
+        return (
+            (x + self._rng.random()) / float(self.settings.width),
+            (y + self._rng.random()) / float(self.settings.height)
+        )
 
 class StratifiedSampler(Sampler):
     """

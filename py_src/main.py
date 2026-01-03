@@ -12,6 +12,7 @@ from src.Sampling import SamplingManager, SampleSettings, PixelFilter
 
 PostProcessingPipeline = None
 from src.Scene import Scene
+from src.MemoryProfiler import MemoryProfiler
 from test_scenes import *
 
 def render_process(scene: Scene, algorithim: Algorithm):
@@ -52,7 +53,7 @@ def save_image(img_data: np.ndarray, out_path="render_out.png"):
     print(f" > Saved to {out_path}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Raytracer CLI")
     parser.add_argument("--no-post", dest="disable_post", action="store_true", help="Disable post-processing to reduce memory and runtime")
     args = parser.parse_args()
 
@@ -60,7 +61,7 @@ if __name__ == "__main__":
     OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    img_w, img_h = 16, 9 # 256, 144 for higher resolution images
+    img_w, img_h = 16 * 1, 9 * 1 # 256, 144 for higher resolution images
 
     all_scenes = [
         get_minimal_scene(img_w, img_h),
@@ -88,16 +89,17 @@ if __name__ == "__main__":
         max_depth=1,
         sampling_manager=sampling_manager,
         ray_generator=generator,
-        intersection_strategy=intersection,
-        interaction_strategy=interactor,
-        shading_strategy=shading,
+        intersection_strategy=test_intersection,
+        interaction_strategy=test_interactor,
+        shading_strategy=test_shading,
         custom_background=Color(1.0, 1.0, 1.0),
         enable_scene_background=True
     )
 
-    enable_postprocessing = not args.disable_post
-
     for scene in all_scenes:
+        # print("Objects:", scene.objects)
+        # print("Lights:", scene.lights)
+        print("*" * 50)
         # Reset tracing stats per-scene to avoid accumulation and keep reported memory accurate
         raytracer.stats = TracingStats()
 
@@ -106,8 +108,19 @@ if __name__ == "__main__":
         print(f"Rendering '{scene.name}' -> {OUT_DIR} ({scene.camera.width}x{scene.camera.height})")
         
         try:
-            # 1. Render to Float Array
-            raw_img_data = render_process(scene, raytracer)
+            # 1. Render to Float Array (profile memory during render)
+            mem_report_path = out_path + "_mem.txt"
+            with MemoryProfiler(enable_tracemalloc=True, top=6) as mp:
+                raw_img_data = render_process(scene, raytracer)
+            # Print and persist memory profile per-scene
+            print(mp.format_report())
+            try:
+                with open(mem_report_path, "w") as f:
+                    f.write(mp.format_report())
+            except Exception:
+                pass
+
+            raytracer.stats.print_verbose_report()
 
             save_image(raw_img_data, out_path=out_path + "_raw.png")
 
@@ -115,7 +128,8 @@ if __name__ == "__main__":
             processed_img = raw_img_data
             # We chain the effects directly on the numpy array
 
-            if enable_postprocessing:
+            if not args.disable_post:
+                print(" > Running post-processing")
                 # Import lazily so heavy deps (scipy) are only loaded when needed
                 from src.PostProcessing import PostProcessingPipeline
 
@@ -149,8 +163,9 @@ if __name__ == "__main__":
                 # Without this, the image looks too dark
                 processed_img = PostProcessingPipeline.gamma_correct(processed_img, gamma=2.0)
 
-            # 3. Save Image
-            save_image(processed_img, out_path=out_path + ".png")
+                save_image(processed_img, out_path=out_path + ".png")
+            else:
+                print(" > Skipping post-processing (--no-post active)")
 
             # Free large buffers promptly to avoid accumulation between scenes
             try:

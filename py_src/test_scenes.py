@@ -243,7 +243,7 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
 
     cam.transform.look_at(np.array([0.0, 2.5, 0.0]))
 
-    scene = Scene(name="rgb_cornell_box", camera=cam, background_color=Color(0, 0, 0))
+    scene = Scene(name="rgb_cornell_box", camera=cam, background_color=Color(0.0, 0.0, 0.0))
     
     scene.add_light(ceiling_light)
     for obj in room_objects:
@@ -371,7 +371,7 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
     scene.add_object(VObject(shape=s5, name="S_Plastic"))
 
     # Lighting
-    scene.add_light(LightSource(np.array([0.0, 5.0, -5.0]), Color(1, 1, 1), 15.0, name="Main"))
+    scene.add_light(LightSource(np.array([0.0, 5.0, -5.0]), Color(1.0, 1.0, 1.0), 15.0, name="Main"))
     scene.add_light(LightSource(np.array([5.0, 2.0, -2.0]), Color(0.8, 0.8, 1.0), 10.0, name="Fill"))
 
     cam.transform.look_at(s3.transform.position)
@@ -398,8 +398,8 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
     for i in range(-6, 7):
         bar = Cube(center=np.array([i, 2.0, 3.5]), side_length=5.0, name=f"Bar_{i}")
         bar.scale(np.array([0.1, 4.0, 0.1]))
-        bar.material = PBRMaterial.create_diffuse(Color(0, 0, 0), 1.0)
-        scene.add_object(VObject(shape=bar, name=f"Bar_{i}"))
+        bar.material = PBRMaterial.create_diffuse(Color(0.0, 0.0, 0.0), 1.0)
+        scene.add_object(VObject(shape=bar, name=f"Bar_{6 + i}"))
 
     # Glass Sphere (IOR 1.5)
     s_glass = Sphere(center=np.array([-1.2, 0.5, 0.0]), radius=0.6, name="Acrylic")
@@ -417,8 +417,7 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
     scene.add_object(VObject(shape=s_water, name="WaterSphere"))
 
     # Lighting
-    scene.add_light(LightSource(np.array([2.0, 3.0, -3.0]), Color(1, 1, 1), 15.0, name="FrontLight"))
+    scene.add_light(LightSource(np.array([2.0, 3.0, -3.0]), Color(1.0, 1.0, 1.0), 15.0, name="FrontLight"))
     
     cam.transform.look_at(np.array([0, 0.5, 0]))
-
     return scene

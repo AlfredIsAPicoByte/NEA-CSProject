@@ -133,7 +133,7 @@ class Scene:
             object=closest_obj 
         )
     
-    def get_background_color(self, direction) -> Color:
+    def get_background_color(self, direction: List) -> Color:
         """
         Return the background color based on the ray's direction vector.
         Handles Solid Color, ColorGradient (Skybox), or Texture Map safely.
