@@ -133,7 +133,7 @@ class Scene:
             object=closest_obj 
         )
     
-    def get_background_color(self, direction) -> np.ndarray:
+    def get_background_color(self, direction) -> Color:
         """
         Return the background color based on the ray's direction vector.
         Handles Solid Color, ColorGradient (Skybox), or Texture Map safely.
@@ -170,18 +170,18 @@ class Scene:
             norm = np.linalg.norm(dir_vec)
             if norm > 1e-6: dir_vec /= norm
             
-            return self._sample_equirectangular_map(bg, dir_vec)
+            return Color(*self._sample_equirectangular_map(bg, dir_vec))
 
         # 5. Handle Solid Color (Color Object)
         # We check the name OR the instance to be safe
         elif bg_type_name == 'Color' or isinstance(bg, Color):
             return bg
-
-        # 6. Handle Solid Color (Tuple/List fallback)
+        # Tuple/List fallback
         elif isinstance(bg, (tuple, list)) and len(bg) == 3:
             return Color(bg[0], bg[1], bg[2])
 
-        return Color(0.0, 0.0, 0.0)
+        # Invisivle fallback
+        return Color(0.0, 0.0, 0.0, 0.0)
     
     def _sample_equirectangular_map(self, texture: np.ndarray, direction: np.ndarray) -> np.ndarray:
         """

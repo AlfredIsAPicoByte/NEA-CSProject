@@ -66,7 +66,7 @@ def world_to_local_point(point: np.ndarray, transform: Transform) -> np.ndarray:
     Transforms a 3D position from World Space to Object Local Space.
     Used to test intersections against unit primitives (like a unit sphere at 0,0,0).
     """
-    M = transform.model_matrix
+    M = transform.get_global_matrix()
     inv = np.linalg.inv(M)
     p_h = np.asarray([point[0], point[1], point[2], 1.0], dtype=float)
     local = inv @ p_h

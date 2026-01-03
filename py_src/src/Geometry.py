@@ -945,7 +945,7 @@ class VObject:
     def __post_init__(self):
         if self.transform is None:
             # Assuming Transform is defined
-            self.transform = Transform(np.zeros(3), np.array(0, 0, 1), np.ones(3))
+            self.transform = Transform(np.zeros(3), np.array([0, 0, 1]), np.ones(3))
         
         # Ensure the shape (if present) shares this transform or follows it
         # Depending on your architecture, you might want: 

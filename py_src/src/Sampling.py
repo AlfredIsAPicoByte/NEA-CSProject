@@ -196,7 +196,7 @@ class Sampler:
 class RandomSampler(Sampler):
     """Pure random sampling (White Noise). Good for high sample counts."""
     def sample_pixel(self, x: int, y: int, sample_idx: int) -> Tuple[float, float]:
-        return (self._rng.random(), self._rng.random())
+        return (x + self._rng.random(), y + self._rng.random())
 
 class StratifiedSampler(Sampler):
     """
@@ -219,8 +219,8 @@ class StratifiedSampler(Sampler):
         # Map linear index to grid coordinates
         # e.g., index 5 in a 3x3 grid might be row 1, col 2
         n = self._grid_side
-        i = sample_idx % n
-        j = sample_idx // n
+        i = x + sample_idx % n
+        j = y + sample_idx // n
         
         # If we run out of grid slots (spp > n*n), fall back to random
         if j >= n:

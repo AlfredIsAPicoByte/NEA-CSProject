@@ -1,11 +1,14 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 import time
+import numpy as np
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Type, Any, List, Tuple
+from typing import Optional, Dict, Type, Any, Tuple, List
 
-from Luminance import Color
 from Scene import Scene
+from Sampling import Sampler
+from Luminance import Color
+from MemoryUtils import get_process_id, get_memory_mb
 
 @dataclass
 class RenderStats:
@@ -21,7 +24,7 @@ class RenderStats:
     def stop_timer(self):
         self.time_taken_seconds = time.perf_counter() - self._start_time
 
-    def __add__(self, other: 'RenderStats') -> 'RenderStats':
+    def __add__(self, other: "RenderStats") -> "RenderStats":
         new_stats = RenderStats()
 
         # Max/Avg specific fields
@@ -29,6 +32,17 @@ class RenderStats:
         new_stats.memory_usage = max(self.memory_usage, other.memory_usage)
 
         return new_stats
+
+def update_memory_stats(stats: RenderStats) -> RenderStats:
+    """
+    Returns a NEW TracingStats object with updated memory usage,
+    leaving the original object untouched (Immutability).
+    """
+    from dataclasses import replace
+    
+    current_mem = get_memory_mb(get_process_id())
+    
+    return replace(stats, memory_usage=current_mem)
 
 class Algorithm(ABC):
     """
@@ -46,9 +60,9 @@ class Algorithm(ABC):
     def render(
             self,
             scene: Scene,
-            seed: Optional[int] = None,
-            region: Optional[Tuple[int,int,int,int]] = None,
-            tile_size: Optional[Tuple[int,int]] = None
+            sampler: Optional[Sampler] = None,
+            region: Optional[Tuple[int, int, int, int]] = None,
+            tile_size: Optional[Tuple[int, int]] = None
         ) -> List[Color]:
         """
         High-level render entry point: produce an image/buffer from the scene and camera.

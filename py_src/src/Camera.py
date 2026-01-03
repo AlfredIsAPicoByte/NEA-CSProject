@@ -1,4 +1,5 @@
 import numpy as np
+import math
 from enum import Enum
 from typing import Tuple
 
@@ -194,49 +195,61 @@ class VCamera:
             "view_projection": (self.get_projection_matrix() @ self.get_view_matrix()).T.tolist(),
         }
 
-    def get_point_normal_from_screen_cords(self, screen_x: float, screen_y: float) -> Tuple[np.ndarray, np.ndarray]:
+    def get_camera_ray(self, u: float, v: float) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Convert screen coordinates (0-width, 0-height) to a world-space ray.
-        Useful for picking/raycasting.
-        Returns: (origin, direction) both as np.ndarray
+        Generates a ray (origin, direction) for UV coordinates (0-1).
         """
+        # --- ORTHOGRAPHIC ---
         if self.type == CameraType.ORTHOGRAPHIC:
-            plane_height = self.fov
-            plane_width = plane_height * self.aspect_ratio.value
-
-            # Map u,v (0..1) to Plane Coordinates (-Width/2 .. +Width/2)
-            px = (screen_x - 0.5) * plane_width
-            py = (0.5 - screen_y) * plane_height # Flip Y if needed for standard coordinate systems
-            # Origin = CameraPos + (Right * px) + (Up * py) + camera near plane
-
+            # 1. Direction is always forward
             direction = self.transform.forward
+            
+            # 2. Origin shifts along the camera plane
+            height_size = self.ortho_scale # or self.fov if reusing that field
+            width_size = height_size * self.aspect_ratio
+
+            # Map 0..1 to -Width/2 .. +Width/2
+            offset_x = (u - 0.5) * width_size
+            offset_y = (0.5 - v) * height_size 
+
             origin = (
                 self.transform.position + 
-                (self.transform.right * px) + 
-                (self.transform.up * py)
-            ) + direction * self.near
-            return (origin, direction)
+                (self.transform.right * offset_x) + 
+                (self.transform.up * offset_y)
+            )
+            return origin, direction
+
+        # --- PERSPECTIVE ---
+        # Geometric approach (Snippet 1 style) is usually faster for CPU raytracing 
+        # than matrix inversion if you aren't caching the inverse matrix.
         
-        # Prespective
-        # Normalize screen coordinates to NDC (-1 to 1)
-        ndc_x = (2.0 * screen_x)
-        ndc_y = 1.0 - (2.0 * screen_y)
+        # 1. NDC (-1 to 1)
+        ndc_x = (2.0 * u) - 1.0
+        ndc_y = 1.0 - (2.0 * v)
 
-        # Create homogeneous clip-space point
-        clip_space = np.array([ndc_x, ndc_y, -1.0, 1.0])
-
-        # Transform back through inverse projection and view matrices
-        inv_projection = np.linalg.inv(self.get_projection_matrix())
-        inv_view = np.linalg.inv(self.get_view_matrix())
-
-        eye_space = inv_projection @ clip_space
-        eye_space[2] = -1.0
-        eye_space[3] = 0.0
-
-        direction = unit((inv_view @ eye_space)[:3])
-
-        origin = self.transform.position + direction * self.near 
-        return (origin, direction)
+        # 2. Scale by FOV
+        # vertical_fov is in degrees
+        tan_half_fov = math.tan(math.radians(self.fov) / 2.0)
+        
+        # Camera Space Direction
+        # Assuming standard camera: Right=+X, Up=+Y, Forward=+Z (or -Z depending on convention)
+        # We use the Basis vectors directly to go straight to World Space
+        
+        x_scale = ndc_x * self.aspect_ratio * tan_half_fov
+        y_scale = ndc_y * tan_half_fov
+        
+        # Construct direction in world space by summing basis vectors
+        # This assumes 'forward' is the direction the camera looks.
+        direction = (
+            (self.transform.forward) +         # 1 unit forward
+            (self.transform.right * x_scale) + # Horizontal spread
+            (self.transform.up * y_scale)      # Vertical spread
+        )
+        
+        # Normalize
+        direction = direction / np.linalg.norm(direction)
+        
+        return self.transform.position, direction
 
     def export_uniforms(self) -> str:
         """
