@@ -136,7 +136,8 @@ class TracingRay(Ray):
     
     # How much light this ray carries (Color multiplier)
     # Storing as object to avoid import cycles with 'Color' class
-    throughput: object = field(default_factory=lambda: np.array([1.0, 1.0, 1.0, 1.0])) 
+    throughput: object = field(default_factory=lambda: np.array([1.0, 1.0, 1.0, 1.0]))
+    pdf: float = 0
     
     # Is the ray currently traveling inside a medium (like glass)?
     is_inside: bool = False
@@ -147,7 +148,7 @@ class TracingRay(Ray):
 
     def __repr__(self):
         return f"TracingRay(name={self.name}, origin={self.origin}, orientation={self.orientation})"
-    pass
+
 
 class RayPool:
     def __init__(self, block_size=10000):

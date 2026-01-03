@@ -7,8 +7,6 @@ import bisect
 
 from CommonUtils import clamp, lerp, unit, orthonormal_basis, attenuate_sqr_distance, attenuate_distance_exponential
 from PrimaryStructures import Ray, HitInfo
-from Reflections import calculate_reflection_vector
-from Refractions import calculate_refraction_vector, calculate_reflectance, REFRACTIVE_INDICES
 from Sampling import Sampler
 
 @dataclass
@@ -74,6 +72,35 @@ class Color:
             return np.array([self.r, self.g, self.b, self.a], dtype=np.float32)
         return np.array([self.r, self.g, self.b], dtype=np.float32)
 
+    # Compatibility aliases (tests and external code may expect different names)
+    def to_np_ndarray(self, include_alpha=False) -> np.ndarray:
+        """Alias kept for older code/tests expecting `to_np_ndarray`."""
+        return self.to_np_array(include_alpha)
+
+    @property
+    def red(self) -> float:
+        return self.r
+
+    @red.setter
+    def red(self, v: float):
+        self.r = v
+
+    @property
+    def green(self) -> float:
+        return self.g
+
+    @green.setter
+    def green(self, v: float):
+        self.g = v
+
+    @property
+    def blue(self) -> float:
+        return self.b
+
+    @blue.setter
+    def blue(self, v: float):
+        self.b = v
+
     # --- Arithmetic Operations ---
 
     def __add__(self, other: Union['Color', float]):
@@ -109,7 +136,7 @@ class Color:
 
 @dataclass(slots=True)
 class ColorGradient:
-    colors: np.ndarray
+    colors: Color
     positions: np.ndarray
 
     def __post_init__(self):
@@ -124,13 +151,13 @@ class ColorGradient:
         # Ensure sorted data for binary search logic
         sorted_pairs = sorted(zip(self.positions, self.colors), key=lambda x: x[0])
         self.positions = np.array([p for p, c in sorted_pairs], dtype=float)
-        self.colors = np.array([c for p, c in sorted_pairs], dtype=float)
+        self.colors = np.array([c for p, c in sorted_pairs], dtype=Color)
 
     def get_color(
         self, 
         t: float, 
         interpolation_function: Callable[[float], float] = lambda x: x
-    ) -> np.ndarray:
+    ) -> Color:
         """
         Get interpolated color at position t in [0.0, 1.0].
         Optimized using NumPy vectorization and bisect for speed.
@@ -166,7 +193,7 @@ class ColorGradient:
         return lerp(c0, c1, factor)
         
 class LightSource:
-    def __init__(self, position: np.ndarray, color: np.ndarray, intensity: float = 1.0, radius: float = 1.0, name: str = "Light Source"):
+    def __init__(self, position: np.ndarray, color: Color, intensity: float = 1.0, radius: float = 1.0, name: str = "Light Source"):
         self.position = position
         self.color = color
         self.intensity = intensity
@@ -198,7 +225,7 @@ class PBRMaterialData:
     name: str = "DefaultMat"
     
     # --- PBR Parameters ---
-    albedo: np.ndarray = field(default_factory=lambda: Color(1.0, 1.0, 1.0).to_np_array())
+    albedo: Color = field(default_factory=lambda: Color(1.0, 1.0, 1.0))
     roughness: float = 0.7
     metallic: float = 0.0
     specular_intensity: float = 0.5
@@ -207,11 +234,11 @@ class PBRMaterialData:
     
     # --- Transparency/Volume Parameters ---
     transmission: float = 0.0      # 0=Opaque, 1=Glass
-    absorption_color: np.ndarray = field(default_factory=lambda: Color(1.0, 1.0, 1.0).to_np_array())
+    absorption_color: Color = field(default_factory=lambda: Color(1.0, 1.0, 1.0))
     absorption_density: float = 0.0
     
     # --- Emissive ---
-    emission: np.ndarray = field(default_factory=lambda: Color(0.0, 0.0, 0.0).to_np_array())
+    emission_color: Color = field(default_factory=lambda: Color(0.0, 0.0, 0.0))
     emission_intensity: float = 0.0
 
     # --- Flags ----
@@ -225,7 +252,7 @@ class PBRMaterial:
         self.data = data
 
     @classmethod
-    def create_diffuse(cls, albedo: np.ndarray, roughness: float = 0.5):
+    def create_diffuse(cls, albedo: Color, roughness: float = 0.5):
         """
         Creates a standard non-metallic (dielectric) material like plastic, wood, or chalk.
         """
@@ -241,7 +268,7 @@ class PBRMaterial:
         return cls(data)
 
     @classmethod
-    def create_specular(cls, albedo: np.ndarray, roughness: float = 0.2, metallicness: float = 1.0, specular_intensity: float = 1.0, specular_tint_amount: float = 0.5):
+    def create_specular(cls, albedo: Color, roughness: float = 0.2, metallicness: float = 1.0, specular_intensity: float = 1.0, specular_tint_amount: float = 0.5):
         """
         Creates a reflective material like gold, aluminum, or copper.
         """
@@ -258,7 +285,7 @@ class PBRMaterial:
         return cls(data)
 
     @classmethod
-    def create_glass(cls, albedo: np.ndarray, absorption_color: np.ndarray, roughness: float = 0.0, metallicness: float = 0.0, ior: float = 1.5, absorption_density: float = 1.0):
+    def create_glass(cls, albedo: Color, absorption_color: Color, roughness: float = 0.0, metallicness: float = 0.0, ior: float = 1.5, absorption_density: float = 1.0):
         """
         Creates a dielectric transparent material (Refractive).
         """
@@ -280,7 +307,7 @@ class PBRMaterial:
         return cls(data)
 
     @classmethod
-    def create_transparent(cls, albedo: np.ndarray):
+    def create_transparent(cls, albedo: Color):
         """
         Creates a "See-Through" material using Alpha Blending (Ghosts, Holograms, Decals).
         Different from Glass because it does not refract light.
@@ -296,17 +323,15 @@ class PBRMaterial:
         return cls(data)
 
     @classmethod
-    def create_emissive(cls, color: np.ndarray, intensity: float = 1.0):
+    def create_emissive(cls, color: Color, intensity: float = 1.0):
         """
         Creates a glowing material (Light Bulb, Neon Sign).
         """
         data = PBRMaterialData(
             name="EmissiveMat",
-            type=MaterialType.EMISSIVE,
-            albedo=color,
-            emission=color,
+            emission_color=color,
             emission_intensity=intensity,
-            roughness=1.0 # Roughness doesn't matter much for emitters
+            type=MaterialType.EMISSIVE,
         )
         return cls(data)
     
@@ -317,7 +342,7 @@ class PBRMaterial:
             view_dir: np.ndarray,
             visibility_function: Callable[[np.ndarray, np.ndarray], float],
             bias: float = 1e-4
-        ) -> np.ndarray:
+        ) -> Color:
         """
         Calculates the Direct Lighting (Shadows + Light Sources) for this material.
         Enforces Energy Conservation (Reflected + Diffuse <= Incoming).
@@ -361,11 +386,11 @@ class PBRMaterial:
             # Intensity * Color * Attenuation * Visibility
             incoming_radiance = light.intensity * attenuation * visibility
             
-            accumulated_light += light.evaluate_brdf(light.intensity, light_dir, surface_normal, view_dir)
+            accumulated_light += Color(*self.evaluate_brdf(incoming_radiance, light_dir, surface_normal, view_dir))
             
-        return accumulated_light.to_np_array()
+        return accumulated_light
 
-    def get_diffuse_component(self, light_color: np.ndarray, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray) -> np.ndarray:
+    def get_diffuse_component(self, light_color: Color, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray) -> Color:
         """
         Get the diffuse component (Lambertian). 
         Corrected to respect the Metallic workflow energy conservation.
@@ -373,19 +398,19 @@ class PBRMaterial:
         NdotL = max(0.0, np.dot(surface_normal, light_dir))
         
         # 1. Standard Lambert Diffuse (Simple but physically consistent)
-        diffuse = light_intensity * self.albedo * NdotL
+        diffuse = light_intensity * self.data.albedo * NdotL
         
         # 2. ENERGY CONSERVATION: Metals have NO diffuse.
         # As metallic approaches 1.0, diffuse must approach 0.0.
-        diffuse = light_color * diffuse * (1.0 - self.metallic)
+        diffuse = light_color * diffuse * (1.0 - self.data.metallic)
         
         return diffuse
 
-    def get_specular_component(self, light_color: np.ndarray, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray, bias: float = 1e-4) ->  np.ndarray:
+    def get_specular_component(self, light_color: Color, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray, bias: float = 1e-4) -> Color:
         """Get the specular component of the material response using the Micro-Facet BRDF."""
         
         # --- 0. Pre-Calculations and Constants ---
-        safe_roughness = max(self.roughness, bias)
+        safe_roughness = max(self.data.roughness, bias)
         alpha = safe_roughness ** 2
         alpha_sq = alpha ** 2
         
@@ -427,11 +452,11 @@ class PBRMaterial:
             Fs = Color(0.0, 0.0, 0.0) 
 
         # Final Specular Color: Light Intensity * BRDF * Cosine Term
-        specular = light_color * Fs * NdotL * light_intensity * self.specular_intensity
+        specular = light_color * Fs * NdotL * light_intensity * self.data.specular_intensity
         
         return specular
 
-    def get_metallic_component(self, bias: float = 1e-4) ->  np.ndarray:
+    def get_metallic_component(self, bias: float = 1e-4) -> Color:
         """
         Calculates the F0 (Base Reflectivity) for Fresnel calculations.
         """
@@ -446,40 +471,40 @@ class PBRMaterial:
         
         # Lerp between Grey (0.04, 0.04, 0.04) and Tinted (0.04 * AlbedoColor)
         # Note: We normalize albedo to preserve the 0.04 intensity magnitude.
-        max_val = max(self.albedo.r, self.albedo.g, self.albedo.b, bias)
-        albedo_normalized = self.albedo / max_val
+        max_val = max(self.data.albedo.r, self.data.albedo.g, self.data.albedo.b, bias)
+        albedo_normalized = self.data.albedo / max_val
         
         F0_dielectric_tinted = F0_dielectric * albedo_normalized
         
         # Apply the Specular Tint Slider
-        F0_final_dielectric = lerp(F0_dielectric, F0_dielectric_tinted, self.specular_tint_amount)
+        F0_final_dielectric = lerp(F0_dielectric, F0_dielectric_tinted, self.data.specular_tint)
 
         # --- 2. Metallic F0 ---
         # Metals use their Albedo directly as F0
-        F0_metal = self.albedo
+        F0_metal = self.data.albedo
 
         # --- 3. Final Blend ---
         # Lerp between Dielectric (0.04) and Metal (Albedo)
-        final_F0: Color = lerp(F0_final_dielectric, F0_metal, self.metallic)
+        final_F0: Color = lerp(F0_final_dielectric, F0_metal, self.data.metallic)
         
-        return final_F0.to_np_array()
+        return final_F0
 
-    def get_fresnel_component(self, cos_theta: float) ->  np.ndarray:
+    def get_fresnel_component(self, cos_theta: float) -> np.ndarray:
         """
         Calculates the portion of light that is reflected (Specular) vs. absorbed/refracted (Diffuse).
         """
-        f0 = self.get_metallic_component().to_np_ndarray()
+        f0 = self.get_metallic_component().to_np_array()
         return schlick_fresnel(cos_theta, f0)
 
-    def get_emissive_component(self) -> np.ndarray:
+    def get_emissive_component(self) -> Color:
         """Get the emissive color of the material."""
-        return self.albedo * self.emissive_intensity
+        return self.data.emission_color * self.data.emission_intensity
 
-    def get_volumetric_component(self, light_color: np.ndarray, distance: float) ->  np.ndarray:
+    def get_volumetric_component(self, light_color: Color, distance: float) -> Color:
         """
         Calculates the volumetric attenuation of light passing through the material
         """
-        sigma = (np.array([1.0, 1.0, 1.0]) - self.absorption_color) * self.absorption_density
+        sigma = (Color(1.0, 1.0, 1.0) - self.data.absorption_color) * self.data.absorption_density
         
         # Calculate attenuation per channel
         # e.g. If Red has high sigma, exp(-high * dist) -> 0.0 (Red is blocked)
@@ -487,17 +512,17 @@ class PBRMaterial:
         
         return light_color * attenuation
 
-    def get_transparency_component(self, light_color: np.ndarray) ->  np.ndarray:
+    def get_transparency_component(self, light_color: Color) -> Color:
         """
         Calculates the transparency color contribution of the material.
         """
-        return lerp(light_color, self.albedo, 1 - self.albedo.a)
+        return lerp(light_color, self.data.albedo, 1 - self.data.albedo.a)
 
-    def get_ambient_color(self, ambient_color: np.ndarray, ambient_intensity: float) ->  np.ndarray:
+    def get_ambient_color(self, ambient_color: Color, ambient_intensity: float) -> Color:
         """
         Calculates the ambient color contribution of the material.
         """
-        ambient = ambient_color * ambient_intensity * self.albedo
+        ambient = ambient_color * ambient_intensity * self.data.albedo
         return ambient
 
     def calculate_microfacet_reflection_ray(
@@ -647,7 +672,7 @@ class PBRMaterial:
 
         return Ray(origin=final_origin, orientation=final_dir, name="microfacet_refraction"), pdf
 
-    def evaluate_brdf(self, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray, bias: float = 1e-4) ->  np.ndarray:
+    def evaluate_brdf(self, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray, bias: float = 1e-4) -> np.ndarray:
         """
         Returns the BRDF value (ratio of radiance).
         """

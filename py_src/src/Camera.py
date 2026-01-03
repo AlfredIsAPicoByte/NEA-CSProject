@@ -235,7 +235,7 @@ class VCamera:
         # Assuming standard camera: Right=+X, Up=+Y, Forward=+Z (or -Z depending on convention)
         # We use the Basis vectors directly to go straight to World Space
         
-        x_scale = ndc_x * self.aspect_ratio * tan_half_fov
+        x_scale = ndc_x * self.aspect_ratio.value * tan_half_fov
         y_scale = ndc_y * tan_half_fov
         
         # Construct direction in world space by summing basis vectors

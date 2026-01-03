@@ -86,7 +86,7 @@ class ShadingStrategy(ABC):
         ray: TracingRay,
         hit_info: HitInfo,
         current_depth: int,
-        trace_function: Callable[[Scene, TracingRay, int, Sampler], np.ndarray], 
+        trace_function: Callable[[Scene, TracingRay, int, Sampler], Color], 
         intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], HitInfo],
         interaction_function: Callable[[TracingRay, HitInfo, Sampler, Optional[float], Optional["TracingStats"]], Optional[TracingRay]],
         sampler: Sampler,
@@ -168,7 +168,7 @@ class JitterRayGenerator(RayGenerationStrategy):
                         pixel_y=y,
                         sample_u=sample.u,
                         sample_v=sample.v,
-                        name=f"ray#{i}_sceen-coords({x},{y})",
+                        name=f"ray#{i}_({x},{y})",
                         throughput=Color(1.0, 1.0, 1.0) # Used for path tracing accumulation
                     )
                     rays.append(ray)
@@ -539,14 +539,16 @@ class StandardInteraction(InteractionStrategy):
         Decide between reflection and refraction (Russian roulette) and generate the next ray.
         Updates ray depth/is_inside and conservative tracing stats counters.
         """
-        material: PBRMaterial = hit_info.object.material
+        material: PBRMaterial = getattr(hit_info.object, "material", None) or getattr(hit_info.object.shape, "material", None) if hasattr(hit_info.object, "shape") else None
+        if not material:
+            return None
 
         # Surface normal (fall back to up)
-        normal = getattr(hit_info, "normal", np.array([0.0, 1.0, 0.0]))
+        normal = getattr(hit_info, "normal", np.array([0.0, 0.0, 1.0]))
 
         # Indices of refraction (fallback to 1.0)
-        n1 = getattr(material, "ior_incident", 1.0) if hasattr(material, "ior_incident") else 1.0
-        n2 = getattr(material, "ior_transmitted", getattr(material, "ior", 1.0))
+        n1 = self.scene_ior
+        n2 = getattr(material.data, "ior", self.scene_ior + 1e-2)
 
         # Fresnel-based decision
         reflection_chance = calculate_fresnel_ratio(
@@ -560,7 +562,7 @@ class StandardInteraction(InteractionStrategy):
 
         # Try refraction first if decision says so
         if do_refract:
-            new_ray, _ = material.calculate_refraction_ray(
+            new_ray, pdf = material.calculate_refraction_ray(
                 incoming_ray=ray,
                 surface_normal=normal,
                 new_origin=hit_info.point + normal * bias,
@@ -574,7 +576,7 @@ class StandardInteraction(InteractionStrategy):
 
         # Reflection path (or fallback)
         if not do_refract:
-            new_ray, _ = material.calculate_microfacet_reflection(
+            new_ray, pdf = material.calculate_microfacet_reflection(
                 incoming_ray=ray,
                 surface_normal=normal,
                 new_origin=hit_info.point + normal * bias,
@@ -595,13 +597,15 @@ class StandardInteraction(InteractionStrategy):
                     stats.rays_reflection += 1
 
             # Reset throughput for a fresh path (material handles weighting)
-            new_ray.throughput = np.array([1, 1, 1])
+            new_ray.throughput = Color(1.0, 1.0, 1.0)
+            new_ray.pdf = pdf
 
         return new_ray
 
 # Shading implementations
 class BasicLambertShading(ShadingStrategy):
-    """Simple Lambertian shader used by unit tests and quick checks.
+    """
+    Simple Lambertian shader used by unit tests and quick checks.
     """
     def shade(
             self,
@@ -609,7 +613,7 @@ class BasicLambertShading(ShadingStrategy):
             ray: "TracingRay",
             hit_info: "HitInfo",
             current_depth: int,
-            trace_function: Callable[[Scene, TracingRay, int, Sampler], np.ndarray], 
+            trace_function: Callable[[Scene, TracingRay, int, Sampler], Color], 
             intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], HitInfo],
             interaction_function: Callable[[TracingRay, HitInfo, Sampler, Optional[float], Optional["TracingStats"]], Optional[TracingRay]],
             sampler: Sampler,
@@ -617,20 +621,21 @@ class BasicLambertShading(ShadingStrategy):
             stats: Optional["TracingStats"] = None
         ) -> Color:
         
-        if hasattr(hit_info.obj, 'shape'):
-            v_obj: VObject = hit_info.obj
+        if not hasattr(hit_info, 'obj') or hasattr(hit_info.obj, 'shape'):
+            return Color(0, 1, 1)  # Error Pink
+        
+        v_obj: VObject = hit_info.obj
 
-            mat = getattr(v_obj, 'material', None)
+        mat = getattr(v_obj, 'material', None)
+        if mat is None:
+            return Color(1.0, 0.0, 1.0)
             
-            # Create a minimal color using ambient only
-            ambient = getattr(scene, 'ambient_color', Color(0.03, 0.03, 0.03))
-            intensity = getattr(scene, 'ambient_intensity', 0.1)
+        # Create a minimal color using ambient only
+        ambient: Color = getattr(scene, 'ambient_color', Color(0.03, 0.03, 0.03))
+        intensity: float = getattr(scene, 'ambient_intensity', 0.1)
             
-            albedo = getattr(mat, 'albedo', Color(1, 1, 1)) if mat is not None else Color(1, 1, 1)
-            return ambient * intensity * albedo
-
-        # If a HitInfo was passed, fall back to a safe black
-        return np.array([0.0, 0.0, 0.0])
+        albedo: Color = getattr(mat, 'albedo', Color(1, 1, 1)) if mat is not None else Color(1, 1, 1)
+        return ambient * intensity * albedo
 
 class RecursiveLambertShading(ShadingStrategy):
     """
@@ -643,22 +648,20 @@ class RecursiveLambertShading(ShadingStrategy):
             ray: TracingRay,
             hit_info: HitInfo,
             current_depth: int,
-            trace_function: Callable[[Scene, TracingRay, int, Sampler], np.ndarray], 
+            trace_function: Callable[[Scene, TracingRay, int, Sampler], Color], 
             intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], HitInfo],
             interaction_function: Callable[[TracingRay, HitInfo, Sampler, Optional[float], Optional["TracingStats"]], Optional[TracingRay]],
             sampler: Sampler,
             bias: float = 1e-4,
             stats: Optional["TracingStats"] = None
         ) -> Color:
-        v_object: Optional[VObject] = hit_info.obj
+        if not hit_info.hit or hasattr(hit_info, "obj") or hasattr(hit_info, "normal"):
+            return Color(0.0, 1.0, 1.0)
 
-        if v_object is None:
-            return np.array([1.0, 0.0, 1.0])
-        
-        material = v_object.material
-
-        if material is None:
+        v_object: VObject = hit_info.obj
+        if not hasattr(v_object, "material"):
             return Color(1.0, 0.0, 1.0)
+        material = v_object.material
         
         # --- 1. Emission (The Glow) ---
         # Added first so even if we stop recursing, we see the light.
@@ -669,6 +672,7 @@ class RecursiveLambertShading(ShadingStrategy):
             return final_color
 
         # --- 2. Direct Lighting (Next Event Estimation) ---
+        normal = unit(hit_info.normal)
         view_dir = -unit(ray.orientation)
         
         # We assume 'evaluate_direct_light' handles the loop over lights & shadow checks
@@ -680,18 +684,17 @@ class RecursiveLambertShading(ShadingStrategy):
              return 0.0 if scene.is_occluded(p1, p2, self.shadow_bias) else 1.0
 
         direct_light = material.evaluate_direct_light(
-            scene.lights, hit_info, view_dir, visibility_checker
+            scene.get_lights(), hit_info, view_dir, visibility_checker
         )
-        final_color += direct_light
 
-        # --- 3. Ambient (Optional) ---
-        if self.ambient_enabled:
-            final_color += material.get_ambient_color(scene.ambient_color, scene.ambient_intensity)
+        # --- 3. Indirect Lighting (Recursion) ---
+        indirect_light = Color(0.0, 0.0, 0.0)
 
-        # --- 4. Indirect Lighting (Recursion) ---
         # The 'interaction_function' calculates the physics of the bounce.
         # It performs Russian Roulette (Reflect OR Refract) and sets 'new_ray.throughput'.
         if current_depth > 0:
+            probe_color = Color(1.0, 1.0, 1.0)
+
             new_ray = interaction_function(ray, hit_info, sampler, bias, stats)
 
             if new_ray is not None:
@@ -699,9 +702,16 @@ class RecursiveLambertShading(ShadingStrategy):
                     stats.max_depth_reached = max(stats.max_depth_reached, getattr(new_ray, "depth", 0))
 
                 incoming_light = trace_function(scene, new_ray, current_depth - 1, sampler)
-                throughput = getattr(new_ray, "throughput", np.array([1, 1, 1]))
-                final_color += incoming_light * throughput
+                
+                indirect_light: Color = incoming_light * new_ray.throughput
+            else:
+                indirect_light = probe_color
 
+        final_color = direct_light + indirect_light
+
+        if self.ambient_enabled:
+            final_color += material.get_ambient_color(scene.ambient_color, scene.ambient_intensity)
+        
         # --- 5. Volumetrics (Beer's Law) ---
         # If the ray passed THROUGH an object to get here, absorb some color.
         if getattr(ray, "is_inside", False):
@@ -736,7 +746,7 @@ class XRayThicknessShading(ShadingStrategy):
         ray: "TracingRay",
         hit_info: "HitInfo",
         current_depth: int,
-        trace_function: Callable[[Scene, TracingRay, int, Sampler], np.ndarray], 
+        trace_function: Callable[[Scene, TracingRay, int, Sampler], Color], 
         intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], HitInfo],
         interaction_function: Callable[[TracingRay, HitInfo, Sampler, Optional[float], Optional["TracingStats"]], Optional[TracingRay]],
         sampler: Sampler,
@@ -940,13 +950,13 @@ class Raytracer(Algorithm):
         If the surface is reflective, this function will be called again by the shader.
         """
         if depth < 0:
-            return Color([0.0, 0.0, 0.0])
+            return Color(0.0, 0.0, 0.0)
 
-        hit_info = self.intersector.find_hit(scene, ray, stats=self.stats)
+        hit_info = self.intersector.find_hit(scene, ray, self.stats)
 
         self.stats = update_memory_stats(self.stats)
 
-        if hit_info.hit:
+        if hit_info.hit and hit_info.obj is not None:
             return self.shader.shade(
                 scene=scene, 
                 ray=ray, 
@@ -962,7 +972,7 @@ class Raytracer(Algorithm):
         # The ray missed all scene objects
         if self.enable_scene_background:
             return self.custom_background
-        return scene.get_background_color(np.asarray(ray.orientation))
+        return scene.get_background_color(ray.orientation)
 
     def render(
         self,
@@ -1021,7 +1031,7 @@ class Raytracer(Algorithm):
                     if ray is None: continue
                     
                     # Global Coordinates
-                    px, py = getattr(ray, "pixel_x", -1), getattr(ray, "pixel_y", -1)
+                    px, py = ray.pixel_x, ray.pixel_y
                     
                     # Convert to Local Tile Coordinates
                     local_x = px - tile_x
@@ -1042,13 +1052,11 @@ class Raytracer(Algorithm):
                     # Store in Local Tile Buffer
                     local_idx = local_y * current_w + local_x
                     tile_samples[local_idx].append((sample, pixel_color))
-
                     pixels_processed += 1
 
                 # 4. Reconstruct Tile (Resolve samples to final color)
                 for i in range(len(tile_samples)):
                     samples_and_colors = tile_samples[i]
-                    print(samples_and_colors)
                     
                     if not samples_and_colors: continue
                     # Calculate Global Pixel Index
@@ -1063,12 +1071,8 @@ class Raytracer(Algorithm):
                     # Convert Color objects to RGB arrays
                     colors = []
                     for sc in samples_and_colors:
-                        color_obj = sc[1]
-                        # Handle both Color objects and numpy arrays
-                        if hasattr(color_obj, 'to_np_array'):
-                            color_array = color_obj.to_np_array()[:3]
-                        else:
-                            color_array = np.array([color_obj[0], color_obj[1], color_obj[2]])
+                        color_obj: Color = sc[1]
+                        color_array = color_obj.to_np_array()[:3]
                         colors.append(color_array)
                         
                     # Note: You need to import/define 'reconstruct_pixel'
