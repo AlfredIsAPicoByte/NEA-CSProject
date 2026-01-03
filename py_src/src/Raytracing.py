@@ -8,7 +8,7 @@ from CommonUtils import unit, attenuate_distance_exponential
 from PrimaryStructures import HitInfo, TracingRay
 from Scene import Scene
 from Camera import VCamera
-from Geometry import Shape, VObject, get_transformed_exit_point
+from Geometry import Shape, VObject, AABB, BVHNode 
 from Refractions import REFRACTIVE_INDICES
 from Luminance import Color, PBRMaterial, MaterialType, calculate_fresnel_ratio, Color
 from RenderingAlgorithims import Algorithm, RenderStats, register_algorithm, update_memory_stats
@@ -193,11 +193,9 @@ class RayMarchingIntersection(IntersectionStrategy):
                 obj_matrix = closest_object.transform.get_global_matrix()
                 inv_obj_matrix = np.linalg.inv(obj_matrix)
                 
-                exit_point = get_transformed_exit_point(
+                _, exit_point = closest_object.shape.inverse_signed_distance(
                     ray.origin, 
-                    ray.orientation, 
-                    obj_matrix, 
-                    inv_obj_matrix,
+                    ray.orientation,
                     64
                 )
                 
@@ -418,6 +416,226 @@ class InverseSDFIntersection(IntersectionStrategy):
         if norm > 0:
             return grad / norm
         return np.array([0.0, 1.0, 0.0]) # Fallback
+    
+class BVHIntersection(IntersectionStrategy):
+    def __init__(self):
+        super().__init__()
+        self._cached_bvh_root: Optional[BVHNode] = None
+        self._cached_scene_id: Optional[int] = None
+
+    def find_hit(self, scene: Scene, ray: TracingRay, stats: Optional["TracingStats"] = None) -> HitInfo:
+        # 1. Check if we need to build/rebuild the BVH
+        # (We use id(scene.objects) as a cheap way to detect if the list changed)
+        current_scene_id = id(scene.objects)
+        if self._cached_bvh_root is None or current_scene_id != self._cached_scene_id:
+            print(f"[BVH] Building Hierarchy for {len(scene.objects)} objects...")
+            self._cached_bvh_root = self._build_bvh(scene.objects)
+            self._cached_scene_id = current_scene_id
+
+        # 2. Traverse
+        closest_hit = HitInfo.miss()
+        
+        # Stack-based traversal (avoids recursion overhead)
+        # Stack stores tuples: (Node, Distance_To_Box)
+        stack = [(self._cached_bvh_root, 0.0)]
+        
+        while stack:
+            node, dist_to_box = stack.pop()
+            
+            # Optimization: If the box is further than our current closest hit,
+            # there is no point checking inside it.
+            if closest_hit.hit and dist_to_box >= closest_hit.distance:
+                continue
+                
+            if stats: stats.bvh_nodes_visited += 1
+
+            # Case A: Leaf Node (Test Objects)
+            if node.objects:
+                for obj in node.objects:
+                    # We reuse your existing per-object test logic here
+                    # Assuming you have a basic geometric intersector or reuse the standard logic
+                    hit = self._test_single_object(obj, ray, stats)
+                    
+                    if hit.hit:
+                        if not closest_hit.hit or hit.distance < closest_hit.distance:
+                            closest_hit = hit
+                continue
+
+            # Case B: Internal Node (Test Children)
+            # We want to push the FAR child first, so we pop the CLOSE child later
+            # This ensures we check the closest boxes first (Front-to-Back ordering)
+            
+            d_left = float('inf')
+            d_right = float('inf')
+            
+            if node.left:
+                if stats: stats.aabb_tests += 1
+                d_left = node.left.box.intersect(ray)
+                
+            if node.right:
+                if stats: stats.aabb_tests += 1
+                d_right = node.right.box.intersect(ray)
+
+            # Push valid children to stack
+            # Push the furthest one first, so the closest is at top of stack
+            if d_left != float('inf') and d_right != float('inf'):
+                if d_left < d_right:
+                    stack.append((node.right, d_right))
+                    stack.append((node.left, d_left))
+                else:
+                    stack.append((node.left, d_left))
+                    stack.append((node.right, d_right))
+            elif d_left != float('inf'):
+                stack.append((node.left, d_left))
+            elif d_right != float('inf'):
+                stack.append((node.right, d_right))
+
+        if not closest_hit.hit and stats:
+            stats.missed_rays += 1
+            
+        return closest_hit
+
+    def _build_bvh(self, objects: list[VObject]) -> BVHNode:
+        """
+        Recursively splits the object list to build the tree.
+        """
+        node = BVHNode([])
+        
+        # 1. Calculate Bounds for all objects in this list
+        # We cache AABBs for performance
+        object_bounds = [(obj, AABB.from_object(obj)) for obj in objects]
+        
+        # Calculate Union of all bounds for this node
+        if not object_bounds:
+            node.box = AABB(np.zeros(3), np.zeros(3))
+            return node
+
+        first_box = object_bounds[0][1]
+        node_min = first_box.min_point.copy()
+        node_max = first_box.max_point.copy()
+        
+        for _, box in object_bounds:
+            node_min = np.minimum(node_min, box.min_point)
+            node_max = np.maximum(node_max, box.max_point)
+        
+        node.box = AABB(node_min, node_max)
+
+        # 2. Leaf Condition
+        # If few objects, stop splitting
+        if len(objects) <= 2:
+            node.objects = objects
+            return node
+
+        # 3. Split Strategy: Longest Axis
+        # Find the widest dimension of the node's box
+        extent = node_max - node_min
+        axis = np.argmax(extent) # 0=x, 1=y, 2=z
+        
+        # Sort objects by their center along that axis
+        object_bounds.sort(key=lambda item: (item[1].min_point[axis] + item[1].max_point[axis]) * 0.5)
+        
+        mid = len(objects) // 2
+        
+        sorted_objs = [item[0] for item in object_bounds]
+        
+        node.left = self._build_bvh(sorted_objs[:mid])
+        node.right = self._build_bvh(sorted_objs[mid:])
+        
+        return node
+
+    def _test_single_object(self, obj: VObject, ray: TracingRay, stats: Optional["TracingStats"]) -> HitInfo:
+        """
+        Hybrid Intersection:
+        1. Transforms the World Ray into Object Local Space.
+        2. Performs a small Ray March loop against the unit_signed_distance.
+        3. Transforms the result back to World Space.
+        """
+        # --- 1. Transform Ray to Local Space ---
+        # We move the ray, not the object. This lets us assume the object is 
+        # always at (0,0,0) with identity rotation/scale.
+        local_origin = obj.transform.inverse_transform_point(ray.origin)
+        local_dir_raw = obj.transform.inverse_transform_direction(ray.orientation)
+        
+        # Normalize direction for correct SDF stepping
+        dir_len = np.linalg.norm(local_dir_raw)
+        if dir_len == 0: return HitInfo.miss()
+        local_dir = local_dir_raw / dir_len
+
+        # --- 2. Local Ray Marching ---
+        t = 0.0
+        max_local_march = 20.0 # Unit shapes are usually size ~1-2, so 20 is plenty
+        local_epsilon = 1e-4   # Precision threshold
+        
+        # Optimization: Check if we are even close to the unit sphere/box 
+        # before starting the march loop.
+        # Simple sphere check: Is the ray passing within sqrt(3) distance of origin?
+        # (Skipping for brevity, but recommended for production)
+
+        # Handle "Inside" logic (if ray is inside the object, distance is negative)
+        sign_modifier = -1.0 if getattr(ray, "is_inside", False) else 1.0
+
+        for _ in range(64): # 64 steps is robust for convex shapes (Sphere/Cube)
+            p = local_origin + (local_dir * t)
+            
+            if stats: stats.triangle_tests += 1
+
+            # EVALUATE SDF
+            dist = obj.shape.unit_signed_distance(p) * sign_modifier
+            
+            # HIT FOUND
+            if dist < local_epsilon:
+                # --- 3. Transform Back to World Space ---
+                p_local = p
+                
+                # A. Calculate Normal in Local Space (Gradient)
+                local_normal = self._calc_local_gradient(obj.shape, p_local)
+                if ray.is_inside: 
+                    local_normal = -local_normal # Flip normal if exiting
+                
+                # B. Transform Results
+                p_world = obj.transform.transform_point(p_local)
+                normal_world = obj.transform.transform_normal(local_normal)
+                
+                # C. Recalculate true world distance
+                # (Surer than scaling 't' because of non-uniform scaling)
+                dist_world = np.linalg.norm(p_world - ray.origin)
+                
+                return HitInfo(
+                    did_hit=True,
+                    distance=dist_world,
+                    point=p_world,
+                    normal=normal_world,
+                    obj=obj
+                )
+            
+            # STEP
+            # Note: If the object has non-uniform scale (e.g. stretched sphere),
+            # this step might be too large/small. For perfect accuracy, we should
+            # divide 'dist' by the max scale factor, but direct stepping is usually visually fine.
+            t += dist
+            
+            if t > max_local_march:
+                break
+                
+        return HitInfo.miss()
+
+    def _calc_local_gradient(self, shape: Shape, p: np.ndarray) -> np.ndarray:
+        """
+        Calculates surface normal using central differences on the SDF.
+        """
+        h = 1e-4
+        dx = np.array([h, 0, 0])
+        dy = np.array([0, h, 0])
+        dz = np.array([0, 0, h])
+        
+        grad = np.array([
+            shape.unit_signed_distance(p + dx) - shape.unit_signed_distance(p - dx),
+            shape.unit_signed_distance(p + dy) - shape.unit_signed_distance(p - dy),
+            shape.unit_signed_distance(p + dz) - shape.unit_signed_distance(p - dz)
+        ])
+        
+        norm = np.linalg.norm(grad)
+        return grad / norm if norm > 0 else np.array([0.0, 1.0, 0.0])
 
 # Interaction implementations
 class TerminalInteraction(InteractionStrategy):

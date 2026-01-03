@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 import numpy as np
-from typing import Optional, Union, List, Callable
+from typing import Optional, Union, List, Tuple
 from dataclasses import dataclass, field
 
 from CommonUtils import unit
-from PrimaryStructures import Transform, Ray
+from PrimaryStructures import Transform, Ray, TracingRay
 from Luminance import PBRMaterial
 
 class Shape(ABC):
@@ -34,7 +34,7 @@ class Shape(ABC):
     
     @classmethod
     @abstractmethod
-    def unit_sdf(cls, point: np.ndarray) -> float:
+    def unit_signed_distance(cls, point: np.ndarray) -> float:
         """
         Signed distance for a unit version of the shape.
         (e.g., Unit Sphere is radius 1 at origin).
@@ -48,6 +48,69 @@ class Shape(ABC):
         (negative inside, positive outside).
         """
         raise NotImplementedError
+    
+    def inverse_signed_distance(
+        self,
+        origin_world: np.ndarray, 
+        dir_world: np.ndarray,
+        max_steps: int = 64,
+        max_distance: float = 10,
+        epsilon: float = 1e-4
+    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        # --- STEP 1: Transform Ray to Local Space ---
+        # 1. Transform Origin (Point: w=1.0)
+        origin_local = self.transform.inverse_transform_point(origin_world)
+        
+        # 2. Transform Direction (Vector: w=0.0)
+        # We only need the rotation/scale 3x3 block for vectors
+        dir_local = unit(self.transform.inverse_transform_direction(dir_world))
+
+        # --- STEP 2: Raymarch in Local Space (Unit Sphere) ---
+        t = 0.0
+        entry_point_local = np.zeros(3)
+        hit_entry = False
+
+        # A. Find Entry Point (Front Face)
+        for _ in range(max_steps):
+            entry_point_local = origin_local + (dir_local * t)
+            dist = -self.unit_signed_distance(entry_point_local)
+            
+            # Optimization: If we are too far away, we missed
+            if dist > max_distance:
+                return None 
+
+            if dist < epsilon:
+                hit_entry = True
+                break
+            t += dist
+
+        # If we never hit the entry, we can't find an exit!
+        if not hit_entry:
+            return None
+        entry_point = self.transform.transform_point(entry_point_local)
+
+        # B. Find Exit Point (Back Face)
+        # Push slightly inside the sphere to start the internal march
+        t += epsilon * 2.0
+        exit_point_local = np.array([0.0, 0.0, 0.0])
+        
+        for _ in range(max_steps):
+            exit_point_local = origin_local + (dir_local * t)
+            
+            # INVERTED SDF: We want distance to the "outer shell" from inside.
+            # Inside a unit sphere, dist is negative. -dist makes it positive.
+            dist = -self.unit_signed_distance(exit_point_local)
+            
+            if dist < epsilon:
+                # Apply World Matrix
+                exit_point = self.transform.transform_point(exit_point_local)
+                
+                # Return 3D (x,y,z)
+                return (entry_point, exit_point)
+                
+            t += dist
+            
+        return None
     
     def get_distance(self, point: np.ndarray) -> float:
         """Unsigned distance to surface."""
@@ -184,7 +247,7 @@ class Circle(Shape2D):
         self.radius = float(radius)
 
     @classmethod
-    def unit_sdf(cls, point: np.ndarray) -> float:
+    def unit_signed_distance(cls, point: np.ndarray) -> float:
         """Unit Disk SDF (Radius 1, XY Plane)."""
         xy_dist = np.linalg.norm(point[:2])
         return np.sqrt(max(0.0, xy_dist - 1.0)**2 + point[2]**2)
@@ -292,7 +355,7 @@ class Triangle(Shape2D):
         return min(d1, d2, d3)
 
     @classmethod
-    def unit_sdf(cls, point: np.ndarray) -> float:
+    def unit_signed_distance(cls, point: np.ndarray) -> float:
         return max(abs(point[2]), max(point[0], max(point[1], 1 - point[0] - point[1])) if point[0]>0 and point[1]>0 else 0)
 
     def convex_hull(self, resolution: int = 0) -> List[np.ndarray]:
@@ -564,7 +627,7 @@ class Sphere(Shape3D):
         self.radius = float(radius)
 
     @classmethod
-    def unit_sdf(cls, point: np.ndarray) -> float:
+    def unit_signed_distance(cls, point: np.ndarray) -> float:
         return np.linalg.norm(point) - 1.0
 
     def signed_distance(self, point: np.ndarray) -> float:
@@ -664,7 +727,7 @@ class Cube(Shape3D):
         self.side_length = float(side_length)
 
     @classmethod
-    def unit_sdf(cls, point: np.ndarray) -> float:
+    def unit_signed_distance(cls, point: np.ndarray) -> float:
         # Unit Cube (side 1)
         d = np.abs(point) - 0.5
         return np.linalg.norm(np.maximum(d, 0.0)) + min(max(d[0], max(d[1], d[2])), 0.0)
@@ -1004,82 +1067,91 @@ class CapsuleFactory(ShapeFactory):
     def create(self, point1: np.ndarray, point2: np.ndarray, radius: float, **kwargs) -> Capsule:
         return Capsule(point1, point2, radius, **kwargs)
 
-def get_transformed_exit_point(
-    ray_origin_world: np.ndarray, 
-    ray_dir_world: np.ndarray, 
-    object_transform_matrix: np.ndarray, 
-    inverse_transform_matrix: np.ndarray,
-    sdf_func: Callable[[np.ndarray], float],
-    max_steps: int = 64,
-    epsilon: float = 1e-4
-) -> Optional[np.ndarray]:
-    
-    # --- STEP 1: Transform Ray to Local Space ---
-    # 1. Transform Origin (Point: w=1.0)
-    origin_4d = np.append(ray_origin_world, 1.0)
-    origin_local_4d = inverse_transform_matrix @ origin_4d
-    ray_origin_local = origin_local_4d[:3]
-    
-    # 2. Transform Direction (Vector: w=0.0)
-    # We only need the rotation/scale 3x3 block for vectors
-    ray_dir_local_raw = inverse_transform_matrix[:3, :3] @ ray_dir_world
-    
-    # 3. Normalize Direction
-    # This is crucial: We are now working in "Unit Sphere Space".
-    # The length of the raw vector encodes the scaling, but standard SDFs 
-    # expect normalized directions to step correctly.
-    ray_dir_local = ray_dir_local_raw / (np.linalg.norm(ray_dir_local_raw) + 1e-8)
+# --- 1. AABB Helper Class (The "Box" logic) ---
+class AABB:
+    """
+    Axis-Aligned Bounding Box.
+    Used for quick rejection tests before checking complex geometry.
+    """
+    __slots__ = ['min_point', 'max_point']
 
-    # --- STEP 2: Raymarch in Local Space (Unit Sphere) ---
-    t = 0.0
-    hit_entry = False
+    def __init__(self, min_point: np.ndarray, max_point: np.ndarray):
+        self.min_point = min_point
+        self.max_point = max_point
 
-    # A. Find Entry Point (Front Face)
-    for _ in range(max_steps):
-        p = ray_origin_local + (ray_dir_local * t)
-        dist = -sdf_func(p)
+    def intersect(self, ray: TracingRay) -> float:
+        """
+        Slab Method for Ray/AABB intersection.
+        Returns distance to entry, or infinity if miss.
+        """
+        # We use the inverse direction to replace division with multiplication
+        # This handles division by zero gracefully (results in +/- inf)
+        inv_dir = 1.0 / (ray.orientation + 1e-9) 
         
-        # Optimization: If we are too far away, we missed
-        if dist > 10.0: 
-            return None 
+        t0 = (self.min_point - ray.origin) * inv_dir
+        t1 = (self.max_point - ray.origin) * inv_dir
 
-        if dist < epsilon:
-            hit_entry = True
-            break
-        t += dist
+        tmin = np.maximum(np.minimum(t0, t1), 0.0)
+        tmax = np.minimum(np.maximum(t0, t1), 1e30)
 
-    # If we never hit the entry, we can't find an exit!
-    if not hit_entry:
-        return None
+        # Find largest entry time and smallest exit time across all axes
+        t_enter = np.max(tmin)
+        t_exit = np.min(tmax)
 
-    # B. Find Exit Point (Back Face)
-    # Push slightly inside the sphere to start the internal march
-    t += epsilon * 2.0 
-    
-    for _ in range(max_steps):
-        p = ray_origin_local + (ray_dir_local * t)
+        if t_exit >= t_enter:
+            return t_enter
         
-        # INVERTED SDF: We want distance to the "outer shell" from inside.
-        # Inside a unit sphere, dist is negative. -dist makes it positive.
-        dist = -sdf_func(p)
+        return float('inf')
+
+    @staticmethod
+    def from_object(obj: VObject) -> 'AABB':
+        """
+        Calculates the world-space AABB for a given object.
+        """
+        # Get the object's local bounds (e.g., Sphere is [-r, -r, -r] to [r, r, r])
+        # This assumes your Shape classes have a 'get_bounds()' method.
+        # Fallback: Approximate with a unit cube scaled by transform
         
-        if dist < epsilon:
-            # We hit the exit boundary!
-            p_exit_local = p 
-            
-            # --- STEP 3: Transform Back to World Space ---
-            # FIX: Must use homogeneous coordinates (4D)
-            p_exit_local_4d = np.append(p_exit_local, 1.0)
-            
-            # Apply World Matrix
-            p_exit_world_4d = object_transform_matrix @ p_exit_local_4d
-            
-            # Return 3D (x,y,z)
-            return p_exit_world_4d[:3]
-            
-        t += dist
+        # 1. Get Transform Matrix
+        matrix = obj.transform.get_global_matrix()
         
-    return None
+        # 2. Define the 8 corners of a generic Unit Cube (-0.5 to 0.5) or Shape bounds
+        # Note: You should add get_local_bounds() to your Shape classes for tighter fits.
+        corners = np.array([
+            [-1, -1, -1], [1, -1, -1], [-1, 1, -1], [1, 1, -1],
+            [-1, -1, 1],  [1, -1, 1],  [-1, 1, 1],  [1, 1, 1]
+        ]) * 0.5 # Unit cube logic
+        
+        # If shape is sphere, radius is usually 1.0 before scaling
+        if hasattr(obj.shape, 'radius'):
+            corners *= 2.0 # Scale unit cube to wrap radius 1.0 sphere
+
+        # 3. Transform corners to world space
+        # (Append 1 for homogeneous coords)
+        ones = np.ones((8, 1))
+        corners_4d = np.hstack([corners, ones]) 
+        world_corners = (matrix @ corners_4d.T).T[:, :3]
+
+        # 4. Find min/max of transformed corners
+        min_p = np.min(world_corners, axis=0) - 0.01 # Small padding
+        max_p = np.max(world_corners, axis=0) + 0.01
+        
+        return AABB(min_p, max_p)
+
+    @staticmethod
+    def union(box_a: 'AABB', box_b: 'AABB') -> 'AABB':
+        return AABB(
+            np.minimum(box_a.min_point, box_b.min_point),
+            np.maximum(box_a.max_point, box_b.max_point)
+        )
+
+# --- 2. The Node Structure ---
+class BVHNode:
+    def __init__(self, objects: list[VObject]):
+        self.left: BVHNode | None = None
+        self.right: BVHNode | None = None
+        self.box: AABB | None = None
+        self.objects: list[VObject] = [] # Only leaf nodes have objects
 
 """
 Geometry Module: Defines geometric shapes, their properties, and interactions.
