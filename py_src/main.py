@@ -65,12 +65,12 @@ if __name__ == "__main__":
     all_scenes = [
         get_minimal_scene(img_w, img_h),
         get_gradient_scene(img_w, img_h),
-        get_emissive_scene(),
-        get_lit_studio_scene(),
+        get_emissive_scene(img_w, img_h),
+        get_lit_studio_scene(img_w, img_h),
         get_rgb_room_with_objects_scene(img_w, img_h),
         get_cyberpunk_scene(img_w, img_h),
-        get_material_deck_scene(),
-        get_refraction_lab_scene()
+        get_material_deck_scene(img_w, img_h),
+        get_refraction_lab_scene(img_w, img_h)
     ]
 
     sample_settings = SampleSettings(samples_per_pixel=1, filter_type=PixelFilter.BOX, filter_width=2)
