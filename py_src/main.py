@@ -14,25 +14,27 @@ PostProcessingPipeline = None
 from src.Scene import Scene
 from test_scenes import *
 
-def render_process(scene: Scene, algorithim: Algorithm) -> np.ndarray:
+def render_process(scene: Scene, algorithim: Algorithm):
     """
-    Renders the scene and returns a NumPy float32 array (H, W, 3).
-    Optimized to avoid slow Python loops during list-to-array conversion.
+    Execute the rendering algorithim on the scene and return the rendered image as a numpy array.
     """
-    W, H = scene.camera.width, scene.camera.height
+    # Render using the algorithim
+    pixel_colors = algorithim.render(scene)
     
-    # 1. Render (Returns flat list of Color objects)
-    pixel_colors: np.ndarray = algorithim.render(scene, sampling_manager.sampler, tile_size=64)
-    flat_pixel_data = [c.rgba[:3] for c in pixel_colors]
-
-    # 2. Convert to NumPy Array
-    pixel_array = np.array(flat_pixel_data, dtype=np.float32)
-
-    # 3. Now you can Reshape
-    # (Height, Width, Channels)
-    raw_buffer = pixel_array.reshape((H, W, 3))
+    # Convert List[Color] to numpy array (width x height x 3)
+    width = scene.camera.width
+    height = scene.camera.height
+    img_array = np.zeros((height, width, 3), dtype=np.float32)
     
-    return raw_buffer
+    for i, color in enumerate(pixel_colors):
+        y = i // width
+        x = i % width
+        if hasattr(color, 'to_np_array'):
+            img_array[y, x] = color.to_np_array()[:3]
+        else:
+            img_array[y, x] = [color[0], color[1], color[2]]
+    
+    return img_array
 
 def save_image(img_data: np.ndarray, out_path="render_out.png"):
     """
@@ -89,7 +91,7 @@ if __name__ == "__main__":
         intersection_strategy=intersection,
         interaction_strategy=interactor,
         shading_strategy=shading,
-        custom_background=np.ones(4),
+        custom_background=Color(1.0, 1.0, 1.0),
         enable_scene_background=True
     )
 
@@ -106,6 +108,7 @@ if __name__ == "__main__":
         try:
             # 1. Render to Float Array
             raw_img_data = render_process(scene, raytracer)
+
             save_image(raw_img_data, out_path=out_path + "_raw.png")
 
             # 2. Post-Process (The Pipeline)
