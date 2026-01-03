@@ -16,7 +16,7 @@ class Scene:
 
         # Ambient lighting defaults (can be overridden via kwargs)
         # small neutral ambient to avoid complete black shadows by default
-        self.ambient_color: np.ndarray = np.array([0.03, 0.03, 0.03])
+        self.ambient_color: Color = Color(0.03, 0.03, 0.03)
         self.ambient_intensity: float = 0.1
 
         for key, value in kwargs.items():
@@ -178,7 +178,7 @@ class Scene:
             return bg
         # Tuple/List fallback
         elif isinstance(bg, (tuple, list)) and len(bg) == 3:
-            return Color(bg[0], bg[1], bg[2])
+            return Color(*bg)
 
         # Invisivle fallback
         return Color(0.0, 0.0, 0.0, 0.0)
