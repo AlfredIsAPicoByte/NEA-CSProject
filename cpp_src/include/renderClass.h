@@ -9,7 +9,7 @@
 #include <stb_image_write.h>
 
 #include "Model.h"
-#include "Image.h"
+#include "Image.hpp"
 #include "IVirtualObject.hpp"
 #include "ModelMeshAdapter.h"
 #include "PythonManager.h"

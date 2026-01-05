@@ -12,8 +12,8 @@
 #include "renderClass.h"
 #include "colorClass.h"
 #include "ModelMeshAdapter.h"
-#include "Light.h"
-#include "Material.h"
+#include "Light.hpp"
+#include "Material.hpp"
 #include "InputManager.h"
 
 class Engine

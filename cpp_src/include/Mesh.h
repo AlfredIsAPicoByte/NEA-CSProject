@@ -6,7 +6,7 @@
 #include "VAO.h"
 #include "EBO.h"
 #include "textureClass.h"
-#include "IRenderable.hpp" // Inherits from your new base class
+#include "IRenderable.hpp"
 #include "Debugger.h"
 
 class Mesh : public IRenderable

@@ -87,47 +87,47 @@ set_target_properties(main PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
-# ---- Python test runner executable (optional) ----
-# Only add this target if the tester source exists at the expected location.
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/tester.cpp")
-    add_executable(python_test_runner cpp_src/tester.cpp)
-    target_link_libraries(python_test_runner PRIVATE pybind11::embed)
-    set_target_properties(python_test_runner PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test_bin"
-    )
-else()
-    message(STATUS "python_test_runner: cpp_src/tester.cpp not found; skipping target")
-endif()
+# # ---- Python test runner executable (optional) ----
+# # Only add this target if the tester source exists at the expected location.
+# if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cpp_src/tester.cpp")
+#     add_executable(python_test_runner cpp_src/tester.cpp)
+#     target_link_libraries(python_test_runner PRIVATE pybind11::embed)
+#     set_target_properties(python_test_runner PROPERTIES
+#         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test_bin"
+#     )
+# else()
+#     message(STATUS "python_test_runner: cpp_src/tester.cpp not found; skipping target")
+# endif()
 
-# remove or comment out this dependency so main does not try to recompile/link tester into itself
-# add_dependencies(main python_test_runner)
+# # remove or comment out this dependency so main does not try to recompile/link tester into itself
+# # add_dependencies(main python_test_runner)
 
-# ---- Optional: Debugging definitions ----
-# You can define DEBUG_MODE based on your build type
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    add_compile_definitions(DEBUG_MODE=1)
-else()
-    add_compile_definitions(DEBUG_MODE=0)
-endif()
+# # ---- Optional: Debugging definitions ----
+# # You can define DEBUG_MODE based on your build type
+# if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+#     add_compile_definitions(DEBUG_MODE=1)
+# else()
+#     add_compile_definitions(DEBUG_MODE=0)
+# endif()
 
-# ---- Optional: support embedding Python. Disabled by default; enable with -DUSE_EMBEDDED_PYTHON=ON ----
-option(USE_EMBEDDED_PYTHON "Enable embedding Python into the executable" OFF)
-if(USE_EMBEDDED_PYTHON)
-    find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-    if(Python3_FOUND)
-        message(STATUS "Embedding Python: ${Python3_VERSION}")
-        target_include_directories(main PRIVATE ${Python3_INCLUDE_DIRS})
-        target_link_libraries(main PRIVATE ${Python3_LIBRARIES})
-        target_compile_definitions(main PRIVATE USE_EMBEDDED_PYTHON=1)
-    endif()
-endif()
+# # ---- Optional: support embedding Python. Disabled by default; enable with -DUSE_EMBEDDED_PYTHON=ON ----
+# option(USE_EMBEDDED_PYTHON "Enable embedding Python into the executable" OFF)
+# if(USE_EMBEDDED_PYTHON)
+#     find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+#     if(Python3_FOUND)
+#         message(STATUS "Embedding Python: ${Python3_VERSION}")
+#         target_include_directories(main PRIVATE ${Python3_INCLUDE_DIRS})
+#         target_link_libraries(main PRIVATE ${Python3_LIBRARIES})
+#         target_compile_definitions(main PRIVATE USE_EMBEDDED_PYTHON=1)
+#     endif()
+# endif()
 
-# ---- Optional: Copy py_src directory after build (ON, OFF) ----
-option(COPY_PY_SRC "Copy py_src directory after build" OFF)
-if(COPY_PY_SRC)
-    add_custom_command(TARGET main POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/py_src
-        $<TARGET_FILE_DIR:main>/py_src
-    )
-endif()
+# # ---- Optional: Copy py_src directory after build (ON, OFF) ----
+# option(COPY_PY_SRC "Copy py_src directory after build" OFF)
+# if(COPY_PY_SRC)
+#     add_custom_command(TARGET main POST_BUILD
+#         COMMAND ${CMAKE_COMMAND} -E copy_directory
+#         ${CMAKE_SOURCE_DIR}/py_src
+#         $<TARGET_FILE_DIR:main>/py_src
+#     )
+# endif()

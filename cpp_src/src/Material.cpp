@@ -1,4 +1,4 @@
-#include "Material.h"
+#include "Material.hpp"
 
 void Material::SerializeFields(json& j) const
 {

@@ -44,7 +44,6 @@ public:
 	void SerializeFields(json& j) const override {
         j = model->GetMeshes()[index].ToJSON();
         j["constructor"] = "ModelAdapter";
-        return j;
     }
 	void DeserializeFields(const json& j) override { model->GetMeshes()[index].FromJSON(j); }
 private:

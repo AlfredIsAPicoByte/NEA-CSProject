@@ -48,7 +48,7 @@ void Model::LoadModel(const std::string& filePath)
 
         // Store resolved paths
         this->modelPath = resolved_path;
-        this->file = filePath; // Store the original request string or resolved path, up to preference
+        this->file = filePath.c_str(); // Store the original request string or resolved path, up to preference
 
         // Parse modelJSON
         std::string text = get_file_contents(resolved_path.string().c_str());
@@ -304,7 +304,7 @@ std::vector<Texture> Model::getTextures()
     std::vector<Texture> textures;
 
     // file is now std::string, so no need to cast
-    std::string fileDirectory = file.substr(0, file.find_last_of('/') + 1);
+    std::string fileDirectory = std::string(file).substr(0, std::string(file).find_last_of('/') + 1);
     AppendMessage("Model directory: " + fileDirectory);
 
     // Go over all images

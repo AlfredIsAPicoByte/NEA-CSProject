@@ -308,38 +308,35 @@ void Camera::SerializeFields(json& j) const
     j["plane"] = {
         {"pitch", planePitch}, {"yaw", planeYaw}, {"roll", planeRoll}, {"power", planePower}
     };
-    
-    return j;
 }
 
 void Camera::DeserializeFields(const json& j)
 {
-    if(j.contains("Position")) Position = glm::vec3(j["Position"][0], j["Position"][1], j["Position"][2]);
-    if(j.contains("WorldUp")) WorldUp = glm::vec3(j["WorldUp"][0], j["WorldUp"][1], j["WorldUp"][2]);
-    if(j.contains("Forward")) Forward = glm::vec3(j["Forward"][0], j["Forward"][1], j["Forward"][2]);
+    Camera t = *this; // Temporary copy in case of partial failure
+    if(j.contains("Position")) t.Position = glm::vec3(j["Position"][0], j["Position"][1], j["Position"][2]);
+    if(j.contains("WorldUp")) t.WorldUp = glm::vec3(j["WorldUp"][0], j["WorldUp"][1], j["WorldUp"][2]);
+    if(j.contains("Forward")) t.Forward = glm::vec3(j["Forward"][0], j["Forward"][1], j["Forward"][2]);
     
     // Recalculate dependent vectors
-    Right = glm::normalize(glm::cross(Forward, WorldUp));
-    Up = glm::normalize(glm::cross(Right, Forward));
+    t.Right = glm::normalize(glm::cross(t.Forward, t.WorldUp));
+    t.Up = glm::normalize(glm::cross(t.Right, t.Forward));
 
-    if(j.contains("type")) type = static_cast<CameraType>(j["type"]);
-    if(j.contains("mode")) mode = static_cast<CamaraMovementMode>(j["mode"]);
-    if(j.contains("fov")) fov = j["fov"];
-    if(j.contains("speed")) speed = j["speed"];
-    if(j.contains("sensitivity")) mouseSensitivity = j["sensitivity"];
-
+    if(j.contains("type")) t.type = static_cast<CameraType>(j["type"]);
+    if(j.contains("fov")) t.fov = j["fov"];
+    if(j.contains("speed")) t.speed = j["speed"];
+    if(j.contains("sensitivity")) t.mouseSensitivity = j["sensitivity"];
     if(j.contains("orbit")) {
-        orbitPitch = j["orbit"]["pitch"];
-        orbitYaw = j["orbit"]["yaw"];
-        orbitRoll = j["orbit"]["roll"];
-        orbitDistance = j["orbit"]["distance"];
-        orbitTarget = glm::vec3(j["orbit"]["target"][0], j["orbit"]["target"][1], j["orbit"]["target"][2]);
+        t.orbitPitch = j["orbit"]["pitch"];
+        t.orbitYaw = j["orbit"]["yaw"];
+        t.orbitRoll = j["orbit"]["roll"];
+        t.orbitDistance = j["orbit"]["distance"];
+        t.orbitTarget = glm::vec3(j["orbit"]["target"][0], j["orbit"]["target"][1], j["orbit"]["target"][2]);
     }
 
     if(j.contains("plane")) {
-        planePitch = j["plane"]["pitch"];
-        planeYaw = j["plane"]["yaw"];
-        planeRoll = j["plane"]["roll"];
-        planePower = j["plane"]["power"];
+        t.planePitch = j["plane"]["pitch"];
+        t.planeYaw = j["plane"]["yaw"];
+        t.planeRoll = j["plane"]["roll"];
+        t.planePower = j["plane"]["power"];
     }
 }

@@ -1,10 +1,10 @@
 #include "InputManager.h"
 
-void InputManager::processInputs(std::vector<ActionInput> inputs)
+void InputManager::processInputs(const std::vector<ActionInput, bool>& inputs)
 {
-    for (const auto& inp : inputs)
-    {
-        doWhenKey(inp);
+    for (const auto& input : inputs) {
+        if (!is_mouse) doWhenKey(input);
+        if (is_mouse) doWhenMouseKey(input);
     }
 }
 
@@ -67,10 +67,14 @@ void InputManager::setCursorVisibility(bool isVisible)
     }
 }
 
-void InputManager::toggleCursor(bool isEnabled)
+void InputManager::toggleCursor()
 {
     if (!m_window) return;
 
-    // Consistency: Reuse the logic from setCursorVisibility
-    setCursorVisibility(isEnabled);
+    int mode = glfwGetInputMode(m_window, GLFW_CURSOR);
+    if (mode == GLFW_CURSOR_NORMAL) {
+        glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    } else {
+        glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    }
 }

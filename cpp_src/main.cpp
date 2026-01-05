@@ -68,7 +68,6 @@ int main()
     // Enable debug context (optional)
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 
-
 	// Create the window and OpenGL context
 	// Create a GLFWwindow object
     GLFWwindow* window = glfwCreateWindow(windowWidth, windowHeight, windowTitle.c_str(), nullptr, nullptr);
@@ -217,8 +216,9 @@ int main()
 
 		// Draw objects
 		floorMesh.Draw(litShaderProgram, camera);
-		bunny->Draw(materialProgram, camera);
+		bunny->Draw(litShaderProgram, camera);
 		sword->Draw(litShaderProgram, camera);
+		dount->Draw(litShaderProgram, camera);
 		lightMesh.Draw(unlitShaderProgram, camera);
 	}));
 	testScene.AddRenderable(std::make_shared<Mesh>(floorMesh));
@@ -228,7 +228,6 @@ int main()
 	testScene.AddRenderable(sword);
 
 	testScene.selectedRenderable = 0;
-	testScene.renderSettings->usePythonRendering = false;
 	
 	testScene.SaveScene("scenes/test_save.scn");
 

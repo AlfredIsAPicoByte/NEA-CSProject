@@ -1,55 +1,48 @@
 #pragma once
 
 #include <cstdlib>
+#include <memory>
 #include <ctime>
 #include <random>
 #include <json.hpp>
 
+class Camera;
+class Model;
+class Mesh;
+class Texture;
+struct Vertex;
+struct Light;
+struct Material;
+
 using json = nlohmann::json;
 
-class IVirtualObject {
+class IVirtualObject : public std::enable_shared_from_this<IVirtualObject> {
 public:
-IVirtualObject() {
-        // Use modern C++ random to avoid srand issues and collisions
+    IVirtualObject() {
         static std::random_device rd;
         static std::mt19937 gen(rd());
-        static std::uniform_int_distribution<> dis(0, 4294967295); // 32-bit range
+        static std::uniform_int_distribution<> dis(0, 16777215);
         l_id = dis(gen);
-    };
+    }
 
     virtual ~IVirtualObject() = default;
     virtual void CleanUp() = 0;
 
     int GetLocalID() const {
         return l_id;
-    };
+    }
 
-    // Converts this objects data into json to be stored
     json ToJSON() const {
         json j;
-        j["l_id"] = l_id;     // Serialize base ID
-        SerializeFields(j);   // Delegate to child classes for specific data
+        j["l_id"] = l_id;
+        SerializeFields(j);
         for (const auto& child : children) {
             j["children"].push_back(child->ToJSON());
         }
         return j;
     }
 
-    // Retrives data form a json form storage
-    void FromJSON(const json& j) {
-        if (j.contains("l_id")) {
-            l_id = j["l_id"]; // Deserialize base ID
-        }
-        DeserializeFields(j); // Delegate to child classes for specific data
-
-        for (const auto& childJson : j.value("children", json::array())) {
-            // Here we would need a factory method to create the correct IVirtualObject derived type
-            // For simplicity, we'll assume a generic IVirtualObject can be created
-            auto child = std::make_unique<IVirtualObject>();
-            child->FromJSON(childJson);
-            AddChild(std::move(child));
-        }
-    }
+    void FromJSON(const json& j);  // Move to .cpp file
 
     void AddChild(std::unique_ptr<IVirtualObject> child) {
         child->parent = shared_from_this();
@@ -94,12 +87,16 @@ IVirtualObject() {
         }
         return *this;
     }
+
 protected:
     virtual void SerializeFields(json& j) const = 0;
     virtual void DeserializeFields(const json& j) = 0;
+
 private:
     unsigned int l_id;
-
     std::vector<std::unique_ptr<IVirtualObject>> children;
     std::weak_ptr<IVirtualObject> parent;
+
+    // Declare as static - move implementation to .cpp
+    static std::unique_ptr<IVirtualObject> CreateFromType(const std::string& type, const std::vector<std::string>& args);
 };

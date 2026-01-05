@@ -118,7 +118,7 @@ public:
     void CleanUp() override {}
 protected:
 	void SerializeFields(json& j) const override;
-	void DeserializeFields(const json& j)const override;
+	void DeserializeFields(const json& j) override;
 private:
     void FirstPersonMovement(GLFWwindow* window, double deltaTime);
     void PlaneMovement(GLFWwindow* window, double deltaTime);

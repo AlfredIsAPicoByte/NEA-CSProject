@@ -91,14 +91,16 @@ void Scene::SerializeFields(json& j) const
         if (!r) { j["renderables"].push_back(nullptr); continue; }
         // try to treat renderable as IVirtualObject to get name
         auto asVO = std::dynamic_pointer_cast<IVirtualObject>(r);
-        if (asVO) j["renderables"].push_back(asVO->name);
+        if (asVO) {
+            j["renderables"].push_back(asVO->GetLocalID());
+        }
         else j["renderables"].push_back("renderable");
     }
     j["objects"] = json::array();
     for (const auto& obj : sceneObjects) {
         if (!obj) { j["objects"].push_back(nullptr); continue; }
         // IVirtualObject is expected to have a public name field
-        j["objects"].push_back(obj->name);
+        j["objects"].push_back(obj->GetLocalID());
     }
     j["constructor"] = "Scene";
 }
@@ -158,17 +160,16 @@ void Scene::DeserializeFields(const json& j)
             std::shared_ptr<IRenderable> foundRenderable = nullptr;
             std::string rName = rData.is_string() ? rData.get<std::string>() : "";
             std::string constructor = rData.contains("constructor") ? rData["constructor"].get<std::string>() : "";
-            
-            switch(constructor) {
-                case "Mesh":
-                    foundRenderable = std::make_shared<Mesh>();
-                    break;
-                case "ModelAdapter":
-                    foundRenderable = std::make_shared<ModelMeshAdapter();
-                    break;
-                default:
-                    AppendWarning("Unknown renderable constructor: " + constructor);
-                    break;
+
+            if (strcmp(constructor.c_str(), "ModelAdapter") == 0) {
+                foundRenderable = std::make_shared<ModelMeshAdapter>(nullptr, 0);
+            }
+            else if (strcmp(constructor.c_str(), "Mesh") == 0) {
+                foundRenderable = std::make_shared<Mesh>();
+            }
+            else {
+                AppendWarning("Unknown renderable constructor: " + constructor);
+                continue;
             }
 
             foundRenderable->FromJSON(rData);
@@ -188,22 +189,18 @@ void Scene::DeserializeFields(const json& j)
             std::string oName = oData.is_string() ? oData.get<std::string>() : "";
             std::string constructor = oData.contains("constructor") ? oData["constructor"].get<std::string>() : "";
 
-            switch(constructor) {
-                case "Camera":
-                    foundObject = std::make_shared<Camera>();
-                    break;
-                case "Light":
-                    foundObject = std::make_shared<Light>(glm::vec3(1.0f), 1.0f, 1.0f, 1.0f);
-                    break;
-                case "Material":
-                    foundObject = std::make_shared<Material>(glm::vec3(1.0f), 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, glm::vec3(0.0f));
-                    break;
-                case "ModelRaw":
-                    foundObject = std::make_shared<Mesh>();
-                    break;
-                default:
-                    AppendWarning("Unknown object constructor: " + constructor);
-                    break;
+            if (strcmp(constructor.c_str(), "Camera") == 0) {
+                auto camera = std::make_shared<Camera>(
+                    800,   // or specific width
+                    400,  // or specific height
+                    glm::vec3(0.0f, 0.0f, 3.0f),  // position
+                    glm::vec3(0.0f, 0.0f, -1.0f)  // forward direction
+                );
+                foundObject = camera;
+            }
+            else {
+                AppendWarning("Unknown object constructor: " + constructor);
+                continue;
             }
 
             foundObject->FromJSON(oData);
