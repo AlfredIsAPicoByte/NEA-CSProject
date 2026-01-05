@@ -1,8 +1,8 @@
 #include "InputManager.h"
 
-void InputManager::processInputs(const std::vector<ActionInput, bool>& inputs)
+void InputManager::processInputs(const std::vector<ActionInput>& inputs, std::vector<bool> is_mice)
 {
-    for (const auto& input : inputs) {
+    for (const auto& [input, is_mouse] : zip(inputs, is_mice)) {
         if (!is_mouse) doWhenKey(input);
         if (is_mouse) doWhenMouseKey(input);
     }

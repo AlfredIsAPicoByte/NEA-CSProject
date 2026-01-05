@@ -25,7 +25,7 @@ public:
         return instance;
     }
 
-    void processInputs(const std::vector<ActionInput>& inputs);
+    void processInputs(const std::vector<ActionInput>& inputs, std::vector<bool> is_mice);
     
     // Polling wrappers
     void doWhenKey(GLint key, bool isPressed, std::function<void()> action);
