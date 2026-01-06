@@ -562,7 +562,10 @@ int main()
 							testScene.selectedRenderable = static_cast<int>(i);
 						}
 					}
-					
+
+					void check_valid_renderable() => {
+
+					}
 					if (ImGui::Button("Print Selcted Object Info")) {
 						if (testScene.selectedRenderable >= 0 && 
 							testScene.selectedRenderable < static_cast<int>(testScene.renderables.size())) {
@@ -582,8 +585,7 @@ int main()
 							testScene.selectedRenderable <static_cast<int>(testScene.renderables.size())) {
 							
 							if (testScene.renderables[testScene.selectedRenderable]) {
-								std::string name = testScene.renderables[testScene.selectedRenderable]->GetName();
-								AppendMessage("Selected Renderable: " + name);
+								camera.LookAt(glm::vec3(testScene.renderables[testScene.selectedRenderable]->GetModelMatrix()[3]));
 							} else {
 								AppendMessage("Selected renderable is NULL.");
 							}
