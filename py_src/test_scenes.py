@@ -421,3 +421,424 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
     
     cam.transform.look_at(np.array([0, 0.5, 0]))
     return scene
+
+def get_scifi_corridor_scene(width: int = 120, height: int = 120) -> Scene:
+    """
+    A high-contrast scene featuring repetitive metallic geometry and emissive lighting.
+    Focuses on reflections of light sources on rough metal.
+    """
+    cam_transform = Transform(np.array([0.0, 1.0, 5.0]), np.array([0.0, 0.0, 0.0]), np.ones(3))
+    cam = VCamera(
+        cam_transform, fov=80.0, near=0.1, far=100.0,
+        resolution_width=width, resolution_height=height,
+        camera_type=CameraType.PERSPECTIVE
+    )
+    
+    scene = Scene(name="scifi_corridor", camera=cam, background_color=Color.from_hex("#020205"))
+
+    # Materials
+    mat_floor = PBRMaterial.create_specular(Color.from_hex("#2A2A2A"), roughness=0.3, metallicness=0.8)
+    mat_pillar = PBRMaterial.create_specular(Color.from_hex("#111111"), roughness=0.5, metallicness=0.9)
+    mat_light_strip = PBRMaterial.create_emissive(Color.from_hex("#00FFFF"), 5.0)
+
+    # Floor
+    floor = Cube(center=np.array([0.0, -1.0, -10.0]), side_length=20.0, name="CorridorFloor")
+    floor.transform.scale = np.array([0.5, 0.1, 4.0])
+    floor.material = mat_floor
+    scene.add_object(VObject(shape=floor, name="Floor"))
+
+    # Ceiling
+    ceiling = Cube(center=np.array([0.0, 3.0, -10.0]), side_length=20.0, name="CorridorCeiling")
+    ceiling.transform.scale = np.array([0.5, 0.1, 4.0])
+    ceiling.material = mat_floor
+    scene.add_object(VObject(shape=ceiling, name="Ceiling"))
+
+    # Repetitive Pillars and Lights
+    for z in range(0, -20, -4):
+        # Left Pillar
+        p_left = Cube(center=np.array([-2.5, 1.0, z]), side_length=2.0, name=f"PillarL_{z}")
+        p_left.transform.scale = np.array([0.5, 2.0, 0.5])
+        p_left.material = mat_pillar
+        scene.add_object(VObject(shape=p_left, name=f"PillarLeft_{z}"))
+
+        # Right Pillar
+        p_right = Cube(center=np.array([2.5, 1.0, z]), side_length=2.0, name=f"PillarR_{z}")
+        p_right.transform.scale = np.array([0.5, 2.0, 0.5])
+        p_right.material = mat_pillar
+        scene.add_object(VObject(shape=p_right, name=f"PillarRight_{z}"))
+
+        # Emissive Light Strips on floor edges
+        l_strip = Cube(center=np.array([0.0, -0.9, z]), side_length=0.2, name=f"Light_{z}")
+        l_strip.transform.scale = np.array([8.0, 0.1, 0.5])
+        l_strip.material = mat_light_strip
+        scene.add_object(VObject(shape=l_strip, name=f"Strip_{z}"))
+
+        # Actual Light Sources corresponding to strips
+        light = LightSource(position=np.array([0.0, 0.5, z]), color=Color.from_hex("#00AAAA"), intensity=5.0, radius=2.0, name=f"PointLight_{z}")
+        scene.add_light(light)
+
+    # End focal point
+    sphere_end = Sphere(center=np.array([0.0, 1.0, -18.0]), radius=1.5, name="EndSphere")
+    sphere_end.material = PBRMaterial.create_specular(Color.from_hex("#FF0000"), roughness=0.1, metallicness=1.0)
+    scene.add_object(VObject(shape=sphere_end, name="EndSphere"))
+
+    cam.transform.look_at(np.array([0, 1, -20]))
+    return scene
+
+def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
+    """
+    A scene focusing on warm lighting, long shadows, and the contrast between
+    a matte organic ground and a sharp, reflective geometric object.
+    """
+    cam_transform = Transform(np.array([3.0, 1.5, -4.0]), np.array([0.0, 0.0, 0.0]), np.ones(3))
+    cam = VCamera(
+        cam_transform, fov=65.0, near=0.1, far=100.0,
+        resolution_width=width, resolution_height=height,
+        camera_type=CameraType.PERSPECTIVE
+    )
+
+    # Sunset Gradient Background
+    sky_colors = [
+        Color.from_hex("#38160D"), # Dark ground horizon
+        Color.from_hex("#E85635"), # Deep Orange
+        Color.from_hex("#F29B36"), # Gold
+        Color.from_hex("#685888"), # Purple zenith
+    ]
+    sky_positions = [0.0, 0.3, 0.5, 1.0]
+    
+    scene = Scene(name="sunset_monolith", camera=cam, background_color=ColorGradient(sky_colors, sky_positions))
+
+    # The Monolith (Highly Specular Black Metal)
+    monolith = Cube(center=np.array([0.0, 2.0, 0.0]), side_length=4.0, name="Monolith")
+    monolith.transform.scale = np.array([0.4, 2.0, 0.4])
+    monolith.transform.rotate(np.radians(25), np.array([0, 1, 0]))
+    mat_mono = PBRMaterial.create_specular(Color.from_hex("#050505"), roughness=0.05, metallicness=1.0)
+    monolith.material = mat_mono
+    scene.add_object(VObject(shape=monolith, name="MonolithObj"))
+
+    # Sand Dunes (Matte, rough)
+    floor = Sphere(center=np.array([0.0, -51.0, 0.0]), radius=50.0, name="Sand")
+    mat_sand = PBRMaterial.create_diffuse(Color.from_hex("#D6783B"), roughness=1.0)
+    floor.material = mat_sand
+    scene.add_object(VObject(shape=floor, name="SandGround"))
+
+    # Floating particles/smaller rocks
+    rock1 = Sphere(center=np.array([-1.5, 0.3, 1.5]), radius=0.3, name="Rock1")
+    rock1.material = PBRMaterial.create_diffuse(Color.from_hex("#554433"), roughness=0.9)
+    scene.add_object(VObject(shape=rock1, name="Rock1"))
+
+    # Lighting
+    # Sun (Low angle, very bright, sharp shadows)
+    sun = LightSource(position=np.array([-8.0, 2.0, 10.0]), color=Color.from_hex("#FF9944"), intensity=30.0, radius=100.0, name="Sun")
+    sun.radius = 0.5 # Make it physically small for sharp shadows
+    scene.add_light(sun)
+
+    # Skylight fill (Purple/Blue ambient)
+    fill = LightSource(position=np.array([5.0, 10.0, -5.0]), color=Color.from_hex("#5544AA"), intensity=4.0, radius=20.0, name="SkyFill")
+    scene.add_light(fill)
+
+    cam.transform.look_at(np.array([0, 1.5, 0]))
+    return scene
+
+def get_pastel_blocks_scene(width: int = 120, height: int = 120) -> Scene:
+    """
+    A 'toy' scene with soft, bright lighting and materials that look like plastic or chalk.
+    No metallic or glass surfaces.
+    """
+    cam_transform = Transform(np.array([0.0, 3.0, -5.0]), np.array([0.0, 0.0, 0.0]), np.ones(3))
+    cam = VCamera(
+        cam_transform, fov=60.0, near=0.1, far=50.0,
+        resolution_width=width, resolution_height=height,
+        camera_type=CameraType.PERSPECTIVE
+    )
+
+    scene = Scene(name="pastel_blocks", camera=cam, background_color=Color.from_hex("#F0F4F8"))
+
+    # Materials (Plastic/Chalky: Diffuse with very low specular or high roughness)
+    mat_pink = PBRMaterial.create_diffuse(Color.from_hex("#FFB7B2"), roughness=0.6)
+    mat_mint = PBRMaterial.create_diffuse(Color.from_hex("#B5EAD7"), roughness=0.6)
+    mat_purple = PBRMaterial.create_diffuse(Color.from_hex("#E2F0CB"), roughness=0.6) # Actually yellowish-green
+    mat_white = PBRMaterial.create_diffuse(Color.from_hex("#FFFFFF"), roughness=0.9)
+
+    # Floor
+    floor = Cube(center=np.array([0.0, -1.0, 0.0]), side_length=10.0, name="WhiteFloor")
+    floor.transform.scale = np.array([2.0, 0.1, 2.0])
+    floor.material = mat_white
+    scene.add_object(VObject(shape=floor, name="Floor"))
+
+    # Stacked Objects
+    # Base Cube
+    base = Cube(center=np.array([0.0, 0.0, 0.0]), side_length=2.0, name="BaseCube")
+    base.transform.rotate(np.radians(15), np.array([0, 1, 0]))
+    base.material = mat_mint
+    scene.add_object(VObject(shape=base, name="BaseObj"))
+
+    # Middle Cylinder (Simulated by stretched sphere or cube? using Sphere for variety)
+    mid = Sphere(center=np.array([0.0, 1.6, 0.0]), radius=0.8, name="MidSphere")
+    mid.material = mat_pink
+    scene.add_object(VObject(shape=mid, name="MidObj"))
+
+    # Top floating cube
+    top = Cube(center=np.array([0.2, 2.8, 0.2]), side_length=1.0, name="TopCube")
+    top.transform.rotate(np.radians(45), np.array([1, 1, 0]))
+    top.material = mat_purple
+    scene.add_object(VObject(shape=top, name="TopObj"))
+
+    # Lighting (Soft Studio setup)
+    # Main soft light
+    key = LightSource(position=np.array([3.0, 5.0, -5.0]), color=Color.from_hex("#FFFBEB"), intensity=18.0, radius=5.0, name="Key")
+    scene.add_light(key)
+
+    # Fill light
+    fill = LightSource(position=np.array([-4.0, 2.0, -2.0]), color=Color.from_hex("#E6E6FA"), intensity=8.0, radius=5.0, name="Fill")
+    scene.add_light(fill)
+
+    cam.transform.look_at(np.array([0, 1.2, 0]))
+    return scene
+
+def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
+    """
+    Features multiple glass objects with different Refractive Indices (IOR) 
+    to demonstrate varying levels of light bending.
+    """
+    cam_transform = Transform(np.array([0.0, 2.0, -6.0]), np.array([-0.2, 0.0, 0.0]), np.ones(3))
+    cam = VCamera(cam_transform, fov=70.0, near=0.1, far=100.0, resolution_width=width, resolution_height=height)
+    
+    scene = Scene(name="glass_prism_row", camera=cam, background_color=Color.from_hex("#101015"))
+
+    # 1. Diamond Sphere (High IOR: 2.42) - Center
+    # High dispersion and internal reflection
+    sphere_diamond = Sphere(center=np.array([0.0, 0.5, 0.0]), radius=0.6, name="Diamond")
+    mat_diamond = PBRMaterial.create_glass(
+        Color(1.0, 1.0, 1.0), 
+        Color(1.0, 1.0, 1.0), 
+        roughness=0.0, 
+        metallicness=0.0, 
+        ior=REFRACTIVE_INDICES["diamond"], 
+        transmission=1.0
+    )
+    sphere_diamond.material = mat_diamond
+    scene.add_object(VObject(shape=sphere_diamond, name="CenterDiamond"))
+
+    # 2. Water Sphere (Low IOR: 1.33) - Left
+    # Subtle bending, looks more transparent
+    sphere_water = Sphere(center=np.array([-1.5, 0.5, 0.0]), radius=0.6, name="Water")
+    mat_water = PBRMaterial.create_glass(
+        Color(0.9, 0.9, 1.0), 
+        Color(0.8, 0.9, 1.0), 
+        roughness=0.0, 
+        metallicness=0.0, 
+        ior=1.33, 
+        transmission=1.0
+    )
+    sphere_water.material = mat_water
+    scene.add_object(VObject(shape=sphere_water, name="LeftWater"))
+
+    # 3. Heavy Flint Glass Cube (Medium-High IOR: 1.65) - Right
+    cube_glass = Cube(center=np.array([1.5, 0.5, 0.0]), side_length=1.2, name="FlintGlass")
+    # Rotate to show refraction through edges
+    cube_glass.transform.rotate(np.radians(30), np.array([0, 1, 0]))
+    cube_glass.transform.rotate(np.radians(10), np.array([1, 0, 0]))
+    mat_flint = PBRMaterial.create_glass(
+        Color(1.0, 0.9, 0.9), 
+        Color(1.0, 1.0, 1.0), 
+        roughness=0.01, 
+        metallicness=0.0, 
+        ior=REFRACTIVE_INDICES["glass_flint_heavy"], 
+        transmission=1.0
+    )
+    cube_glass.material = mat_flint
+    scene.add_object(VObject(shape=cube_glass, name="RightFlint"))
+
+    # Checkerboard Floor (to make refraction obvious)
+    # Note: Since we don't have texture support in this snippet, we use a highly patterned background object
+    floor = Cube(center=np.array([0.0, -10.5, 5.0]), side_length=20.0, name="Floor")
+    floor.transform.scale = np.array([1.0, 1.0, 0.5]) # Flatten
+    # Using a striped emissive material to create lines visible THROUGH the glass
+    mat_floor = PBRMaterial.create_diffuse(Color.from_hex("#888888"), roughness=0.8)
+    floor.material = mat_floor
+    scene.add_object(VObject(shape=floor, name="FloorBase"))
+
+    # Striped Wall behind objects
+    for i in range(-5, 6):
+        bar = Cube(center=np.array([i, 2.0, 4.0]), side_length=0.5, name=f"Strip_{i}")
+        bar.transform.scale = np.array([0.5, 8.0, 0.1])
+        # Alternating colors
+        col = Color.from_hex("#FF0000") if i % 2 == 0 else Color.from_hex("#FFFFFF")
+        bar.material = PBRMaterial.create_emissive(col, 2.0)
+        scene.add_object(VObject(shape=bar, name=f"Bar_{i}"))
+
+    # Light
+    scene.add_light(LightSource(np.array([0.0, 5.0, -3.0]), Color(1.0, 1.0, 1.0), 20.0, name="TopLight"))
+
+    return scene
+
+def get_glass_sculpture_scene(width: int = 120, height: int = 120) -> Scene:
+    """
+    A complex arrangement of overlapping glass plates and spheres.
+    Good for testing recursion depth and transmission color absorption.
+    """
+    cam_transform = Transform(np.array([3.0, 2.5, -3.0]), np.array([-0.3, 0.7, 0.0]), np.ones(3))
+    cam = VCamera(cam_transform, fov=60.0, near=0.1, far=100.0, resolution_width=width, resolution_height=height)
+    cam.transform.look_at(np.array([0, 0.5, 0]))
+    
+    scene = Scene(name="glass_sculpture", camera=cam, background_color=Color.from_hex("#200505"))
+
+    # Central Red Glass Sphere
+    center_sphere = Sphere(center=np.array([0.0, 0.8, 0.0]), radius=0.8, name="RedOrb")
+    # Red transmission color: Light passing through will turn red
+    mat_red_glass = PBRMaterial.create_glass(
+        Color(1.0, 1.0, 1.0), 
+        Color(1.0, 0.0, 0.2), # Transmission Color
+        roughness=0.02, 
+        metallicness=0.0, 
+        ior=REFRACTIVE_INDICES["glass"], 
+        transmission=1.0
+    )
+    center_sphere.material = mat_red_glass
+    scene.add_object(VObject(shape=center_sphere, name="RedOrb"))
+
+    # Encasing Glass Cube (Clear)
+    outer_box = Cube(center=np.array([0.0, 0.8, 0.0]), side_length=2.0, name="ClearBox")
+    mat_clear = PBRMaterial.create_glass(
+        Color(1.0, 1.0, 1.0), 
+        Color(1.0, 1.0, 1.0), 
+        roughness=0.0, 
+        metallicness=0.0, 
+        ior=1.1, # Low IOR to look like thin plastic or aerogel
+        transmission=0.9
+    )
+    outer_box.material = mat_clear
+    scene.add_object(VObject(shape=outer_box, name="ClearBox"))
+
+    # Back Mirror to reflect the back of the glass objects
+    mirror = Cube(center=np.array([0.0, 2.0, 3.0]), side_length=6.0, name="MirrorBack")
+    mirror.transform.scale = np.array([1.0, 1.0, 0.1])
+    mirror.material = PBRMaterial.create_specular(Color(1.0, 1.0, 1.0), roughness=0.0, metallicness=1.0)
+    scene.add_object(VObject(shape=mirror, name="MirrorBack"))
+
+    # Lights
+    # Cyan light to contrast with red glass
+    scene.add_light(LightSource(np.array([4.0, 4.0, -4.0]), Color.from_hex("#00FFFF"), 15.0, name="CyanKey"))
+    # White rim
+    scene.add_light(LightSource(np.array([-4.0, 1.0, 0.0]), Color.from_hex("#FFFFFF"), 5.0, name="Rim"))
+
+    return scene
+
+def get_100_spheres_grid_scene(width: int = 128, height: int = 128) -> Scene:
+    """
+    Stress test scene: Generates a 10x10 grid of spheres with varying materials.
+    Total objects: 100 spheres + 1 floor = 101 objects.
+    """
+    cam_transform = Transform(np.array([-8.0, 8.0, -8.0]), np.array([0.0, 0.0, 0.0]), np.ones(3))
+    cam = VCamera(cam_transform, fov=60.0, near=0.1, far=200.0, resolution_width=width, resolution_height=height)
+    
+    scene = Scene(name="100_spheres_grid", camera=cam, background_color=Color.from_hex("#1A1A1A"))
+
+    # Grid settings
+    rows = 10
+    cols = 10
+    spacing = 1.5
+    offset_x = -((rows - 1) * spacing) / 2
+    offset_z = -((cols - 1) * spacing) / 2
+
+    # Loop to create 100 spheres
+    for r in range(rows):
+        for c in range(cols):
+            x = offset_x + (r * spacing)
+            z = offset_z + (c * spacing)
+            
+            # Create a wave pattern for height (y) using sine/cosine
+            y = 0.5 + 0.5 * np.sin(r * 0.5) * np.cos(c * 0.5)
+            
+            pos = np.array([x, y, z])
+            
+            # Vary material based on position
+            # Even rows: Metallic, Odd rows: Matte
+            # Color shifts across the grid
+            
+            # Calculate color factor (0.0 to 1.0)
+            factor = (r * cols + c) / 100.0
+            
+            color = Color(
+                r / rows,      # Red increases with Row
+                0.5,           # Green constant
+                c / cols       # Blue increases with Col
+            )
+            
+            name = f"S_{r}_{c}"
+            shape = Sphere(center=pos, radius=0.4, name=name)
+            
+            if (r + c) % 2 == 0:
+                # Shiny Metal
+                mat = PBRMaterial.create_specular(color, roughness=0.1, metallicness=0.9)
+            else:
+                # Rough Diffuse
+                mat = PBRMaterial.create_diffuse(color, roughness=0.8)
+                
+            shape.material = mat
+            scene.add_object(VObject(shape=shape, name=name))
+
+    # Floor
+    floor = Cube(center=np.array([0.0, -2.0, 0.0]), side_length=50.0, name="Floor")
+    floor.transform.scale = np.array([1.0, 0.1, 1.0])
+    floor.material = PBRMaterial.create_diffuse(Color.from_hex("#333333"), roughness=0.5)
+    scene.add_object(VObject(shape=floor, name="FloorObj"))
+
+    # Single Bright Sun Light to cast many shadows
+    sun = LightSource(position=np.array([10.0, 20.0, -10.0]), color=Color(1.0, 1.0, 0.9), intensity=50.0, radius=100.0, name="Sun")
+    scene.add_light(sun)
+    
+    cam.transform.look_at(np.array([0, 0, 0]))
+
+    return scene
+
+def get_low_ior_scene(width: int = 120, height: int = 120) -> Scene:
+    """
+    Features a sphere with an IOR < 1.0 (0.8).
+    This acts like an 'air bubble in glass' but inverted, pushing light rays 
+    away from the normal rather than towards it upon entry.
+    """
+    cam_transform = Transform(np.array([0.0, 0.0, -5.0]), np.array([0.0, 0.0, 0.0]), np.ones(3))
+    cam = VCamera(
+        cam_transform, fov=60.0, near=0.1, far=100.0,
+        resolution_width=width, resolution_height=height,
+        camera_type=CameraType.PERSPECTIVE
+    )
+    
+    scene = Scene(name="low_ior_anomaly", camera=cam, background_color=Color.from_hex("#000000"))
+
+    # 1. The Low IOR Sphere (IOR 0.8)
+    # This will bend light 'outward', making the center look magnified/distorted 
+    # differently than standard glass.
+    anomaly = Sphere(center=np.array([0.0, 0.0, 0.0]), radius=1.2, name="AnomalySphere")
+    mat_low_ior = PBRMaterial.create_glass(
+        Color(1.0, 1.0, 1.0), 
+        Color(0.8, 1.0, 0.9), # Slight cyan tint to internal transmission
+        roughness=0.0, 
+        metallicness=0.0, 
+        ior=0.8,              # < 1.0 creates the unique divergence effect
+        transmission=1.0
+    )
+    anomaly.material = mat_low_ior
+    scene.add_object(VObject(shape=anomaly, name="AnomalyObj"))
+
+    # 2. Background Grid (To visualize the distortion)
+    # We place a checkerboard of cubes behind the sphere.
+    for x in range(-3, 4):
+        for y in range(-3, 4):
+            if (x + y) % 2 == 0:
+                bg_cube = Cube(center=np.array([x * 1.5, y * 1.5, 4.0]), side_length=1.0, name=f"Bg_{x}_{y}#a")
+                bg_cube.material = PBRMaterial.create_emissive(Color.from_hex("#FF4444"), 2.0)
+            else:
+                bg_cube = Cube(center=np.array([x * 1.5, y * 1.5, 4.0]), side_length=1.0, name=f"Bg_{x}_{y}#b")
+                bg_cube.material = PBRMaterial.create_emissive(Color.from_hex("#4444FF"), 2.0)
+            
+            # Scale them to be flat tiles
+            bg_cube.transform.scale = np.array([1.0, 1.0, 0.1])
+            scene.add_object(VObject(shape=bg_cube, name=f"Tile_{x}_{y}"))
+
+    # Lighting (Standard setup, though the emissive background does most of the work)
+    scene.add_light(LightSource(np.array([2.0, 2.0, -3.0]), Color(1.0, 1.0, 1.0), 10.0, name="Front"))
+
+    return scene
