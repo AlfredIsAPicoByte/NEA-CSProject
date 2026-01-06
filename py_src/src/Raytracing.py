@@ -1,16 +1,16 @@
 import numpy as np
 import math
-from typing import Optional, List, Tuple, Callable
+from typing import Optional, List, Tuple, Callable, cast
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from CommonUtils import unit, attenuate_distance_exponential
-from PrimaryStructures import HitInfo, TracingRay
+from PrimaryStructures import Transform, TracingRay, HitInfo
 from Scene import Scene
 from Camera import VCamera
 from Geometry import Shape, VObject, AABB, BVHNode 
 from Refractions import REFRACTIVE_INDICES
-from Luminance import Color, PBRMaterial, MaterialType, calculate_fresnel_ratio
+from Luminance import Color, PBRMaterial, MaterialType, LightSource, calculate_fresnel_ratio
 from RenderingAlgorithims import Algorithm, RenderStats, register_algorithm, update_memory_stats
 from Sampling import SamplingManager, SampleSettings, Sampler, Sample, reconstruct_pixel, RandomSampler
 
@@ -88,7 +88,7 @@ class ShadingStrategy(ABC):
         current_depth: int,
         trace_function: Callable[[Scene, TracingRay, int, Sampler], Color], 
         intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], HitInfo],
-        interaction_function: Callable[[TracingRay, HitInfo, Sampler, Optional[float], Optional["TracingStats"]], Optional[TracingRay]],
+        interaction_function: Callable[[TracingRay, HitInfo, Sampler, float, Optional["TracingStats"]], Optional[TracingRay]],
         sampler: Sampler,
         bias: float = 1e-4,
         stats: Optional["TracingStats"] = None
@@ -169,7 +169,6 @@ class JitterRayGenerator(RayGenerationStrategy):
                         sample_u=sample.u,
                         sample_v=sample.v,
                         name=f"ray#{i}_({x},{y})",
-                        throughput=Color(1.0, 1.0, 1.0) # Used for path tracing accumulation
                     )
                     rays.append(ray)
         return rays
@@ -202,9 +201,10 @@ class RayMarchingIntersection(IntersectionStrategy):
             
             # Hit Check
             if distance_to_closest <= self.epsilon:
-                surface_normal = np.array([0.0, 1.0, 0.0])
-                if hasattr(closest_object, "shape"):
-                    surface_normal = closest_object.shape.get_normal(point)
+                surface_normal = np.array([0.0, 0.0, 1.0])
+                closest_object_shape = getattr(closest_object, "shape", None) 
+                if closest_object_shape is not None:
+                    surface_normal = closest_object_shape.get_normal(point)
 
                 if stats is not None:
                     stats.triangle_tests += 1
@@ -220,8 +220,12 @@ class RayMarchingIntersection(IntersectionStrategy):
             
             # Advance
             distance_traveled += distance_to_closest
-            if distance_traveled >= self.max_distance:
-                break
+            cam: VCamera = cast(VCamera,getattr(scene, "camera", None))
+            closest_object_transform = getattr(closest_object, "transform", Transform(np.zeros(3), np.zeros(3), np.ones(3)))
+            if cam is not None:
+                far_plane_distance = np.linalg.norm(cam.transform.position - closest_object_transform.position)
+                if distance_traveled >= self.max_distance or far_plane_distance >= cam.far:
+                    break
 
         if stats is not None:
             stats.missed_rays += 1
@@ -262,7 +266,16 @@ class InverseSDFIntersection(IntersectionStrategy):
             hit_info = self._intersect_object(obj, ray, stats)
             
             # Keep track of the closest hit only
-            if hit_info.hit and hit_info.distance < closest_hit.distance:
+            hit_obj = getattr(hit_info, "obj", None)
+            if hit_obj is None:
+                break
+
+            cam = getattr(scene, "camera", None)
+            if cam is None:
+                break
+
+            far_plane_distance = np.linalg.norm(cam.transform.position - hit_obj.transform.position)
+            if hit_info.hit and (hit_info.distance < closest_hit.distance or hit_info.distance < far_plane_distance) :
                 closest_hit = hit_info
                 
         if not closest_hit.hit and stats is not None:
@@ -282,9 +295,14 @@ class InverseSDFIntersection(IntersectionStrategy):
         2. March in Local Space (Unscaled)
         3. Transform Hit -> World Space
         """
+        obj_shape = getattr(obj, "shape", None)
+        if obj_shape is None:
+            return HitInfo.miss()
+        
         # --- 1. Transform Ray to Local Space ---
-        local_origin = obj.transform.inverse_transform_point(ray.origin)
-        local_dir_raw = obj.transform.inverse_transform_direction(ray.orientation)
+        obj_transform = getattr(obj, "transform", Transform(np.zeros(3), np.zeros(3), np.ones(3)))
+        local_origin = obj_transform.inverse_transform_point(ray.origin)
+        local_dir_raw = obj_transform.inverse_transform_direction(ray.orientation)
         
         dir_length = np.linalg.norm(local_dir_raw)
         if dir_length == 0:
@@ -303,7 +321,7 @@ class InverseSDFIntersection(IntersectionStrategy):
             p = local_origin + (local_dir * t)
             
             # Sample the Object's SDF (in local space)
-            raw_dist = obj.shape.signed_distance(p)
+            raw_dist = obj_shape.signed_distance(p)
             
             if stats is not None:
                 stats.triangle_tests += 1
@@ -320,7 +338,7 @@ class InverseSDFIntersection(IntersectionStrategy):
                 p_local_hit = p
                 
                 # A. Transform Point
-                p_world_hit = obj.transform.transform_point(p_local_hit)
+                p_world_hit = obj_transform.transform_point(p_local_hit)
                 
                 # B. Calculate Distance (Depth)
                 # We calculate world distance explicitly to avoid scaling errors
@@ -328,18 +346,18 @@ class InverseSDFIntersection(IntersectionStrategy):
                 
                 # C. Calculate Normal
                 # We need the gradient at the local point, then transformed
-                local_normal = self._calc_local_gradient(obj.shape, p_local_hit)
+                local_normal = self._calc_local_gradient(obj_shape, p_local_hit)
                 
                 # If we are hitting the "inside" face (exiting), the normal should 
                 # point towards the empty space (which is effectively 'out' for us)
                 if ray.is_inside:
                     local_normal = -local_normal
                     
-                world_normal = obj.transform.transform_normal(local_normal)
+                world_normal = obj_transform.transform_normal(local_normal)
                 
                 return HitInfo(
                     did_hit=True,
-                    distance=world_distance,
+                    distance=float(world_distance),
                     point=p_world_hit,
                     normal=world_normal,
                     obj=obj
@@ -354,11 +372,10 @@ class InverseSDFIntersection(IntersectionStrategy):
                 
         return HitInfo.miss()
 
-    def _calc_local_gradient(self, shape: Shape, p: np.ndarray) -> np.ndarray:
+    def _calc_local_gradient(self, shape: Shape, p: np.ndarray, h: float = 1e-4) -> np.ndarray:
         """
         Calculates the normal in Local Space using central differences.
         """
-        h = 1e-4 # Small step for gradient
         dx = np.array([h, 0, 0])
         dy = np.array([0, h, 0])
         dz = np.array([0, 0, h])
@@ -373,7 +390,7 @@ class InverseSDFIntersection(IntersectionStrategy):
         norm = np.linalg.norm(grad)
         if norm > 0:
             return grad / norm
-        return np.array([0.0, 1.0, 0.0]) # Fallback
+        return np.array([0.0, 0.0, 1.0]) # Fallback
     
 class BVHIntersection(IntersectionStrategy):
     def __init__(self):
@@ -428,25 +445,38 @@ class BVHIntersection(IntersectionStrategy):
             
             if node.left:
                 if stats: stats.aabb_tests += 1
-                d_left = node.left.box.intersect(ray)
+                l_box = getattr(node.left, "box", None)
+                if l_box is None:
+                    continue
+                d_left = l_box.intersect(ray)
                 
             if node.right:
                 if stats: stats.aabb_tests += 1
-                d_right = node.right.box.intersect(ray)
+                r_box = getattr(node.right, "box", None)
+                if r_box is None:
+                    continue
+                d_right = r_box.intersect(ray)
+
+
+            l_node = getattr(node, "left", None)
+            r_node = getattr(node, "right", None)
+
+            if l_node is None or r_node is None:
+                continue
 
             # Push valid children to stack
             # Push the furthest one first, so the closest is at top of stack
             if d_left != float('inf') and d_right != float('inf'):
                 if d_left < d_right:
-                    stack.append((node.right, d_right))
-                    stack.append((node.left, d_left))
+                    stack.append((r_node, d_right))
+                    stack.append((l_node, d_left))
                 else:
-                    stack.append((node.left, d_left))
-                    stack.append((node.right, d_right))
+                    stack.append((l_node, d_left))
+                    stack.append((r_node, d_right))
             elif d_left != float('inf'):
-                stack.append((node.left, d_left))
+                stack.append((l_node, d_left))
             elif d_right != float('inf'):
-                stack.append((node.right, d_right))
+                stack.append((r_node, d_right))
 
         if not closest_hit.hit and stats:
             stats.missed_rays += 1
@@ -508,11 +538,14 @@ class BVHIntersection(IntersectionStrategy):
         2. Performs a small Ray March loop against the unit_signed_distance.
         3. Transforms the result back to World Space.
         """
+        obj_shape = getattr(obj, "shape", None)
+        if obj_shape is None:
+            return HitInfo.miss()
+        
         # --- 1. Transform Ray to Local Space ---
-        # We move the ray, not the object. This lets us assume the object is 
-        # always at (0,0,0) with identity rotation/scale.
-        local_origin = obj.transform.inverse_transform_point(ray.origin)
-        local_dir_raw = obj.transform.inverse_transform_direction(ray.orientation)
+        obj_transform = getattr(obj, "transform", Transform(np.zeros(3), np.zeros(3), np.ones(3)))
+        local_origin = obj_transform.inverse_transform_point(ray.origin)
+        local_dir_raw = obj_transform.inverse_transform_direction(ray.orientation)
         
         # Normalize direction for correct SDF stepping
         dir_len = np.linalg.norm(local_dir_raw)
@@ -538,7 +571,7 @@ class BVHIntersection(IntersectionStrategy):
             if stats: stats.triangle_tests += 1
 
             # EVALUATE SDF
-            dist = obj.shape.unit_signed_distance(p) * sign_modifier
+            dist = obj_shape.unit_signed_distance(p) * sign_modifier
             
             # HIT FOUND
             if dist < local_epsilon:
@@ -546,21 +579,21 @@ class BVHIntersection(IntersectionStrategy):
                 p_local = p
                 
                 # A. Calculate Normal in Local Space (Gradient)
-                local_normal = self._calc_local_gradient(obj.shape, p_local)
+                local_normal = self._calc_local_gradient(obj_shape, p_local)
                 if ray.is_inside: 
                     local_normal = -local_normal # Flip normal if exiting
                 
                 # B. Transform Results
-                p_world = obj.transform.transform_point(p_local)
-                normal_world = obj.transform.transform_normal(local_normal)
+                p_world = obj_transform.transform_point(p_local)
+                normal_world = obj_transform.transform_normal(local_normal)
                 
                 # C. Recalculate true world distance
                 # (Surer than scaling 't' because of non-uniform scaling)
-                dist_world = np.linalg.norm(p_world - ray.origin)
+                distance_world = np.linalg.norm(p_world - ray.origin)
                 
                 return HitInfo(
                     did_hit=True,
-                    distance=dist_world,
+                    distance=float(distance_world),
                     point=p_world,
                     normal=normal_world,
                     obj=obj
@@ -577,11 +610,10 @@ class BVHIntersection(IntersectionStrategy):
                 
         return HitInfo.miss()
 
-    def _calc_local_gradient(self, shape: Shape, p: np.ndarray) -> np.ndarray:
+    def _calc_local_gradient(self, shape: Shape, p: np.ndarray, h: float = 1e-4) -> np.ndarray:
         """
         Calculates surface normal using central differences on the SDF.
         """
-        h = 1e-4
         dx = np.array([h, 0, 0])
         dy = np.array([0, h, 0])
         dz = np.array([0, 0, h])
@@ -593,7 +625,7 @@ class BVHIntersection(IntersectionStrategy):
         ])
         
         norm = np.linalg.norm(grad)
-        return grad / norm if norm > 0 else np.array([0.0, 1.0, 0.0])
+        return grad / norm if norm > 0 else np.array([0.0, 0.0, 1.0])
 
 # Interaction implementations
 class TerminalInteraction(InteractionStrategy):
@@ -638,16 +670,16 @@ class TerminalInteraction(InteractionStrategy):
 
         # If we survive the opacity check (or opacity is 0), the ray passes through.
         # It continues in the EXACT same direction.
-        next_origin = hit_info.point + (ray.orientation * bias)
+        hit_point = getattr(hit_info, "point", None)
+        if hit_point is None:
+            return None
+        
+        next_origin = hit_point + (ray.orientation * bias)
         
         if stats is not None:
             stats.rays_transparency += 1
 
-        return TracingRay(
-            origin=next_origin,
-            orientation=ray.orientation, # Maintain original direction
-            is_inside=ray.is_inside      # Maintain current medium state
-        )
+        return replace(ray, origin=next_origin)
 
 class PassthroughInteraction(InteractionStrategy):
     """
@@ -681,16 +713,16 @@ class PassthroughInteraction(InteractionStrategy):
 
         # 2. Passthrough Logic
         # We spawn a new ray continuing in the exact same direction.
-        next_origin = hit_info.point + (ray.orientation * bias)
+        hit_point = getattr(hit_info, "point", None)
+        if hit_point is None:
+            return None
+        
+        next_origin = hit_point + (ray.orientation * bias)
         
         if stats is not None:
             stats.rays_transparency += 1
 
-        return TracingRay(
-            origin=next_origin,
-            orientation=ray.orientation, # Keep exact direction
-            is_inside=ray.is_inside      # Maintain medium state (don't toggle)
-        )
+        return replace(ray, origin=next_origin)
 
 class StandardInteraction(InteractionStrategy):
     """
@@ -715,12 +747,16 @@ class StandardInteraction(InteractionStrategy):
         Decide between reflection and refraction (Russian roulette) and generate the next ray.
         Updates ray depth/is_inside and conservative tracing stats counters.
         """
-        material: PBRMaterial = getattr(hit_info.obj, "material", None) or getattr(hit_info.obj.shape, "material", None) if hasattr(hit_info.obj, "shape") else None
-        if not material:
+        v_obj = hit_info.obj
+        material = getattr(v_obj, "material", None)
+        if material is None:
             return None
 
         # Surface normal (fall back to up)
-        normal = getattr(hit_info, "normal", np.array([0.0, 0.0, 1.0]))
+        normal = getattr(hit_info, "normal", np.array([0.0, 1.0, 0.0]))
+        hit_point = getattr(hit_info, "point", None)
+        if hit_point is None:
+            return None
 
         # Indices of refraction (fallback to 1.0)
         n1 = self.scene_ior
@@ -734,14 +770,13 @@ class StandardInteraction(InteractionStrategy):
         do_refract = sampler.random_float() > reflection_chance
 
         new_ray = None
-        pdf = 0.0
 
         # Try refraction first if decision says so
         if do_refract:
-            new_ray, pdf = material.calculate_microfacet_refraction_ray(
+            new_ray = material.calculate_microfacet_refraction_ray(
                 direction=ray.orientation,
                 surface_normal=normal,
-                new_origin=hit_info.point + normal * bias,
+                new_origin=hit_point - normal * bias,
                 sampler=sampler,
                 ior_incident=n1,
                 ior_transmitted=n2
@@ -752,17 +787,14 @@ class StandardInteraction(InteractionStrategy):
 
         # Reflection path (or fallback)
         if not do_refract:
-            new_ray, pdf = material.calculate_microfacet_reflection_ray(
+            new_ray = material.calculate_microfacet_reflection_ray(
                 direction=ray.orientation,
                 surface_normal=normal,
-                new_origin=hit_info.point + normal * bias,
+                new_origin=hit_point + normal * bias,
                 sampler=sampler
             )
 
         if new_ray is not None:
-            print(ray)
-            new_ray.depth = ray.depth + 1
-
             # Toggle inside flag on refraction
             if do_refract:
                 new_ray.is_inside = not getattr(ray, "is_inside", False)
@@ -774,15 +806,124 @@ class StandardInteraction(InteractionStrategy):
                     stats.rays_reflection += 1
 
             # Reset throughput for a fresh path (material handles weighting)
-            new_ray.throughput = Color(1.0, 1.0, 1.0)
-            new_ray.pdf = pdf
+            new_ray.throughput = [1.0, 1.0, 1.0]
 
         return new_ray
 
 # Shading implementations
+class NormalShading(ShadingStrategy):
+    """
+    Debug shader that maps surface normals to RGB colors.
+    
+    Usage:
+    - Red indicates the normal points right (+X)
+    - Green indicates the normal points up (+Y)
+    - Blue indicates the normal points forward (+Z)
+    
+    This is critical for Glass scenes. If a sphere's normal is inverted, 
+    the refraction calculations (Snell's Law) will be wrong.
+    """
+    def shade(
+            self,
+            scene: Scene,
+            ray: TracingRay,
+            hit_info: HitInfo,
+            current_depth: int,
+            trace_function: Callable, 
+            intersection_function: Callable,
+            interaction_function: Callable,
+            sampler: Sampler,
+            bias: float = 1e-4,
+            stats: Optional["TracingStats"] = None
+        ) -> Color:
+        
+        # If we missed, return black (or background)
+        if not (hit_info.hit and hit_info.obj):
+            return Color(0.0, 0.0, 0.0)
+            
+        # 1. Get Normal
+        normal = getattr(hit_info, "normal", np.array([0.0, 1.0, 0.0]))
+        
+        # 2. Map from range [-1, 1] to [0, 1] for color display
+        # Normal (0,0,0) becomes Gray (0.5, 0.5, 0.5)
+        r = (normal[0] + 1.0) * 0.5
+        g = (normal[1] + 1.0) * 0.5
+        b = (normal[2] + 1.0) * 0.5
+        
+        return Color(r, g, b)
+
+
+class DepthShading(ShadingStrategy):
+    """
+    Debug shader that visualizes the distance from the camera to the object.
+    
+    Objects closer than 'min_depth' are White.
+    Objects further than 'max_depth' are Black.
+    Gradient in between.
+    """
+    def __init__(self, min_depth: float = 0.0, max_depth: float = 20.0):
+        super().__init__()
+        self.min_dist = min_depth
+        self.max_dist = max_depth
+
+    def shade(
+            self,
+            scene: Scene,
+            ray: TracingRay,
+            hit_info: HitInfo,
+            current_depth: int,
+            *args, **kwargs
+        ) -> Color:
+        
+        if not hit_info.hit:
+            return Color(0.0, 0.0, 0.0) # Background is "infinite" depth (black)
+
+        dist = hit_info.distance
+        
+        # Normalize distance to 0.0 - 1.0
+        # Formula: (dist - min) / (max - min)
+        range_dist = self.max_dist - self.min_dist
+        if range_dist == 0: range_dist = 1.0
+        
+        normalized = (dist - self.min_dist) / range_dist
+        
+        # Clamp between 0 and 1
+        normalized = max(0.0, min(1.0, normalized))
+        
+        # Invert so Close = Bright, Far = Dark
+        val = 1.0 - normalized
+        
+        return Color(val, val, val)
+
+class FlatShading(ShadingStrategy):
+    """
+    Renders objects with their raw Albedo color only. 
+    No lighting, no shadows, no recursion. 
+    Fastest possible render mode.
+    """
+    def shade(
+            self,
+            scene: Scene,
+            ray: TracingRay,
+            hit_info: HitInfo,
+            current_depth: int,
+            *args, **kwargs
+        ) -> Color:
+        
+        if not (hit_info.hit and hit_info.obj):
+            orientation = getattr(ray, "orientation", [0.0, 0.0, -1.0])
+            return scene.get_background_color(orientation)
+
+        mat = hit_info.obj.material
+        if mat is None:
+            return Color(1.0, 0.0, 1.0) # Error Pink
+
+        # Just return the base color (Albedo)
+        return getattr(mat, 'albedo', Color(1.0, 1.0, 1.0))
+
 class BasicLambertShading(ShadingStrategy):
     """
-    Simple Lambertian shader used by unit tests and quick checks.
+    Simple Lambertian shader.
     """
     def shade(
             self,
@@ -792,17 +933,15 @@ class BasicLambertShading(ShadingStrategy):
             current_depth: int,
             trace_function: Callable[[Scene, TracingRay, int, Sampler], Color], 
             intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], HitInfo],
-            interaction_function: Callable[[TracingRay, HitInfo, Sampler, Optional[float], Optional["TracingStats"]], Optional[TracingRay]],
+            interaction_function: Callable[[TracingRay, HitInfo, Sampler, float, Optional["TracingStats"]], Optional[TracingRay]],
             sampler: Sampler,
             bias: float = 1e-4,
             stats: Optional["TracingStats"] = None
         ) -> Color:
         if not (hit_info.hit or hasattr(hit_info, "obj")):
-            return Color(0.0, 1.0, 1.0) # Cyan for missing object
+            return Color(0.0, 0.0, 0.0)
         
-        v_obj: VObject = hit_info.obj
-
-        mat = getattr(v_obj, 'material', None)
+        mat = getattr(hit_info.obj, 'material', None)
         if mat is None:
             return Color(1.0, 0.0, 1.0) # Pink for missing material
             
@@ -813,7 +952,28 @@ class BasicLambertShading(ShadingStrategy):
         albedo: Color = getattr(mat, 'albedo', Color(1.0, 1.0, 1.0)) if mat is not None else Color(1.0, 1.0, 1.0)
         return ambient * intensity * albedo
 
-class RecursiveLambertShading(ShadingStrategy):
+    def _calculate_shadow_visibility(self, scene: Scene, point: np.ndarray, light: LightSource, light_dir: np.ndarray, sampler: Sampler):
+        visibility = 1.0
+
+        if self.enable_shadows:
+            radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
+            if not radius or self.shadow_samples == 1:
+                # single test for occlusion
+                occluded = scene.is_occluded(point, light.position, bias=self.shadow_bias)
+                visibility = 0.0 if occluded else 1.0
+            
+            else:
+                # soft shadow by sampling area light
+                visible_count = 0
+                for _ in range(self.shadow_samples):
+                    sample_pos = self._random_point_on_disc(light.position, -light_dir, float(radius), sampler)
+                    if not scene.is_occluded(point, sample_pos, bias=self.shadow_bias):
+                        visible_count += 1
+                visibility = visible_count / float(self.shadow_samples)
+
+        return visibility
+
+class RecursiveLambertShading(BasicLambertShading):
     """
     Standard recursive shading. 
     Handles Direct Light (Shadow Rays) and Indirect Light (Reflection/Refraction Rays).
@@ -826,7 +986,7 @@ class RecursiveLambertShading(ShadingStrategy):
             current_depth: int,
             trace_function: Callable[[Scene, TracingRay, int, Sampler], Color], 
             intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], HitInfo],
-            interaction_function: Callable[[TracingRay, HitInfo, Sampler, Optional[float], Optional["TracingStats"]], Optional[TracingRay]],
+            interaction_function: Callable[[TracingRay, HitInfo, Sampler, float, Optional["TracingStats"]], Optional[TracingRay]],
             sampler: Sampler,
             bias: float = 1e-4,
             stats: Optional["TracingStats"] = None
@@ -834,8 +994,7 @@ class RecursiveLambertShading(ShadingStrategy):
         if not (hit_info.hit or hasattr(hit_info, "obj")):
             return Color(0.0, 1.0, 1.0) # Cyan for missing object
 
-        v_object: VObject = hit_info.obj
-        material: PBRMaterial = v_object.material
+        material = getattr(hit_info.obj, "material", None)
         if material is None:
             return Color(1.0, 0.0, 1.0) # Pink for missing material
         
@@ -848,19 +1007,13 @@ class RecursiveLambertShading(ShadingStrategy):
             return final_color
 
         # --- 2. Direct Lighting (Next Event Estimation) ---
-        normal = unit(hit_info.normal)
         view_dir = -unit(ray.orientation)
         
-        # We assume 'evaluate_direct_light' handles the loop over lights & shadow checks
-        def visibility_checker(p1, p2):
-             if not self.enable_shadows: return 1.0
-             if stats is not None:
-                 stats.lights_sampled += 1
-                 stats.rays_shadow += 1
-             return 0.0 if scene.is_occluded(p1, p2, self.shadow_bias) else 1.0
+        def visibility_function(point: np.ndarray, light: LightSource):
+            return self._calculate_shadow_visibility(scene, point, light, light.get_light_direction(point), sampler)
 
         direct_light = material.evaluate_direct_light(
-            scene.get_lights(), hit_info, view_dir, visibility_checker
+            scene.get_lights(), hit_info, view_dir, visibility_function
         )
 
         # --- 3. Indirect Lighting (Recursion) ---
@@ -872,14 +1025,14 @@ class RecursiveLambertShading(ShadingStrategy):
             probe_color = Color(1.0, 1.0, 1.0)
 
             new_ray = interaction_function(ray, hit_info, sampler, bias, stats)
-
+            
             if new_ray is not None:
                 if stats is not None:
                     stats.max_depth_reached = max(stats.max_depth_reached, getattr(new_ray, "depth", 0))
 
                 incoming_light = trace_function(scene, new_ray, current_depth - 1, sampler)
                 
-                indirect_light: Color = incoming_light * new_ray.throughput
+                indirect_light = incoming_light * Color(*new_ray.throughput)
             else:
                 indirect_light = probe_color
 
@@ -924,27 +1077,26 @@ class XRayThicknessShading(ShadingStrategy):
         current_depth: int,
         trace_function: Callable[[Scene, TracingRay, int, Sampler], Color], 
         intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], HitInfo],
-        interaction_function: Callable[[TracingRay, HitInfo, Sampler, Optional[float], Optional["TracingStats"]], Optional[TracingRay]],
+        interaction_function: Callable[[TracingRay, HitInfo, Sampler, float, Optional["TracingStats"]], Optional[TracingRay]],
         sampler: Sampler,
         bias: float = 1e-4,
         stats: Optional["TracingStats"] = None
     ) -> Color:
         # 1. Setup Vectors
         # Normal pointing OUT of the surface
-        normal = hit_info.normal
+        normal = getattr(hit_info, "normal", np.array([0.0, 1.0, 0.0]))
+        hit_point = getattr(hit_info, "point", None)
+        if hit_point is None:
+            return Color(0.0, 0.0, 0.0)
+        
         view_dir = unit(-ray.orientation)
 
         # 2. Calculate Thickness (The "Through" Ray)
         # We push the origin slightly INSIDE the object (opposite to normal) to avoid self-intersection at the entry.
         # Note: If geometry is single-sided planes, this might fail. Assumes closed volume.
-        inside_origin = hit_info.point - (normal * bias) 
+        inside_origin = hit_point - (normal * bias) 
         
-        inside_ray = TracingRay(
-            origin=inside_origin, 
-            orientation=ray.orientation,
-            depth=ray.depth, # Keep depth to prevent infinite recursion bugs
-            is_inside=True      # Mark this ray as originating INSIDE the object so the intersector treats it as an exit ray
-        )
+        inside_ray = replace(ray, origin=inside_origin, is_inside=True)      # Mark this ray as originating INSIDE the object so the intersector treats it as an exit ray
 
         # Find where the ray leaves the object (pass stats along)
         exit_hit = intersection_function(scene, inside_ray, stats)
@@ -1072,7 +1224,7 @@ class TracingStats(RenderStats):
         Generates a formatted string report suitable for saving to a .txt file.
         """
         lines = []
-        lines.append(f"=== Extended Tracing Stats ===")
+        lines.append(f"=== Tracing Stats ===")
         lines.append(f"Time: {self.time_taken_seconds:.3f}s | Mem: {self.memory_usage:.2f}MB")
         lines.append(f"-------------------------")
         lines.append(f"Ray Traffic:")
@@ -1140,8 +1292,6 @@ class Raytracer(Algorithm):
 
         hit_info = self.intersector.find_hit(scene, ray, self.stats)
 
-        self.stats = update_memory_stats(self.stats)
-
         if hit_info.hit and hit_info.obj is not None:
             return self.shader.shade(
                 scene=scene, 
@@ -1157,8 +1307,9 @@ class Raytracer(Algorithm):
 
         # The ray missed all scene objects
         if self.enable_scene_background:
-            return self.custom_background
-        return scene.get_background_color(ray.orientation)
+            return self.custom_background if self.custom_background is not None else Color(0.0, 0.0, 0.0)
+        orientation = getattr(ray, "orientation", [0.0, 0.0, -1.0])
+        return scene.get_background_color(orientation)
 
     def render(
         self,
@@ -1186,14 +1337,15 @@ class Raytracer(Algorithm):
         pixels_processed = 0
 
         # Handle tile_size parameter
-        if tile_size is None:
-            ts = 64
-        else:
-            ts = tile_size
+        ts = tile_size if tile_size is not None else 64
 
         # Create default sampler if not provided
         if sampler is None:
             sampler = RandomSampler(self.sample_settings)
+
+        # Optional: Print total tiles for progress tracking
+        # total_tiles = ((rw + ts - 1) // ts) * ((rh + ts - 1) // ts)
+        # tile_count = 0
 
         for tile_y in range(ry, ry + rh, ts):
             for tile_x in range(rx, rx + rw, ts):
@@ -1211,6 +1363,9 @@ class Raytracer(Algorithm):
                 # 2. Local Storage for this Tile
                 # Map: (local_tile_index) -> List[(Sample, Color)]
                 tile_samples = [[] for _ in range(current_w * current_h)]
+
+
+                self.stats = update_memory_stats(self.stats)
 
                 # 3. Trace Rays
                 for ray in rays:

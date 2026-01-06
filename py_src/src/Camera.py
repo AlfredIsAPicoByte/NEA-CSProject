@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Tuple
 
 from CommonUtils import unit
-from PrimaryStructures import Transform, Ratio
+from PrimaryStructures import Ratio, Transform
 
 class CameraType (Enum):
     """
@@ -29,11 +29,6 @@ class CameraMode (Enum):
 class VCamera:
     """
     A virtual camera class used to store properties and process calculations.
-
-    Backwards-compatible constructor supports the following keyword names:
-     - width / height (preferred in tests)
-     - resolution_width / resolution_height (explicit)
-     - camType (alternate name for camera_type)
     """
     def __init__ (
             self,
@@ -41,20 +36,15 @@ class VCamera:
             fov: float = 60,
             near: float = 0.01,
             far: float = 1000,
-            resolution_width: int = 10,
-            resolution_height: int = 10,
+            resolution_width: int = 16,
+            resolution_height: int = 9,
             camera_type: CameraType = CameraType.PERSPECTIVE,
             camera_mode: CameraMode = CameraMode.FIRST_PERSON,
             name: str = "Camera"
         ):
         self.transform = transform
 
-        if fov <= 0:
-            raise ValueError("FOV must be greater than 0")
         self.fov = fov
-        
-        if near <= 0 or far <= near:
-            raise ValueError("Invalid near and far plane values")
         self.near = near
         self.far = far
 
@@ -62,24 +52,22 @@ class VCamera:
         self.type = camera_type
         self.mode = camera_mode
 
-        # Resolve width/height arguments (support both new and old names)
-        w = resolution_width if resolution_width is not None else width
-        h = resolution_height if resolution_height is not None else height
-        if w is None or h is None:
-            raise ValueError("Width and Height must be provided (either as 'width,height' or 'resolution_width,resolution_height')")
-
-        if int(w) <= 0 or int(h) <= 0:
-            raise ValueError("Width and Height must be greater than 0")
-
-        # Store canonical integer attributes used across the codebase
-        self.resolution_width = int(w)
-        self.resolution_height = int(h)
-        # Backwards-compatible properties `width` and `height` are provided below
+        self.resolution_width = resolution_width
+        self.resolution_height = resolution_height
         self.aspect_ratio = Ratio(self.resolution_width, self.resolution_height)
 
         self.name = name
 
-    # Backwards compatible aliases
+    def __post_init__(self):
+        if self.fov <= 0:
+            raise ValueError("FOV must be greater than 0")
+        
+        if self.near <= 0 or self.far <= self.near:
+            raise ValueError("Invalid near and far plane values")
+    
+        if self.resolution_width is None or self.resolution_height is None:
+            raise ValueError("Width and Height must be provided (as 'resolution_width, resolution_height')")
+
     @property
     def width(self) -> int:
         return int(self.resolution_width)
@@ -180,7 +168,7 @@ class VCamera:
         return {
             "fov_radians": np.radians(self.fov),
             "fov_degrees": self.fov,
-            "aspect": float(self.aspect_ratio.value()),
+            "aspect": float(self.aspect_ratio.value),
             "near": float(self.near),
             "far": float(self.far),
         }
@@ -205,7 +193,7 @@ class VCamera:
             direction = self.transform.forward
             
             # 2. Origin shifts along the camera plane
-            height_size = self.ortho_scale # or self.fov if reusing that field
+            height_size = self.fov
             width_size = height_size * self.aspect_ratio.value
 
             # Map 0..1 to -Width/2 .. +Width/2
@@ -217,7 +205,7 @@ class VCamera:
                 (self.transform.right * offset_x) + 
                 (self.transform.up * offset_y)
             )
-            return origin, direction
+            return origin + direction * self.near, direction
 
         # --- PERSPECTIVE ---
         # Geometric approach (Snippet 1 style) is usually faster for CPU raytracing 
@@ -249,7 +237,7 @@ class VCamera:
         # Normalize
         direction = direction / np.linalg.norm(direction)
         
-        return self.transform.position, direction
+        return self.transform.position + direction * self.near, direction
 
     def export_uniforms(self) -> str:
         """

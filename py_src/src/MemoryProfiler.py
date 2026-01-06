@@ -2,7 +2,7 @@
 import tracemalloc
 import time
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from typing import cast, Any, List, Dict, Any, Optional
 from MemoryUtils import get_current_memory_usage
 
 @dataclass
@@ -43,11 +43,15 @@ class MemoryProfiler:
         if self.enable_tracemalloc:
             current_b, peak_b = tracemalloc.get_traced_memory()
             snapshot2 = tracemalloc.take_snapshot()
-            raw_stats = snapshot2.compare_to(self._start_snapshot, 'lineno')[:self.top]
-            top_stats = [
-                {"trace": str(s.traceback), "size_kb": s.size / 1024.0, "count": s.count}
-                for s in raw_stats
-            ]
+            start_snap = getattr(self, "_start_snapshot", None)
+            if start_snap is not None:
+                raw_stats = snapshot2.compare_to(start_snap, 'lineno')[:self.top]
+                top_stats = [
+                    {"trace": str(s.traceback), "size_kb": s.size / 1024.0, "count": s.count}
+                    for s in raw_stats
+                ]
+            else:
+                top_stats = []
             tracemalloc.stop()
         else:
             current_b = peak_b = 0
@@ -88,10 +92,10 @@ def profile(*, enable_tracemalloc: bool = True, top: int = 6, verbose: bool = Tr
                 result = func(*args, **kwargs)
             if verbose:
                 print(mp.format_report())
-            wrapper.last_profile = mp.result
+            cast(Any, wrapper).last_profile = mp.result
             if return_result:
                 return result, mp.result
             return result
-        wrapper.last_profile = None
+        cast(Any, wrapper).last_profile = None
         return wrapper
     return decorator

@@ -257,9 +257,12 @@ def calculate_critical_angle(
     """
     
     if refractive_index_incident <= refractive_index:
-        return None
+        return -1
 
-    critical_angle_rad = math.asin(refractive_index / refractive_index_incident)
+    critical_angle_rad = safe_asin(refractive_index / refractive_index_incident)
+    if critical_angle_rad is None:
+        return -1
+    
     return math.degrees(critical_angle_rad)
 
 def calculate_refraction_angle(
@@ -281,7 +284,7 @@ def calculate_refraction_angle(
     refraction_angle = calculate_angle_of_refraction(incident_angle, refractive_index_incident, refractive_index)
 
     if refraction_angle is None:
-        return None
+        return -1
 
     if incoming_angle > surface_normal_angle:
         return surface_normal_angle + refraction_angle

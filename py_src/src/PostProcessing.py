@@ -18,7 +18,7 @@ class BloomSettings:
 @dataclass
 class ChromaticAberrationSettings:
     enabled: bool = False
-    strength: float = 0.005 # strength is usually a small float, not int
+    strength: int = 0
 
 @dataclass
 class VignetteSettings:

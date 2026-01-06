@@ -14,9 +14,9 @@ def test_minimal_scene_not_all_background():
     raytracer = Raytracer(
         max_depth=4,
         sampling_manager=sampling_manager,
-        ray_generator=JitterRayGenerator(sampling_manager._sampler),
+        ray_generator=JitterRayGenerator(),
         intersection_strategy=RayMarchingIntersection(max_distance=100),
-        interaction_strategy=StandardInteraction(sampling_manager._sampler),
+        interaction_strategy=StandardInteraction(),
         shading_strategy=RecursiveLambertShading(),
         custom_background=scene.get_background_color([0.0, 0.0, 0.0, -1.0]),
         enable_scene_background=True

@@ -6,25 +6,25 @@ import gc
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from src.RenderingAlgorithims import Algorithm
-from src.Raytracing import Raytracer, JitterRayGenerator, RayMarchingIntersection, BVHIntersection, TerminalInteraction, StandardInteraction, RecursiveLambertShading, XRayThicknessShading, TracingStats
-from src.Sampling import SamplingManager, SampleSettings, PixelFilter
-
-PostProcessingPipeline = None
 from src.Scene import Scene
+from src.RenderingAlgorithims import Algorithm
+from src.Raytracing import *
+from src.Sampling import SamplingManager, SampleSettings, PixelFilter
 from src.MemoryProfiler import MemoryProfiler
 from test_scenes import *
+PostProcessingPipeline = None
 
 def render_process(scene: Scene, algorithim: Algorithm):
     """
     Execute the rendering algorithim on the scene and return the rendered image as a numpy array.
     """
     # Render using the algorithim
-    pixel_colors = algorithim.render(scene)
+    pixel_colors = algorithim.render(scene, tile_size=16)
     
     # Convert List[Color] to numpy array (width x height x 3)
-    width = scene.camera.width
-    height = scene.camera.height
+    cam = scene.camera
+    width = cam.width if cam is not None else 64
+    height = cam.height if cam is not None else 32
     img_array = np.zeros((height, width, 3), dtype=np.float32)
     
     for i, color in enumerate(pixel_colors):
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    img_w, img_h = 16 * 1, 9 * 1 # 256, 144 for higher resolution images
+    img_w, img_h = 16 * 4, 9 * 4 # 256, 144 for higher resolution images
 
     all_scenes = [
         get_minimal_scene(img_w, img_h),
@@ -71,40 +71,37 @@ if __name__ == "__main__":
         get_rgb_room_with_objects_scene(img_w, img_h),
         get_cyberpunk_scene(img_w, img_h),
         get_material_deck_scene(img_w, img_h),
-        get_refraction_lab_scene(img_w, img_h)
+        get_refraction_lab_scene(img_w, img_h),
     ]
 
-    sample_settings = SampleSettings(samples_per_pixel=1, filter_type=PixelFilter.BOX, filter_width=2)
-    sampling_manager = SamplingManager(sample_settings)
+    sample_settings = SampleSettings(samples_per_pixel=1, filter_type=PixelFilter.TENT, filter_width=2)
+    sampling_manager = SamplingManager(sample_settings, "halton")
 
     generator = JitterRayGenerator()
-    intersection = RayMarchingIntersection()
+    intersection = RayMarchingIntersection(max_steps=256)
     interactor = StandardInteraction()
-    test_interactor = TerminalInteraction()
-    shading = RecursiveLambertShading(ambient_color=Color.from_hex("#24272B"), ambient_intensity=0.3, shadow_samples=8)
-    test_shading = XRayThicknessShading()
+    shading = RecursiveLambertShading(ambient_color=Color.from_hex("#24272B"), ambient_intensity=1.0, shadow_samples=4)
 
     raytracer = Raytracer(
         max_depth=1,
         sampling_manager=sampling_manager,
         ray_generator=generator,
         intersection_strategy=intersection,
-        interaction_strategy=test_interactor,
-        shading_strategy=test_shading,
-        custom_background=Color(1.0, 1.0, 1.0),
-        enable_scene_background=True
+        interaction_strategy=interactor,
+        shading_strategy=shading,
+        # custom_background=Color(1.0, 1.0, 1.0),
+        # enable_scene_background=True
     )
 
     for scene in all_scenes:
-        # print("Objects:", scene.objects)
-        # print("Lights:", scene.lights)
-        print("*" * 50)
         # Reset tracing stats per-scene to avoid accumulation and keep reported memory accurate
         raytracer.stats = TracingStats()
 
         sanitized_name = scene.name.replace(" ", "_").lower()
         out_path = os.path.join(OUT_DIR, f"{sanitized_name}_python")
-        print(f"Rendering '{scene.name}' -> {OUT_DIR} ({scene.camera.width}x{scene.camera.height})")
+        width = scene.camera.width if scene.camera is not None else img_w
+        height = scene.camera.height if scene.camera is not None else img_h
+        print(f"Rendering '{scene.name}' -> {OUT_DIR} ({width}x{height})")
         
         try:
             # 1. Render to Float Array (profile memory during render)
@@ -132,13 +129,13 @@ if __name__ == "__main__":
 
             # 2. Post-Process (The Pipeline)
             processed_img = raw_img_data
-            # We chain the effects directly on the numpy array
 
-            if not args.disable_post:
+            if not args.disable_post and False:
                 print(" > Running post-processing")
                 # Import lazily so heavy deps (scipy) are only loaded when needed
                 from src.PostProcessing import PostProcessingPipeline
 
+                # We chain the effects directly on the numpy array
                 # A. Bloom (Make bright lights glow)
                 processed_img = PostProcessingPipeline.apply_bloom(
                     processed_img, 
@@ -181,7 +178,7 @@ if __name__ == "__main__":
                 pass
             gc.collect()
 
-            print("-" * 50)
+            print("-|" * 30)
             
         except Exception as e:
             print(f"Failed to render '{scene.name}': {e}")
