@@ -7,7 +7,7 @@ from CommonUtils import unit
 
 def unit_vector(v):
     norm = np.linalg.norm(v)
-    return v / norm if norm > 0 else v
+    return v / norm if norm > 0 else np.array([0.0, 0.0, 1.0])
 
 @dataclass(slots=True)
 class Ray:
@@ -38,10 +38,8 @@ class Ray:
         v = np.asarray(v, dtype=float)
         if v.ndim != 1:
             raise ValueError("Orientation must be a 1D vector")
-        norm = np.linalg.norm(v)
-        if norm == 0:
-            raise ValueError("Orientation vector cannot be zero-length")
-        self._orientation = v / norm
+
+        norm = unit_vector(v)
 
     # alias 'direction' to the same data (keeps compatibility)
     @property
@@ -66,7 +64,7 @@ class Ray:
             return True
         
         to_point_normalized = unit(to_point)
-        return np.allclose(to_point_normalized, self.orientation )
+        return np.allclose(to_point_normalized, self.orientation)
 
     def check_point_in_front(self, point: np.ndarray):
         """Checks if a given point is in front of the ray's origin along its orientation ."""
@@ -104,8 +102,7 @@ class Ray:
             [uz*ux*(1 - cos_a) - uy*sin_a, uz*uy*(1 - cos_a) + ux*sin_a, cos_a + uz**2 * (1 - cos_a)]
         ])
         
-        self.orientation  = R @ self.orientation 
-        self.orientation  /= np.linalg.norm(self.orientation )
+        self.orientation = unit(R @ self.orientation)
 
     def translate(self, vector: np.ndarray):
         """Translates the ray's origin by the given vector."""
@@ -115,9 +112,9 @@ class Ray:
 
     def get_angle(self, line: np.ndarray):
         """Retruns the angles created from another vector"""
-        if line.shape != self.orientation .shape:
+        if line.shape != self.orientation.shape:
             raise ValueError("Input vector must match the ray's orientation  dimension")
-        dot_product = np.dot(self.orientation , line) / (np.linalg.norm(self.orientation ) * np.linalg.norm(line))
+        dot_product = np.dot(self.orientation , line) / (np.linalg.norm(self.orientation) * np.linalg.norm(line))
         angle = acos(dot_product)
         return angle
 
@@ -206,14 +203,13 @@ class HitInfo:
     def __init__(
         self,
         did_hit: bool,
+        distance: float = float('inf'),
         point: Optional[np.ndarray] = None,
         direction: Optional[np.ndarray] = None,
         normal: Optional[np.ndarray] = None,
-        distance: float = float('inf'),
         obj: Optional[Any] = None,
         uv: Optional[np.ndarray] = None
     ):
-        # Assign directly to the SLOTS defined above.
         object.__setattr__(self, 'hit', bool(did_hit))
         object.__setattr__(self, 'point', point)
         object.__setattr__(self, 'distance', distance)
@@ -246,13 +242,13 @@ class Transform:
       - "global": methods update the public position/rotation/scale (default, keeps simple test usage)
       - "local" : methods update the local_* offsets which are applied on top of the public transform
     """
-    def __init__(self, position: np.ndarray, rotation: np.ndarray, scale: np.ndarray, parent=None, name: str = "Transform"):
+    def __init__(self, position: np.ndarray, rotation: np.ndarray, scale: np.ndarray, parent=None, name: str="Transform"):
         if position.shape != (3,) or rotation.shape != (3,) or scale.shape != (3,):
             raise ValueError("position, rotation, and scale must be 3D vectors")
             
         # public/base transform (treated as the "global/base" transform)
         self.position = np.asarray(position, dtype=float)
-        self.rotation = np.asarray(rotation, dtype=float)  # Euler angles in radians
+        self.rotation = np.asarray(unit(rotation), dtype=float)  # Euler angles in radians
         self.scale = np.asarray(scale, dtype=float)
 
         # explicit local offsets applied on top of the base transform
