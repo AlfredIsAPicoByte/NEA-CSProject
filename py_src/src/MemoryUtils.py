@@ -5,7 +5,6 @@ from functools import wraps
 from contextlib import contextmanager
 import time
 
-from typing import Dict
 
 def get_process_id() -> int:
     """Pure wrapper to get current PID."""

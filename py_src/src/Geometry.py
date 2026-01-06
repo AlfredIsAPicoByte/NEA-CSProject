@@ -208,7 +208,10 @@ class Shape(ABC):
         self.transform.rotate(angle, axis, space="global")
 
     def enlarge(self, factor: Union[float, np.ndarray]):
-        self.transform.enlarge(factor, space="global")
+        if isinstance(factor, float):
+            self.transform.enlarge(np.array([1, 1, 1]) * factor, space="global")
+        elif isinstance(factor, np.ndarray):
+            self.transform.enlarge(factor, space="global")
     
     def scale(self, factor: Union[float, np.ndarray]):
         self.enlarge(factor)
@@ -290,7 +293,7 @@ class Circle(Shape2D):
         if abs(denom) < 1e-6: return False
         t = np.dot(self.transform.position - ray.origin, self.normal) / denom
         if t < 0: return False
-        return np.linalg.norm(ray.point_at(t) - self.transform.position)**2 <= self.radius**2
+        return bool(np.linalg.norm(ray.point_at(t) - self.transform.position)**2 <= self.radius**2)
 
     def get_ray_intersections(self, ray: Ray) -> List[np.ndarray]:
         if self.check_ray_intersection(ray):
@@ -352,7 +355,7 @@ class Triangle(Shape2D):
         d1 = point_to_segment_dist(point, self.v1, self.v2)
         d2 = point_to_segment_dist(point, self.v2, self.v3)
         d3 = point_to_segment_dist(point, self.v3, self.v1)
-        return min(d1, d2, d3)
+        return float(min(d1, d2, d3))
 
     @classmethod
     def unit_signed_distance(cls, point: np.ndarray) -> float:
@@ -361,11 +364,6 @@ class Triangle(Shape2D):
     def convex_hull(self, resolution: int = 0) -> List[np.ndarray]:
         """Triangle convex hull is just its vertices."""
         return [self.v1, self.v2, self.v3]
-
-    def signed_distance(self, point: np.ndarray) -> float:
-        # (Implementation from previous response)
-        # ... logic for distance to triangle ...
-        return 0.0 # Placeholder: Insert full logic from previous step
 
     def check_ray_intersection(self, ray: Ray, bias: float = 1e-10) -> bool:
         edge1 = self.v2 - self.v1
@@ -415,11 +413,11 @@ class Triangle(Shape2D):
 
     @property
     def area(self) -> float:
-        return 0.5 * np.linalg.norm(np.cross(self.v2 - self.v1, self.v3 - self.v1))
+        return float(0.5 * np.linalg.norm(np.cross(self.v2 - self.v1, self.v3 - self.v1)))
 
     @property
     def perimeter(self) -> float:
-        return (np.linalg.norm(self.v2 - self.v1) + np.linalg.norm(self.v3 - self.v2) + np.linalg.norm(self.v1 - self.v3))
+        return float(np.linalg.norm(self.v2 - self.v1) + np.linalg.norm(self.v3 - self.v2) + np.linalg.norm(self.v1 - self.v3))
 
 class Polygon(Shape2D):
     def __init__(self, vertices: List[np.ndarray], **kwargs):
@@ -449,7 +447,7 @@ class Polygon(Shape2D):
             v2 = self.vertices[(i + 1) % len(self.vertices)]
             dist = point_to_segment_dist(point, v1, v2)
             min_dist = min(min_dist, dist)
-        return min_dist
+        return float(min_dist)
 
     def check_ray_intersection(self, ray: Ray) -> bool:
         return len(self.get_ray_intersections(ray)) > 0
@@ -481,7 +479,7 @@ class Polygon(Shape2D):
             v1 = self.vertices[i]
             v2 = self.vertices[(i + 1) % len(self.vertices)]
             area += np.cross(v1, v2)
-        return abs(area) / 2
+        return float(abs(area) / 2)
 
     @property
     def perimeter(self) -> float:
@@ -490,7 +488,7 @@ class Polygon(Shape2D):
             v1 = self.vertices[i]
             v2 = self.vertices[(i + 1) % len(self.vertices)]
             perim += np.linalg.norm(v2 - v1)
-        return perim
+        return float(perim)
 
     def _repr__(self):
         return f"Polygon({len(self.vertices)} vertices)"
@@ -549,15 +547,15 @@ class ClippedPlane(Plane):
         super().__init__(point, normal, **kwargs)
         self.bounds = [np.asarray(b, dtype=float) for b in bounds]
     
-    def check_ray_intersection(self, ray: Ray) -> bool:
+    def check_ray_intersection(self, ray: Ray, bias: float = 1e-1) -> bool:
         intersections = self.get_ray_intersections(ray)
         return len(intersections) > 0
     
-    def get_ray_intersections(self, ray: Ray) -> List[np.ndarray]:
+    def get_ray_intersections(self, ray: Ray, bias: float = 1e-1) -> List[np.ndarray]:
         intersections = super().get_ray_intersections(ray)
         valid_points = []
         for pt in intersections:
-            if self._point_in_bounds(pt):
+            if self.point_in_bounds(pt):
                 valid_points.append(pt)
         return valid_points
     
@@ -576,7 +574,7 @@ class ClippedPlane(Plane):
             v1 = self.bounds[i]
             v2 = self.bounds[(i + 1) % n]
             area += v1[0] * v2[1] - v2[0] * v1[1]
-        return abs(area) / 2
+        return float(abs(area) / 2)
 
     @property
     def perimeter(self) -> float:
@@ -586,7 +584,7 @@ class ClippedPlane(Plane):
             v1 = self.bounds[i]
             v2 = self.bounds[(i + 1) % n]
             perim += np.linalg.norm(v2 - v1)
-        return perim
+        return float(perim)
 
     def _repr__(self):
         return f"ClippedPlane(point={self.point}, normal={self.normal}, bounds={len(self.bounds)} vertices)"
@@ -628,7 +626,7 @@ class Sphere(Shape3D):
 
     @classmethod
     def unit_signed_distance(cls, point: np.ndarray) -> float:
-        return np.linalg.norm(point) - 1.0
+        return float(np.linalg.norm(point) - 1.0)
 
     def signed_distance(self, point: np.ndarray) -> float:
         # World space approximation
@@ -764,8 +762,8 @@ class Cube(Shape3D):
         """
         # 1. Transform Ray to Local Space
         # Note: We do NOT normalize the local_dir. This allows 't' to match world units.
-        local_origin = self.inverse_transform_point(ray.origin)
-        local_dir = self.inverse_transform_direction(ray.direction, normalize=False)
+        local_origin = self.transform.inverse_transform_point(ray.origin)
+        local_dir = self.transform.inverse_transform_direction(ray.direction, normalize=False)
         
         # 2. Slab Method Setup
         # Avoid division by zero: replace 0 with a tiny epsilon or use numpy's inf handling
@@ -947,7 +945,7 @@ class Capsule(Shape3D):
         ab_sq = np.dot(ab, ab)
         t = np.clip(np.dot(ap, ab) / max(ab_sq, bias), 0, 1)
         closest = self.point1 + t * ab
-        return np.linalg.norm(point - closest) - self.radius
+        return float(np.linalg.norm(point - closest) - self.radius)
 
     def check_ray_intersection(self, ray: Ray) -> bool:
         return len(self.get_ray_intersections(ray)) > 0
@@ -974,13 +972,13 @@ class Capsule(Shape3D):
     def volume(self) -> float:
         from math import pi
         cylinder_height = np.linalg.norm(self.point2 - self.point1)
-        return pi * self.radius ** 2 * cylinder_height + (4/3) * pi * self.radius ** 3
+        return float(pi * self.radius ** 2 * cylinder_height + (4/3) * pi * self.radius ** 3)
 
     @property
     def surface_area(self) -> float:
         from math import pi
         cylinder_height = np.linalg.norm(self.point2 - self.point1)
-        return 2 * pi * self.radius * cylinder_height + 4 * pi * self.radius ** 2
+        return float(2 * pi * self.radius * cylinder_height + 4 * pi * self.radius ** 2)
 
     def convex_hull(self, resolution: int = 100) -> List[np.ndarray]:
         raise NotImplementedError("Capsule convex hull not yet implemented")
@@ -1006,7 +1004,7 @@ class VObject:
     def __post_init__(self):
         if self.transform is None:
             # Assuming Transform is defined
-            self.transform = Transform(np.zeros(3), np.array([0, 0, 1]), np.ones(3))
+            self.transform = Transform(np.zeros(3), np.zeros(3), np.ones(3))
         
         # Ensure the shape (if present) shares this transform or follows it
         # Depending on your architecture, you might want: 
@@ -1038,37 +1036,37 @@ class ShapeFactory(ABC):
         raise NotImplementedError
 
 class CircleFactory(ShapeFactory):
-    def create(self, center: np.ndarray, radius: float, **kwargs) -> Circle:
+    def create(self, center: np.ndarray, radius: float, **kwargs) -> Circle: # type: ignore
         # Circle ctor expects (center, normal, radius); default normal is +Z
         return Circle(center, np.array([0.0, 0.0, 1.0]), radius, **kwargs)
 
 class TriangleFactory(ShapeFactory):
-    def create(self, v1: np.ndarray, v2: np.ndarray, v3: np.ndarray, **kwargs) -> Triangle:
+    def create(self, v1: np.ndarray, v2: np.ndarray, v3: np.ndarray, **kwargs) -> Triangle: # type: ignore
         return Triangle(v1, v2, v3, **kwargs)
 
 class PolygonFactory(ShapeFactory):
-    def create(self, vertices: List[np.ndarray], **kwargs) -> Polygon:
-        return Polygon(vertices, **kwargs)
+    def create(self, vertices: List[np.ndarray], **kwargs) -> Polygon: # type: ignore
+        return Polygon(vertices, **kwargs) # type: ignore
 
 class SphereFactory(ShapeFactory):
-    def create(self, center: np.ndarray, radius: float, **kwargs) -> Sphere:
+    def create(self, center: np.ndarray, radius: float, **kwargs) -> Sphere: # type: ignore
         return Sphere(center, radius, **kwargs)
 
 class CubeFactory(ShapeFactory):
-    def create(self, center: np.ndarray, side_length: float, **kwargs) -> Cube:
+    def create(self, center: np.ndarray, side_length: float, **kwargs) -> Cube: # type: ignore
         return Cube(center, side_length, **kwargs)
 
 class PrismFactory(ShapeFactory):
-    def create(self, base_polygon: Polygon, height: float, **kwargs) -> Prism:
-        return Prism(base_polygon, height, **kwargs)
+    def create(self, base_polygon: Polygon, height: float, **kwargs) -> Prism: # type: ignore
+        return Prism(base_polygon, height, **kwargs) # type: ignore
 
 class PyramidFactory(ShapeFactory):
-    def create(self, base_polygon: Polygon, height: float, **kwargs) -> Pyramid:
-        return Pyramid(base_polygon, height, **kwargs)
+    def create(self, base_polygon: Polygon, height: float, **kwargs) -> Pyramid: # type: ignore
+        return Pyramid(base_polygon, height, **kwargs) # type: ignore
 
 class CapsuleFactory(ShapeFactory):
-    def create(self, point1: np.ndarray, point2: np.ndarray, radius: float, **kwargs) -> Capsule:
-        return Capsule(point1, point2, radius, **kwargs)
+    def create(self, point1: np.ndarray, point2: np.ndarray, radius: float, **kwargs) -> Capsule: # type: ignore
+        return Capsule(point1, point2, radius, **kwargs) # type: ignore
 
 # --- 1. AABB Helper Class (The "Box" logic) ---
 class AABB:
@@ -1116,7 +1114,8 @@ class AABB:
         # Fallback: Approximate with a unit cube scaled by transform
         
         # 1. Get Transform Matrix
-        matrix = obj.transform.get_global_matrix()
+        obj_transform = getattr(obj, "transform", Transform(np.zeros(3), np.zeros(3), np.ones(3)))
+        matrix = obj_transform.get_global_matrix()
         
         # 2. Define the 8 corners of a generic Unit Cube (-0.5 to 0.5) or Shape bounds
         # Note: You should add get_local_bounds() to your Shape classes for tighter fits.

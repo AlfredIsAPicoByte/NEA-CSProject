@@ -1,6 +1,6 @@
 from math import cos, sin, acos, gcd
 import numpy as np
-from typing import Optional, Any
+from typing import Optional, Any, List
 from dataclasses import dataclass, field
 
 from CommonUtils import unit
@@ -27,19 +27,6 @@ class Ray:
         else:
             # Normalize and re-assign (bypass frozen check if frozen=True, though unnecessary here)
             object.__setattr__(self, 'orientation', unit_vector(self.orientation))
-
-    @property
-    def orientation(self) -> np.ndarray:
-        # return a copy so callers can't mutate internal storage accidentally
-        return self._orientation.copy()
-
-    @orientation.setter
-    def orientation(self, v):
-        v = np.asarray(v, dtype=float)
-        if v.ndim != 1:
-            raise ValueError("Orientation must be a 1D vector")
-
-        norm = unit_vector(v)
 
     # alias 'direction' to the same data (keeps compatibility)
     @property
@@ -122,7 +109,7 @@ class Ray:
         return f"Ray(origin={self.origin}, orientation={self.orientation})"
 
 # Define a ray that holds the ray and data
-@dataclass(slots=True)
+@dataclass
 class TracingRay(Ray):
     """
     A Ray that carries extra state for the recursive path tracing engine.
@@ -133,7 +120,7 @@ class TracingRay(Ray):
     
     # How much light this ray carries (Color multiplier)
     # Storing as object to avoid import cycles with 'Color' class
-    throughput: object = field(default_factory=lambda: np.array([1.0, 1.0, 1.0, 1.0]))
+    throughput: List[float] = field(default_factory=lambda: [1.0, 1.0, 1.0, 1.0])
     pdf: float = 0
     
     # Is the ray currently traveling inside a medium (like glass)?
@@ -145,7 +132,6 @@ class TracingRay(Ray):
 
     def __repr__(self):
         return f"TracingRay(name={self.name}, origin={self.origin}, orientation={self.orientation})"
-
 
 class RayPool:
     def __init__(self, block_size=10000):
@@ -162,11 +148,11 @@ class RayPool:
             ray.pixel_y = y
             ray.depth = 0
             ray.is_inside = False
-            ray.throughput = np.ndarray([1.0, 1.0, 1.0])
+            ray.throughput = np.array([1.0, 1.0, 1.0])
             return ray
         else:
             # Create new if pool is empty
-            return TracingRay(origin, orientation, x, y, ...)
+            return TracingRay(origin, orientation, x, y)
 
     def return_ray(self, ray: TracingRay):
         self._pool.append(ray)
@@ -248,7 +234,7 @@ class Transform:
             
         # public/base transform (treated as the "global/base" transform)
         self.position = np.asarray(position, dtype=float)
-        self.rotation = np.asarray(unit(rotation), dtype=float)  # Euler angles in radians
+        self.rotation = np.asarray(rotation, dtype=float)  # Euler angles in radians
         self.scale = np.asarray(scale, dtype=float)
 
         # explicit local offsets applied on top of the base transform
@@ -323,7 +309,7 @@ class Transform:
     def get_global_position(self) -> np.ndarray:
         return self.get_global_matrix()[:3, 3]
     
-    def look_at(self, target_position: np.ndarray, world_up: np.ndarray = None):
+    def look_at(self, target_position: np.ndarray, world_up: np.ndarray = np.array([0.0, 1.0, 0.0])):
         if world_up is None: world_up = np.array([0, 1, 0])
         target_position = np.asarray(target_position, dtype=float)
         

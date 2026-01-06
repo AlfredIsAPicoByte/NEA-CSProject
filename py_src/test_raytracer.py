@@ -114,11 +114,11 @@ def test_color_math():
     
     # Addition
     added = c1 + c2
-    np.testing.assert_allclose([added.red, added.green, added.blue], [0.3, 0.6, 0.9])
+    np.testing.assert_allclose([added.r, added.g, added.b], [0.3, 0.6, 0.9])
     
     # Scaling
     scaled = c1 * 2
-    np.testing.assert_allclose([scaled.red, scaled.green, scaled.blue], [0.4, 0.8, 1.2])
+    np.testing.assert_allclose([scaled.r, scaled.g, scaled.b], [0.4, 0.8, 1.2])
 
 def test_camera_logic():
     transform = Transform(np.zeros(3), np.zeros(3), np.ones(3))
@@ -143,7 +143,7 @@ def test_ray_shape_intersection():
 
 def test_background_gradient():
     cam = VCamera(Transform(np.array([0,0,-3]), np.zeros(3), np.ones(3)), 60, 0.1, 100, 8, 8, CameraType.PERSPECTIVE)
-    grad = ColorGradient([Color.from_hex("#000033"), Color.from_hex("#87CEEB")], [0.0, 1.0])
+    grad = ColorGradient([Color.from_hex("#000033"), Color.from_hex("#87CEEB")], np.array([0.0, 1.0]))
     scene = Scene(name="bg_test", camera=cam, background_color=grad)
     
     up_color = scene.get_background_color([0.0, 1.0, 0.0])
@@ -178,10 +178,10 @@ def test_ambient_lighting():
     material = PBRMaterial.create_diffuse(
         albedo=Color(0.8, 0.8, 0.8),
         roughness=0.5,
-    ).data
+    )
     sphere = VObject(SphereFactory().create(np.array([0, 0, 0]), 1), Transform(np.zeros(3), np.zeros(3), np.ones(3)))
     # Attach PBR data to shape for compatibility
-    sphere.shape.material = material
+    sphere.material = material
     scene = Scene(name="ambient_test", camera=cam, objects=[sphere], lights=[
         light
     ], background_color=Color(0.0, 0.0, 0.0))

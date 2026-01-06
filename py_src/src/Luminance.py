@@ -131,7 +131,7 @@ class Color:
             return replace(self, r=self.r - other.r, g=self.g - other.g, b=self.b - other.b)
         return NotImplemented
 
-    def __mul__(self, scale: float):
+    def __mul__(self, scale: Union['Color', float, int]):
         if isinstance(scale, (int, float)):
             return replace(self, r=self.r * scale, g=self.g * scale, b=self.b * scale)
         if isinstance(scale, Color):
@@ -140,20 +140,30 @@ class Color:
             return replace(self, r=self.r * scale.r, g=self.g * scale.g, b=self.b * scale.b)
         return NotImplemented
 
-    def __rmul__(self, scale: float):
+    def __rmul__(self, scale: Union['Color', float]):
         return self.__mul__(scale)
 
     def __truediv__(self, scale: float):
         if isinstance(scale, (int, float)) and scale != 0:
             return replace(self, r=self.r / scale, g=self.g / scale, b=self.b / scale)
         return NotImplemented
+    
+    def __getitem__(self, index):
+        if index == 0 or index == "r" or index == "red":
+            return self.r
+        elif index == 1 or index == "g" or index == "green":
+            return self.r
+        elif index == 2 or index == "b" or index == "blue":
+            return self.r
+        elif index == 3 or index == "a" or index == "alpha":
+            return self.r
 
     def __repr__(self):
         return f"Color(r={self.r:.2f}, g={self.g:.2f}, b={self.b:.2f}, a={self.a:.2f})"
 
 @dataclass(slots=True)
 class ColorGradient:
-    colors: Color
+    colors: List[Color]
     positions: np.ndarray
 
     def __post_init__(self):
@@ -168,7 +178,7 @@ class ColorGradient:
         # Ensure sorted data for binary search logic
         sorted_pairs = sorted(zip(self.positions, self.colors), key=lambda x: x[0])
         self.positions = np.array([p for p, c in sorted_pairs], dtype=float)
-        self.colors = np.array([c for p, c in sorted_pairs], dtype=Color)
+        self.colors = [c for p, c in sorted_pairs]
 
     def get_color(
         self, 
@@ -380,14 +390,17 @@ class PBRMaterial:
         surface_normal = hit_info.normal
         hit_point = hit_info.point
         accumulated_light = Color(0.0, 0.0, 0.0)
+        
+        if hit_point is None or surface_normal is None:
+            return accumulated_light
 
         for light in scene_lights:
             # --- Light Calculation ---
             light_dir = light.get_light_direction(hit_point)
-            dist = np.linalg.norm(light.position - hit_point)
+            light_dist = np.linalg.norm(light.position - hit_point)
             
             # Optimization: Skip lights that are too close (singularities)
-            if dist <= bias: continue
+            if light_dist <= bias: continue
             
             # --- B. Visibility Check (Shadows) ---
             # If the light is blocked by another object, we skip it.
@@ -397,7 +410,7 @@ class PBRMaterial:
 
             # --- C. Lighting Calculations ---
             # 1. Attenuation: Light gets weaker over distance (Inverse Square Law)
-            attenuation = attenuate_sqr_distance(dist)
+            attenuation = attenuate_sqr_distance(float(light_dist))
             
             # 2. Cosine Law: Light hits weaker at glancing angles
             NdotL = max(0.0, np.dot(surface_normal, light_dir))
@@ -666,7 +679,7 @@ class PBRMaterial:
             # The ray cannot refract through this specific microfacet angle.
             # In a full integrator, this energy would reflect, but for this 
             # specific function request, we return None.
-            return None, 0.0
+            return None
 
         # Calculate Refraction Vector
         # T = (eta * (v . h) - sqrt(k)) * h - eta * v

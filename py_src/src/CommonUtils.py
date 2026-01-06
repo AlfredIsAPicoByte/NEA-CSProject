@@ -1,10 +1,7 @@
 from __future__ import annotations
 import numpy as np
 import math
-from typing import TYPE_CHECKING, Optional
-
-if TYPE_CHECKING:
-    from PrimaryStructures import Transform, Ray
+from typing import Optional
 
 def clamp(value, min_value: float|int = 0.0, max_value: float|int = 1.0):
     """
@@ -25,7 +22,7 @@ def safe_norm(v: np.ndarray, eps: float = 1e-8) -> float:
     Calculates the length (magnitude) of a vector with a tiny safety buffer.
     Prevents DivisionByZero errors when normalizing zero-length vectors.
     """
-    return np.linalg.norm(v) + eps
+    return float(np.linalg.norm(v) + eps)
 
 def unit(v: np.ndarray, eps: float = 1e-8) -> np.ndarray:
     """

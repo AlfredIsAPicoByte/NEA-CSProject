@@ -272,16 +272,16 @@ class AdaptiveSampler(Sampler):
         pass
 
     def next_1d(self) -> float:
-        return np.random()
+        return np.random.random()
 
     def next_2d(self) -> Tuple[float, float]:
-        return (np.random(), np.random())
+        return (np.random.random(), np.random.random())
 
     def clone(self, seed: Optional[int] = None) -> "AdaptiveSampler":
         return AdaptiveSampler(self.settings, seed)
 
     def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
-        return (np.random(), np.random())
+        return (np.random.random(), np.random.random())
 
 # Registry and factory
 _SAMPLER_REGISTRY: dict[str, type[Sampler]] = {

@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Tuple
 
 from CommonUtils import unit
-from PrimaryStructures import Transform, Ratio
+from PrimaryStructures import Ratio, Transform
 
 class CameraType (Enum):
     """
@@ -168,7 +168,7 @@ class VCamera:
         return {
             "fov_radians": np.radians(self.fov),
             "fov_degrees": self.fov,
-            "aspect": float(self.aspect_ratio.value()),
+            "aspect": float(self.aspect_ratio.value),
             "near": float(self.near),
             "far": float(self.far),
         }
@@ -193,7 +193,7 @@ class VCamera:
             direction = self.transform.forward
             
             # 2. Origin shifts along the camera plane
-            height_size = self.ortho_scale # or self.fov if reusing that field
+            height_size = self.fov
             width_size = height_size * self.aspect_ratio.value
 
             # Map 0..1 to -Width/2 .. +Width/2
