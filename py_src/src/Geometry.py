@@ -51,19 +51,15 @@ class Shape(ABC):
     
     def inverse_signed_distance(
         self,
-        origin_world: np.ndarray, 
-        dir_world: np.ndarray,
+        world_origin: np.ndarray, 
+        world_dir: np.ndarray,
         max_steps: int = 64,
         max_distance: float = 10,
         epsilon: float = 1e-4
     ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         # --- STEP 1: Transform Ray to Local Space ---
         # 1. Transform Origin (Point: w=1.0)
-        origin_local = self.transform.inverse_transform_point(origin_world)
-        
-        # 2. Transform Direction (Vector: w=0.0)
-        # We only need the rotation/scale 3x3 block for vectors
-        dir_local = unit(self.transform.inverse_transform_direction(dir_world))
+        local_ray = self.transform.inverse_transform_ray(Ray(world_origin, world_dir))
 
         # --- STEP 2: Raymarch in Local Space (Unit Sphere) ---
         t = 0.0
@@ -72,7 +68,7 @@ class Shape(ABC):
 
         # A. Find Entry Point (Front Face)
         for _ in range(max_steps):
-            entry_point_local = origin_local + (dir_local * t)
+            entry_point_local = local_ray.origin + (local_ray.orientation * t)
             dist = -self.unit_signed_distance(entry_point_local)
             
             # Optimization: If we are too far away, we missed
@@ -95,7 +91,7 @@ class Shape(ABC):
         exit_point_local = np.array([0.0, 0.0, 0.0])
         
         for _ in range(max_steps):
-            exit_point_local = origin_local + (dir_local * t)
+            exit_point_local = local_ray.origin + (local_ray.orientation * t)
             
             # INVERTED SDF: We want distance to the "outer shell" from inside.
             # Inside a unit sphere, dist is negative. -dist makes it positive.
@@ -629,10 +625,89 @@ class Sphere(Shape3D):
         return float(np.linalg.norm(point) - 1.0)
 
     def signed_distance(self, point: np.ndarray) -> float:
-        # World space approximation
-        d = np.linalg.norm(point - self.transform.position) - self.radius
-        return d * min(self.transform.scale[0], self.transform.scale[0], self.transform.scale[0])
+        # Transform point to local space to handle scaling (ellipsoids)
+        local_point = self.transform.inverse_transform_point(point)
+        
+        # Calculate distance to surface of a standard sphere in local space
+        d_local = np.linalg.norm(local_point) - self.radius
+        
+        # Approximate world-space distance by scaling the result by the smallest scale factor.
+        # This prevents over-stepping in ray marching.
+        min_scale = min(self.transform.scale[0], self.transform.scale[1], self.transform.scale[2])
+        return d_local * min_scale
 
+    # Standard sphere methods
+    def check_ray_intersection(self, ray: Ray) -> bool:
+        # 1. Transform Ray to Local Space
+        # We do NOT normalize the direction. This allows 't' to match world units directly.
+        local_ray = self.transform.inverse_transform_ray(ray)
+
+        # 2. Intersect with Sphere at (0,0,0) of self.radius
+        # Quadratic: at^2 + bt + c = 0
+        a = np.dot(local_ray.orientation, local_ray.orientation)
+        b = 2.0 * np.dot(local_ray.origin, local_ray.orientation)
+        c = np.dot(local_ray.origin, local_ray.origin) - (self.radius ** 2)
+
+        disc = b * b - 4.0 * a * c
+        
+        # 3. Check for valid solution
+        if disc < 0.0:
+            return False
+
+        sqrt_disc = np.sqrt(disc)
+        t0 = (-b - sqrt_disc) / (2.0 * a)
+        t1 = (-b + sqrt_disc) / (2.0 * a)
+
+        # If the furthest intersection is behind us, we missed
+        if t1 < 0.0:
+            return False
+            
+        return True
+
+    def get_ray_intersections(self, ray: Ray) -> List[np.ndarray]:
+        # 1. Transform Ray to Local Space
+        local_ray = self.transform.inverse_transform_ray(ray)
+
+        a = np.dot(local_ray.orientation, local_ray.orientation)
+        b = 2.0 * np.dot(local_ray.origin, local_ray.orientation)
+        c = np.dot(local_ray.origin, local_ray.origin) - (self.radius ** 2)
+
+
+        disc = b * b - 4.0 * a * c
+        if disc < 0.0:
+            return []
+
+        sqrt_disc = np.sqrt(disc)
+        t0 = (-b - sqrt_disc) / (2.0 * a)
+        t1 = (-b + sqrt_disc) / (2.0 * a)
+
+        hits = []
+        # Because we didn't normalize local_dir, t0 and t1 are in World Unit distance
+        if t0 >= 0.0:
+            hits.append(ray.point_at(t0))
+        if t1 >= 0.0 and t1 != t0:
+            hits.append(ray.point_at(t1))
+            
+        return hits
+
+    def get_normal(self, point: np.ndarray) -> np.ndarray:
+        # 1. Transform world point to local point
+        local_point = self.transform.inverse_transform_point(point)
+        
+        # 2. Local normal for a sphere is just the normalized position (relative to center 0,0,0)
+        local_normal = local_point / np.linalg.norm(local_point)
+        
+        # 3. Transform local normal to world normal
+        # Must use inverse-transpose for normals to handle non-uniform scaling correctly
+        return unit(self.transform.transform_normal(local_normal))
+
+    def get_tangent(self, point: np.ndarray) -> np.ndarray:
+        n = self.get_normal(point)
+        # Handle singularity at poles for standard sphere mapping
+        if abs(n[1]) > 0.99:
+            return unit(np.cross(n, np.array([1, 0, 0])))
+        return unit(np.cross(n, np.array([0, 1, 0])))
+    
     def convex_hull(self, resolution: int = 100) -> List[np.ndarray]:
         """
         Generates points on the sphere surface using a Fibonacci Lattice.
@@ -659,56 +734,6 @@ class Sphere(Shape3D):
             
         return points
 
-    # Standard sphere methods
-    def check_ray_intersection(self, ray: Ray) -> bool:
-        # Solve quadratic for a, b, c
-        oc = ray.origin - self.transform.position
-        d = ray.orientation
-        a = np.dot(d, d)
-        b = 2.0 * np.dot(oc, d)
-        c = np.dot(oc, oc) - (self.radius ** 2)
-
-        disc = b * b - 4.0 * a * c
-        if disc < 0.0:
-            return False
-
-        sqrt_disc = np.sqrt(disc)
-        t0 = (-b - sqrt_disc) / (2.0 * a)
-        t1 = (-b + sqrt_disc) / (2.0 * a)
-
-        # If both intersections are behind the ray origin, no hit
-        return not (t0 < 0.0 and t1 < 0.0)
-
-    def get_ray_intersections(self, ray: Ray) -> List[np.ndarray]:
-        oc = ray.origin - self.transform.position
-        d = ray.orientation
-        a = np.dot(d, d)
-        b = 2.0 * np.dot(oc, d)
-        c = np.dot(oc, oc) - (self.radius ** 2)
-
-        disc = b * b - 4.0 * a * c
-        if disc < 0.0:
-            return []
-
-        sqrt_disc = np.sqrt(disc)
-        t0 = (-b - sqrt_disc) / (2.0 * a)
-        t1 = (-b + sqrt_disc) / (2.0 * a)
-
-        points: List[np.ndarray] = []
-        if t0 >= 0.0:
-            points.append(ray.point_at(t0))
-        if t1 >= 0.0:
-            points.append(ray.point_at(t1))
-        return points
-
-    def get_normal(self, point: np.ndarray) -> np.ndarray:
-        return unit(point - self.transform.position)
-
-    def get_tangent(self, point: np.ndarray) -> np.ndarray:
-        n = self.get_normal(point)
-        arb = np.array([0, 1, 0]) if abs(n[1]) < 0.9 else np.array([1, 0, 0])
-        return unit(np.cross(n, arb))
-
     @property
     def volume(self) -> float:
         return (4/3) * np.pi * self.radius**3
@@ -731,29 +756,18 @@ class Cube(Shape3D):
         return np.linalg.norm(np.maximum(d, 0.0)) + min(max(d[0], max(d[1], d[2])), 0.0)
 
     def signed_distance(self, point: np.ndarray) -> float:
-        # OBB Distance
+        # Transform to local space
         local_p = self.transform.inverse_transform_point(point)
-        d = np.abs(local_p) - (self.side_length / 2.0)
-        dist = np.linalg.norm(np.maximum(d, 0.0)) + min(max(d[0], max(d[1], d[2])), 0.0)
-        return dist * self.get_min_uniform_scale()
-
-    def convex_hull(self, resolution: int = 0) -> List[np.ndarray]:
-        """
-        Returns the 8 corners of the Cube (OBB).
-        Resolution is ignored as a cube strictly has 8 vertices.
-        """
-        half = self.side_length / 2.0
-        corners = []
         
-        # Iterate all combinations of +/- half_size
-        for x in [-1, 1]:
-            for y in [-1, 1]:
-                for z in [-1, 1]:
-                    local_pt = np.array([x * half, y * half, z * half])
-                    world_pt = self.transform.transform_point(local_pt)
-                    corners.append(world_pt)
-                    
-        return corners
+        # Calculate distance to AABB centered at 0 with size 'side_length'
+        half_size = self.side_length / 2.0
+        d = np.abs(local_p) - half_size
+        
+        # Local distance
+        dist = np.linalg.norm(np.maximum(d, 0.0)) + min(max(d[0], max(d[1], d[2])), 0.0)
+        
+        # Scale by minimum scale to preserve world-space conservatism
+        return dist * self.get_min_uniform_scale()
 
     def check_ray_intersection(self, ray: Ray, local_min: float = -0.5, local_max: float = 0.5) -> bool:
         """
@@ -762,16 +776,15 @@ class Cube(Shape3D):
         """
         # 1. Transform Ray to Local Space
         # Note: We do NOT normalize the local_dir. This allows 't' to match world units.
-        local_origin = self.transform.inverse_transform_point(ray.origin)
-        local_dir = self.transform.inverse_transform_direction(ray.direction, normalize=False)
+        local_ray = self.transform.inverse_transform_ray(ray)
         
         # 2. Slab Method Setup
         # Avoid division by zero: replace 0 with a tiny epsilon or use numpy's inf handling
         with np.errstate(divide='ignore'):
-            inv_dir = 1.0 / local_dir
+            inv_dir = 1.0 / local_ray.orientation
             
-        t1 = (local_min - local_origin) * inv_dir
-        t2 = (local_max - local_origin) * inv_dir
+        t1 = (local_min - local_ray.origin) * inv_dir
+        t2 = (local_max - local_ray.origin) * inv_dir
 
         # 3. Find intersection interval
         t_min = np.minimum(t1, t2)
@@ -791,15 +804,14 @@ class Cube(Shape3D):
         Returns 0, 1, or 2 points sorted by distance.
         """
         # 1. Transform Ray to Local Space
-        local_origin = self.transform.inverse_transform_point(ray.origin)
-        local_dir = self.transform.inverse_transform_direction(ray.direction, normalize=False)
+        local_ray = self.transform.inverse_transform_ray(ray)
 
         # 2. Slab Method
         with np.errstate(divide='ignore'):
-            inv_dir = 1.0 / local_dir
+            inv_dir = 1.0 / local_ray.orientation
         
-        t1 = (local_min - local_origin) * inv_dir
-        t2 = (local_max - local_origin) * inv_dir
+        t1 = (local_min - local_ray.origin) * inv_dir
+        t2 = (local_max - local_ray.origin) * inv_dir
         
         t_min = np.minimum(t1, t2)
         t_max = np.maximum(t1, t2)
@@ -813,34 +825,54 @@ class Cube(Shape3D):
             
         intersections = []
         
-        # 4. Calculate World Points
-        # Because we didn't normalize local_dir, these 't' values apply directly to the World Ray.
-        # P_world = Origin_world + t * Direction_world
-        
-        # Check entry point (must be >= 0 to be valid)
+        # Entry point
         if t_enter >= 0:
-            p_enter = ray.origin + (ray.direction * t_enter)
-            intersections.append(p_enter)
+            intersections.append(ray.point_at(t_enter))
             
-        # Check exit point (only if it's distinct from entry, e.g. not a grazing edge, and valid)
-        # Using a small epsilon for float comparison
+        # Exit point (if distinct and valid)
         if t_exit >= 0 and (len(intersections) == 0 or abs(t_exit - t_enter) > 1e-6):
-            p_exit = ray.origin + (ray.direction * t_exit)
-            intersections.append(p_exit)
+            intersections.append(ray.point_at(t_exit))
             
         return intersections
 
     def get_normal(self, point: np.ndarray) -> np.ndarray:
-        # Box normal logic
+        # 1. Convert to local space to find which face we are on
         local_p = self.transform.inverse_transform_point(point)
-        dominant = np.argmax(np.abs(local_p))
-        n = np.zeros(3); n[dominant] = np.sign(local_p[dominant])
-        return self.transform.transform_normal(n)
+        
+        # 2. Determine dominant axis (which face is closest?)
+        # Normalize relative to side length
+        norm_p = local_p / (self.side_length / 2.0)
+        dominant_idx = np.argmax(np.abs(norm_p))
+        
+        local_n = np.zeros(3)
+        local_n[dominant_idx] = np.sign(norm_p[dominant_idx])
+        
+        # 3. Transform normal back to world space
+        return unit(self.transform.transform_normal(local_n))
 
     def get_tangent(self, point: np.ndarray) -> np.ndarray:
         n = self.get_normal(point)
-        t = np.cross(n, np.array([0,1,0])) if abs(n[1]) < 0.9 else np.cross(n, np.array([1,0,0]))
-        return unit(t)
+        if abs(n[1]) > 0.9:
+            return unit(np.cross(n, np.array([1, 0, 0])))
+        return unit(np.cross(n, np.array([0, 1, 0])))
+    
+    def convex_hull(self, resolution: int = 0) -> List[np.ndarray]:
+        """
+        Returns the 8 corners of the Cube (OBB).
+        Resolution is ignored as a cube strictly has 8 vertices.
+        """
+        half = self.side_length / 2.0
+        corners = []
+        
+        # Iterate all combinations of +/- half_size
+        for x in [-1, 1]:
+            for y in [-1, 1]:
+                for z in [-1, 1]:
+                    local_pt = np.array([x * half, y * half, z * half])
+                    world_pt = self.transform.transform_point(local_pt)
+                    corners.append(world_pt)
+                    
+        return corners
 
     @property
     def volume(self) -> float:

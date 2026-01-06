@@ -14,7 +14,7 @@ _submodules = [
     "Luminance",
     "Camera",
     "Scene",
-    "Algorithims",
+    "RenderingAlgorithms",
     "Sampling",
     "Reflections",
     "Refractions",

@@ -7,19 +7,19 @@ import gc
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from src.Scene import Scene
-from src.RenderingAlgorithims import Algorithm
+from src.RenderingAlgorithms import Algorithm
 from src.Raytracing import *
 from src.Sampling import SamplingManager, SampleSettings, PixelFilter
 from src.MemoryProfiler import MemoryProfiler
 from test_scenes import *
 PostProcessingPipeline = None
 
-def render_process(scene: Scene, algorithim: Algorithm):
+def render_process(scene: Scene, algorithm: Algorithm):
     """
-    Execute the rendering algorithim on the scene and return the rendered image as a numpy array.
+    Execute the rendering algorithm on the scene and return the rendered image as a numpy array.
     """
-    # Render using the algorithim
-    pixel_colors = algorithim.render(scene, tile_size=16)
+    # Render using the algorithm
+    pixel_colors = algorithm.render(scene, tile_size=16)
     
     # Convert List[Color] to numpy array (width x height x 3)
     cam = scene.camera
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    img_w, img_h = 16 * 4, 9 * 4 # 256, 144 for higher resolution images
+    img_w, img_h = 16 * 8, 9 * 8
 
     all_scenes = [
         get_minimal_scene(img_w, img_h),
@@ -78,9 +78,9 @@ if __name__ == "__main__":
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     generator = JitterRayGenerator()
-    intersection = RayMarchingIntersection(max_steps=256)
-    interactor = StandardInteraction()
-    shading = RecursiveLambertShading(ambient_color=Color.from_hex("#24272B"), ambient_intensity=1.0, shadow_samples=4)
+    intersection = RayMarchingIntersection(max_steps=64)
+    interactor = TerminalInteraction()
+    shading = XRayThicknessShading()
 
     raytracer = Raytracer(
         max_depth=1,
@@ -89,8 +89,8 @@ if __name__ == "__main__":
         intersection_strategy=intersection,
         interaction_strategy=interactor,
         shading_strategy=shading,
-        # custom_background=Color(1.0, 1.0, 1.0),
-        # enable_scene_background=True
+        custom_background=Color(0.0, 0.0, 0.0),
+        enable_scene_background=True
     )
 
     for scene in all_scenes:

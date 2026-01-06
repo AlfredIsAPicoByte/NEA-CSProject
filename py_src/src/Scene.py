@@ -1,11 +1,12 @@
-from typing import Callable, List, Tuple, Optional
+from typing import Callable, List, Tuple, Optional, cast
 import numpy as np
 from math import atan2, asin, pi, floor
 
+from CommonUtils import safe_norm
 from PrimaryStructures import Ray, HitInfo
 from Camera import VCamera
-from Geometry import VObject
-from Luminance import LightSource, Color, ColorGradient
+from Geometry import VObject, Shape
+from Luminance import LightSource, Color
 
 class Scene:
     def __init__(self, name: str = "Scene", camera: Optional[VCamera] = None, **kwargs):
@@ -37,32 +38,26 @@ class Scene:
     def distance_estimator(self, point: np.ndarray, exclude_obj: Optional[VObject] = None) -> Tuple[Optional[VObject], float]:
         """
         Evaluates the Scene SDF to find the closest object and the distance to it.
-        
-        Args:
-            point: The 3D point to check.
-            exclude_obj: (Optional) An object to ignore. 
-                         Crucial for preventing self-shadowing (shadow acne).
+        This relies on obj.shape.signed_distance() correctly handling World->Local conversion.
         """
         min_d = float("inf")
         closest = None
         
         for obj in self.objects:
-            # 1. Skip the object we are starting from (Self-Shadowing fix)
+            # 1. Skip exclusion (Self-Shadowing fix)
             if exclude_obj is not None and obj is exclude_obj:
                 continue
-                
-            d = float("inf")
             
-            try:
-                # 2. Check if object has a Signed Distance Function
-                # Support several common method namings used across shapes
-                sdf_fn = None
-                if hasattr(obj.shape, "signed_distance") and callable(getattr(obj.shape, "signed_distance")):
-                    sdf_fn: Callable[[np.ndarray], float] = getattr(obj.shape, "signed_distance")
-                    d = float(sdf_fn(point))
+            # 2. Check for Shape
+            shape = getattr(obj, "shape", None)
+            if shape is None or not hasattr(shape, "signed_distance"):
+                continue
 
+            # 3. Calculate Distance
+            # The Shape is responsible for transforming the world 'point' to its local space.
+            try:
+                d = float(shape.signed_distance(point))
             except Exception:
-                # If math fails on one object, don't crash the whole renderer
                 continue
             
             # 4. Update Closest
@@ -74,63 +69,58 @@ class Scene:
     
     def get_closest_intersection(self, ray: Ray) -> HitInfo:
         """
-        Analytical Intersection (Ray-Sphere, Ray-Plane).
-        Returns a `HitInfo` describing the closest intersection.
+        Analytical Intersection (Ray-Sphere, Ray-Box).
+        Returns a `HitInfo` describing the closest valid intersection.
         """
         closest_obj = None
-        closest_hit = None
+        closest_point = None
         min_distance = float("inf")
         
-        # CRITICAL: Threshold to ignore self-intersections.
-        # Any hit closer than this is considered a numerical error.
-        epsilon = 1e-5
+        # Threshold to ignore self-intersections (Shadow Acne)
+        epsilon = 1e-4
 
         for obj in self.objects:
-            # 1. Safety Check: Only call intersect on analytical shapes
-            if not hasattr(obj.shape, 'intersect'):
+            shape = getattr(obj, "shape", None)
+            if shape is None: 
                 continue
 
-            try:
-                hit_point = obj.shape.intersect(ray)
-            except Exception:
-                hit_point = None
+            # Get all intersection points (World Space)
+            # The Shape class handles the Ray transformation (World->Local) internally
+            # and returns the points transformed back to World Space.
+            hits = shape.get_ray_intersections(ray)
+            
+            if not hits:
+                continue
 
-            if hit_point is not None:
-                # 2. Calculate Distance
-                # Note: It is faster if your intersect() returns 't' (distance) directly,
-                # but calculating norm here works fine for now.
-                dist_vec = hit_point - ray.origin
-                distance = np.linalg.norm(dist_vec)
+            # Find the closest valid hit for this specific object
+            for hit_point in hits:
+                # Calculate distance squared is faster, but norm is safer for generic code
+                dist = np.linalg.norm(hit_point - ray.origin)
                 
-                # 3. Check bounds (Closest valid hit)
-                # MUST check distance > epsilon to prevent "Shadow Acne"
-                if distance > epsilon and distance < min_distance:
-                    min_distance = distance
+                # Check if this is the closest valid hit we've seen so far
+                # (dist > epsilon ensures we don't hit the surface we just started from)
+                if epsilon < dist < min_distance:
+                    min_distance = dist
                     closest_obj = obj
-                    closest_hit = hit_point
+                    closest_point = hit_point
 
-        if closest_obj is None or closest_hit is None:
+        if closest_obj is None or closest_point is None:
             return HitInfo.miss()
 
-        # 4. Resolve Normal
-        normal = np.array([0.0, 1.0, 0.0]) # Default up fallback
-        if hasattr(closest_obj.shape, 'GetNormal') and callable(closest_obj.shape.GetNormal):
-            normal = closest_obj.shape.GetNormal(closest_hit)
-            
-            # Normalize safely
-            nm = np.linalg.norm(normal)
-            if nm > 1e-6:
-                normal = normal / nm
+        # Resolve Normal
+        normal = np.array([0.0, 1.0, 0.0])
+        shape = getattr(closest_obj, "shape", None)
+        if shape is not None:
+            # Shape expects a World Point and handles the transform internally
+            normal = shape.get_normal(closest_point)
 
-        # 5. Return HitInfo
-        # Naming 'object' matches the access pattern in 'is_occluded'
         return HitInfo(
-            hit=True, 
-            point=closest_hit, 
+            did_hit=True, 
+            point=closest_point, 
             direction=ray.orientation, 
             normal=normal, 
-            distance=min_distance, 
-            object=closest_obj 
+            distance=float(min_distance), 
+            obj=closest_obj 
         )
     
     def get_background_color(self, direction: List) -> Color:
@@ -236,7 +226,7 @@ class Scene:
             from PrimaryStructures import Ray
             ray = Ray(origin, dir_norm)
             hit_info = self.get_closest_intersection(ray)
-            v_object: Optional[VObject] = hit_info.object
+            v_object = getattr(hit_info, "obj", None)
             if hit_info.hit and v_object is not None and hit_info.point is not None:
                 hit_dist = np.linalg.norm(hit_info.point - origin)
                 if hit_dist < (dist_to_light - epsilon):

@@ -15,7 +15,7 @@ void Scene::Initialize()
 {
     PythonManager::Instance().AddModulePath("src");
 
-    pyAlgorithimModule = PythonManager::Instance().LoadModule("baseAlgorithm");
+    pyAlgorithmModule = PythonManager::Instance().LoadModule("baseAlgorithm");
     pyRaytracingModule = PythonManager::Instance().LoadModule("raytracing");
     pySamplerModule = PythonManager::Instance().LoadModule("sampler");
     pySceneModule = PythonManager::Instance().LoadModule("scene");

@@ -73,7 +73,7 @@ public:
     
     void SetOpenGLRenderFunction(std::shared_ptr<std::function<void()>> renderFunc);
     
-    py::object pyAlgorithimModule;
+    py::object pyAlgorithmModule;
     py::object pyRaytracingModule;
     py::object pySamplerModule;
     py::object pySceneModule;

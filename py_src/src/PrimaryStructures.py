@@ -413,6 +413,16 @@ class Transform:
         # Normals should almost always be normalized after transformation
         return unit(transformed)
     
+    def transform_ray(self, ray: Ray, normalize: bool = False) -> Ray:
+        """
+        Transforms a ray into the local space.
+        """
+
+        local_origin = self.transform_point(ray.origin)
+        local_orientation = unit(self.transform_direction(ray.orientation, normalize))
+
+        return Ray(local_origin, local_orientation)
+    
     def get_inverse_matrix(self) -> np.ndarray:
         """Returns the inverse of the global transform matrix (World -> Local)."""
         # Note: For high-performance rendering engines, this is usually cached.
@@ -476,6 +486,16 @@ class Transform:
         transformed = transpose_matrix @ world_normal
         
         return unit(transformed)
+    
+    def inverse_transform_ray(self, ray: Ray, normalize: bool = False) -> Ray:
+        """
+        Transforms a ray into the local space.
+        """
+
+        local_origin = self.inverse_transform_point(ray.origin)
+        local_orientation = unit(self.inverse_transform_direction(ray.orientation, normalize))
+
+        return Ray(local_origin, local_orientation)
 
     def reflect_axis(self, axis: np.ndarray, space: str = "global"):
         """

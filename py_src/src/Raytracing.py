@@ -11,7 +11,7 @@ from Camera import VCamera
 from Geometry import Shape, VObject, AABB, BVHNode 
 from Refractions import REFRACTIVE_INDICES
 from Luminance import Color, PBRMaterial, MaterialType, LightSource, calculate_fresnel_ratio
-from RenderingAlgorithims import Algorithm, RenderStats, register_algorithm, update_memory_stats
+from RenderingAlgorithms import Algorithm, RenderStats, register_algorithm, update_memory_stats
 from Sampling import SamplingManager, SampleSettings, Sampler, Sample, reconstruct_pixel, RandomSampler
 
 # TODO: Pool tracing rays and hit info to reduce memory useage at runtime
@@ -298,17 +298,6 @@ class InverseSDFIntersection(IntersectionStrategy):
         obj_shape = getattr(obj, "shape", None)
         if obj_shape is None:
             return HitInfo.miss()
-        
-        # --- 1. Transform Ray to Local Space ---
-        obj_transform = getattr(obj, "transform", Transform(np.zeros(3), np.zeros(3), np.ones(3)))
-        local_origin = obj_transform.inverse_transform_point(ray.origin)
-        local_dir_raw = obj_transform.inverse_transform_direction(ray.orientation)
-        
-        dir_length = np.linalg.norm(local_dir_raw)
-        if dir_length == 0:
-            return HitInfo.miss()
-            
-        local_dir = local_dir_raw / dir_length
 
         # --- 2. Raymarch Loop ---
         t = 0.0
@@ -318,9 +307,10 @@ class InverseSDFIntersection(IntersectionStrategy):
         sign_modifier = -1.0 if ray.is_inside else 1.0
         
         for _ in range(self.max_steps):
-            p = local_origin + (local_dir * t)
+            # 1. Calculate World Point
+            p = ray.point_at(t)
             
-            # Sample the Object's SDF (in local space)
+            # 2. Sample the Object's SDF (It handles the transform internally)
             raw_dist = obj_shape.signed_distance(p)
             
             if stats is not None:
@@ -329,44 +319,24 @@ class InverseSDFIntersection(IntersectionStrategy):
             # Apply Modifier (flips distance if inside)
             dist = raw_dist * sign_modifier
             
-            # HIT CONDITION
+            # 3. Hit Check
             if dist < self.epsilon:
-                # We hit the surface in Local Space!
+                normal = self._calc_local_gradient(obj_shape, p)
                 
-                # --- 3. Transform Back to World Space ---
-                # We calculate the world hit point specifically based on the local hit
-                p_local_hit = p
-                
-                # A. Transform Point
-                p_world_hit = obj_transform.transform_point(p_local_hit)
-                
-                # B. Calculate Distance (Depth)
-                # We calculate world distance explicitly to avoid scaling errors
-                world_distance = np.linalg.norm(p_world_hit - ray.origin)
-                
-                # C. Calculate Normal
-                # We need the gradient at the local point, then transformed
-                local_normal = self._calc_local_gradient(obj_shape, p_local_hit)
-                
-                # If we are hitting the "inside" face (exiting), the normal should 
-                # point towards the empty space (which is effectively 'out' for us)
                 if ray.is_inside:
-                    local_normal = -local_normal
+                    normal = -normal
                     
-                world_normal = obj_transform.transform_normal(local_normal)
-                
                 return HitInfo(
                     did_hit=True,
-                    distance=float(world_distance),
-                    point=p_world_hit,
-                    normal=world_normal,
+                    distance=t,
+                    point=p,
+                    normal=normal,
                     obj=obj
                 )
             
-            # STEP
-            t += dist
+            # 4. Step
+            t += dist * self.step_relaxation
             
-            # Far Plane Check
             if t > self.max_distance:
                 break
                 
@@ -393,8 +363,14 @@ class InverseSDFIntersection(IntersectionStrategy):
         return np.array([0.0, 0.0, 1.0]) # Fallback
     
 class BVHIntersection(IntersectionStrategy):
-    def __init__(self):
-        super().__init__()
+    
+    def __init__(
+            self,
+            epsilon: float = 1e-4,
+            max_steps: int = 64,
+            max_distance: float = 50
+        ):
+        super().__init__(epsilon, max_steps, max_distance)
         self._cached_bvh_root: Optional[BVHNode] = None
         self._cached_scene_id: Optional[int] = None
 
@@ -542,53 +518,41 @@ class BVHIntersection(IntersectionStrategy):
         if obj_shape is None:
             return HitInfo.miss()
         
-        # --- 1. Transform Ray to Local Space ---
-        obj_transform = getattr(obj, "transform", Transform(np.zeros(3), np.zeros(3), np.ones(3)))
-        local_origin = obj_transform.inverse_transform_point(ray.origin)
-        local_dir_raw = obj_transform.inverse_transform_direction(ray.orientation)
-        
-        # Normalize direction for correct SDF stepping
-        dir_len = np.linalg.norm(local_dir_raw)
-        if dir_len == 0: return HitInfo.miss()
-        local_dir = local_dir_raw / dir_len
+        # 1. Transform Ray to Local Space
+        obj_transform = cast(Transform, getattr(obj, "transform", Transform(np.zeros(3), np.zeros(3), np.ones(3))))
+        local_ray = obj_transform.inverse_transform_ray(ray)
 
-        # --- 2. Local Ray Marching ---
+        # 2. Get Minimum Scale Factor for safe stepping
+        # If we are in local space, a distance of 1.0 might mean 0.1 in world space (if scaled down).
+        # We must multiply the local distance by the smallest scale to avoid overstepping.
+        scale = obj_transform.scale
+        min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
+
         t = 0.0
-        max_local_march = 20.0 # Unit shapes are usually size ~1-2, so 20 is plenty
-        local_epsilon = 1e-4   # Precision threshold
-        
-        # Optimization: Check if we are even close to the unit sphere/box 
-        # before starting the march loop.
-        # Simple sphere check: Is the ray passing within sqrt(3) distance of origin?
-        # (Skipping for brevity, but recommended for production)
-
-        # Handle "Inside" logic (if ray is inside the object, distance is negative)
         sign_modifier = -1.0 if getattr(ray, "is_inside", False) else 1.0
 
-        for _ in range(64): # 64 steps is robust for convex shapes (Sphere/Cube)
-            p = local_origin + (local_dir * t)
+        for _ in range(self.max_steps): 
+            p = local_ray.point_at(t)
             
             if stats: stats.triangle_tests += 1
 
-            # EVALUATE SDF
-            dist = obj_shape.unit_signed_distance(p) * sign_modifier
+            # FIX: Use unit_signed_distance (Local Logic)
+            dist_local = obj_shape.unit_signed_distance(p) * sign_modifier
             
-            # HIT FOUND
-            if dist < local_epsilon:
-                # --- 3. Transform Back to World Space ---
-                p_local = p
+            # Check convergence
+            if dist_local < self.epsilon:
+                # --- Hit Found ---
                 
-                # A. Calculate Normal in Local Space (Gradient)
-                local_normal = self._calc_local_gradient(obj_shape, p_local)
+                # A. Transform Point to World
+                p_world = obj_transform.transform_point(p)
+                
+                # B. Calculate Normal (Local Gradient -> World Normal)
+                local_normal = self._calc_local_gradient(obj_shape, p)
                 if ray.is_inside: 
-                    local_normal = -local_normal # Flip normal if exiting
-                
-                # B. Transform Results
-                p_world = obj_transform.transform_point(p_local)
+                    local_normal = -local_normal
                 normal_world = obj_transform.transform_normal(local_normal)
                 
-                # C. Recalculate true world distance
-                # (Surer than scaling 't' because of non-uniform scaling)
+                # C. True World Distance
                 distance_world = np.linalg.norm(p_world - ray.origin)
                 
                 return HitInfo(
@@ -599,13 +563,9 @@ class BVHIntersection(IntersectionStrategy):
                     obj=obj
                 )
             
-            # STEP
-            # Note: If the object has non-uniform scale (e.g. stretched sphere),
-            # this step might be too large/small. For perfect accuracy, we should
-            # divide 'dist' by the max scale factor, but direct stepping is usually visually fine.
-            t += dist
+            t += dist_local / min_scale
             
-            if t > max_local_march:
+            if t >= self.max_distance:
                 break
                 
         return HitInfo.miss()
