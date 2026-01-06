@@ -43,7 +43,7 @@ class Sample:
     w: float = 1.0
 
 def evaluate_filter_weight(
-settings: SampleSettings, 
+    settings: SampleSettings, 
     dist_x: np.ndarray, 
     dist_y: np.ndarray
 ) -> np.ndarray:
