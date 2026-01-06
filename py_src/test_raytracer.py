@@ -197,7 +197,10 @@ def test_ambient_lighting():
     )
     pixels = raytracer.render(scene)
     # Check center pixel
-    center_pixel = pixels[(scene.camera.resolution_height // 2) * scene.camera.resolution_width + (scene.camera.resolution_width // 2)]
+    if scene.camera is None:
+        raise ValueError("Camera is missing!")
+    center_index = int((scene.camera.resolution_height // 2) * scene.camera.resolution_width + (scene.camera.resolution_width // 2))
+    center_pixel = pixels[center_index]
     rgb = np.array([center_pixel.r, center_pixel.g, center_pixel.b])
 
     # Ensure it isn't Black
