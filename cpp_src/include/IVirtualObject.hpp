@@ -5,10 +5,12 @@
 #include <ctime>
 #include <random>
 #include <json.hpp>
+#include <glm/glm.hpp>
 
 class Camera;
 class Model;
 class Mesh;
+class ModelAdapter;
 class Texture;
 struct Vertex;
 struct Light;
@@ -97,6 +99,25 @@ private:
     std::vector<std::unique_ptr<IVirtualObject>> children;
     std::weak_ptr<IVirtualObject> parent;
 
-    // Declare as static - move implementation to .cpp
-    static std::unique_ptr<IVirtualObject> CreateFromType(const std::string& type, const std::vector<std::string>& args);
+    static std::unique_ptr<IVirtualObject> CreateFromType(const std::string& type);
+
+    template<typename T>
+    static T SafeGet(const json& j, const std::string& key, const T& defaultValue) {
+        if (j.contains(key)) {
+            try {
+                return j[key].get<T>();
+            }
+            catch (...) {
+                return defaultValue;
+            }
+        }
+        return defaultValue;
+    }
+    
+    static glm::vec3 SafeGetVec3(const json& j, const std::string& key, const glm::vec3& defaultValue) {
+        if (j.contains(key) && j[key].is_array() && j[key].size() >= 3) {
+            return glm::vec3(j[key][0], j[key][1], j[key][2]);
+        }
+        return defaultValue;
+    }
 };

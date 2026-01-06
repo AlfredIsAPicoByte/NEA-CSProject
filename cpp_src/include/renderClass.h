@@ -11,7 +11,7 @@
 #include "Model.h"
 #include "Image.hpp"
 #include "IVirtualObject.hpp"
-#include "ModelMeshAdapter.h"
+#include "ModelAdapter.h"
 #include "PythonManager.h"
 
 struct RenderSettings {
@@ -19,7 +19,6 @@ struct RenderSettings {
     int imageHeight = 800;
     bool usePythonRendering = true;
 
-    RenderSettings() = default;
     RenderSettings(int width = 800, int height = 800, bool pythonRendering = true)
         : imageWidth(width), imageHeight(height), usePythonRendering(pythonRendering) {}
 

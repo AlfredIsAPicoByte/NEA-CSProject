@@ -1,4 +1,4 @@
-#version 330 core
+#version 460 core
 // Designed for a model. Expects tangents/bitangents provided by the vertex shader.
 
 #define PI 3.14159265359
@@ -100,6 +100,7 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 // --- main ---
 void main()
 {
+
     // Material fetch
     vec3 albedo = SRGBToLinear(texture(u_albedoMap, TexCoords).rgb);
     vec3 emissive = SRGBToLinear(texture(u_emissiveMap, TexCoords).rgb);
@@ -120,11 +121,19 @@ void main()
     vec3 Lo = VertColor;
     for (int i = 0; i < u_lightCount; ++i)
     {
-        vec3 L = normalize(u_lightPositions[i] - FragPos);
+        vec3 lightPos = u_lightPosType[i].xyz;
+        int lightType = int(u_lightPosType[i].w);
+        vec3 lightColor = u_lightColorIntensity[i].xyz;
+        float intensity = u_lightColorIntensity[i].w;
+
+        // light direction and radiance
+        if (intensity <= 0.0) continue; // skip inactive lights
+
+        vec3 L = normalize(lightPos - FragPos);
         vec3 H = normalize(V + L);
-        float distance = length(u_lightPositions[i] - FragPos);
+        float distance = length(lightPos - FragPos);
         float attenuation = 1.0 / (distance * distance);
-        vec3 radiance = u_lightColors[i] * attenuation;
+        vec3 radiance = lightColor * intensity * attenuation;
 
         // Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);

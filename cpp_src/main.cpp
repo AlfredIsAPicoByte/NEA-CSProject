@@ -1,7 +1,7 @@
 #include "Engine.h"
 
-int windowWidth = 800;
-int windowHeight = 800;
+int windowWidth = 1080;
+int windowHeight = 810;
 std::string windowTitle = "My OpenGL Window";
 Color bgClolor("#454749ff");
 
@@ -96,6 +96,9 @@ int main()
 
 	glfwSetWindowTitle(window, "A level NEA Rendering Engine");
 
+	glfwSetWindowUserPointer(window, &Engine::Instance());
+	glfwSetFramebufferSizeCallback(window, Engine::FramebufferSizeCallback);
+
 #if DEBUG_MODE
 	EnableOpenGLDebugger();
 	std::cout << "Debugger On!" << std::endl;
@@ -143,7 +146,7 @@ int main()
 	bunnyModelMatrix = glm::rotate(bunnyModelMatrix, glm::radians(bunnyRot.z), glm::vec3(0.0f, 0.0f, 1.0f));	
 	bunnyModelMatrix = glm::scale(bunnyModelMatrix, bunnyScale);
 	bunnyPtr->SetModelMatricesForAllMeshes(std::vector<glm::mat4>{ bunnyModelMatrix });
-	auto bunny = std::make_shared<ModelMeshAdapter>(bunnyPtr, 0);
+	auto bunny = std::make_shared<ModelAdapter>(bunnyPtr, 0);
 	bunny->SetName("Bunny");
 
 	auto swordPtr = std::make_shared<Model>("sword/scene.gltf");
@@ -153,17 +156,17 @@ int main()
 	swordModelMatrix = glm::translate(swordModelMatrix, swordPos);
 	swordModelMatrix = glm::scale(swordModelMatrix, swordScale);
 	swordPtr->SetModelMatricesForAllMeshes(std::vector<glm::mat4>{ swordModelMatrix });
-	auto sword = std::make_shared<ModelMeshAdapter>(swordPtr, 0);
+	auto sword = std::make_shared<ModelAdapter>(swordPtr, 0);
 	sword->SetName("Sword");
 
-	auto dountPtr = std::make_shared<Model>("custom_donut/scene.gltf");
+	auto dountPtr = std::make_shared<Model>("custom_donut_low/scene.gltf");
 	glm::vec3 donutPos = glm::vec3(0.0f, 1.0f, 0.0f);
 	glm::vec3 donutScale = glm::vec3(0.5f);
 	glm::mat4 donutModelMatrix = glm::mat4(1.0f);
 	donutModelMatrix = glm::translate(donutModelMatrix, donutPos);
 	donutModelMatrix = glm::scale(donutModelMatrix, donutScale);
 	dountPtr->SetModelMatricesForAllMeshes(std::vector<glm::mat4>{ donutModelMatrix });
-	auto dount = std::make_shared<ModelMeshAdapter>(dountPtr, 0);
+	auto dount = std::make_shared<ModelAdapter>(dountPtr, 0);
 	dount->SetName("Donut");
 
 	Time time;
@@ -218,7 +221,7 @@ int main()
 		floorMesh.Draw(litShaderProgram, camera);
 		bunny->Draw(litShaderProgram, camera);
 		sword->Draw(litShaderProgram, camera);
-		dount->Draw(litShaderProgram, camera);
+		dount->Draw(unlitShaderProgram, camera);
 		lightMesh.Draw(unlitShaderProgram, camera);
 	}));
 	testScene.AddRenderable(std::make_shared<Mesh>(floorMesh));
@@ -226,10 +229,11 @@ int main()
 
 	testScene.AddRenderable(bunny);
 	testScene.AddRenderable(sword);
+	testScene.AddRenderable(dount);
 
 	testScene.selectedRenderable = 0;
 	
-	testScene.SaveScene("scenes/test_save.scn");
+	// testScene.SaveScene("scenes/test_save.scn");
 
 	// Main loop
 	Engine::Instance().Start();
@@ -242,6 +246,18 @@ int main()
 
 			std::string newTitle = "A level NEA Rendering Engine - (" + testScene.name + ") - " + std::to_string(time.frameRate) + "FPS, " + std::to_string(time.deltaTime * 1000.0f) + "ms";
 			glfwSetWindowTitle(window, newTitle.c_str());
+			
+			// Handle window resizing
+			int fbW, fbH;
+			glfwGetFramebufferSize(window, &fbW, &fbH);
+			float aspect = float(fbW) / fbH;
+			static int lastW = 0, lastH = 0;
+
+			if (fbW != lastW || fbH != lastH) {
+				camera.Resize(fbW, fbH);
+				lastW = fbW;
+				lastH = fbH;
+			}	
 		},
 		// Input handling
 		[&]() {
@@ -337,7 +353,9 @@ int main()
 			);
 		},
 		// Post-processing
-		[]() {},
+		[]() {
+
+		},
 		// ImGui Objects
 		[&]() {
 			{
@@ -496,27 +514,89 @@ int main()
 			
 			{
 				ImGui::Begin("Scene Panel");
-				ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", camera.Position.x, camera.Position.y, camera.Position.z);
-				ImGui::Text("Camera Orientation: (%.2f, %.2f, %.2f)", camera.Forward.x, camera.Forward.y, camera.Forward.z);
-				ImGui::Text("Camera Up: (%.2f, %.2f, %.2f)", camera.Up.x, camera.Up.y, camera.Up.z);
-				ImGui::Text("Camera Mode: %s", camera.mode == FIRST_PERSON ? "FIRST_PERSON" : camera.mode == PLANE ? "PLANE" : "ORBIT");
-				ImGui::Checkbox("Use Python Rendering", &testScene.renderSettings->usePythonRendering);
-				ImGui::Separator();
-				ImGui::Text("Renderables in Scene:");
-				for (size_t i = 0; i < testScene.renderables.size(); ++i) {
-					std::string label = testScene.renderables[i]->GetName().empty() ? "Renderable " + std::to_string(i) : testScene.renderables[i]->GetName();
-					if (ImGui::Selectable(label.c_str(), testScene.selectedRenderable == static_cast<int>(i))) {
-						testScene.selectedRenderable = static_cast<int>(i);
+
+				// Add try-catch and individual checks
+				try {
+					// Test 1: Camera access
+					ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", camera.Position.x, camera.Position.y, camera.Position.z);
+					ImGui::Text("Camera Orientation: (%.2f, %.2f, %.2f)", camera.Forward.x, camera.Forward.y, camera.Forward.z);
+					ImGui::Text("Camera Up: (%.2f, %.2f, %.2f)", camera.Up.x, camera.Up.y, camera.Up.z);
+					
+					// Test 2: Check mode before comparing
+					const char* modeText = "UNKNOWN";
+					if (camera.mode == FIRST_PERSON) modeText = "FIRST_PERSON";
+					else if (camera.mode == PLANE) modeText = "PLANE";
+					else if (camera.mode == ORBIT) modeText = "ORBIT";
+					ImGui::Text("Camera Mode: %s", modeText);
+					
+					// Test 3: RenderSettings check
+					if (testScene.renderSettings) {
+						ImGui::Checkbox("Use Python Rendering", &testScene.renderSettings->usePythonRendering);
+					} else {
+						ImGui::Text("RenderSettings: NULL");
 					}
+					
+					ImGui::Separator();
+					ImGui::Text("Renderables in Scene: %zu", testScene.renderables.size());
+					
+					// Test 4: Renderables loop
+					for (size_t i = 0; i < testScene.renderables.size(); ++i) {
+						if (!testScene.renderables[i]) {
+							ImGui::Text("Renderable %zu: NULL", i);
+							continue;
+						}
+						
+						// Get name safely
+						std::string name;
+						try {
+							name = testScene.renderables[i]->GetName();
+						} catch (...) {
+							name = "ERROR GETTING NAME";
+						}
+						
+						std::string label = name.empty() 
+							? "Renderable " + std::to_string(i) 
+							: name;
+							
+						if (ImGui::Selectable(label.c_str(), testScene.selectedRenderable == static_cast<int>(i))) {
+							testScene.selectedRenderable = static_cast<int>(i);
+						}
+					}
+					
+					if (ImGui::Button("Print Selcted Object Info")) {
+						if (testScene.selectedRenderable >= 0 && 
+							testScene.selectedRenderable < static_cast<int>(testScene.renderables.size())) {
+							
+							if (testScene.renderables[testScene.selectedRenderable]) {
+								std::string name = testScene.renderables[testScene.selectedRenderable]->GetName();
+								AppendMessage("Selected Renderable: " + name);
+							} else {
+								AppendMessage("Selected renderable is NULL.");
+							}
+						} else {
+							AppendMessage("No renderable selected.");
+						}
+					}
+					if (ImGui::Button("Look at Selected")) {
+						if (testScene.selectedRenderable >= 0 && 
+							testScene.selectedRenderable <static_cast<int>(testScene.renderables.size())) {
+							
+							if (testScene.renderables[testScene.selectedRenderable]) {
+								std::string name = testScene.renderables[testScene.selectedRenderable]->GetName();
+								AppendMessage("Selected Renderable: " + name);
+							} else {
+								AppendMessage("Selected renderable is NULL.");
+							}
+						} else {
+							AppendMessage("No renderable selected.");
+						}
+					}
+				} catch (const std::exception& e) {
+					ImGui::Text("ERROR: %s", e.what());
+				} catch (...) {
+					ImGui::Text("Unknown error in Scene Panel");
 				}
-				if (ImGui::Button("Print Selected Renderable Info")) {
-					if (testScene.selectedRenderable >= 0 && testScene.selectedRenderable < static_cast<int>(testScene.renderables.size())) {
-						AppendMessage("Selected Renderable: " +	testScene.renderables[testScene.selectedRenderable]->GetName());
-					}
-					else {
-						AppendMessage("No renderable selected.");
-					}
-				}
+
 				ImGui::End();
 			}
 			// TODO: Add hiearchy for objects 

@@ -2,6 +2,7 @@
 
 Scene::Scene()
 {
+    renderSettings = std::make_shared<RenderSettings>();
     AppendMessage("Scene created.");
 }
 
@@ -15,13 +16,13 @@ void Scene::Initialize()
 {
     PythonManager::Instance().AddModulePath("src");
 
-    pyAlgorithimModule = PythonManager::Instance().LoadModule("baseAlgorithm");
-    pyRaytracingModule = PythonManager::Instance().LoadModule("raytracing");
-    pySamplerModule = PythonManager::Instance().LoadModule("sampler");
-    pySceneModule = PythonManager::Instance().LoadModule("scene");
-    pyCameraModule = PythonManager::Instance().LoadModule("camera");
-    pyLuminanceModule = PythonManager::Instance().LoadModule("luminance");
-    pyGeometryModule = PythonManager::Instance().LoadModule("geometry");
+    pyAlgorithimModule = PythonManager::Instance().LoadModule("RenderingAlgorithms");
+    pyRaytracingModule = PythonManager::Instance().LoadModule("Raytracing");
+    pySamplerModule = PythonManager::Instance().LoadModule("Sampler");
+    pySceneModule = PythonManager::Instance().LoadModule("Scene");
+    pyCameraModule = PythonManager::Instance().LoadModule("Camera");
+    pyLuminanceModule = PythonManager::Instance().LoadModule("Luminance");
+    pyGeometryModule = PythonManager::Instance().LoadModule("Geometry");
 }
 
 
@@ -162,7 +163,7 @@ void Scene::DeserializeFields(const json& j)
             std::string constructor = rData.contains("constructor") ? rData["constructor"].get<std::string>() : "";
 
             if (strcmp(constructor.c_str(), "ModelAdapter") == 0) {
-                foundRenderable = std::make_shared<ModelMeshAdapter>(nullptr, 0);
+                foundRenderable = std::make_shared<ModelAdapter>(nullptr, 0);
             }
             else if (strcmp(constructor.c_str(), "Mesh") == 0) {
                 foundRenderable = std::make_shared<Mesh>();

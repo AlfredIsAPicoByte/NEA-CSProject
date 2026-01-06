@@ -12,6 +12,15 @@
 	"scene":0,
 	"scenes":[
 		{
+			"extras":{
+				"wiggle":{
+					"is_rendering":0
+				},
+				"scatter_properties":{},
+				"jiggle_tree":{},
+				"tension_props":{},
+				"jiggle_rate":1.0
+			},
 			"name":"Scene",
 			"nodes":[
 				2
@@ -21,7 +30,7 @@
 	"nodes":[
 		{
 			"mesh":0,
-			"name":"Drizzle",
+			"name":"Drizzle_low",
 			"translation":[
 				0,
 				0.4907170534133911,
@@ -33,19 +42,19 @@
 				0
 			],
 			"mesh":1,
-			"name":"Icing"
+			"name":"Icing_low"
 		},
 		{
 			"children":[
 				1
 			],
 			"mesh":2,
-			"name":"Donut",
+			"name":"Donut_low",
 			"rotation":[
-				0.36599814891815186,
-				-0.45315393805503845,
-				0.21130913496017456,
-				0.784885585308075
+				0.40882423520088196,
+				0.2296622395515442,
+				-0.10709325969219208,
+				0.8767264485359192
 			]
 		}
 	],
@@ -76,8 +85,14 @@
 					"ior":1.4500000476837158
 				}
 			},
-			"name":"Drizzle",
+			"name":"Drizzle.001",
 			"pbrMetallicRoughness":{
+				"baseColorFactor":[
+					0.7914316058158875,
+					0.5209727883338928,
+					0.24226370453834534,
+					1
+				],
 				"metallicFactor":0,
 				"roughnessFactor":0.3718181848526001
 			}
@@ -92,21 +107,20 @@
 						1.8472727537155151
 					]
 				},
-				"KHR_materials_sheen":{
-					"sheenColorFactor":[
-						1.0,
-						1.0,
-						1.0
-					],
-					"sheenRoughnessFactor":0.5
-				},
 				"KHR_materials_ior":{
 					"ior":1.4500000476837158
 				}
 			},
-			"name":"Icing",
+			"name":"Icing.001",
 			"pbrMetallicRoughness":{
-				"metallicFactor":0
+				"baseColorFactor":[
+					0.052869610488414764,
+					0.01680663786828518,
+					0.006048399955034256,
+					1
+				],
+				"metallicFactor":0,
+				"roughnessFactor":0.3863636255264282
 			}
 		},
 		{
@@ -131,18 +145,22 @@
 					"ior":1.4500000476837158
 				}
 			},
-			"name":"Donut",
+			"name":"Donut.001",
 			"pbrMetallicRoughness":{
 				"baseColorTexture":{
 					"index":0
 				},
-				"metallicFactor":0
+				"metallicFactor":0,
+				"roughnessFactor":0.5
 			}
 		}
 	],
 	"meshes":[
 		{
-			"name":"Drizzle",
+			"extras":{
+				"tension_props":{}
+			},
+			"name":"Drizzle.001",
 			"primitives":[
 				{
 					"attributes":{
@@ -156,7 +174,10 @@
 			]
 		},
 		{
-			"name":"Mesh",
+			"extras":{
+				"tension_props":{}
+			},
+			"name":"Icing.001",
 			"primitives":[
 				{
 					"attributes":{
@@ -170,7 +191,10 @@
 			]
 		},
 		{
-			"name":"Mesh",
+			"extras":{
+				"tension_props":{}
+			},
+			"name":"Donut.001",
 			"primitives":[
 				{
 					"attributes":{
@@ -193,8 +217,8 @@
 	"images":[
 		{
 			"mimeType":"image/png",
-			"name":"Donut_2_baseColor",
-			"uri":"textures/Donut_2_baseColor.png"
+			"name":"Donut_baseColor",
+			"uri":"textures/Donut_baseColor.png"
 		}
 	],
 	"accessors":[
@@ -235,69 +259,69 @@
 		{
 			"bufferView":4,
 			"componentType":5126,
-			"count":26363,
+			"count":5792,
 			"max":[
-				0.6135755181312561,
-				0.2854897081851959,
-				0.5888015031814575
+				0.6226732134819031,
+				0.28624996542930603,
+				0.5891929268836975
 			],
 			"min":[
-				-0.6011097431182861,
-				-0.13760578632354736,
-				-0.5998767614364624
+				-0.6028962135314941,
+				-0.14540576934814453,
+				-0.6118461489677429
 			],
 			"type":"VEC3"
 		},
 		{
 			"bufferView":5,
 			"componentType":5126,
-			"count":26363,
+			"count":5792,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":6,
 			"componentType":5126,
-			"count":26363,
+			"count":5792,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":7,
 			"componentType":5123,
-			"count":139008,
+			"count":34752,
 			"type":"SCALAR"
 		},
 		{
 			"bufferView":8,
 			"componentType":5126,
-			"count":20704,
+			"count":5145,
 			"max":[
-				0.5780823826789856,
-				0.263946533203125,
-				0.5665455460548401
+				0.5785461664199829,
+				0.26481324434280396,
+				0.5670170187950134
 			],
 			"min":[
-				-0.5780172348022461,
-				-0.2645881175994873,
-				-0.5684092044830322
+				-0.5784439444541931,
+				-0.2656874358654022,
+				-0.5689154863357544
 			],
 			"type":"VEC3"
 		},
 		{
 			"bufferView":9,
 			"componentType":5126,
-			"count":20704,
+			"count":5145,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":10,
 			"componentType":5126,
-			"count":20704,
+			"count":5145,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":11,
 			"componentType":5123,
-			"count":119808,
+			"count":29952,
 			"type":"SCALAR"
 		}
 	],
@@ -328,50 +352,50 @@
 		},
 		{
 			"buffer":0,
-			"byteLength":316356,
+			"byteLength":69504,
 			"byteOffset":692696,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":316356,
-			"byteOffset":1009052,
+			"byteLength":69504,
+			"byteOffset":762200,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":210904,
-			"byteOffset":1325408,
+			"byteLength":46336,
+			"byteOffset":831704,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":278016,
-			"byteOffset":1536312,
+			"byteLength":69504,
+			"byteOffset":878040,
 			"target":34963
 		},
 		{
 			"buffer":0,
-			"byteLength":248448,
-			"byteOffset":1814328,
+			"byteLength":61740,
+			"byteOffset":947544,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":248448,
-			"byteOffset":2062776,
+			"byteLength":61740,
+			"byteOffset":1009284,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":165632,
-			"byteOffset":2311224,
+			"byteLength":41160,
+			"byteOffset":1071024,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":239616,
-			"byteOffset":2476856,
+			"byteLength":59904,
+			"byteOffset":1112184,
 			"target":34963
 		}
 	],
@@ -383,7 +407,7 @@
 	],
 	"buffers":[
 		{
-			"byteLength":2716472,
+			"byteLength":1172088,
 			"uri":"scene.bin"
 		}
 	]
