@@ -6,13 +6,13 @@
 #include "Model.h"
 #include "IRenderable.hpp"
 
-class ModelMeshAdapter : public IRenderable {
+class ModelAdapter : public IRenderable {
 public:
     // Accept a shared_ptr<Model> and the mesh index this adapter represents
-    ModelMeshAdapter(std::shared_ptr<Model> mdl, size_t meshIndex)
+    ModelAdapter(std::shared_ptr<Model> mdl, size_t meshIndex)
       : model(mdl), index(meshIndex) 
     {
-        if (!model) throw std::invalid_argument("ModelMeshAdapter: null model");
+        if (!model) throw std::invalid_argument("ModelAdapter: null model");
     }
 
     // Draw only the specific mesh this adapter represents

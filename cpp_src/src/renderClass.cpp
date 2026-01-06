@@ -2,6 +2,7 @@
 
 Scene::Scene()
 {
+    renderSettings = std::make_shared<RenderSettings>();
     AppendMessage("Scene created.");
 }
 
@@ -162,7 +163,7 @@ void Scene::DeserializeFields(const json& j)
             std::string constructor = rData.contains("constructor") ? rData["constructor"].get<std::string>() : "";
 
             if (strcmp(constructor.c_str(), "ModelAdapter") == 0) {
-                foundRenderable = std::make_shared<ModelMeshAdapter>(nullptr, 0);
+                foundRenderable = std::make_shared<ModelAdapter>(nullptr, 0);
             }
             else if (strcmp(constructor.c_str(), "Mesh") == 0) {
                 foundRenderable = std::make_shared<Mesh>();

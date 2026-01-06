@@ -28,7 +28,7 @@ Texture::Texture(const char* image, const char* texType, GLuint slot, GLenum pix
         }
     }
 
-    std::cerr << "Texture lookup for '" << image << "': ";
+    AppendMessage("Texture lookup for '" + std::string(image) + "': ");
     if (!found.empty()) std::cerr << found.string() << std::endl;
     else {
         std::cerr << "NOT FOUND (tried candidates and recursive search)" << std::endl;

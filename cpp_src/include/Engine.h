@@ -11,7 +11,7 @@
 
 #include "renderClass.h"
 #include "colorClass.h"
-#include "ModelMeshAdapter.h"
+#include "ModelAdapter.h"
 #include "Light.hpp"
 #include "Material.hpp"
 #include "InputManager.h"
@@ -41,6 +41,14 @@ public:
     void setDepthTest(bool enable);
     
     void CleanUp(GLFWwindow* window);
+    
+    static void FramebufferSizeCallback(GLFWwindow* window, int w, int h) {
+        auto* engine = static_cast<Engine*>(glfwGetWindowUserPointer(window));
+        engine->OnFramebufferResize(w, h);
+    }
+    void OnFramebufferResize(int w, int h) {
+        glViewport(0, 0, w, h);
+    }
 
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;

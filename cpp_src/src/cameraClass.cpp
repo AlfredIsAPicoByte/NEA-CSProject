@@ -308,6 +308,8 @@ void Camera::SerializeFields(json& j) const
     j["plane"] = {
         {"pitch", planePitch}, {"yaw", planeYaw}, {"roll", planeRoll}, {"power", planePower}
     };
+    
+    j["constructor"] = "Camera";
 }
 
 void Camera::DeserializeFields(const json& j)
