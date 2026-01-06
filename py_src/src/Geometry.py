@@ -793,8 +793,8 @@ class Cube(Shape3D):
         Returns 0, 1, or 2 points sorted by distance.
         """
         # 1. Transform Ray to Local Space
-        local_origin = self.inverse_transform_point(ray.origin)
-        local_dir = self.inverse_transform_direction(ray.direction, normalize=False)
+        local_origin = self.transform.inverse_transform_point(ray.origin)
+        local_dir = self.transform.inverse_transform_direction(ray.direction, normalize=False)
 
         # 2. Slab Method
         with np.errstate(divide='ignore'):
