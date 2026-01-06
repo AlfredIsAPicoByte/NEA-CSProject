@@ -61,7 +61,7 @@ class Algorithm(ABC):
             scene: Scene,
             sampler: Optional[Sampler] = None,
             region: Optional[Tuple[int, int, int, int]] = None,
-            tile_size: Optional[Tuple[int, int]] = None
+            tile_size: Optional[int] = None
         ) -> List[Color]:
         """
         High-level render entry point: produce an image/buffer from the scene and camera.
