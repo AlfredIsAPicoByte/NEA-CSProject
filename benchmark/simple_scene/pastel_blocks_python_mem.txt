@@ -1,6 +1,6 @@
-Time: 6.6624s | RSS Δ: 0.375 MB
-RSS start: 75.398 MB | RSS end: 75.773 MB
-tracemalloc current: 137.30 KB | peak: 2067.61 KB
+Time: 7.6117s | RSS Δ: 0.000 MB
+RSS start: 75.742 MB | RSS end: 75.742 MB
+tracemalloc current: 136.57 KB | peak: 2066.82 KB
 Top allocations (most recent frame):
   1. /workspaces/NEA-CSProject/py_src/main.py:28 | 108.09 KB (2 allocs)
   2. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1369 | 13.67 KB (250 allocs)

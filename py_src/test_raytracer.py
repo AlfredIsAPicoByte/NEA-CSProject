@@ -100,7 +100,7 @@ def test_ray_check_points(t, expected_point, should_match):
         assert not is_close, f"Point at t={t} matched {expected_point} but shouldn't have"
 
 def test_vobject_creation():
-    transform = Transform(np.zeros(3), np.zeros(3), np.ones(3))
+    transform = Transform.identity()
     shape = SphereFactory().create(np.array([0, 0, 0]), 1)
     
     obj = VObject(shape, transform)
@@ -121,7 +121,7 @@ def test_color_math():
     np.testing.assert_allclose([scaled.r, scaled.g, scaled.b], [0.4, 0.8, 1.2])
 
 def test_camera_logic():
-    transform = Transform(np.zeros(3), np.zeros(3), np.ones(3))
+    transform = Transform.identity()
     cam = VCamera(transform, 90, 0.1, 1000, 1440, 810)
     
     cam.aspect_ratio.simplify()
@@ -179,7 +179,7 @@ def test_ambient_lighting():
         albedo=Color(0.8, 0.8, 0.8),
         roughness=0.5,
     )
-    sphere = VObject(SphereFactory().create(np.array([0, 0, 0]), 1), Transform(np.zeros(3), np.zeros(3), np.ones(3)))
+    sphere = VObject(SphereFactory().create(np.array([0, 0, 0]), 1), Transform.identity())
     # Attach PBR data to shape for compatibility
     sphere.material = material
     scene = Scene(name="ambient_test", camera=cam, objects=[sphere], lights=[

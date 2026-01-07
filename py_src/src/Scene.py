@@ -43,7 +43,9 @@ class Scene:
         min_d = float("inf")
         closest = None
         
-        for obj in self.objects:
+        all_object_flattened: set[VObject] = get_all_objects_flattened(self.objects)
+
+        for obj in all_object_flattened:
             # 1. Skip exclusion (Self-Shadowing fix)
             if exclude_obj is not None and obj is exclude_obj:
                 continue
@@ -55,14 +57,26 @@ class Scene:
 
             # 3. Calculate Distance
             # The Shape is responsible for transforming the world 'point' to its local space.
+            transform = obj.world_transform
+            local_point = transform.inverse_transform_point(point)
+
             try:
-                d = float(shape.signed_distance(point))
+                # 3. Get Local Distance (SDF assumes object is at 0,0,0)
+                d_local = float(shape.signed_distance(local_point))
+                
+                # 4. Scale Distance back to World Space
+                # If the object is scaled down (0.1), a local distance of 1.0 is actually 0.1 in world space.
+                # We multiply by the smallest scale component to avoid overstepping (overshooting).
+                scale = transform.scale
+                min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
+                
+                d_world = d_local * min_scale
+                
             except Exception:
                 continue
-            
-            # 4. Update Closest
-            if d < min_d:
-                min_d = d
+
+            if d_world < min_d:
+                min_d = d_world
                 closest = obj
         
         return (closest, min_d)
@@ -87,18 +101,26 @@ class Scene:
             # Get all intersection points (World Space)
             # The Shape class handles the Ray transformation (World->Local) internally
             # and returns the points transformed back to World Space.
-            hits = shape.get_ray_intersections(ray)
+            transform = obj.world_transform
+
+            # 1. Transform Ray -> Local Space
+            # "Shoot the ray as if the camera moved relative to the object"
+            local_ray = transform.inverse_transform_ray(ray)
+
+            # 2. Get Intersections in Local Space
+            # Shape returns points like (0, 0, 1) assuming it is centered at origin
+            local_hits = shape.get_ray_intersections(local_ray)
             
-            if not hits:
+            if not local_hits:
                 continue
 
-            # Find the closest valid hit for this specific object
-            for hit_point in hits:
-                # Calculate distance squared is faster, but norm is safer for generic code
+            # 3. Transform Hits Local -> World
+            # Move the hit points to where the object actually is in the scene
+            world_hits = [transform.transform_point(p) for p in local_hits]
+
+            for hit_point in world_hits:
                 dist = np.linalg.norm(hit_point - ray.origin)
                 
-                # Check if this is the closest valid hit we've seen so far
-                # (dist > epsilon ensures we don't hit the surface we just started from)
                 if epsilon < dist < min_distance:
                     min_distance = dist
                     closest_obj = obj
@@ -109,10 +131,22 @@ class Scene:
 
         # Resolve Normal
         normal = np.array([0.0, 1.0, 0.0])
+        
+        # Recalculate normal correctly using the object's transform logic
         shape = getattr(closest_obj, "shape", None)
         if shape is not None:
-            # Shape expects a World Point and handles the transform internally
-            normal = shape.get_normal(closest_point)
+            # We need to manually do the normal transform pipeline:
+            # World Point -> Local Point -> Local Gradient -> World Normal
+            
+            transform = closest_obj.transform
+            local_pt = transform.inverse_transform_point(closest_point)
+            
+            # Calculate Local Normal (Gradient)
+            # Note: 'get_normal' usually expects a local point if it's a pure shape
+            local_normal = shape.get_normal(local_pt) 
+            
+            # Transform Normal to World (Inverse Transpose logic handles non-uniform scale)
+            normal = transform.transform_normal(local_normal)
 
         return HitInfo(
             did_hit=True, 
@@ -255,3 +289,36 @@ class Scene:
 
         # If no approach worked, conservatively say not occluded
         return False
+
+def get_all_objects_flattened(root_objects):
+    """
+    Flattens a hierarchy of objects into a single list, 
+    preventing infinite loops from circular references.
+    """
+    flat_list = []
+    
+    # We store the ID (memory address) of visited objects
+    visited_ids = set() 
+    
+    # Initialize stack with the top-level objects
+    stack = list(root_objects)
+
+    while stack:
+        current_obj = stack.pop()
+
+        # 1. Cycle Detection: Have we seen this specific object instance before?
+        if id(current_obj) in visited_ids:
+            continue
+            
+        # 2. Mark as visited
+        visited_ids.add(id(current_obj))
+        
+        # 3. Add to our result list
+        flat_list.append(current_obj)
+
+        # 4. Add children to the stack to be processed next
+        # (Check if the object actually has children first)
+        if hasattr(current_obj, 'children') and current_obj.children:
+            stack.extend(current_obj.children)
+            
+    return flat_list
