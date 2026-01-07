@@ -61,7 +61,7 @@ if __name__ == "__main__":
     OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    img_w, img_h = 16 * 8, 9 * 8
+    img_w, img_h = 16 * 16, 9 * 16
 
     all_scenes = [
         get_minimal_scene(img_w, img_h),
@@ -81,16 +81,16 @@ if __name__ == "__main__":
         get_low_ior_scene(img_w, img_h),
     ]
 
-    sample_settings = SampleSettings(samples_per_pixel=1, filter_type=PixelFilter.TENT, filter_width=2)
+    sample_settings = SampleSettings(samples_per_pixel=4, filter_type=PixelFilter.GAUSSIAN, filter_width=16)
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     generator = JitterRayGenerator()
-    intersection = BVHIntersection(max_steps=64)
-    interactor = TerminalInteraction()
-    shading = FlatShading()
+    intersection = BVHIntersection(max_distance=100, max_steps=64)
+    interactor = StandardInteraction()
+    shading = RecursiveLambertShading(shadow_samples=16, shadow_bias=2e-3)
 
     raytracer = Raytracer(
-        max_depth=1,
+        max_depth=6,
         sampling_manager=sampling_manager,
         ray_generator=generator,
         intersection_strategy=intersection,
