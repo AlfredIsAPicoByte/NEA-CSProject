@@ -36,10 +36,12 @@ class IntersectionStrategy(ABC):
             epsilon: float = 1e-4,          # Hit Threshold
             max_steps: int = 128,           # Performance Cap
             max_distance: float = 1000.0,   # Far Clip Plane
+            step_relaxation: float = 0.9
         ):
         self.epsilon = epsilon
         self.max_distance = max_distance
         self.max_steps = max_steps
+        self.step_relaxation = step_relaxation
     
     @abstractmethod
     def find_hit(
@@ -194,6 +196,9 @@ class RayMarchingIntersection(IntersectionStrategy):
             point = ray.point_at(distance_traveled)
 
             closest_object, distance_to_closest = scene.distance_estimator(point)
+            
+            scale = closest_object.transform.scale
+            min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
 
             # Optimization: If we marched into the void
             if closest_object is None:
@@ -219,9 +224,9 @@ class RayMarchingIntersection(IntersectionStrategy):
                 )
             
             # Advance
-            distance_traveled += distance_to_closest
+            distance_traveled += distance_to_closest * self.step_relaxation / min_scale
             cam: VCamera = cast(VCamera,getattr(scene, "camera", None))
-            closest_object_transform = getattr(closest_object, "transform", Transform(np.zeros(3), np.zeros(3), np.ones(3)))
+            closest_object_transform = getattr(closest_object, "transform", Transform.identity())
             if cam is not None:
                 far_plane_distance = np.linalg.norm(cam.transform.position - closest_object_transform.position)
                 if distance_traveled >= self.max_distance or far_plane_distance >= cam.far:
@@ -244,8 +249,7 @@ class InverseSDFIntersection(IntersectionStrategy):
             step_relaxation: float = 0.9,   # Step Safety Factor
             use_bounding_box: bool = True   # Optimization Flag
         ):
-        super().__init__(epsilon, max_steps, max_distance)
-        self.step_relaxation = step_relaxation
+        super().__init__(epsilon, max_steps, max_distance, step_relaxation)
         self.use_bounding_box = use_bounding_box
 
     def find_hit(
@@ -261,6 +265,10 @@ class InverseSDFIntersection(IntersectionStrategy):
             # Skip objects that don't have an SDF shape defined
             if not hasattr(obj, 'shape'):
                 continue
+
+            if self.use_bounding_box and hasattr(obj, "bounds"):
+                if obj.bounds.intersect(ray) == float('inf'):
+                    continue
 
             # Attempt to intersect this specific object
             hit_info = self._intersect_object(obj, ray, stats)
@@ -302,6 +310,9 @@ class InverseSDFIntersection(IntersectionStrategy):
         # --- 2. Raymarch Loop ---
         t = 0.0
         
+        scale = obj.transform.scale
+        min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
+
         # Check for "Inside-Out" logic (for X-ray/Dielectrics)
         # If we are inside, we treat negative distance as empty space (flip sign)
         sign_modifier = -1.0 if ray.is_inside else 1.0
@@ -335,9 +346,10 @@ class InverseSDFIntersection(IntersectionStrategy):
                 )
             
             # 4. Step
-            t += dist * self.step_relaxation
+            t += (dist * self.step_relaxation) / min_scale
             
-            if t > self.max_distance:
+            # Optimization: If local t exceeds max distance adjusted for scale
+            if t * min_scale > self.max_distance:
                 break
                 
         return HitInfo.miss()
@@ -368,9 +380,10 @@ class BVHIntersection(IntersectionStrategy):
             self,
             epsilon: float = 1e-4,
             max_steps: int = 64,
-            max_distance: float = 50
+            max_distance: float = 50,
+            step_relaxation: float = 0.9
         ):
-        super().__init__(epsilon, max_steps, max_distance)
+        super().__init__(epsilon, max_steps, max_distance, step_relaxation)
         self._cached_bvh_root: Optional[BVHNode] = None
         self._cached_scene_id: Optional[int] = None
 
@@ -519,7 +532,7 @@ class BVHIntersection(IntersectionStrategy):
             return HitInfo.miss()
         
         # 1. Transform Ray to Local Space
-        obj_transform = cast(Transform, getattr(obj, "transform", Transform(np.zeros(3), np.zeros(3), np.ones(3))))
+        obj_transform = cast(Transform, getattr(obj, "transform", Transform.identity()))
         local_ray = obj_transform.inverse_transform_ray(ray)
 
         # 2. Get Minimum Scale Factor for safe stepping
@@ -563,9 +576,10 @@ class BVHIntersection(IntersectionStrategy):
                     obj=obj
                 )
             
-            t += dist_local / min_scale
+            t += (dist_local * self.step_relaxation) / min_scale
             
-            if t >= self.max_distance:
+            # Optimization: If local t exceeds max distance adjusted for scale
+            if t * min_scale > self.max_distance:
                 break
                 
         return HitInfo.miss()

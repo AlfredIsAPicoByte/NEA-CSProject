@@ -319,7 +319,7 @@ class PBRMaterial:
         return cls(data)
 
     @classmethod
-    def create_glass(cls, albedo: Color, absorption_color: Color, roughness: float = 0.0, metallicness: float = 0.0, ior: float = 1.5, absorption_density: float = 1.0):
+    def create_glass(cls, albedo: Color, absorption_color: Color, roughness: float = 0.0, metallicness: float = 0.0, ior: float = 1.5, transmission: float = 1.0, absorption_density: float = 1.0):
         """
         Creates a dielectric transparent material (Refractive).
         """
@@ -334,7 +334,7 @@ class PBRMaterial:
             ior=ior,
             
             # Volumetric/Transmission Properties
-            transmission=1.0,         # Enables Refraction logic
+            transmission=transmission,         # Enables Refraction logic
             absorption_color=absorption_color, # The color inside the glass (Beer's Law)
             absorption_density=absorption_density
         )

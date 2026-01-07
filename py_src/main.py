@@ -72,15 +72,22 @@ if __name__ == "__main__":
         get_cyberpunk_scene(img_w, img_h),
         get_material_deck_scene(img_w, img_h),
         get_refraction_lab_scene(img_w, img_h),
+        get_scifi_corridor_scene(img_w, img_h),
+        get_sunset_monolith_scene(img_w, img_h),
+        get_pastel_blocks_scene(img_w, img_h),
+        get_glass_prism_scene(img_w, img_h),
+        get_glass_sculpture_scene(img_w, img_h),
+        get_100_spheres_grid_scene(img_w, img_h),
+        get_low_ior_scene(img_w, img_h),
     ]
 
     sample_settings = SampleSettings(samples_per_pixel=1, filter_type=PixelFilter.TENT, filter_width=2)
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     generator = JitterRayGenerator()
-    intersection = RayMarchingIntersection(max_steps=64)
+    intersection = BVHIntersection(max_steps=64)
     interactor = TerminalInteraction()
-    shading = XRayThicknessShading()
+    shading = FlatShading()
 
     raytracer = Raytracer(
         max_depth=1,
@@ -89,8 +96,8 @@ if __name__ == "__main__":
         intersection_strategy=intersection,
         interaction_strategy=interactor,
         shading_strategy=shading,
-        custom_background=Color(0.0, 0.0, 0.0),
-        enable_scene_background=True
+        # custom_background=Color(0.0, 0.0, 0.0),
+        # enable_scene_background=True
     )
 
     for scene in all_scenes:

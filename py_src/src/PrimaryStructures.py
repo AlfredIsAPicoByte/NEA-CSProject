@@ -247,6 +247,14 @@ class Transform:
 
         self.update_orientations()
 
+    @classmethod
+    def identity(cls):
+        return cls(
+            position=np.zeros(3),
+            rotation=np.zeros(3),
+            scale=np.ones(3),
+        )
+
     def _matrix_to_euler(self, R: np.ndarray) -> np.ndarray:
         """Converts a 3x3 rotation matrix to ZYX Euler angles."""
         sy = np.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
