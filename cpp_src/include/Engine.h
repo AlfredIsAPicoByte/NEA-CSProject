@@ -49,7 +49,7 @@ public:
     void OnFramebufferResize(int w, int h) {
         glViewport(0, 0, w, h);
     }
-
+    
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
     Engine(Engine&&) = delete;

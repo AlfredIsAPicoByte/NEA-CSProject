@@ -82,3 +82,5 @@ public:
 
     void CleanUp();
 };
+
+bool check_valid_renderable(const Scene& scene);

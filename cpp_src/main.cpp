@@ -232,6 +232,7 @@ int main()
 	testScene.AddRenderable(dount);
 
 	testScene.selectedRenderable = 0;
+	testScene.renderSettings->usePythonRendering = false;
 	
 	// testScene.SaveScene("scenes/test_save.scn");
 
@@ -563,34 +564,20 @@ int main()
 						}
 					}
 
-					void check_valid_renderable() => {
-
-					}
 					if (ImGui::Button("Print Selcted Object Info")) {
-						if (testScene.selectedRenderable >= 0 && 
-							testScene.selectedRenderable < static_cast<int>(testScene.renderables.size())) {
-							
-							if (testScene.renderables[testScene.selectedRenderable]) {
-								std::string name = testScene.renderables[testScene.selectedRenderable]->GetName();
-								AppendMessage("Selected Renderable: " + name);
-							} else {
-								AppendMessage("Selected renderable is NULL.");
-							}
+						if (check_valid_renderable(testScene)) {
+							std::string name = testScene.renderables[testScene.selectedRenderable]->GetName();
+							AppendMessage("Selected Renderable: " + name);
 						} else {
-							AppendMessage("No renderable selected.");
+							AppendMessage("No renderable selected, or invalid index, or NULL renderable.");
 						}
 					}
+
 					if (ImGui::Button("Look at Selected")) {
-						if (testScene.selectedRenderable >= 0 && 
-							testScene.selectedRenderable <static_cast<int>(testScene.renderables.size())) {
-							
-							if (testScene.renderables[testScene.selectedRenderable]) {
-								camera.LookAt(glm::vec3(testScene.renderables[testScene.selectedRenderable]->GetModelMatrix()[3]));
-							} else {
-								AppendMessage("Selected renderable is NULL.");
-							}
+						if (check_valid_renderable(testScene)) {
+							camera.LookAt(glm::vec3(testScene.renderables[testScene.selectedRenderable]->GetModelMatrix()[3]));
 						} else {
-							AppendMessage("No renderable selected.");
+							AppendMessage("No renderable selected, or invalid index, or NULL renderable.");
 						}
 					}
 				} catch (const std::exception& e) {

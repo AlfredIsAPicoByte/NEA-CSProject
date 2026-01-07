@@ -16,13 +16,13 @@ void Scene::Initialize()
 {
     PythonManager::Instance().AddModulePath("src");
 
-    pyAlgorithmModule = PythonManager::Instance().LoadModule("baseAlgorithm");
-    pyRaytracingModule = PythonManager::Instance().LoadModule("raytracing");
-    pySamplerModule = PythonManager::Instance().LoadModule("sampler");
-    pySceneModule = PythonManager::Instance().LoadModule("scene");
-    pyCameraModule = PythonManager::Instance().LoadModule("camera");
-    pyLuminanceModule = PythonManager::Instance().LoadModule("luminance");
-    pyGeometryModule = PythonManager::Instance().LoadModule("geometry");
+    pyAlgorithmModule = PythonManager::Instance().LoadModule("RenderingAlgorithms");
+    pyRaytracingModule = PythonManager::Instance().LoadModule("Raytracing");
+    pySamplerModule = PythonManager::Instance().LoadModule("Sampler");
+    pySceneModule = PythonManager::Instance().LoadModule("Scene");
+    pyCameraModule = PythonManager::Instance().LoadModule("Camera");
+    pyLuminanceModule = PythonManager::Instance().LoadModule("Luminance");
+    pyGeometryModule = PythonManager::Instance().LoadModule("Geometry");
 }
 
 
@@ -321,4 +321,10 @@ void Scene::ClearObjects()
 void Scene::CleanUp()
 {
     renderables.clear();
+}
+
+bool check_valid_renderable(const Scene& scene) {
+    return scene.selectedRenderable >= 0 &&
+           scene.selectedRenderable < static_cast<int>(scene.renderables.size()) &&
+           scene.renderables[scene.selectedRenderable] != nullptr;
 }

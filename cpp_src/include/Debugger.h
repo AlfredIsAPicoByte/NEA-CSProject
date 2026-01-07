@@ -115,7 +115,7 @@ struct DebugMessage {
 
     // Approximate size including metadata
     int getApproxSize() const {
-        return message.size() + std::to_string(count).length() + 50; // overhead for formatting and enum values
+        return int(message.size() + std::to_string(count).length()) + 50; // overhead for formatting and enum values
     }
 };
 
