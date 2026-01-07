@@ -10,7 +10,7 @@ from Scene import Scene
 from Camera import VCamera
 from Geometry import Shape, VObject, AABB, BVHNode 
 from Refractions import REFRACTIVE_INDICES
-from Luminance import Color, PBRMaterial, MaterialType, LightSource, calculate_fresnel_ratio
+from Luminance import Color, ColorGradient, PBRMaterial, MaterialType, LightSource, calculate_fresnel_ratio
 from RenderingAlgorithms import Algorithm, RenderStats, register_algorithm, update_memory_stats
 from Sampling import SamplingManager, SampleSettings, Sampler, Sample, reconstruct_pixel, RandomSampler
 
@@ -196,9 +196,6 @@ class RayMarchingIntersection(IntersectionStrategy):
             point = ray.point_at(distance_traveled)
 
             closest_object, distance_to_closest = scene.distance_estimator(point)
-            
-            scale = closest_object.transform.scale
-            min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
 
             # Optimization: If we marched into the void
             if closest_object is None:
@@ -224,12 +221,14 @@ class RayMarchingIntersection(IntersectionStrategy):
                 )
             
             # Advance
-            distance_traveled += distance_to_closest * self.step_relaxation / min_scale
+            distance_traveled += distance_to_closest * self.step_relaxation
+            
+            # Frustum/Far Plane checks
             cam: VCamera = cast(VCamera,getattr(scene, "camera", None))
-            closest_object_transform = getattr(closest_object, "transform", Transform.identity())
-            if cam is not None:
-                far_plane_distance = np.linalg.norm(cam.transform.position - closest_object_transform.position)
-                if distance_traveled >= self.max_distance or far_plane_distance >= cam.far:
+            if cam:
+                obj_pos = getattr(closest_object, 'transform', Transform.identity()).position
+                far_plane_dist = np.linalg.norm(cam.transform.position - obj_pos)
+                if distance_traveled >= self.max_distance or far_plane_dist >= cam.far:
                     break
 
         if stats is not None:
@@ -271,7 +270,7 @@ class InverseSDFIntersection(IntersectionStrategy):
                     continue
 
             # Attempt to intersect this specific object
-            hit_info = self._intersect_object(obj, ray, stats)
+            hit_info = self._intersect_object(obj, ray, scene.camera.far, scene.camera.transform.position, stats)
             
             # Keep track of the closest hit only
             hit_obj = getattr(hit_info, "obj", None)
@@ -295,6 +294,8 @@ class InverseSDFIntersection(IntersectionStrategy):
             self,
             obj: VObject,
             ray: "TracingRay",
+            far_plane: float,
+            cam_pos: np.ndarray,
             stats: Optional["TracingStats"] = None
         ) -> "HitInfo":
         """
@@ -309,9 +310,6 @@ class InverseSDFIntersection(IntersectionStrategy):
 
         # --- 2. Raymarch Loop ---
         t = 0.0
-        
-        scale = obj.transform.scale
-        min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
 
         # Check for "Inside-Out" logic (for X-ray/Dielectrics)
         # If we are inside, we treat negative distance as empty space (flip sign)
@@ -346,10 +344,12 @@ class InverseSDFIntersection(IntersectionStrategy):
                 )
             
             # 4. Step
-            t += (dist * self.step_relaxation) / min_scale
+            t += (dist * self.step_relaxation)
             
-            # Optimization: If local t exceeds max distance adjusted for scale
-            if t * min_scale > self.max_distance:
+            # Frustum/Far Plane checks
+            obj_pos = getattr(obj, 'transform', Transform.identity()).position
+            far_plane_dist = np.linalg.norm(cam_pos - obj_pos)
+            if t >= self.max_distance or far_plane_dist >= far_plane:
                 break
                 
         return HitInfo.miss()
@@ -375,7 +375,6 @@ class InverseSDFIntersection(IntersectionStrategy):
         return np.array([0.0, 0.0, 1.0]) # Fallback
     
 class BVHIntersection(IntersectionStrategy):
-    
     def __init__(
             self,
             epsilon: float = 1e-4,
@@ -418,7 +417,7 @@ class BVHIntersection(IntersectionStrategy):
                 for obj in node.objects:
                     # We reuse your existing per-object test logic here
                     # Assuming you have a basic geometric intersector or reuse the standard logic
-                    hit = self._test_single_object(obj, ray, stats)
+                    hit = self._test_single_object(obj, ray, scene.camera.far, scene.camera.transform.position, stats)
                     
                     if hit.hit:
                         if not closest_hit.hit or hit.distance < closest_hit.distance:
@@ -520,7 +519,13 @@ class BVHIntersection(IntersectionStrategy):
         
         return node
 
-    def _test_single_object(self, obj: VObject, ray: TracingRay, stats: Optional["TracingStats"]) -> HitInfo:
+    def _test_single_object(
+            self,
+            obj: VObject,
+            ray: TracingRay,
+            far_plane: float,
+            cam_pos: np.ndarray,
+            stats: Optional["TracingStats"]) -> HitInfo:
         """
         Hybrid Intersection:
         1. Transforms the World Ray into Object Local Space.
@@ -532,12 +537,14 @@ class BVHIntersection(IntersectionStrategy):
             return HitInfo.miss()
         
         # 1. Transform Ray to Local Space
-        obj_transform = cast(Transform, getattr(obj, "transform", Transform.identity()))
+        obj_transform = cast(Transform, getattr(obj, 'transform', Transform.identity()))
         local_ray = obj_transform.inverse_transform_ray(ray)
+        
+        local_dir_len = np.linalg.norm(local_ray.orientation)
+        if local_dir_len > 0:
+            local_ray.orientation /= local_dir_len
 
-        # 2. Get Minimum Scale Factor for safe stepping
-        # If we are in local space, a distance of 1.0 might mean 0.1 in world space (if scaled down).
-        # We must multiply the local distance by the smallest scale to avoid overstepping.
+        # 2. Get an minimum Scale Factor for safe stepping. Imagine the object is uniform in size
         scale = obj_transform.scale
         min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
 
@@ -549,8 +556,7 @@ class BVHIntersection(IntersectionStrategy):
             
             if stats: stats.triangle_tests += 1
 
-            # FIX: Use unit_signed_distance (Local Logic)
-            dist_local = obj_shape.unit_signed_distance(p) * sign_modifier
+            dist_local = obj_shape.unit_signed_distance(p) * sign_modifier * min_scale
             
             # Check convergence
             if dist_local < self.epsilon:
@@ -576,10 +582,12 @@ class BVHIntersection(IntersectionStrategy):
                     obj=obj
                 )
             
-            t += (dist_local * self.step_relaxation) / min_scale
+            t += dist_local * self.step_relaxation
             
-            # Optimization: If local t exceeds max distance adjusted for scale
-            if t * min_scale > self.max_distance:
+            # Frustum/Far Plane checks
+            obj_pos = getattr(obj, 'transform', Transform.identity()).position
+            far_plane_dist = np.linalg.norm(cam_pos - obj_pos)
+            if t >= self.max_distance or far_plane_dist >= far_plane:
                 break
                 
         return HitInfo.miss()
@@ -835,36 +843,31 @@ class DepthShading(ShadingStrategy):
     Objects further than 'max_depth' are Black.
     Gradient in between.
     """
-    def __init__(self, min_depth: float = 0.0, max_depth: float = 20.0):
+    def __init__(self, min_depth: float = 0.0, max_depth: float = 20.0, color_gradient: Optional[ColorGradient] = None):
         super().__init__()
         self.min_dist = min_depth
         self.max_dist = max_depth
 
-    def shade(
-            self,
-            scene: Scene,
-            ray: TracingRay,
-            hit_info: HitInfo,
-            current_depth: int,
-            *args, **kwargs
-        ) -> Color:
+    def shade(self, scene: Scene, ray: TracingRay, hit_info: HitInfo, current_depth: int, *args, **kwargs) -> Color:
         
+        # 1. Debug "Miss"
         if not hit_info.hit:
-            return Color(0.0, 0.0, 0.0) # Background is "infinite" depth (black)
+            return Color(1.0, 0.0, 0.0) # RED = Missed everything
 
         dist = hit_info.distance
         
-        # Normalize distance to 0.0 - 1.0
-        # Formula: (dist - min) / (max - min)
+        # 2. Safety Check: Verify we aren't getting negative distances from the SDF
+        if dist < 0:
+            return Color(0.0, 1.0, 0.0) # GREEN = Error (Negative Distance)
+
+        # 3. Linear Depth Calculation
         range_dist = self.max_dist - self.min_dist
         if range_dist == 0: range_dist = 1.0
         
         normalized = (dist - self.min_dist) / range_dist
-        
-        # Clamp between 0 and 1
         normalized = max(0.0, min(1.0, normalized))
         
-        # Invert so Close = Bright, Far = Dark
+        # Close = White (1.0), Far = Black (0.0)
         val = 1.0 - normalized
         
         return Color(val, val, val)

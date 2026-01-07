@@ -325,7 +325,7 @@ class Triangle(Shape2D):
 
     @property
     def area(self) -> float:
-        return 0.5 * np.linalg.norm(np.cross(self.edge1, self.edge2))
+        return float(0.5 * np.linalg.norm(np.cross(self.edge1, self.edge2)))
 
 class Polygon(Shape2D):
     def __init__(self, vertices: List[np.ndarray], **kwargs):
@@ -528,7 +528,7 @@ class Sphere(Shape3D):
     # --- SDF (Local Space) ---
     def signed_distance(self, local_point: np.ndarray) -> float:
         # Simple distance from origin minus radius
-        return np.linalg.norm(local_point) - self.radius
+        return float(np.linalg.norm(local_point) - self.radius)
 
     # --- Analytical Intersection (Local Space) ---
     def get_ray_intersections(self, local_ray: "Ray") -> List[np.ndarray]:
@@ -652,20 +652,19 @@ class Cube(Shape3D):
             
         return hits
 
-    def get_normal(self, local_point: np.ndarray) -> np.ndarray:
-        # Normal is the axis with the largest component relative to size
-        # (approaching the face)
-        
+    def get_normal(self, local_point: np.ndarray, epsilon: float = 1e-9) -> np.ndarray:
         # Normalize point relative to box dimensions
-        p = local_point / self.half_size
+        # Add tiny epsilon to avoid division by zero
+        p = local_point / (self.half_size + epsilon)
         
-        # Find dominant axis
-        # (This implies strictly sharp edges. For beveled boxes, SDF gradient is better)
+        # Softmax-ish approach for cleaner edges, or just argmax
         abs_p = np.abs(p)
         max_axis = np.argmax(abs_p)
         
         normal = np.zeros(3)
+        # Using sign of the dominant axis
         normal[max_axis] = np.sign(p[max_axis])
+        
         return normal
 
     def get_uv(self, local_point: np.ndarray, local_normal: np.ndarray) -> np.ndarray:
@@ -844,7 +843,7 @@ class VObject:
     Acts as a Node in the Scene Graph.
     """
     shape: Optional["Shape"] = None # Optional so we can have empty "Group" nodes
-    transform: Optional["Transform"] = None
+    transform: Optional['transform'] = None
     material: Optional["PBRMaterial"] = None
     name: str = "VObject"
 
@@ -861,7 +860,7 @@ class VObject:
             self.material = getattr(self.shape, 'material', None)
 
     @property
-    def world_transform(self) -> "Transform":
+    def world_transform(self) -> 'transform':
         """
         Calculates the absolute World Space transform by traversing up the hierarchy.
         Usage: Use this property in your Renderer/Intersection loop.
@@ -956,20 +955,20 @@ class AABB:
         self.min_point = min_point
         self.max_point = max_point
 
-    def intersect(self, ray: TracingRay) -> float:
+    def intersect(self, ray: TracingRay, max_t: float =  1e30, bias: float = 1e-9) -> float:
         """
         Slab Method for Ray/AABB intersection.
         Returns distance to entry, or infinity if miss.
         """
         # We use the inverse direction to replace division with multiplication
         # This handles division by zero gracefully (results in +/- inf)
-        inv_dir = 1.0 / (ray.orientation + 1e-9) 
+        inv_dir = 1.0 / (ray.orientation + bias) 
         
         t0 = (self.min_point - ray.origin) * inv_dir
         t1 = (self.max_point - ray.origin) * inv_dir
 
         tmin = np.maximum(np.minimum(t0, t1), 0.0)
-        tmax = np.minimum(np.maximum(t0, t1), 1e30)
+        tmax = np.minimum(np.maximum(t0, t1), max_t)
 
         # Find largest entry time and smallest exit time across all axes
         t_enter = np.max(tmin)
@@ -981,7 +980,7 @@ class AABB:
         return float('inf')
 
     @staticmethod
-    def from_object(obj: VObject) -> 'AABB':
+    def from_object(obj: VObject, padding: float = 1e-2) -> 'AABB':
         """
         Calculates the world-space AABB for a given object.
         """
@@ -990,29 +989,47 @@ class AABB:
         # Fallback: Approximate with a unit cube scaled by transform
         
         # 1. Get Transform Matrix
-        obj_transform = cast(Transform, getattr(obj, "transform", Transform.identity()))
+        obj_transform = cast(Transform, getattr(obj, 'transform', Transform.identity()))
         matrix = obj_transform.get_global_matrix()
         
-        # 2. Define the 8 corners of a generic Unit Cube (-0.5 to 0.5) or Shape bounds
-        # Note: You should add get_local_bounds() to your Shape classes for tighter fits.
-        corners = np.array([
-            [-1, -1, -1], [1, -1, -1], [-1, 1, -1], [1, 1, -1],
-            [-1, -1, 1],  [1, -1, 1],  [-1, 1, 1],  [1, 1, 1]
-        ]) * 0.5 # Unit cube logic
+        # 2. Define the 8 corners of a cube localy
+        shape = getattr(obj, "shape", None)
+        local_corners = None
         
-        # If shape is sphere, radius is usually 1.0 before scaling
-        if hasattr(obj.shape, 'radius'):
-            corners *= 2.0 # Scale unit cube to wrap radius 1.0 sphere
+        if shape is not None:
+            # 1. Handle Cubes / Meshes (Anything with corners)
+            if hasattr(shape, "convex_hull"):
+                local_corners = np.array(shape.convex_hull())
+            
+            # 2. Handle Spheres (Look for radius)
+            elif hasattr(shape, "radius"):
+                # Create a box that fully encloses the sphere
+                r = float(shape.radius)
+                local_corners = np.array([
+                    [-r, -r, -r], [r, -r, -r], [-r, r, -r], [r, r, -r],
+                    [-r, -r, r],  [r, -r, r],  [-r, r, r],  [r, r, r]
+                ])
 
-        # 3. Transform corners to world space
-        # (Append 1 for homogeneous coords)
-        ones = np.ones((8, 1))
-        corners_4d = np.hstack([corners, ones]) 
+        # C. Fallback: Unit Cube (-0.5 to 0.5)
+        if local_corners is None:
+            local_corners = np.array([
+                [-0.5, -0.5, -0.5], [0.5, -0.5, -0.5], 
+                [-0.5, 0.5, -0.5], [0.5, 0.5, -0.5],
+                [-0.5, -0.5, 0.5],  [0.5, -0.5, 0.5],  
+                [-0.5, 0.5, 0.5],  [0.5, 0.5, 0.5]
+            ])
+
+        # 2. Transform to World Space
+        # Convert to homogeneous coordinates (N, 4)
+        ones = np.ones((len(local_corners), 1))
+        corners_4d = np.hstack([local_corners, ones]) 
+        
+        # Apply Matrix (Scale, Rotate, Translate)
         world_corners = (matrix @ corners_4d.T).T[:, :3]
 
         # 4. Find min/max of transformed corners
-        min_p = np.min(world_corners, axis=0) - 0.01 # Small padding
-        max_p = np.max(world_corners, axis=0) + 0.01
+        min_p = np.min(world_corners, axis=0) - padding # Small padding
+        max_p = np.max(world_corners, axis=0) + padding
         
         return AABB(min_p, max_p)
 

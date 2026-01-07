@@ -228,7 +228,7 @@ class Transform:
       - "global": methods update the public position/rotation/scale (default, keeps simple test usage)
       - "local" : methods update the local_* offsets which are applied on top of the public transform
     """
-    def __init__(self, position: np.ndarray, rotation: np.ndarray, scale: np.ndarray, parent=None, name: str="Transform"):
+    def __init__(self, position: np.ndarray, rotation: np.ndarray, scale: np.ndarray, parent=None, name: str='transform'):
         if position.shape != (3,) or rotation.shape != (3,) or scale.shape != (3,):
             raise ValueError("position, rotation, and scale must be 3D vectors")
             
