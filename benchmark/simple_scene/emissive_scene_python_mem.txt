@@ -1,10 +1,22 @@
-Time: 9.5631s | RSS Δ: 1.750 MB
-RSS start: 73.648 MB | RSS end: 75.398 MB
-tracemalloc current: 134.70 KB | peak: 2065.12 KB
+Time: 13.7282s | RSS Δ: 0.250 MB
+RSS start: 70.480 MB | RSS end: 70.730 MB
+tracemalloc current: 172.21 KB | peak: 1103.91 KB
 Top allocations (most recent frame):
-  1. /workspaces/NEA-CSProject/py_src/main.py:28 | 108.09 KB (2 allocs)
-  2. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1369 | 11.05 KB (202 allocs)
-  3. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/psutil/_pslinux.py:1593 | 4.80 KB (41 allocs)
-  4. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1339 | 4.27 KB (78 allocs)
-  5. /workspaces/NEA-CSProject/py_src/src/Sampling.py:201 | 1.05 KB (45 allocs)
-  6. /workspaces/NEA-CSProject/py_src/src/Sampling.py:202 | 1.03 KB (44 allocs)
+  1. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/numeric.py:1469 | 46.73 KB (997 allocs)
+  2. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/numeric.py:1548 | 46.69 KB (996 allocs)
+  3. /workspaces/NEA-CSProject/py_src/main.py:28 | 42.28 KB (2 allocs)
+  4. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1372 | 13.67 KB (250 allocs)
+  5. /usr/lib/python3.12/dataclasses.py:1581 | 8.10 KB (71 allocs)
+  6. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1342 | 4.10 KB (75 allocs)
+
+Postproccesing:
+Time: 0.0016s | RSS Δ: 0.000 MB
+RSS start: 70.730 MB | RSS end: 70.730 MB
+tracemalloc current: 85.34 KB | peak: 488.00 KB
+Top allocations (most recent frame):
+  1. /workspaces/NEA-CSProject/py_src/src/PostProcessing.py:198 | 84.47 KB (2 allocs)
+  2. /usr/lib/python3.12/tracemalloc.py:560 | 0.22 KB (2 allocs)
+  3. /usr/lib/python3.12/tracemalloc.py:423 | 0.22 KB (2 allocs)
+  4. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/psutil/_pslinux.py:1593 | 0.12 KB (1 allocs)
+  5. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:57 | 0.12 KB (1 allocs)
+  6. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/lib/_stride_tricks_impl.py:358 | 0.10 KB (2 allocs)

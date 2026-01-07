@@ -1,10 +1,22 @@
-Time: 13.1805s | RSS Δ: 0.000 MB
-RSS start: 75.742 MB | RSS end: 75.742 MB
-tracemalloc current: 144.05 KB | peak: 2074.32 KB
+Time: 405.6242s | RSS Δ: -20.375 MB
+RSS start: 70.980 MB | RSS end: 50.605 MB
+tracemalloc current: 181.89 KB | peak: 1113.55 KB
 Top allocations (most recent frame):
-  1. /workspaces/NEA-CSProject/py_src/main.py:28 | 108.09 KB (2 allocs)
-  2. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1369 | 13.67 KB (250 allocs)
-  3. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/psutil/_pslinux.py:1593 | 4.80 KB (41 allocs)
-  4. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1339 | 4.27 KB (78 allocs)
-  5. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:496 | 1.99 KB (34 allocs)
-  6. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:495 | 1.99 KB (34 allocs)
+  1. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/numeric.py:1469 | 46.73 KB (997 allocs)
+  2. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/numeric.py:1548 | 46.69 KB (996 allocs)
+  3. /workspaces/NEA-CSProject/py_src/main.py:28 | 42.28 KB (2 allocs)
+  4. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1372 | 13.67 KB (250 allocs)
+  5. /usr/lib/python3.12/dataclasses.py:1581 | 7.40 KB (65 allocs)
+  6. /workspaces/NEA-CSProject/py_src/src/Luminance.py:488 | 6.86 KB (156 allocs)
+
+Postproccesing:
+Time: 0.0114s | RSS Δ: 0.375 MB
+RSS start: 51.855 MB | RSS end: 52.230 MB
+tracemalloc current: 85.05 KB | peak: 487.71 KB
+Top allocations (most recent frame):
+  1. /workspaces/NEA-CSProject/py_src/src/PostProcessing.py:198 | 84.47 KB (2 allocs)
+  2. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/psutil/_pslinux.py:1593 | 0.12 KB (1 allocs)
+  3. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:57 | 0.12 KB (1 allocs)
+  4. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/lib/_stride_tricks_impl.py:358 | 0.10 KB (2 allocs)
+  5. /usr/lib/python3.12/tracemalloc.py:560 | 0.08 KB (2 allocs)
+  6. /usr/lib/python3.12/tracemalloc.py:423 | 0.07 KB (2 allocs)

@@ -1,10 +1,22 @@
-Time: 33.1903s | RSS Δ: 10.574 MB
-RSS start: 61.449 MB | RSS end: 72.023 MB
-tracemalloc current: 131.08 KB | peak: 2062.62 KB
+Time: 26.0724s | RSS Δ: 7.117 MB
+RSS start: 61.363 MB | RSS end: 68.480 MB
+tracemalloc current: 155.84 KB | peak: 1087.61 KB
 Top allocations (most recent frame):
-  1. /workspaces/NEA-CSProject/py_src/main.py:28 | 108.16 KB (4 allocs)
-  2. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1369 | 12.85 KB (235 allocs)
-  3. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1339 | 4.10 KB (75 allocs)
-  4. /workspaces/NEA-CSProject/py_src/src/Sampling.py:201 | 1.05 KB (45 allocs)
-  5. /workspaces/NEA-CSProject/py_src/src/Sampling.py:202 | 1.03 KB (44 allocs)
-  6. /workspaces/NEA-CSProject/py_src/src/Sampling.py:114 | 0.50 KB (1 allocs)
+  1. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/numeric.py:1469 | 44.16 KB (942 allocs)
+  2. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/numeric.py:1548 | 44.11 KB (941 allocs)
+  3. /workspaces/NEA-CSProject/py_src/main.py:28 | 42.35 KB (4 allocs)
+  4. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1372 | 12.85 KB (235 allocs)
+  5. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1342 | 4.10 KB (75 allocs)
+  6. /workspaces/NEA-CSProject/py_src/src/Luminance.py:488 | 1.71 KB (39 allocs)
+
+Postproccesing:
+Time: 0.0022s | RSS Δ: 0.000 MB
+RSS start: 68.730 MB | RSS end: 68.730 MB
+tracemalloc current: 89.92 KB | peak: 490.24 KB
+Top allocations (most recent frame):
+  1. /workspaces/NEA-CSProject/py_src/src/PostProcessing.py:198 | 84.47 KB (2 allocs)
+  2. /workspaces/NEA-CSProject/py_src/src/PostProcessing.py:170 | 1.00 KB (1 allocs)
+  3. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/scipy/ndimage/_filters.py:665 | 1.00 KB (1 allocs)
+  4. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/_methods.py:115 | 0.62 KB (1 allocs)
+  5. /workspaces/NEA-CSProject/py_src/src/PostProcessing.py:138 | 0.55 KB (2 allocs)
+  6. /workspaces/NEA-CSProject/py_src/src/PostProcessing.py:122 | 0.50 KB (1 allocs)

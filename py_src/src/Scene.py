@@ -3,9 +3,9 @@ import numpy as np
 from math import atan2, asin, pi, floor
 
 from CommonUtils import safe_norm
-from PrimaryStructures import Ray, HitInfo
+from PrimaryStructures import Ray, HitInfo, Transform
 from Camera import VCamera
-from Geometry import VObject, Shape
+from Geometry import VObject
 from Luminance import LightSource, Color
 
 class Scene:
@@ -58,6 +58,8 @@ class Scene:
             # 3. Calculate Distance
             # The Shape is responsible for transforming the world 'point' to its local space.
             transform = obj.world_transform
+            if transform is None:
+                print(obj)
             local_point = transform.inverse_transform_point(point)
 
             try:
@@ -138,7 +140,7 @@ class Scene:
             # We need to manually do the normal transform pipeline:
             # World Point -> Local Point -> Local Gradient -> World Normal
             
-            transform = closest_obj.transform
+            transform = getattr(closest_obj, 'transform', Transform.identity())
             local_pt = transform.inverse_transform_point(closest_point)
             
             # Calculate Local Normal (Gradient)
@@ -290,7 +292,7 @@ class Scene:
         # If no approach worked, conservatively say not occluded
         return False
 
-def get_all_objects_flattened(root_objects):
+def get_all_objects_flattened(root_objects: list[VObject]) -> set[VObject]:
     """
     Flattens a hierarchy of objects into a single list, 
     preventing infinite loops from circular references.
@@ -321,4 +323,4 @@ def get_all_objects_flattened(root_objects):
         if hasattr(current_obj, 'children') and current_obj.children:
             stack.extend(current_obj.children)
             
-    return flat_list
+    return set(flat_list)

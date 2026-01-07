@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 from src.Scene import Scene
 from src.RenderingAlgorithms import Algorithm
 from src.Raytracing import *
-from src.Sampling import SamplingManager, SampleSettings, PixelFilter
+from src.Sampling import SamplingManager, SampleSettings, PixelFilter, reconstruct_pixel
 from src.MemoryProfiler import MemoryProfiler
 from test_scenes import *
 PostProcessingPipeline = None
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    img_w, img_h = 16 * 16, 9 * 16
+    img_w, img_h = 16 * 5, 9 * 5
 
     all_scenes = [
         get_minimal_scene(img_w, img_h),
@@ -81,16 +81,16 @@ if __name__ == "__main__":
         get_low_ior_scene(img_w, img_h),
     ]
 
-    sample_settings = SampleSettings(samples_per_pixel=4, filter_type=PixelFilter.GAUSSIAN, filter_width=16)
+    sample_settings = SampleSettings(samples_per_pixel=1, filter_type=PixelFilter.BOX, filter_width=2)
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     generator = JitterRayGenerator()
-    intersection = BVHIntersection(max_distance=100, max_steps=64)
+    intersection = BVHIntersection(max_distance=100, max_steps=10)
     interactor = StandardInteraction()
-    shading = RecursiveLambertShading(shadow_samples=16, shadow_bias=2e-3)
+    shading = RecursiveLambertShading()
 
     raytracer = Raytracer(
-        max_depth=6,
+        max_depth=4,
         sampling_manager=sampling_manager,
         ray_generator=generator,
         intersection_strategy=intersection,
@@ -137,41 +137,51 @@ if __name__ == "__main__":
             # 2. Post-Process (The Pipeline)
             processed_img = raw_img_data
 
-            if not args.disable_post and False:
-                print(" > Running post-processing")
-                # Import lazily so heavy deps (scipy) are only loaded when needed
-                from src.PostProcessing import PostProcessingPipeline
+            if not args.disable_post:
+                with MemoryProfiler(enable_tracemalloc=True, top=6) as mp:
+                    print(" > Running post-processing")
+                    # Import lazily so heavy deps (scipy) are only loaded when needed
+                    from src.PostProcessing import *
 
-                # We chain the effects directly on the numpy array
-                # A. Bloom (Make bright lights glow)
-                processed_img = PostProcessingPipeline.apply_bloom(
-                    processed_img, 
-                    threshold=0.8, 
-                    intensity=0.05,
-                    softness=0.75,
-                    radius=1.5,
-                    fast=False
-                )
+                    # We chain the effects directly on the numpy array
+                    # A. Bloom (Make bright lights glow)
+                    processed_img = PostProcessingPipeline.apply_bloom(
+                        processed_img, 
+                        threshold=0.8, 
+                        intensity=0.05,
+                        softness=0.75,
+                        radius=1,
+                        fast=False
+                    )
+                    
+                    # B. Cromatic Aberration (Shifts Red and Blue channels)
+                    processed_img = PostProcessingPipeline.apply_chromatic_aberration(
+                        processed_img,
+                        strength=0
+                    )
+
+                    # C. Vignette (Darken corners slightly)
+                    processed_img = PostProcessingPipeline.apply_vignette(
+                        processed_img, 
+                        strength=0.2
+                    )
+
+                    # D. Tone Mapping (Compress HDR values to 0-1)
+                    # Without this, bright spots just clip to white
+                    processed_img = PostProcessingPipeline.aces_tone_map(processed_img)
+
+                    # E. Gamma Correction (Linear -> sRGB)
+                    # Without this, the image looks too dark
+                    processed_img = PostProcessingPipeline.gamma_correct(processed_img, gamma=2.0)
                 
-                # B. Cromatic Aberration (Shifts Red and Blue channels)
-                processed_img = PostProcessingPipeline.apply_chromatic_aberration(
-                    processed_img,
-                    strength=0
-                )
-
-                # C. Vignette (Darken corners slightly)
-                processed_img = PostProcessingPipeline.apply_vignette(
-                    processed_img, 
-                    strength=0.2
-                )
-
-                # D. Tone Mapping (Compress HDR values to 0-1)
-                # Without this, bright spots just clip to white
-                processed_img = PostProcessingPipeline.aces_tone_map(processed_img)
-
-                # E. Gamma Correction (Linear -> sRGB)
-                # Without this, the image looks too dark
-                processed_img = PostProcessingPipeline.gamma_correct(processed_img, gamma=2.0)
+                try:
+                    with open(mem_report_path, "a") as f:
+                        f.write("\n\nPostproccesing:\n")
+                        f.write(mp.format_report())
+                        print(" + Wrote memory report")
+                except Exception:
+                    print(" / Failed to write memory report")
+                    pass
 
                 save_image(processed_img, out_path=out_path + ".png")
             else:
@@ -185,7 +195,7 @@ if __name__ == "__main__":
                 pass
             gc.collect()
 
-            print("-|" * 30)
+            print("|-" * 32 + "|")
             
         except Exception as e:
             print(f"Failed to render '{scene.name}': {e}")
