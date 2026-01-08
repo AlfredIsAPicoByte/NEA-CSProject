@@ -61,36 +61,36 @@ if __name__ == "__main__":
     OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    img_w, img_h = 16 * 5, 9 * 5
+    img_w, img_h = 16 * 8, 9 * 8
 
     all_scenes = [
         get_minimal_scene(img_w, img_h),
-        get_gradient_scene(img_w, img_h),
-        get_emissive_scene(img_w, img_h),
-        get_lit_studio_scene(img_w, img_h),
-        get_rgb_room_with_objects_scene(img_w, img_h),
-        get_cyberpunk_scene(img_w, img_h),
-        get_material_deck_scene(img_w, img_h),
-        get_refraction_lab_scene(img_w, img_h),
-        get_scifi_corridor_scene(img_w, img_h),
-        get_sunset_monolith_scene(img_w, img_h),
-        get_pastel_blocks_scene(img_w, img_h),
-        get_glass_prism_scene(img_w, img_h),
-        get_glass_sculpture_scene(img_w, img_h),
-        get_100_spheres_grid_scene(img_w, img_h),
-        get_low_ior_scene(img_w, img_h),
+        # get_gradient_scene(img_w, img_h),
+        # get_emissive_scene(img_w, img_h),
+        # get_lit_studio_scene(img_w, img_h),
+        # get_rgb_room_with_objects_scene(img_w, img_h),
+        # get_cyberpunk_scene(img_w, img_h),
+        # get_material_deck_scene(img_w, img_h),
+        # get_refraction_lab_scene(img_w, img_h),
+        # get_scifi_corridor_scene(img_w, img_h),
+        # get_sunset_monolith_scene(img_w, img_h),
+        # get_pastel_blocks_scene(img_w, img_h),
+        # get_glass_prism_scene(img_w, img_h),
+        # get_glass_sculpture_scene(img_w, img_h),
+        # get_100_spheres_grid_scene(img_w, img_h),
+        # get_low_ior_scene(img_w, img_h),
     ]
 
     sample_settings = SampleSettings(samples_per_pixel=1, filter_type=PixelFilter.BOX, filter_width=2)
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     generator = JitterRayGenerator()
-    intersection = BVHIntersection(max_distance=100, max_steps=10)
-    interactor = StandardInteraction()
-    shading = RecursiveLambertShading()
+    intersection = BVHIntersection(max_distance=1000, max_steps=512)
+    interactor = TerminalInteraction()
+    shading = NormalShading()
 
     raytracer = Raytracer(
-        max_depth=4,
+        max_depth=1,
         sampling_manager=sampling_manager,
         ray_generator=generator,
         intersection_strategy=intersection,

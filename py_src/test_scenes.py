@@ -4,7 +4,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from src.PrimaryStructures import Transform
-from src.Geometry import Sphere, Cube, VObject
+from src.Geometry import *
 from src.Scene import Scene
 from src.Camera import VCamera, CameraType
 from src.Luminance import LightSource, Color, ColorGradient, PBRMaterial
@@ -26,7 +26,7 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
         Color.from_hex("#5B6791"),
         Color.from_hex("#87BFC6"),
     ]
-    sky_positions = [0.0, 0.4, 0.45, 1.0] 
+    sky_positions = np.array([0.0, 0.4, 0.45, 1.0]) 
 
     # Primary Key Light (Sharp, slightly yellow, placed high and to the left for side lighting)
     key_light = LightSource(position=np.array([4.0, 5.0, 0.0]), color=Color.from_hex("#FFEDC7"), intensity=15.0, radius=0.5, name="Key Light")
@@ -37,31 +37,30 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     # Main Sphere (Mid-Ground): Highly Reflective Metal
     sphere_shape_1 = Sphere(radius=2.5, name="MainReflectiveBall")
     mat_metal = PBRMaterial.create_specular(Color.from_hex("#47505C"), 0.2, 0.9, 1.0, 1.0)
+    sph_1 = VObject(shape=sphere_shape_1, name="ReflectiveSphere")
+    sph_1.transform.translate(np.array([0.0, 2.25, 5.0]))
+    sph_1.material = mat_metal
 
     # Additional Object 1: Cube (Background/Visual Anchor) - Matte and Rough
     box_shape = Cube(center=np.array([2.0, 3.0, 4.0]), side_length=2.5, name="BackgroundBox")
     mat_matte = PBRMaterial.create_diffuse(Color.from_hex("#C27A23"), roughness=0.8)
+    bx_1 = VObject(shape=box_shape, name="MatteBoxObject")
+    bx_1.transform.rotate(np.radians(15), np.array([0, 1, 0]))
+    bx_1.material = mat_matte
     
     # Additional Object 2: Small Emissive Sphere (Light Source Helper) - Floating in air
     sphere_shape_2 = Sphere(radius=1, name="EmissiveOrb")
     mat_glow = PBRMaterial.create_emissive(Color.from_hex("#EE1717"), 2)
+    sph_2 = VObject(shape=sphere_shape_2, name="EmissiveOrbObject")
+    sph_2.material = mat_glow
+    sph_2.transform.translate(np.array([-0.5, 2.5, 1.5]))
 
     scene = Scene(name="gradient_scene", camera=cam, background_color=ColorGradient(sky_colors, sky_positions))
 
     scene.add_light(key_light)
     scene.add_light(fill_light)
 
-    sph_1 = VObject(sphere_shape_1, Transform.identity(), name="ReflectiveSphere")
-    sph_1.transform.translate(np.array([0.0, 2.25, 5.0]))
-    sph_2 = VObject(sphere_shape_2, Transform.identity(), name="EmissiveOrbObject")
-    cam.transform.look_at(sph_2.transform.position, [0, 1, 0])
-    sph_2.transform.translate(np.array([-0.5, 2.5, 1.5]))
-    bx_1 = VObject(box_shape, Transform.identity(), name="MatteBoxObject")
-    bx_1.transform.rotate(np.radians(15), np.array([0, 1, 0]))
-
-    sph_1.material = mat_metal
-    bx_1.material = mat_matte
-    sph_2.material = mat_glow
+    cam.transform.look_at(sph_1.transform.position, np.array([0, 1, 0]))
 
     scene.add_object(sph_1)
     scene.add_object(bx_1)
@@ -70,29 +69,32 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     return scene
 
 def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
-    cam_transform = Transform(np.array([0.0, 0.0, -3.0]), np.zeros(3), np.ones(3))
+    cam_transform = Transform(np.array([0.0, 0.0, -100.0]), np.zeros(3), np.ones(3))
     cam = VCamera(
         cam_transform,
-        fov=70.0, near=0.1, far=86.0,
+        fov=60.0, near=0.1, far=1000.0,
         resolution_width=width, resolution_height=height,
-        camera_type=CameraType.PERSPECTIVE
+        camera_type=CameraType.ORTHOGRAPHIC,
+        distance=100
     )
     scene = Scene(name="minimal_scene", camera=cam, background_color=Color.from_hex("#403A43"))
 
     # Sphere at origin
-    sphere_shape = Sphere(radius=0.5, name="BallMin")
+    sphere_shape = Sphere(name="BallMin")
     mat = PBRMaterial.create_diffuse(Color.from_hex("#227DD7"), 0.2)
     v_sphere = VObject(shape=sphere_shape, name="SphereMin")
+    v_sphere.transform.enlarge(np.ones(3) * 0.5)
     v_sphere.material = mat
     # No translation needed as it is at (0,0,0)
     scene.add_object(v_sphere)
 
     # Ground
-    ground_shape = Sphere(radius=100.0, name="GroundMin")
+    ground_shape = Sphere(name="GroundMin")
     matg = PBRMaterial.create_diffuse(Color.from_hex("#3F3F3F"), 0.9)
     v_ground = VObject(shape=ground_shape, name="GroundMin")
+    v_ground.transform.translate(np.array([0.0, -200.5, 0.0]))
+    v_sphere.transform.enlarge(np.ones(3) * 10)
     v_ground.material = matg
-    v_ground.transform.translate(np.array([0.0, -100.5, 0.0]))
     scene.add_object(v_ground)
 
     # Single light
@@ -112,27 +114,30 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
     scene = Scene(name="emissive_scene", camera=cam, background_color=Color.from_hex("#000000"))
 
     # Emissive sphere
-    emissive_shape = Sphere(radius=0.3, name="EmissiveOrb")
+    emissive_shape = Sphere(name="EmissiveOrb")
     mat_glow = PBRMaterial.create_emissive(Color.from_hex("#FFEA62"), 1.2)
     v_emissive = VObject(shape=emissive_shape, name="GlowingSphere")
-    v_emissive.material = mat_glow
+    v_emissive.transform.enlarge(np.ones(3) * 0.3)
     v_emissive.transform.translate(np.array([0.8, 1.0, 0.0]))
+    v_emissive.material = mat_glow
     scene.add_object(v_emissive)
 
     # Reflective sphere
-    mirror_shape = Sphere(radius=0.5, name="Mirror")
+    mirror_shape = Sphere(name="Mirror")
     mat_reflect = PBRMaterial.create_specular(Color.from_hex("#6B6666"), roughness=0.1, metallicness=0.5, specular_intensity=1.0, specular_tint_amount=1.0)
     v_mirror = VObject(shape=mirror_shape, name="MirrorSphere")
-    v_mirror.material = mat_reflect
+    v_mirror.transform.enlarge(np.ones(3) * 0.5)
     v_mirror.transform.translate(np.array([-0.5, 0.5, 0.0]))
+    v_mirror.material = mat_reflect
     scene.add_object(v_mirror)
 
     # Ground
-    ground_shape = Sphere(radius=100.0, name="GroundEmissive")
+    ground_shape = Sphere(name="GroundEmissive")
     matg = PBRMaterial.create_diffuse(Color.from_hex("#202020"), roughness=0.8)
     v_ground = VObject(shape=ground_shape, name="GroundEmissive")
-    v_ground.material = matg
+    v_ground.transform.enlarge(np.ones(3) * 100)
     v_ground.transform.translate(np.array([0.0, -100.5, 0.0]))
+    v_ground.material = matg
     scene.add_object(v_ground)
 
     # Small ambient fill light
@@ -152,28 +157,30 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     scene = Scene(name="lit_studio", camera=cam, background_color=Color.from_hex("#BEC2CF"))
 
     # Objects: two spheres and box as background
-    s1_shape = Sphere(radius=0.4, name="StudioBallA")
+    s1_shape = Sphere(name="StudioBallA")
     mat1 = PBRMaterial.create_specular(Color.from_hex("#FFB86B"), 0.2, 0.1, 0.9, 0)
     v_s1 = VObject(shape=s1_shape, name="StudioBallA")
-    v_s1.material = mat1
+    v_s1.transform.enlarge(np.ones(3) * 0.4)
     v_s1.transform.translate(np.array([-0.6, 0.4, 0.5]))
+    v_s1.material = mat1
     scene.add_object(v_s1)
 
-    s2_shape = Sphere(radius=0.45, name="StudioBallB")
+    s2_shape = Sphere(name="StudioBallB")
     mat2 = PBRMaterial.create_specular(Color.from_hex("#6B9BFF"), 0.2, 0.4, 0.9, 0)
     v_s2 = VObject(shape=s2_shape, name="StudioBallB")
-    v_s2.material = mat2
+    v_s2.transform.enlarge(np.ones(3) * 0.45)
     v_s2.transform.translate(np.array([0.8, 0.45, 0.2]))
+    v_s2.material = mat2
     scene.add_object(v_s2)
 
     # Background 
-    box_shape = Cube(side_length=6.0, name="StudioBack")
-    mat_box = PBRMaterial.create_diffuse(Color.from_hex("#C1CBD0"), roughness=1.0)
-    v_box = VObject(shape=box_shape, name="StudioBox")
-    v_box.material = mat_box
-    v_box.transform.translate(np.array([0.0, 0.5, 2.0]))
-    v_box.transform.enlarge(np.array([1.0, 1.0, 0.1]))
-    scene.add_object(v_box)
+    plane_shape = Plane(name="StudioBack")
+    mat_plane = PBRMaterial.create_diffuse(Color.from_hex("#C1CBD0"), roughness=1.0)
+    v_plane = VObject(shape=plane_shape, name="StudioBox")
+    v_plane.transform.translate(np.array([0.0, 0.5, 2.0]))
+    v_plane.transform.rotate(np.deg2rad(90), np.array([1.0, 0.0, 0.0]))
+    v_plane.material = mat_plane
+    scene.add_object(v_plane)
 
     # Lights
     key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#EEE0BA"), intensity=25.0, radius=100, name="StudioKey")
@@ -208,48 +215,48 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
 
     # Floor
     floor_shape = Cube(side_length=10.0, name="Floor")
-    floor_shape.material = mat_white
     v_floor = VObject(shape=floor_shape, name="Floor")
+    v_floor.material = mat_white
     v_floor.transform.translate(np.array([0.0, -0.5, 0.0]))
     v_floor.transform.enlarge(np.array([2.0, 0.1, 2.0]))
     scene.add_object(v_floor)
     
     # Ceiling
     ceiling_shape = Cube(side_length=10.0, name="Ceiling")
-    ceiling_shape.material = mat_white
     v_ceiling = VObject(shape=ceiling_shape, name="Ceiling")
+    v_ceiling.material = mat_white
     v_ceiling.transform.translate(np.array([0.0, 6.5, 0.0]))
     v_ceiling.transform.enlarge(np.array([2.0, 0.1, 2.0]))
     scene.add_object(v_ceiling)
 
     # Back Wall
     back_shape = Cube(side_length=10.0, name="BackWall")
-    back_shape.material = mat_blue
     v_back = VObject(shape=back_shape, name="BackWall")
+    v_back.material = mat_blue
     v_back.transform.translate(np.array([0.0, 3.0, 5.5]))
     v_back.transform.enlarge(np.array([2.0, 3.0, 0.1]))
     scene.add_object(v_back)
     
     # Left Wall (Red)
     left_shape = Cube(side_length=10.0, name="LeftWall")
-    left_shape.material = mat_red
     v_left = VObject(shape=left_shape, name="LeftWall")
+    v_left.material = mat_red
     v_left.transform.translate(np.array([-5.5, 3.0, 0.0]))
     v_left.transform.enlarge(np.array([0.1, 3.0, 2.0]))
     scene.add_object(v_left)
 
     # Right Wall (Green)
     right_shape = Cube(side_length=10.0, name="RightWall")
-    right_shape.material = mat_green
     v_right = VObject(shape=right_shape, name="RightWall")
+    v_right.material = mat_green
     v_right.transform.translate(np.array([5.5, 3.0, 0.0]))
     v_right.transform.enlarge(np.array([0.1, 3.0, 2.0]))
     scene.add_object(v_right)
     
     # Tall Box (Rotated)
     tall_box_shape = Cube(side_length=3.0, name="TallBox")
-    tall_box_shape.material = mat_white
     v_tall_box = VObject(shape=tall_box_shape, name="TallBox")
+    v_tall_box.material = mat_white
     v_tall_box.transform.translate(np.array([-2.0, 1.5, 2.0]))
     v_tall_box.transform.enlarge(np.array([0.6, 1.0, 0.6]))
     v_tall_box.transform.rotate(20.0, np.array([0.0, 1.0, 0.0]))
@@ -257,15 +264,15 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     
     # Sphere (Mirror)
     mirror_sphere_shape = Sphere(radius=1.25, name="MirrorBall")
-    mirror_sphere_shape.material = mat_mirror
     v_mirror_sphere = VObject(shape=mirror_sphere_shape, name="MirrorBall")
+    v_mirror_sphere.material = mat_mirror
     v_mirror_sphere.transform.translate(np.array([2.0, 1.25, 3.0]))
     scene.add_object(v_mirror_sphere)
     
     # Small Cube (Glass/Crystal in front)
     glass_cube_shape = Cube(side_length=1.5, name="GlassCube")
-    glass_cube_shape.material = mat_glass
     v_glass_cube = VObject(shape=glass_cube_shape, name="GlassCube")
+    v_glass_cube.material = mat_glass
     v_glass_cube.transform.translate(np.array([0.0, 0.75, -2.0]))
     v_glass_cube.transform.rotate(-15.0, np.array([0.0, 1.0, 0.0]))
     scene.add_object(v_glass_cube)
@@ -297,14 +304,14 @@ def get_cyberpunk_scene(width: int = 120, height: int = 120) -> Scene:
         Color.from_hex("#050008"),
         Color.from_hex("#0B1333"),
     ]
-    sky_positions = [0.0, 1.0] 
+    sky_positions = np.array([0.0, 1.0])
     scene = Scene(name="cyberpunk_street", camera=cam, background_color=ColorGradient(sky_colors, sky_positions))
 
     # Road
     road_shape = Cube(side_length=20.0, name="WetRoad")
     mat_wet = PBRMaterial.create_diffuse(Color.from_hex("#151515"), roughness=0.2)
-    road_shape.material = mat_wet
     v_road = VObject(shape=road_shape, name="Road")
+    v_road.material = mat_wet
     v_road.transform.translate(np.array([0.0, -1.0, 0.0]))
     v_road.transform.enlarge(np.array([1.0, 0.1, 2.0]))
     scene.add_object(v_road)
@@ -312,22 +319,22 @@ def get_cyberpunk_scene(width: int = 120, height: int = 120) -> Scene:
     # Hero Object: Chrome Sphere
     hero_shape = Sphere(radius=0.8, name="ChromeHero")
     mat_chrome = PBRMaterial.create_specular(Color.from_hex("#313238"), roughness=0.2, metallicness=1.0)
-    hero_shape.material = mat_chrome
     v_hero = VObject(shape=hero_shape, name="HeroSphere")
+    v_hero.material = mat_chrome
     v_hero.transform.translate(np.array([0.0, 0.5, 0.0]))
     scene.add_object(v_hero)
 
     # Background Buildings
     bldg_left_shape = Cube(side_length=4.0, name="BuildingLeft")
-    bldg_left_shape.material = PBRMaterial.create_diffuse(Color.from_hex("#4DBC3E"), roughness=0.9)
     v_bldg_left = VObject(shape=bldg_left_shape, name="BldgLeft")
+    v_bldg_left.material = PBRMaterial.create_diffuse(Color.from_hex("#4DBC3E"), roughness=0.9)
     v_bldg_left.transform.translate(np.array([-2.5, 2.0, 2.0]))
     v_bldg_left.transform.enlarge(np.array([0.5, 2.0, 0.5]))
     scene.add_object(v_bldg_left)
 
     bldg_right_shape = Cube(side_length=4.0, name="BuildingRight")
-    bldg_right_shape.material = PBRMaterial.create_diffuse(Color.from_hex("#E28335"), roughness=0.9)
     v_bldg_right = VObject(shape=bldg_right_shape, name="BldgRight")
+    v_bldg_right.material = PBRMaterial.create_diffuse(Color.from_hex("#E28335"), roughness=0.9)
     v_bldg_right.transform.translate(np.array([2.5, 1.3, 2.2]))
     v_bldg_right.transform.enlarge(np.array([0.65, 1.3, 0.65]))
     scene.add_object(v_bldg_right)
@@ -384,8 +391,8 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
 
     # Floor
     floor_shape = Cube(side_length=15.0, name="Floor")
-    floor_shape.material = PBRMaterial.create_diffuse(Color.from_hex("#CCCCCC"), roughness=1.0)
     v_floor = VObject(shape=floor_shape, name="Floor")
+    v_floor.material = PBRMaterial.create_diffuse(Color.from_hex("#CCCCCC"), roughness=1.0)
     v_floor.transform.translate(np.array([0.0, -1.0, 0.0]))
     v_floor.transform.enlarge(np.array([2.0, 0.1, 1.0]))
     scene.add_object(v_floor)
@@ -394,32 +401,32 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
     
     # Spheres with varying roughness
     s1_shape = Sphere(radius=0.6, name="Gold_0.0")
-    s1_shape.material = PBRMaterial.create_specular(base_col, roughness=0.0)
     v_s1 = VObject(shape=s1_shape, name="S_Mirror")
+    v_s1.material = PBRMaterial.create_specular(base_col, roughness=0.0)
     v_s1.transform.translate(np.array([-3.0, 0.5, 0.0]))
     scene.add_object(v_s1)
 
     s2_shape = Sphere(radius=0.6, name="Gold_0.25")
-    s2_shape.material = PBRMaterial.create_specular(base_col, roughness=0.25)
     v_s2 = VObject(shape=s2_shape, name="S_Brushed")
+    v_s2.material = PBRMaterial.create_specular(base_col, roughness=0.25)
     v_s2.transform.translate(np.array([-1.5, 0.5, 0.0]))
     scene.add_object(v_s2)
 
     s3_shape = Sphere(radius=0.6, name="Gold_0.5")
-    s3_shape.material = PBRMaterial.create_specular(base_col, roughness=0.5)
     v_s3 = VObject(shape=s3_shape, name="S_Rough")
+    v_s3.material = PBRMaterial.create_specular(base_col, roughness=0.5)
     v_s3.transform.translate(np.array([0.0, 0.5, 0.0]))
     scene.add_object(v_s3)
 
     s4_shape = Sphere(radius=0.6, name="Gold_0.75")
-    s4_shape.material = PBRMaterial.create_specular(base_col, roughness=0.75)
     v_s4 = VObject(shape=s4_shape, name="S_Matte")
+    v_s4.material = PBRMaterial.create_specular(base_col, roughness=0.75)
     v_s4.transform.translate(np.array([1.5, 0.5, 0.0]))
     scene.add_object(v_s4)
     
     s5_shape = Sphere(radius=0.6, name="Plastic_Red")
-    s5_shape.material = PBRMaterial.create_diffuse(Color.from_hex("#FF0000"), roughness=0.1)
     v_s5 = VObject(shape=s5_shape, name="S_Plastic")
+    v_s5.material = PBRMaterial.create_diffuse(Color.from_hex("#FF0000"), roughness=0.1)
     v_s5.transform.translate(np.array([3.0, 0.5, 0.0]))
     scene.add_object(v_s5)
 
@@ -443,8 +450,8 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
 
     # Striped Background Wall
     wall_shape = Cube(side_length=8.0, name="StripedWall")
-    wall_shape.material = PBRMaterial.create_emissive(Color(1.0, 1.0, 1.0), 1.0)
     v_wall = VObject(shape=wall_shape, name="BackWall")
+    v_wall.material = PBRMaterial.create_emissive(Color(1.0, 1.0, 1.0), 1.0)
     v_wall.transform.translate(np.array([0.0, 2.0, 4.0]))
     v_wall.transform.enlarge(np.array([1.5, 1.0, 0.1]))
     scene.add_object(v_wall)
@@ -452,30 +459,30 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
     # Blocker bars
     for i in range(-6, 7):
         bar_shape = Cube(side_length=5.0, name=f"Bar_{i}")
-        bar_shape.material = PBRMaterial.create_diffuse(Color(0.0, 0.0, 0.0), 1.0)
         v_bar = VObject(shape=bar_shape, name=f"Bar_{6 + i}")
+        v_bar.material = PBRMaterial.create_diffuse(Color(0.0, 0.0, 0.0), 1.0)
         v_bar.transform.translate(np.array([i, 2.0, 3.5]))
         v_bar.transform.enlarge(np.array([0.1, 4.0, 0.1]))
         scene.add_object(v_bar)
 
     # Glass Sphere (IOR 1.5)
     s_glass_shape = Sphere(radius=0.6, name="Acrylic")
-    s_glass_shape.material = PBRMaterial.create_glass(Color.from_hex("#FFFFFF"), Color(1.0, 1.0, 1.0), 0.0, 0.0, REFRACTIVE_INDICES["acrylic"], 0)
     v_s_glass = VObject(shape=s_glass_shape, name="AcrylicSphere")
+    v_s_glass.material = PBRMaterial.create_glass(Color.from_hex("#FFFFFF"), Color(1.0, 1.0, 1.0), 0.0, 0.0, REFRACTIVE_INDICES["acrylic"], 0)
     v_s_glass.transform.translate(np.array([-1.2, 0.5, 0.0]))
     scene.add_object(v_s_glass)
 
     # Diamond Sphere (IOR 2.4)
     s_diamond_shape = Sphere(radius=0.6, name="Diamond")
-    s_diamond_shape.material = PBRMaterial.create_glass(Color.from_hex("#B9D3E3"), Color(0.9, 0.9, 1.0), 0.0, 0.0, REFRACTIVE_INDICES["diamond"], 0.2)
     v_s_diamond = VObject(shape=s_diamond_shape, name="DiamondSphere")
+    v_s_diamond.material = PBRMaterial.create_glass(Color.from_hex("#B9D3E3"), Color(0.9, 0.9, 1.0), 0.0, 0.0, REFRACTIVE_INDICES["diamond"], 0.2)
     v_s_diamond.transform.translate(np.array([0.0, 0.5, 0.0]))
     scene.add_object(v_s_diamond)
 
     # Water Sphere / Bubble (IOR 1.33)
     s_water_shape = Sphere(radius=0.6, name="Water")
-    s_water_shape.material = PBRMaterial.create_glass(Color.from_hex("#A6ADD5"), Color.from_hex("#1F1FFF"), 0.0, 0.0, REFRACTIVE_INDICES["water"], 0.1)
     v_s_water = VObject(shape=s_water_shape, name="WaterSphere")
+    v_s_water.material = PBRMaterial.create_glass(Color.from_hex("#A6ADD5"), Color.from_hex("#1F1FFF"), 0.0, 0.0, REFRACTIVE_INDICES["water"], 0.1)
     v_s_water.transform.translate(np.array([1.2, 0.5, 0.0]))
     scene.add_object(v_s_water)
 
@@ -506,16 +513,16 @@ def get_scifi_corridor_scene(width: int = 120, height: int = 120) -> Scene:
 
     # Floor
     floor_shape = Cube(side_length=20.0, name="CorridorFloor")
-    floor_shape.material = mat_floor
     v_floor = VObject(shape=floor_shape, name="Floor")
+    v_floor.material = mat_floor
     v_floor.transform.translate(np.array([0.0, -1.0, -10.0]))
     v_floor.transform.enlarge(np.array([0.5, 0.1, 4.0]))
     scene.add_object(v_floor)
 
     # Ceiling
     ceiling_shape = Cube(side_length=20.0, name="CorridorCeiling")
-    ceiling_shape.material = mat_floor
     v_ceiling = VObject(shape=ceiling_shape, name="Ceiling")
+    v_ceiling.material = mat_floor
     v_ceiling.transform.translate(np.array([0.0, 3.0, -10.0]))
     v_ceiling.transform.enlarge(np.array([0.5, 0.1, 4.0]))
     scene.add_object(v_ceiling)
@@ -524,24 +531,24 @@ def get_scifi_corridor_scene(width: int = 120, height: int = 120) -> Scene:
     for z in range(0, -20, -4):
         # Left Pillar
         p_left_shape = Cube(side_length=2.0, name=f"PillarL_{z}")
-        p_left_shape.material = mat_pillar
         v_p_left = VObject(shape=p_left_shape, name=f"PillarLeft_{z}")
+        v_p_left.material = mat_pillar
         v_p_left.transform.translate(np.array([-2.5, 1.0, z]))
         v_p_left.transform.enlarge(np.array([0.5, 2.0, 0.5]))
         scene.add_object(v_p_left)
 
         # Right Pillar
         p_right_shape = Cube(side_length=2.0, name=f"PillarR_{z}")
-        p_right_shape.material = mat_pillar
         v_p_right = VObject(shape=p_right_shape, name=f"PillarRight_{z}")
+        v_p_right.material = mat_pillar
         v_p_right.transform.translate(np.array([2.5, 1.0, z]))
         v_p_right.transform.enlarge(np.array([0.5, 2.0, 0.5]))
         scene.add_object(v_p_right)
 
         # Emissive Light Strips on floor edges
         l_strip_shape = Cube(side_length=0.2, name=f"Light_{z}")
-        l_strip_shape.material = mat_light_strip
         v_l_strip = VObject(shape=l_strip_shape, name=f"Strip_{z}")
+        v_l_strip.material = mat_light_strip
         v_l_strip.transform.translate(np.array([0.0, -0.9, z]))
         v_l_strip.transform.enlarge(np.array([8.0, 0.1, 0.5]))
         scene.add_object(v_l_strip)
@@ -552,8 +559,8 @@ def get_scifi_corridor_scene(width: int = 120, height: int = 120) -> Scene:
 
     # End focal point
     sphere_end_shape = Sphere(radius=1.5, name="EndSphere")
-    sphere_end_shape.material = PBRMaterial.create_specular(Color.from_hex("#FF0000"), roughness=0.1, metallicness=1.0)
     v_sphere_end = VObject(shape=sphere_end_shape, name="EndSphere")
+    v_sphere_end.material = PBRMaterial.create_specular(Color.from_hex("#FF0000"), roughness=0.1, metallicness=1.0)
     v_sphere_end.transform.translate(np.array([0.0, 1.0, -18.0]))
     scene.add_object(v_sphere_end)
 
@@ -579,15 +586,15 @@ def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
         Color.from_hex("#F29B36"), # Gold
         Color.from_hex("#685888"), # Purple zenith
     ]
-    sky_positions = [0.0, 0.3, 0.5, 1.0]
+    sky_positions = np.array([0.0, 0.3, 0.5, 1.0])
     
     scene = Scene(name="sunset_monolith", camera=cam, background_color=ColorGradient(sky_colors, sky_positions))
 
     # The Monolith (Highly Specular Black Metal)
     monolith_shape = Cube(side_length=4.0, name="Monolith")
     mat_mono = PBRMaterial.create_specular(Color.from_hex("#050505"), roughness=0.05, metallicness=1.0)
-    monolith_shape.material = mat_mono
     v_monolith = VObject(shape=monolith_shape, name="MonolithObj")
+    v_monolith.material = mat_mono
     v_monolith.transform.translate(np.array([0.0, 2.0, 0.0]))
     v_monolith.transform.enlarge(np.array([0.4, 2.0, 0.4]))
     v_monolith.transform.rotate(np.radians(25), np.array([0, 1, 0]))
@@ -596,15 +603,15 @@ def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
     # Sand Dunes (Matte, rough)
     floor_shape = Sphere(radius=50.0, name="Sand")
     mat_sand = PBRMaterial.create_diffuse(Color.from_hex("#D6783B"), roughness=1.0)
-    floor_shape.material = mat_sand
     v_floor = VObject(shape=floor_shape, name="SandGround")
+    v_floor.material = mat_sand
     v_floor.transform.translate(np.array([0.0, -51.0, 0.0]))
     scene.add_object(v_floor)
 
     # Floating particles/smaller rocks
     rock1_shape = Sphere(radius=0.3, name="Rock1")
-    rock1_shape.material = PBRMaterial.create_diffuse(Color.from_hex("#554433"), roughness=0.9)
     v_rock1 = VObject(shape=rock1_shape, name="Rock1")
+    v_rock1.material = PBRMaterial.create_diffuse(Color.from_hex("#554433"), roughness=0.9)
     v_rock1.transform.translate(np.array([-1.5, 0.3, 1.5]))
     scene.add_object(v_rock1)
 
@@ -643,8 +650,8 @@ def get_pastel_blocks_scene(width: int = 120, height: int = 120) -> Scene:
 
     # Floor
     floor_shape = Cube(side_length=10.0, name="WhiteFloor")
-    floor_shape.material = mat_white
     v_floor = VObject(shape=floor_shape, name="Floor")
+    v_floor.material = mat_white
     v_floor.transform.translate(np.array([0.0, -1.0, 0.0]))
     v_floor.transform.enlarge(np.array([2.0, 0.1, 2.0]))
     scene.add_object(v_floor)
@@ -652,23 +659,23 @@ def get_pastel_blocks_scene(width: int = 120, height: int = 120) -> Scene:
     # Stacked Objects
     # Base Cube
     base_shape = Cube(side_length=2.0, name="BaseCube")
-    base_shape.material = mat_mint
     v_base = VObject(shape=base_shape, name="BaseObj")
+    v_base.material = mat_mint
     v_base.transform.translate(np.array([0.0, 0.0, 0.0]))
     v_base.transform.rotate(np.radians(15), np.array([0, 1, 0]))
     scene.add_object(v_base)
 
     # Middle Cylinder (Simulated by stretched sphere or cube? using Sphere for variety)
     mid_shape = Sphere(radius=0.8, name="MidSphere")
-    mid_shape.material = mat_pink
     v_mid = VObject(shape=mid_shape, name="MidObj")
+    v_mid.material = mat_pink
     v_mid.transform.translate(np.array([0.0, 1.6, 0.0]))
     scene.add_object(v_mid)
 
     # Top floating cube
     top_shape = Cube(side_length=1.0, name="TopCube")
-    top_shape.material = mat_purple
     v_top = VObject(shape=top_shape, name="TopObj")
+    v_top.material = mat_purple
     v_top.transform.translate(np.array([0.2, 2.8, 0.2]))
     v_top.transform.rotate(np.radians(45), np.array([1, 1, 0]))
     scene.add_object(v_top)
@@ -706,8 +713,8 @@ def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
         ior=REFRACTIVE_INDICES["diamond"], 
         transmission=1.0
     )
-    sphere_diamond_shape.material = mat_diamond
     v_sphere_diamond = VObject(shape=sphere_diamond_shape, name="CenterDiamond")
+    v_sphere_diamond.material = mat_diamond
     v_sphere_diamond.transform.translate(np.array([0.0, 0.5, 0.0]))
     scene.add_object(v_sphere_diamond)
 
@@ -722,8 +729,8 @@ def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
         ior=1.33, 
         transmission=1.0
     )
-    sphere_water_shape.material = mat_water
     v_sphere_water = VObject(shape=sphere_water_shape, name="LeftWater")
+    v_sphere_water.material = mat_water
     v_sphere_water.transform.translate(np.array([-1.5, 0.5, 0.0]))
     scene.add_object(v_sphere_water)
 
@@ -737,8 +744,8 @@ def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
         ior=REFRACTIVE_INDICES["glass_flint_heavy"], 
         transmission=1.0
     )
-    cube_glass_shape.material = mat_flint
     v_cube_glass = VObject(shape=cube_glass_shape, name="RightFlint")
+    v_cube_glass.material = mat_flint
     v_cube_glass.transform.translate(np.array([1.5, 0.5, 0.0]))
     # Rotate to show refraction through edges
     v_cube_glass.transform.rotate(np.radians(30), np.array([0, 1, 0]))
@@ -749,8 +756,8 @@ def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
     floor_shape = Cube(side_length=20.0, name="Floor")
     # Using a striped emissive material to create lines visible THROUGH the glass
     mat_floor = PBRMaterial.create_diffuse(Color.from_hex("#888888"), roughness=0.8)
-    floor_shape.material = mat_floor
     v_floor = VObject(shape=floor_shape, name="FloorBase")
+    v_floor.material = mat_floor
     v_floor.transform.translate(np.array([0.0, -10.5, 5.0]))
     v_floor.transform.enlarge(np.array([1.0, 1.0, 0.5])) # Flatten
     scene.add_object(v_floor)
@@ -760,8 +767,8 @@ def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
         bar_shape = Cube(side_length=0.5, name=f"Strip_{i}")
         # Alternating colors
         col = Color.from_hex("#FF0000") if i % 2 == 0 else Color.from_hex("#FFFFFF")
-        bar_shape.material = PBRMaterial.create_emissive(col, 2.0)
         v_bar = VObject(shape=bar_shape, name=f"Bar_{i}")
+        v_bar.material = PBRMaterial.create_emissive(col, 2.0)
         v_bar.transform.translate(np.array([i, 2.0, 4.0]))
         v_bar.transform.enlarge(np.array([0.5, 8.0, 0.1]))
         scene.add_object(v_bar)
@@ -793,8 +800,8 @@ def get_glass_sculpture_scene(width: int = 120, height: int = 120) -> Scene:
         ior=REFRACTIVE_INDICES["glass"], 
         transmission=1.0
     )
-    center_sphere_shape.material = mat_red_glass
     v_center_sphere = VObject(shape=center_sphere_shape, name="RedOrb")
+    v_center_sphere.material = mat_red_glass
     v_center_sphere.transform.translate(np.array([0.0, 0.8, 0.0]))
     scene.add_object(v_center_sphere)
 
@@ -808,15 +815,15 @@ def get_glass_sculpture_scene(width: int = 120, height: int = 120) -> Scene:
         ior=1.1, # Low IOR to look like thin plastic or aerogel
         transmission=0.9
     )
-    outer_box_shape.material = mat_clear
     v_outer_box = VObject(shape=outer_box_shape, name="ClearBox")
+    v_outer_box.material = mat_clear
     v_outer_box.transform.translate(np.array([0.0, 0.8, 0.0]))
     scene.add_object(v_outer_box)
 
     # Back Mirror to reflect the back of the glass objects
     mirror_shape = Cube(side_length=6.0, name="MirrorBack")
-    mirror_shape.material = PBRMaterial.create_specular(Color(1.0, 1.0, 1.0), roughness=0.0, metallicness=1.0)
     v_mirror = VObject(shape=mirror_shape, name="MirrorBack")
+    v_mirror.material = PBRMaterial.create_specular(Color(1.0, 1.0, 1.0), roughness=0.0, metallicness=1.0)
     v_mirror.transform.translate(np.array([0.0, 2.0, 3.0]))
     v_mirror.transform.enlarge(np.array([1.0, 1.0, 0.1]))
     scene.add_object(v_mirror)
@@ -843,7 +850,7 @@ def get_100_spheres_grid_scene(width: int = 128, height: int = 128) -> Scene:
         Color.from_hex("#5B6791"),
         Color.from_hex("#87BFC6"),
     ]
-    sky_positions = [0.0, 0.4, 0.45, 1.0]
+    sky_positions = np.array([0.0, 0.4, 0.45, 1.0])
     
     scene = Scene(name="100_spheres_grid", camera=cam, background_color=ColorGradient(sky_colors, sky_positions))
 
@@ -895,7 +902,7 @@ def get_100_spheres_grid_scene(width: int = 128, height: int = 128) -> Scene:
     
     mat_floor = PBRMaterial.create_diffuse(Color.from_hex("#333333"), roughness=0.5)
     
-    scene.add_object(VObject(floor_shape, t_floor, mat_floor, "Floor"))
+    scene.add_object(VObject(t_floor, floor_shape, mat_floor, "Floor"))
 
     # Light
     scene.add_light(LightSource(np.array([10.0, 20.0, -10.0]), Color(1.0, 1.0, 0.9), 50.0, name="Sun"))
@@ -926,7 +933,7 @@ def get_low_ior_scene(width: int = 120, height: int = 120) -> Scene:
     t_anomaly = Transform(position=np.array([0.0, 0.0, 0.0]), rotation=np.zeros(3), scale=np.ones(3))
             
     
-    scene.add_object(VObject(anomaly_shape, t_anomaly, mat_low_ior, "AnomalyObj"))
+    scene.add_object(VObject(t_anomaly, anomaly_shape, mat_low_ior, "AnomalyObj"))
 
     # 2. Background Grid
     # Reuse a single cube shape for all tiles

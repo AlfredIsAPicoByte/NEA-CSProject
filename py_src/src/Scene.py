@@ -5,7 +5,7 @@ from math import atan2, asin, pi, floor
 from CommonUtils import safe_norm
 from PrimaryStructures import Ray, HitInfo, Transform
 from Camera import VCamera
-from Geometry import VObject
+from Geometry import Shape, VObject
 from Luminance import LightSource, Color
 
 class Scene:
@@ -13,7 +13,7 @@ class Scene:
         self.name = name
         self.objects: List[VObject] = []
         self.lights: List[LightSource] = []
-        self.camera: Optional[VCamera] = camera
+        self.camera: VCamera = camera if camera is not None else VCamera(Transform.identity())
 
         # Ambient lighting defaults (can be overridden via kwargs)
         # small neutral ambient to avoid complete black shadows by default
@@ -52,14 +52,13 @@ class Scene:
             
             # 2. Check for Shape
             shape = getattr(obj, "shape", None)
-            if shape is None or not hasattr(shape, "signed_distance"):
+            if shape is None:
                 continue
+            shape = cast(Shape, shape)
 
             # 3. Calculate Distance
             # The Shape is responsible for transforming the world 'point' to its local space.
             transform = obj.world_transform
-            if transform is None:
-                print(obj)
             local_point = transform.inverse_transform_point(point)
 
             try:
@@ -81,7 +80,7 @@ class Scene:
                 min_d = d_world
                 closest = obj
         
-        return (closest, min_d)
+        return (closest, float(min_d))
     
     def get_closest_intersection(self, ray: Ray) -> HitInfo:
         """
@@ -159,7 +158,7 @@ class Scene:
             obj=closest_obj 
         )
     
-    def get_background_color(self, direction: List) -> Color:
+    def get_background_color(self, direction: np.ndarray) -> Color:
         """
         Return the background color based on the ray's direction vector.
         Handles Solid Color, ColorGradient (Skybox), or Texture Map safely.
@@ -176,10 +175,9 @@ class Scene:
         if bg_type_name == 'ColorGradient':
             # Resolve Direction
             try:
-                dir_vec = np.array(direction, dtype=float)
-                norm = np.linalg.norm(dir_vec)
+                norm = np.linalg.norm(direction)
                 if norm > 1e-6:
-                    dir_vec = dir_vec / norm
+                    dir_vec = direction / norm
                 else:
                     dir_vec = np.array([0.0, 1.0, 0.0])
             except (ValueError, TypeError):
@@ -192,11 +190,10 @@ class Scene:
         # 4. Handle Texture Map (Numpy Array)
         elif isinstance(bg, np.ndarray):
             # Resolve Direction (Reuse logic or recalculate)
-            dir_vec = np.array(direction, dtype=float)
-            norm = np.linalg.norm(dir_vec)
-            if norm > 1e-6: dir_vec /= norm
+            norm = np.linalg.norm(direction)
+            if norm > 1e-6: direction /= norm
             
-            return self._sample_equirectangular_map(bg, dir_vec)
+            return self._sample_equirectangular_map(bg, direction)
 
         # 5. Handle Solid Color (Color Object)
         # We check the name OR the instance to be safe
@@ -241,7 +238,7 @@ class Scene:
     def clear_objects(self):
         self.objects.clear()
         self.lights.clear()
-        self.camera = None
+        self.camera = VCamera(Transform.identity())
     
     def is_occluded(self, point: np.ndarray, light_pos: np.ndarray, bias: float = 1e-4, epsilon: float = 1e-4, max_steps: int = 256) -> bool:
         """
@@ -260,6 +257,7 @@ class Scene:
         # --- 1) Try geometry intersection path if available ---
         try:
             from PrimaryStructures import Ray
+
             ray = Ray(origin, dir_norm)
             hit_info = self.get_closest_intersection(ray)
             v_object = getattr(hit_info, "obj", None)

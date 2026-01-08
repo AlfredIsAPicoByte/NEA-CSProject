@@ -1,4 +1,4 @@
-from math import cos, sin, sqrt
+import math
 import numpy as np
 from enum import Enum
 from dataclasses import dataclass, field, replace
@@ -8,6 +8,8 @@ import bisect
 from CommonUtils import clamp, lerp, unit, orthonormal_basis, attenuate_sqr_distance, attenuate_distance_exponential
 from PrimaryStructures import TracingRay, HitInfo
 from Sampling import Sampler
+from Reflections import calculate_reflection_vector
+from Refractions import calculate_refraction_vector, calculate_reflectance
 
 @dataclass
 class Color:
@@ -331,9 +333,9 @@ class PBRMaterial:
             albedo=albedo,            # Surface tint (usually White for clear glass)
             roughness=roughness,      # 0.0 = Clear, 0.5 = Frosted
             metallic=metallicness,    # Usually 0.0
-            ior=ior,
             
             # Volumetric/Transmission Properties
+            ior=ior,
             transmission=transmission,         # Enables Refraction logic
             absorption_color=absorption_color, # The color inside the glass (Beer's Law)
             absorption_density=absorption_density
@@ -363,9 +365,9 @@ class PBRMaterial:
         """
         data = PBRMaterialData(
             name="EmissiveMat",
+            type=MaterialType.EMISSIVE,
             emission_color=color,
             emission_intensity=intensity,
-            type=MaterialType.EMISSIVE,
         )
         return cls(data)
     
@@ -378,15 +380,8 @@ class PBRMaterial:
             bias: float = 1e-4
         ) -> Color:
         """
-        Calculates the Direct Lighting (Shadows + Light Sources) for this material.
-        Enforces Energy Conservation (Reflected + Diffuse <= Incoming).
+        Calculates Direct Lighting contribution for Glass (Reflection + Refraction).
         """
-        # 1. Handle Emission (Self-Illumination)
-        # Note: This is usually added separately, but returning it here is valid if 
-        # you treat the object as its own light source.
-        if self.type == MaterialType.EMISSIVE:
-            return self.get_emissive_component()
-
         surface_normal = hit_info.normal
         hit_point = hit_info.point
         accumulated_light = Color(0.0, 0.0, 0.0)
@@ -394,39 +389,172 @@ class PBRMaterial:
         if hit_point is None or surface_normal is None:
             return accumulated_light
 
+        # 1. Determine IOR Context (Entering vs Exiting)
+        # -----------------------------------------------
+        # Assuming view_dir points FROM surface TO camera.
+        # If dot(N, V) > 0, we are outside looking in.
+        # If dot(N, V) < 0, we are inside looking out.
+        dot_n_v = np.dot(surface_normal, view_dir)
+        
+        if dot_n_v > 0:
+            # Front face (Air -> Glass)
+            ior_in = 1.000293  # Air
+            ior_trans = self.ior
+            working_normal = surface_normal
+        else:
+            # Back face (Glass -> Air)
+            ior_in = self.ior
+            ior_trans = 1.000293
+            working_normal = -surface_normal 
+
         for light in scene_lights:
-            # --- Light Calculation ---
+            # --- Light Setup ---
             light_dir = light.get_light_direction(hit_point)
             light_dist = np.linalg.norm(light.position - hit_point)
             
-            # Optimization: Skip lights that are too close (singularities)
             if light_dist <= bias: continue
             
-            # --- B. Visibility Check (Shadows) ---
-            # If the light is blocked by another object, we skip it.
+            # --- Visibility Check (Shadows) ---
             visibility = visibility_function(hit_point, light)
             if visibility <= 0.0:
                 continue
 
-            # --- C. Lighting Calculations ---
-            # 1. Attenuation: Light gets weaker over distance (Inverse Square Law)
+            # --- Lighting Calculations ---
+            # 1. Cosine Law (N dot L)
+            NdotL = np.dot(working_normal, light_dir)
+            abs_NdotL = abs(NdotL) # Use this for weighting
+    
+            # 2. Incoming Radiance (Li)
             attenuation = attenuate_sqr_distance(float(light_dist))
-            
-            # 2. Cosine Law: Light hits weaker at glancing angles
-            NdotL = max(0.0, np.dot(surface_normal, light_dir))
-            
-            # If light is behind the surface, skip (unless it's translucent, handled separately)
-            if NdotL <= 0.0:
-                continue
+            att_intensity = (light.intensity * attenuation * visibility)
+            incoming_radiance = light.color * att_intensity
+        
+            if self.type == MaterialType.DIFFUSE:
+                diffuse_component = self.get_diffuse_component(light.color, att_intensity * abs_NdotL, light_dir, surface_normal)
+                accumulated_light += diffuse_component 
 
-            # 3. Incoming Radiance (Li): Intensity * Attenuation * Visibility
-            incoming_intensity = light.intensity * attenuation * visibility
+            if self.type == MaterialType.SPECULAR:
+                diffuse_component = self.get_diffuse_component(light.color, att_intensity * abs_NdotL, light_dir, surface_normal)
+                specular_component = self.get_specular_component(light.color, att_intensity * abs_NdotL, light_dir, surface_normal, view_dir)
+                accumulated_light += diffuse_component + specular_component
 
-            # Evaluate BRDF using light color + incoming intensity
-            brdf_color = self.evaluate_brdf(light.color, incoming_intensity, light_dir, surface_normal, view_dir)
-            accumulated_light += brdf_color
+            if self.type == MaterialType.GLASS:
+                bsdf_val = self.evaluate_bsdf(
+                    incident_dir=light_dir, 
+                    view_dir=view_dir, 
+                    surface_normal=working_normal, 
+                    roughness=self.roughness, 
+                    ior_incident=ior_in, 
+                    ior_transmitted=ior_trans
+                )
+                accumulated_light += bsdf_val * incoming_radiance * abs_NdotL
+            
+            if self.type == MaterialType.TRANSPARENT:
+                transparent_component = self.get_transparency_component(light.color)
+                accumulated_light += transparent_component * visibility
             
         return accumulated_light
+    
+    def evaluate_bsdf(
+        self,
+        incident_dir: np.ndarray,   # Incoming Light Direction (L) - Pointing OUT from surface
+        view_dir: np.ndarray,       # View Direction (V) - Pointing OUT from surface
+        surface_normal: np.ndarray, # Geometric Normal (N)
+        roughness: float,
+        ior_incident: float,
+        ior_transmitted: float
+    ) -> Color:
+        """
+        Evaluates the Microfacet BSDF for a specific pair of input/output directions.
+        Returns: RGB Color attenuation (BSDF value).
+        """
+        # 1. Normalize and Setup
+        L = unit(incident_dir)
+        V = unit(view_dir)
+        N = unit(surface_normal)
+        
+        # Cosines
+        dot_n_l = np.dot(N, L)
+        dot_n_v = np.dot(N, V)
+
+        # 2. Determine Mode: Reflection or Refraction?
+        # If L and V are on the same side of the normal, it's Reflection.
+        # If they are on opposite sides, it's Refraction.
+        is_reflection = (dot_n_l * dot_n_v) > 0
+
+        if is_reflection:
+            # --- REFLECTION LOBE ---
+            # 1. Calculate Half Vector (H)
+            H = unit(L + V)
+            
+            # 2. Check Validity
+            # If V or L is below horizon relative to H, contribution is 0
+            if np.dot(V, H) <= 0 or np.dot(L, H) <= 0:
+                return Color(0.0, 0.0, 0.0)
+
+            # 3. Calculate Fresnel (F)
+            # Using your helper or Schlick directly
+            # Note: We use H as the normal for Fresnel
+            dot_v_h = np.abs(np.dot(V, H))
+            F = calculate_reflectance(np.degrees(math.acos(dot_v_h)), ior_incident, ior_transmitted)
+            if F is None: F = 1.0 # Handle TIR case
+
+            # 4. Calculate D and G
+            D = ggx_distribution(N, H, roughness)
+            G = smith_geometry(N, V, L, roughness)
+
+            # 5. Cook-Torrance Specular BRDF Formula
+            # f = (D * G * F) / (4 * (N.L) * (N.V))
+            denominator = 4.0 * np.abs(dot_n_l) * np.abs(dot_n_v) + 1e-8
+            val = (D * G * F) / denominator
+            
+            return Color(val, val, val)
+
+        else:
+            # --- REFRACTION LOBE ---
+            # 1. Calculate Half Vector (H) for Refraction
+            # This H must align with the "bend" between L and V.
+            # Standard formula: H = - (eta_i * V + eta_t * L)
+            eta_i = ior_incident
+            eta_t = ior_transmitted
+            
+            # Note: Depending on your convention, V might need to be negated if it points IN.
+            # Here we assume V and L both point AWAY from surface.
+            # Since it's refraction, one is 'above' (dot > 0) and one 'below' (dot < 0).
+            
+            if dot_n_v > 0:
+                # Entering: V is outside, L is inside
+                H_raw = -(eta_i * V + eta_t * L)
+            else:
+                # Exiting: V is inside, L is outside
+                H_raw = -(eta_t * V + eta_i * L)
+
+            H = unit(H_raw)
+            
+            # 2. Calculate Fresnel (F)
+            dot_v_h = np.abs(np.dot(V, H))
+            dot_l_h = np.abs(np.dot(L, H))
+            
+            F = calculate_reflectance(np.degrees(math.acos(dot_v_h)), ior_incident, ior_transmitted)
+            if F is None: F = 1.0
+
+            # 3. Calculate D and G
+            D = ggx_distribution(N, H, roughness)
+            G = smith_geometry(N, V, L, roughness)
+
+            # 4. Microfacet BTDF (Transmittance) Formula
+            # f = |V.H| * |L.H| * eta_t^2 * D * G * (1-F)
+            #     ---------------------------------------
+            #     |N.V| * |N.L| * (eta_i * (V.H) + eta_t * (L.H))^2
+            
+            denom_part = (eta_i * dot_v_h + eta_t * dot_l_h)
+            denominator = np.abs(dot_n_v) * np.abs(dot_n_l) * (denom_part ** 2) + 1e-8
+            
+            numerator = dot_v_h * dot_l_h * (eta_t ** 2) * D * G * (1.0 - F)
+            
+            val = numerator / denominator
+            
+            return Color(val, val, val)
 
     def get_diffuse_component(self, light_color: Color, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray) -> Color:
         """
@@ -448,7 +576,7 @@ class PBRMaterial:
         """Get the specular component of the material response using the Micro-Facet BRDF."""
         
         # --- 0. Pre-Calculations and Constants ---
-        safe_roughness = max(self.data.roughness, bias)
+        safe_roughness = max(self.data.roughness, 1e-2)
         alpha = safe_roughness ** 2
         alpha_sq = alpha ** 2
         
@@ -563,173 +691,6 @@ class PBRMaterial:
         ambient = ambient_color * ambient_intensity * self.data.albedo
         return ambient
 
-    def calculate_microfacet_reflection_ray(
-            self,
-            surface_normal: np.ndarray,
-            direction: np.ndarray,
-            new_origin: np.ndarray,
-            sampler: Sampler,
-            bias: float = 1e-8
-        ) -> TracingRay:
-        """
-            Generates a reflection ray using GGX Importance Sampling.
-            Returns: (Ray, PDF)
-        """
-        # 1. Get Random Samples (u, v)
-        # These determine "where" on the roughness hemisphere we pick a direction
-        u, v = sampler.next_2d()
-
-        # 2. Importance Sampling (GGX)
-        # We map the random (u, v) to a 3D direction based on Roughness (alpha)
-        # The rougher the surface, the wider the spread of possible directions.
-        alpha = self.data.roughness ** 2
-
-        phi = 2.0 * np.pi * u
-        cos_theta = sqrt((1.0 - v) / (1.0 + ((alpha ** 2) - 1.0) * v))
-        sin_theta = sqrt(max(0.0, 1.0 - cos_theta * cos_theta))
-
-        H_tangent = np.array([
-            sin_theta * cos(phi),
-            sin_theta * sin(phi),
-            cos_theta
-        ])
-
-        tangent, bitangent = orthonormal_basis(surface_normal)
-
-        H_world = (tangent * H_tangent[0]) + (bitangent * H_tangent[1]) + (surface_normal * H_tangent[2])
-        H_world = unit(H_world)
-
-        view_dir = -unit(direction)
-
-        dot_v_h = np.dot(view_dir, H_world)
-        reflection_dir = (2.0 * dot_v_h * H_world) - view_dir
-        final_dir = unit(reflection_dir)
-
-        # 5. Create the new Ray
-        # Offset origin to prevent acne
-        final_origin = new_origin + (surface_normal * bias) # or hit_point + bias
-        
-        # Calculate Probability Density Function (PDF)
-        # This is needed for the color math (throughput) to balance correctly.
-        # (Simplified for demonstration)
-        pdf = (2.0 * dot_v_h) / ((cos_theta * alpha * alpha) + bias) # Approximation
-
-        new_ray = TracingRay(origin=final_origin, orientation=final_dir, pdf=pdf)
-        return new_ray
-    
-    def calculate_microfacet_refraction_ray(
-            self,
-            surface_normal: np.ndarray,
-            direction: np.ndarray,
-            new_origin: np.ndarray,
-            sampler: Sampler,
-            ior_incident: float,
-            ior_transmitted: float,
-            bias: float = 1e-4
-        ) -> Optional[TracingRay]:
-        """
-        Generates a refraction ray using GGX Importance Sampling (Frosted Glass).
-        Returns: (Ray, PDF) or (None, 0.0) if Total Internal Reflection occurs.
-        """
-        # 1. Calculate Relative IOR (Eta)
-        # -----------------------------
-        eta = ior_incident / ior_transmitted
-
-        # 2. Get Random Microfacet Normal (H)
-        # -----------------------------------
-        # Same GGX sampling as reflection. We sample a "tilt" for the surface
-        # at this microscopic point.
-        u, v = sampler.next_2d()
-        alpha = self.data.roughness ** 2
-        
-        # Avoid singularities with perfectly smooth surfaces (alpha=0)
-        alpha = max(alpha, 1e-4)
-
-        phi = 2.0 * np.pi * u
-        cos_theta = np.sqrt((1.0 - v) / (1.0 + ((alpha ** 2) - 1.0) * v))
-        sin_theta = np.sqrt(max(0.0, 1.0 - cos_theta * cos_theta))
-
-        H_tangent = np.array([
-            sin_theta * np.cos(phi),
-            sin_theta * np.sin(phi),
-            cos_theta
-        ])
-
-        tangent, bitangent = orthonormal_basis(surface_normal)
-        H_world = (tangent * H_tangent[0]) + (bitangent * H_tangent[1]) + (surface_normal * H_tangent[2])
-        H_world = unit(H_world)
-
-        # 3. Refract the View Vector through H
-        # ------------------------------------
-        # We treat 'H_world' as the surface normal for this specific light ray.
-        # Vector Math: Snell's Law in 3D
-        
-        # View direction (pointing TO the light, away from surface)
-        view_dir = -unit(direction)
-        
-        # Dot product of View and Microfacet Normal
-        dot_v_h = np.dot(view_dir, H_world)
-        
-        # Calculate the discriminant for Snell's law
-        # sqrt_term = 1 - eta^2 * (1 - (v . h)^2)
-        term_k = 1.0 - (eta * eta) * (1.0 - dot_v_h * dot_v_h)
-
-        # CHECK: Total Internal Reflection (TIR)
-        if term_k < 0.0:
-            # The ray cannot refract through this specific microfacet angle.
-            # In a full integrator, this energy would reflect, but for this 
-            # specific function request, we return None.
-            return None
-
-        # Calculate Refraction Vector
-        # T = (eta * (v . h) - sqrt(k)) * h - eta * v
-        # Note: We use -view_dir to represent the incident vector pointing IN.
-        refraction_dir = (eta * dot_v_h - np.sqrt(term_k)) * H_world - (eta * view_dir)
-        final_dir = unit(refraction_dir)
-
-        # 4. Construct Ray
-        # ----------------
-        # Push origin THROUGH the surface (negative normal bias) to avoid self-intersection
-        final_origin = new_origin - (surface_normal * bias)
-
-        # 5. Calculate PDF (Jacobian approximation)
-        # ---------------------------------------
-        # The PDF for refraction is complex because the solid angle changes 
-        # as the ray crosses the interface (compression/expansion).
-        dot_l_h = np.abs(np.dot(final_dir, H_world))
-        dot_v_h = np.abs(dot_v_h)
-        
-        # GGX Distribution (D) calculation
-        denom = (dot_v_h * alpha * alpha) + bias # Simplified D term
-        
-        # Jacobian for Refraction
-        sqrt_denom = dot_v_h + eta * dot_l_h
-        jacobian = (eta * eta * dot_l_h) / (sqrt_denom * sqrt_denom + bias)
-        
-        pdf = denom * jacobian
-
-        return TracingRay(origin=final_origin, orientation=final_dir, pdf=pdf)
-
-    def evaluate_brdf(self, light_color: Color, light_intensity: float, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray, bias: float = 1e-4) -> Color:
-        """
-        Returns the BRDF value (ratio of radiance).
-        """
-        H = (view_dir + light_dir)
-        # Safety check for degenerate vectors
-        h_len = np.linalg.norm(H)
-        if h_len < bias:
-            return Color(0.0, 0.0, 0.0)
-        H = H / h_len
-
-        # Clamp dot products to avoid negative values (lighting from behind surface)
-        VdotH = max(np.dot(view_dir, H), bias)
-
-        # Compute PBR Terms
-        specular_term = self.get_specular_component(light_color, light_intensity, light_dir, surface_normal, view_dir)
-        diffuse_term = self.get_diffuse_component(light_color, light_intensity, light_dir, surface_normal) * (1.0/np.pi)
-
-        return diffuse_term + specular_term
-
     def __repr__(self):
         return (
             f"Material(albedo={self.data.albedo}, other={self.data})"
@@ -738,40 +699,31 @@ class PBRMaterial:
 def schlick_fresnel(cos_theta: float, f0: np.ndarray) -> np.ndarray:
     """
     Calculates the portion of light that is reflected (Specular) vs. absorbed/refracted (Diffuse).
-    
-    Args:
-        cos_theta: The dot product of View Vector and Surface Normal (N dot V).
-                Must be clamped between 0.0 and 1.0.
-        f0: The base reflectivity of the material at 0 degrees incidence.
-            For non-metals (dielectrics), this is usually constant (e.g., 0.04).
-            For metals, this is the surface color itself.
-    
-    Returns:
-        The reflection coefficient (F), a value between 0.0 and 1.0.
     """
     return f0 + (1.0 - f0) * ((1.0 - cos_theta) ** 5)
 
 def calculate_fresnel_ratio(
     incident_dir: np.ndarray, 
-    normal: np.ndarray, 
+    surface_normal: np.ndarray, 
     ior_incident: float, 
-    ior_transmitted: float
+    ior_transmitted: float,
+    approx: bool = True,
 ) -> float:
     """
-    Calculates the ratio of light that reflects vs refracts using the Schlick Approximation.
-    
-    Returns:
-        float: The probability of Reflection (0.0 to 1.0).
-               The Refraction probability is (1.0 - result).
+    Calculates the ratio of light that reflects vs refracts.
     """
     # 1. Calculate Cosine of the Incident Angle
     # Ensure vectors are normalized
     unit_incident = unit(incident_dir)
-    unit_normal = unit(normal)
+    unit_normal = unit(surface_normal)
     
     # cos_theta is usually -dot(view, normal).
     # Since incident_dir points INTO the surface, we negate it.
     cos_theta = np.dot(-unit_incident, unit_normal)
+
+    if not approx:
+        fresnel_reflectance = calculate_reflectance(cos_theta, ior_incident, ior_transmitted)
+        return fresnel_reflectance if fresnel_reflectance is not None else 1.0
     
     # 2. Handle Total Internal Reflection (TIR) Check
     # This is required when moving from dense -> rare medium (e.g. Glass -> Air)
@@ -791,9 +743,259 @@ def calculate_fresnel_ratio(
     r0 = ((ior_incident - ior_transmitted) / (ior_incident + ior_transmitted)) ** 2
     
     # 4. Schlick Approximation
-    fresnel_reflectance = schlick_fresnel(cos_theta, np.array([r0]))[0]
+    fresnel_reflectance = schlick_fresnel(cos_theta, np.array([r0, r0, r0]))
     
-    return fresnel_reflectance
+    return float(np.linalg.norm(fresnel_reflectance))
+
+def ggx_distribution(normal: np.ndarray, half_vector: np.ndarray, roughness: float) -> float:
+    """Calculates the GGX/Trowbridge-Reitz Normal Distribution Function (D)."""
+    alpha = max(roughness ** 2, 1e-4)
+    dot_n_h = np.dot(normal, half_vector)
+    
+    # D is 0 if the half vector is below the geometric surface
+    if dot_n_h <= 0:
+        return 0.0
+
+    denominator = (dot_n_h ** 2) * (alpha ** 2 - 1.0) + 1.0
+    return (alpha ** 2) / (np.pi * denominator * denominator)
+
+def smith_geometry(n: np.ndarray, v: np.ndarray, l: np.ndarray, roughness: float) -> float:
+    """
+    Smith Geometry Shadowing-Masking function.
+    Determines what percentage of microfacets are blocked by other microfacets.
+    """
+    # Using the Schlick-GGX approximation for Smith G
+    # k = (alpha + 1)^2 / 8  (for direct lighting / analytic)
+    # k = alpha^2 / 2        (for IBL / path tracing) -> We use this usually for consistency
+    alpha = roughness ** 2
+    k = (alpha) / 2.0 
+
+    dot_n_v = np.abs(np.dot(n, v))
+    dot_n_l = np.abs(np.dot(n, l))
+
+    g1_v = dot_n_v / (dot_n_v * (1.0 - k) + k)
+    g1_l = dot_n_l / (dot_n_l * (1.0 - k) + k)
+
+    return g1_v * g1_l
+
+def calculate_microfacet_pdf(
+    incident_dir: np.ndarray,   # Direction light is coming FROM (World space)
+    outgoing_dir: np.ndarray,   # The sampled direction (Reflection or Refraction)
+    surface_normal: np.ndarray,
+    roughness: float,
+    ior_incident: float,
+    ior_transmitted: float,
+    fresnel_probability: float  # The 'F' value calculated during sampling
+) -> float:
+    """
+    Calculates the PDF for a specific reflection or refraction event.
+    """
+    # 1. Normalize Vectors
+    V = -unit(incident_dir) # View Vector (pointing to viewer)
+    L = unit(outgoing_dir)  # Light/Sample Vector
+    N = unit(surface_normal)
+
+    # 2. Determine if this is Reflection or Refraction
+    # We check if L and N are in the same hemisphere
+    is_reflection = np.dot(L, N) > 0
+
+    if is_reflection:
+        # --- REFLECTION PDF ---
+        
+        # Calculate Half Vector (H) for Reflection
+        # H = Normalize(V + L)
+        H = unit(V + L)
+        
+        # Calculate Dot Products
+        dot_n_h = np.abs(np.dot(N, H))
+        dot_v_h = np.abs(np.dot(V, H))
+        
+        # Calculate D term
+        D = ggx_distribution(N, H, roughness)
+        
+        # Jacobian for Reflection: 1 / (4 * (V.H))
+        pdf_geometry = (D * dot_n_h) / (4.0 * dot_v_h + 1e-8)
+        
+        # Combine with Selection Probability (Fresnel)
+        return pdf_geometry * fresnel_probability
+
+    else:
+        # --- REFRACTION PDF ---
+        
+        # Calculate Half Vector (H) for Refraction
+        # Standard microfacet H for refraction: -(eta_i * V + eta_t * L)
+        # Note: We must be careful with signs. 
+        # Usually H is constructed to point into the simpler medium or averaged.
+        # Robust method:
+        eta_i = ior_incident
+        eta_t = ior_transmitted
+        
+        H_unstand = -(eta_i * V + eta_t * L)
+        H = unit(H_unstand)
+        
+        # D term
+        dot_n_h = np.abs(np.dot(N, H))
+        D = ggx_distribution(N, H, roughness)
+        
+        # Calculate Terms for Jacobian
+        dot_v_h = np.dot(V, H)
+        dot_l_h = np.dot(L, H)
+        
+        # Denominator part: (eta_i * (V.H) + eta_t * (L.H))^2
+        sqrt_denom = (eta_i * dot_v_h + eta_t * dot_l_h)
+        denom = sqrt_denom * sqrt_denom
+        
+        # Jacobian for Refraction
+        # J = (eta_t^2 * |L.H|) / (eta_i * (V.H) + eta_t * (L.H))^2
+        # Note: The 'D(h) * dot_n_h' part comes from the sampling of H itself.
+        jacobian = (eta_t ** 2 * np.abs(dot_l_h)) / (denom + 1e-8)
+        
+        # PDF in solid angle measure
+        pdf_geometry = D * dot_n_h * jacobian 
+        
+        # Combine with Selection Probability (1 - F)
+        # Note: We multiply by derivative of H wrt solid angle
+        # Most implementations simplify the weight calculation directly, 
+        # but this is the raw PDF value.
+        return pdf_geometry * (1.0 - fresnel_probability)
+    
+def sample_microfacet_glass(
+        incident_dir: np.ndarray,
+        surface_normal: np.ndarray,
+        new_origin: np.ndarray,
+        sampler: Sampler,
+        roughness: float,
+        ior_incident: float,
+        ior_transmitted: float,
+        bias: float = 1e-4
+    ) -> TracingRay:
+    """
+    Unified Microfacet BSDF (Glass/Dielectric).
+    Probabilistically samples Reflection or Refraction based on Fresnel term.
+    """
+    # 1. Setup & IOR
+    # -------------------------
+    # Direction vectors should be normalized
+    view_dir = -unit(incident_dir) # Pointing towards viewer/light source
+    
+    # Calculate Eta (Relative IOR)
+    eta = ior_incident / ior_transmitted
+
+    # 2. Sample Microfacet Normal (H) (GGX)
+    # -------------------------
+    # Both reflection and refraction rely on the same microfacet distribution.
+    # We sample H once.
+    u, v = sampler.next_2d()
+    alpha = max(roughness ** 2, bias) # Prevent div by zero
+
+    phi = 2.0 * np.pi * u
+    cos_theta = np.sqrt((1.0 - v) / (1.0 + ((alpha ** 2) - 1.0) * v))
+    sin_theta = np.sqrt(max(0.0, 1.0 - cos_theta * cos_theta))
+
+    H_tangent = np.array([
+        sin_theta * np.cos(phi),
+        sin_theta * np.sin(phi),
+        cos_theta
+    ])
+
+    tangent, bitangent = orthonormal_basis(surface_normal)
+    H_world = (tangent * H_tangent[0]) + (bitangent * H_tangent[1]) + (surface_normal * H_tangent[2])
+    H_world = unit(H_world)
+
+    # Ensure H points into the same hemisphere as the view direction
+    if np.dot(view_dir, H_world) < 0:
+        H_world = -H_world
+
+    # 3. Calculate Fresnel Term (The Selector)
+    # -------------------------
+    dot_v_h = np.dot(view_dir, H_world)
+    dot_v_h = np.clip(dot_v_h, 0.0, 1.0)
+    incident_angle_deg = np.degrees(math.acos(dot_v_h))
+
+    # Calculate F (Probability of Reflection)
+    # This handles the complex Fresnel equations for you.
+    F = calculate_reflectance(incident_angle_deg, ior_incident, ior_transmitted)
+    
+    # Handle Total Internal Reflection (TIR)
+    # Your module returns None if TIR occurs
+    if F is None:
+        F = 1.0
+
+    # 4. Russian Roulette: Reflect or Refract?
+    # -------------------------
+    # We use a new random sample to decide the path.
+    # Note: Some integrators pass a specific sample for this. We'll ask the sampler.
+    w = sampler.next_1d()
+    dot_v_h = np.dot(view_dir, H_world)
+
+    if w < F:
+        # --- REFLECTION ---
+        # Critical: Pass H_world as the normal!
+        final_dir = calculate_reflection_vector(H_world, incident_dir)
+        
+        # Origin Offset: Push AWAY from geometric normal
+        final_origin = new_origin + (surface_normal * bias)
+        
+        # Note on PDF: In a combined BSDF, the PDF is usually weighted by the probability
+        # of choosing this lobe.
+        # pdf_final = pdf_reflection * F
+        
+    else:
+        # --- REFRACTION ---
+        final_dir = calculate_refraction_vector(
+            surface_normal=H_world,  # Use Microfacet H
+            direction=incident_dir,
+            refractive_index_incident=ior_incident,
+            refractive_index=ior_transmitted
+        )
+        
+        # Safety: If your module detects TIR (returning None), fallback to reflection.
+        # (Though our F check above should catch this, floating point errors happen).
+        if final_dir is None:
+            final_dir = calculate_reflection_vector(H_world, incident_dir)
+            final_origin = new_origin + (surface_normal * bias)
+        else:
+            # Origin Offset: Push THROUGH geometric normal
+            final_origin = new_origin - (surface_normal * bias)
+
+        # pdf_final = pdf_refraction * (1 - F)
+
+    return TracingRay(origin=final_origin, orientation=final_dir)
+
+def calculate_throughput_weight(
+        light_dir: np.ndarray,
+        surface_normal: np.ndarray,
+        bsdf_value: np.ndarray,
+        pdf: float,
+        bias: float = 1e-6
+    ) -> np.ndarray: 
+    """
+    Calculates the weight (color contribution) of a specific ray sample 
+    using the Monte Carlo estimator: (BSDF * CosTheta) / PDF.
+    
+    Args:
+        light_dir: The direction of the OUTGOING (sampled) ray.
+        surface_normal: The geometric surface normal.
+        bsdf_value: The RGB color returned by evaluate_bsdf().
+        pdf: The probability density calculated by calculate_pdf().
+    """
+    
+    # 1. Safety Check: Avoid division by zero
+    if pdf < bias:
+        return np.array([0.0, 0.0, 0.0])
+
+    # 2. Geometry Term (Cosine Law / Foreshortening)
+    # We take the Absolute value (|N.L|) because:
+    # - Reflection: L is on the same side as N (positive).
+    # - Refraction: L is on the opposite side of N (negative).
+    # Both attenuate light based on the projected area.
+    cos_theta = np.abs(np.dot(surface_normal, light_dir))
+
+    # 3. Calculate Weight
+    # Weight = (BSDF * CosTheta) / PDF
+    weight = (bsdf_value * cos_theta) / pdf
+
+    return weight
 
 """
 Luminance module: Provides classes for color representation, light rays, materials, and light sources.
