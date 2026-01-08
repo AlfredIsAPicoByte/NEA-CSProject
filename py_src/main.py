@@ -86,11 +86,11 @@ if __name__ == "__main__":
 
     generator = JitterRayGenerator()
     intersection = BVHIntersection(max_distance=100, max_steps=10)
-    interactor = StandardInteraction()
-    shading = RecursiveLambertShading()
+    interactor = TerminalInteraction()
+    shading = BasicLambertShading()
 
     raytracer = Raytracer(
-        max_depth=4,
+        max_depth=1,
         sampling_manager=sampling_manager,
         ray_generator=generator,
         intersection_strategy=intersection,

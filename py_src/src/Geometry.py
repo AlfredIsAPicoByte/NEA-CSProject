@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
-from typing import Optional, Union, List, Tuple, cast
+from typing import Optional, Union, List, Tuple, Iterator, cast
 from dataclasses import dataclass, field
 
 from CommonUtils import unit
@@ -706,7 +706,6 @@ class Prism(Shape3D):
         if height <= 0:
             raise ValueError("Height must be > 0")
         self.height = float(height)
-        self.transform.position = base_polygon.transform.position
 
     @property
     def volume(self) -> float:
@@ -745,8 +744,6 @@ class Pyramid(Shape3D):
         if height <= 0:
             raise ValueError("Height must be > 0")
         self.height = float(height)
-        self.apex = base_polygon.transform.position + np.array([0, height, 0])
-        self.transform.position = base_polygon.transform.position
 
     @property
     def volume(self) -> float:
@@ -785,7 +782,6 @@ class Capsule(Shape3D):
         if radius <= 0:
             raise ValueError("Radius must be > 0")
         self.radius = float(radius)
-        self.transform.position = (self.point1 + self.point2) / 2
 
     def signed_distance(self, point: np.ndarray, bias: float = 1e-10) -> float:
         """Distance from point to capsule surface."""
@@ -842,25 +838,16 @@ class VObject:
     Visual object combining shape, transform, and material.
     Acts as a Node in the Scene Graph.
     """
-    shape: Optional["Shape"] = None # Optional so we can have empty "Group" nodes
-    transform: Optional['transform'] = None
+    transform: 'Transform' = field(default_factory=lambda: Transform.identity())
+    shape: Optional['Shape'] = None # Optional so we can have empty "Group" nodes
     material: Optional["PBRMaterial"] = None
     name: str = "VObject"
 
     children: List["VObject"] = field(default_factory=list)
     parent: Optional["VObject"] = field(default=None, repr=False) # Exclude from repr to avoid recursion
 
-    def __post_init__(self):
-        if self.transform is None:
-            # Assuming Transform is defined
-            self.transform = Transform.identity()
-        
-        # If no material provided on the VObject itself, inherit from the shape
-        if self.material is None and self.shape is not None and hasattr(self.shape, 'material'):
-            self.material = getattr(self.shape, 'material', None)
-
     @property
-    def world_transform(self) -> 'transform':
+    def world_transform(self) -> 'Transform':
         """
         Calculates the absolute World Space transform by traversing up the hierarchy.
         Usage: Use this property in your Renderer/Intersection loop.
@@ -868,7 +855,10 @@ class VObject:
         if self.parent:
             # Combine Parent(World) * Self(Local)
             # Assuming your Transform class supports composition via multiplication
-            return self.parent.world_transform * self.transform
+            t_m = self.parent.world_transform * self.transform
+            if isinstance(t_m, 'Transform'):
+                return t_m
+            return Transform(*Transform.decompose_matrix(t_m))
         return self.transform
 
     def add_child(self, child: "VObject"):
@@ -884,12 +874,45 @@ class VObject:
 
     def flatten(self) -> List["VObject"]:
         """
-        Returns a flat list of this object and all its descendants.
-        Useful for passing a simple list to the Renderer.
+        Returns a flat list of this object and all descendants using an iterative stack.
+        Safe for very deep hierarchies.
         """
-        flat_list = [self]
+        result = []
+        # Start with the current object
+        stack = [self]
+        
+        while stack:
+            current = stack.pop()
+            result.append(current)
+            
+            # Add children to the stack. 
+            # We reverse them so they pop in the original order (optional, aesthetic).
+            for child in reversed(current.children):
+                stack.append(child)
+                
+        return result
+
+    def flatten_with_transforms(self, parent_matrix: Optional[np.ndarray]) -> List[Tuple["VObject", np.ndarray]]:
+        """
+        Returns a list of (object, absolute_world_matrix).
+        Calculates world matrices on the way down to avoid re-traversing up later.
+        """
+        # 1. Calculate World Matrix for self
+        # If no parent matrix provided, use Identity (or self's local matrix if root)
+        local_mat = self.transform.get_global_matrix()
+        
+        if parent_matrix is not None:
+            world_mat = parent_matrix @ local_mat
+        else:
+            world_mat = local_mat
+
+        # 2. Add self to list
+        flat_list: List[Tuple["VObject", np.ndarray]] = [(self, world_mat)]
+
+        # 3. Pass calculated world_mat down to children
         for child in self.children:
-            flat_list.extend(child.flatten())
+            flat_list.extend(child.flatten_with_transforms(world_mat))
+        
         return flat_list
 
     def __hash__(self):
@@ -911,9 +934,9 @@ class ShapeFactory(ABC):
         raise NotImplementedError
 
 class CircleFactory(ShapeFactory):
-    def create(self, center: np.ndarray, radius: float, **kwargs) -> Circle: # type: ignore
+    def create(self, radius: float, **kwargs) -> Circle: # type: ignore
         # Circle ctor expects (center, normal, radius); default normal is +Z
-        return Circle(center, np.array([0.0, 0.0, 1.0]), radius, **kwargs)
+        return Circle(radius, **kwargs)
 
 class TriangleFactory(ShapeFactory):
     def create(self, v1: np.ndarray, v2: np.ndarray, v3: np.ndarray, **kwargs) -> Triangle: # type: ignore
@@ -924,12 +947,12 @@ class PolygonFactory(ShapeFactory):
         return Polygon(vertices, **kwargs) # type: ignore
 
 class SphereFactory(ShapeFactory):
-    def create(self, center: np.ndarray, radius: float, **kwargs) -> Sphere: # type: ignore
-        return Sphere(center, radius, **kwargs)
+    def create(self, radius: float, **kwargs) -> Sphere: # type: ignore
+        return Sphere(radius, **kwargs)
 
 class CubeFactory(ShapeFactory):
-    def create(self, center: np.ndarray, side_length: float, **kwargs) -> Cube: # type: ignore
-        return Cube(center, side_length, **kwargs)
+    def create(self, size: float | np.ndarray, **kwargs) -> Cube: # type: ignore
+        return Cube(size, **kwargs)
 
 class PrismFactory(ShapeFactory):
     def create(self, base_polygon: Polygon, height: float, **kwargs) -> Prism: # type: ignore

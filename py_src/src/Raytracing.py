@@ -87,7 +87,7 @@ class ShadingStrategy(ABC):
         scene: Scene,
         ray: TracingRay,
         hit_info: HitInfo,
-        current_depth: int,
+        recursions_left: int,
         trace_function: Callable[[Scene, TracingRay, int, Sampler], Color], 
         intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], HitInfo],
         interaction_function: Callable[[TracingRay, HitInfo, Sampler, float, Optional["TracingStats"]], Optional[TracingRay]],
@@ -204,7 +204,8 @@ class RayMarchingIntersection(IntersectionStrategy):
             # Hit Check
             if distance_to_closest <= self.epsilon:
                 surface_normal = np.array([0.0, 0.0, 1.0])
-                closest_object_shape = getattr(closest_object, "shape", None) 
+                closest_object_shape = getattr(closest_object, "shape", None)
+
                 if closest_object_shape is not None:
                     surface_normal = closest_object_shape.get_normal(point)
 
@@ -224,11 +225,10 @@ class RayMarchingIntersection(IntersectionStrategy):
             distance_traveled += distance_to_closest * self.step_relaxation
             
             # Frustum/Far Plane checks
-            cam: VCamera = cast(VCamera,getattr(scene, "camera", None))
-            if cam:
+            if scene.camera:
                 obj_pos = getattr(closest_object, 'transform', Transform.identity()).position
-                far_plane_dist = np.linalg.norm(cam.transform.position - obj_pos)
-                if distance_traveled >= self.max_distance or far_plane_dist >= cam.far:
+                far_plane_dist = np.linalg.norm(scene.camera.transform.position - obj_pos)
+                if distance_traveled >= self.max_distance or far_plane_dist >= scene.camera.far:
                     break
 
         if stats is not None:
@@ -276,12 +276,11 @@ class InverseSDFIntersection(IntersectionStrategy):
             hit_obj = getattr(hit_info, "obj", None)
             if hit_obj is None:
                 break
-
-            cam = getattr(scene, "camera", None)
-            if cam is None:
+            
+            if scene.camera is None:
                 break
 
-            far_plane_distance = np.linalg.norm(cam.transform.position - hit_obj.transform.position)
+            far_plane_distance = np.linalg.norm(scene.camera.transform.position - hit_obj.transform.position)
             if hit_info.hit and (hit_info.distance < closest_hit.distance or hit_info.distance < far_plane_distance) :
                 closest_hit = hit_info
                 
@@ -725,70 +724,80 @@ class StandardInteraction(InteractionStrategy):
         bias: float = 1e-4,
         stats: Optional["TracingStats"] = None
     ) -> Optional[TracingRay]:
-        """
-        Decide between reflection and refraction (Russian roulette) and generate the next ray.
-        Updates ray depth/is_inside and conservative tracing stats counters.
-        """
-        v_obj = hit_info.obj
-        material = getattr(v_obj, "material", None)
-        if material is None:
-            return None
+        
+        obj = hit_info.obj
+        material = getattr(obj, "material", None)
+        if material is None: return None
 
-        # Surface normal (fall back to up)
-        normal = getattr(hit_info, "normal", np.array([0.0, 1.0, 0.0]))
-        hit_point = getattr(hit_info, "point", None)
-        if hit_point is None:
-            return None
+        # 1. Geometry Setup
+        # -----------------
+        geometric_normal = hit_info.normal
+        hit_point = hit_info.point
+        
+        # Check if we are Entering or Exiting the medium
+        # Dot product < 0 means Ray and Normal oppose each other (Entering)
+        entering = np.dot(ray.orientation, geometric_normal) < 0
+        
+        if entering:
+            # Entering: Air -> Glass
+            n1 = self.scene_ior
+            n2 = material.ior
+            normal_for_math = geometric_normal
+        else:
+            # Exiting: Glass -> Air
+            n1 = material.ior
+            n2 = self.scene_ior
+            # Flip normal so it points towards the incoming ray (Standard convention)
+            normal_for_math = -geometric_normal
 
-        # Indices of refraction (fallback to 1.0)
-        n1 = self.scene_ior
-        n2 = getattr(material.data, "ior", self.scene_ior + 1e-2)
-
-        # Fresnel-based decision
-        reflection_chance = calculate_fresnel_ratio(
-            ray.orientation, normal, n1, n2
-        )
-
-        do_refract = sampler.random_float() > reflection_chance
-
+        # 2. Generate the Ray (Physics)
+        # -----------------
         new_ray = None
-
-        # Try refraction first if decision says so
-        if do_refract:
-            new_ray = material.calculate_microfacet_refraction_ray(
-                direction=ray.orientation,
-                surface_normal=normal,
-                new_origin=hit_point - normal * bias,
+        
+        if material.type == MaterialType.GLASS:
+            # Use our unified Microfacet Glass function
+            new_ray = material.sample_microfacet_glass(
+                incident_dir=ray.orientation,
+                surface_normal=normal_for_math,
+                new_origin=hit_point,
                 sampler=sampler,
+                roughness=material.roughness,
                 ior_incident=n1,
-                ior_transmitted=n2
+                ior_transmitted=n2,
+                bias=bias
             )
-            # Total internal reflection: fall back to reflection
-            if new_ray is None:
-                do_refract = False
+            
+            # 3. Post-Processing (State Management)
+            # -----------------
+            if new_ray:
+                # Detect if we Reflected or Refracted based on geometry
+                # If the new ray is on the opposite side of the surface => Refraction
+                is_transmission = np.dot(new_ray.orientation, geometric_normal) * np.dot(ray.orientation, geometric_normal) > 0
+                
+                # Update "Inside" status for Volumetrics (Beer's Law)
+                # If we transmitted, we toggle the state. If reflected, state stays same.
+                current_inside_status = getattr(ray, "is_inside", False)
+                new_ray.is_inside = not current_inside_status if is_transmission else current_inside_status
 
-        # Reflection path (or fallback)
-        if not do_refract:
-            new_ray = material.calculate_microfacet_reflection_ray(
-                direction=ray.orientation,
-                surface_normal=normal,
-                new_origin=hit_point + normal * bias,
-                sampler=sampler
-            )
+                # Update Stats
+                if stats:
+                    if is_transmission: stats.rays_refraction += 1
+                    else: stats.rays_reflection += 1
 
-        if new_ray is not None:
-            # Toggle inside flag on refraction
-            if do_refract:
-                new_ray.is_inside = not getattr(ray, "is_inside", False)
-                if stats is not None:
-                    stats.rays_refraction += 1
-            else:
-                new_ray.is_inside = getattr(ray, "is_inside", False)
-                if stats is not None:
-                    stats.rays_reflection += 1
+                # Set Throughput (Color)
+                # For Glass, the math cancels out to 1.0 (conservation), so we just use Albedo tint.
+                # We cast to list/tuple if your Color class requires it
+                color_val = material.albedo.to_list() if hasattr(material.albedo, "to_list") else material.albedo
+                new_ray.throughput = color_val
 
-            # Reset throughput for a fresh path (material handles weighting)
-            new_ray.throughput = [1.0, 1.0, 1.0]
+        # Handle Diffuse/Specular fallback if needed
+        elif material.type == MaterialType.DIFFUSE:
+             # (Placeholder for your diffuse logic)
+             pass 
+
+        # Copy depth for recursion safety
+        if new_ray:
+            new_ray.recursions_left = getattr(ray, "current_depth", 0) + 1
 
         return new_ray
 
@@ -810,7 +819,7 @@ class NormalShading(ShadingStrategy):
             scene: Scene,
             ray: TracingRay,
             hit_info: HitInfo,
-            current_depth: int,
+            recursions_left: int,
             trace_function: Callable, 
             intersection_function: Callable,
             interaction_function: Callable,
@@ -818,11 +827,6 @@ class NormalShading(ShadingStrategy):
             bias: float = 1e-4,
             stats: Optional["TracingStats"] = None
         ) -> Color:
-        
-        # If we missed, return black (or background)
-        if not (hit_info.hit and hit_info.obj):
-            return Color(0.0, 0.0, 0.0)
-            
         # 1. Get Normal
         normal = getattr(hit_info, "normal", np.array([0.0, 1.0, 0.0]))
         
@@ -848,19 +852,12 @@ class DepthShading(ShadingStrategy):
         self.min_dist = min_depth
         self.max_dist = max_depth
 
-    def shade(self, scene: Scene, ray: TracingRay, hit_info: HitInfo, current_depth: int, *args, **kwargs) -> Color:
-        
-        # 1. Debug "Miss"
-        if not hit_info.hit:
-            return Color(1.0, 0.0, 0.0) # RED = Missed everything
-
+    def shade(self, scene: Scene, ray: TracingRay, hit_info: HitInfo, recursions_left: int, *args, **kwargs) -> Color:
         dist = hit_info.distance
-        
-        # 2. Safety Check: Verify we aren't getting negative distances from the SDF
-        if dist < 0:
-            return Color(0.0, 1.0, 0.0) # GREEN = Error (Negative Distance)
 
-        # 3. Linear Depth Calculation
+        if dist < 0:
+            return Color(0.0, -1.0, 0.0) # Negative Distance
+
         range_dist = self.max_dist - self.min_dist
         if range_dist == 0: range_dist = 1.0
         
@@ -883,31 +880,27 @@ class FlatShading(ShadingStrategy):
             scene: Scene,
             ray: TracingRay,
             hit_info: HitInfo,
-            current_depth: int,
+            recursions_left: int,
             *args, **kwargs
         ) -> Color:
-        
-        if not (hit_info.hit and hit_info.obj):
-            orientation = getattr(ray, "orientation", [0.0, 0.0, -1.0])
-            return scene.get_background_color(orientation)
-
-        mat = hit_info.obj.material
-        if mat is None:
-            return Color(1.0, 0.0, 1.0) # Error Pink
+        material = hit_info.obj.material
+        if material is None:
+            return Color(1.0, 0.0, 1.0) # Material Error
 
         # Just return the base color (Albedo)
-        return getattr(mat, 'albedo', Color(1.0, 1.0, 1.0))
+        return material.data.albedo
 
 class BasicLambertShading(ShadingStrategy):
     """
-    Simple Lambertian shader.
+    Simple Lambertian shader (Direct Light Only).
+    Calculates lighting from scene lights but does NOT recurse for reflections/refractions.
     """
     def shade(
             self,
             scene: "Scene",
             ray: "TracingRay",
             hit_info: "HitInfo",
-            current_depth: int,
+            recursions_left: int,
             trace_function: Callable[[Scene, TracingRay, int, Sampler], Color], 
             intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], HitInfo],
             interaction_function: Callable[[TracingRay, HitInfo, Sampler, float, Optional["TracingStats"]], Optional[TracingRay]],
@@ -915,111 +908,133 @@ class BasicLambertShading(ShadingStrategy):
             bias: float = 1e-4,
             stats: Optional["TracingStats"] = None
         ) -> Color:
-        if not (hit_info.hit or hasattr(hit_info, "obj")):
-            return Color(0.0, 0.0, 0.0)
+
+        # Material validation
+        material = getattr(hit_info.obj, 'material', None)
+        if material is None:
+            return Color(1.0, 0.0, 1.0) # Material Error
+
+        # 1. Setup Geometry
+        # We need the View Direction (V) for specular highlights
+        view_dir = -unit(ray.orientation) 
+        hit_point = hit_info.point
+        final_color = Color(0.0, 0.0, 0.0)
+
+        # 2. Handle Emission (Self-Illumination)
+        # Even in basic shading, emissive objects should glow.
+        if material.type == MaterialType.EMISSIVE:
+            return material.get_emissive_component()
+
+        # 3. Iterate Over Scene Lights
+        # ----------------------------
+        def visibility_fn(point: np.ndarray, light: LightSource) -> float:
+            # Calculate direction to this specific light (or sample point)
+            # Note: _calculate_shadow_visibility expects light_dir
+            light_dir_to_source = light.get_light_direction(point)
+            return self._calculate_shadow_visibility(scene, point, light, light_dir_to_source, sampler)
+
+        # 4. Evaluate Direct Lighting
+        # The material class already contains the logic to loop over lights
+        # and apply the BRDF (Diffuse + Specular).
         
-        mat = getattr(hit_info.obj, 'material', None)
-        if mat is None:
-            return Color(1.0, 0.0, 1.0) # Pink for missing material
+        direct_light = material.evaluate_direct_light(
+            scene_lights=scene.get_lights(),
+            hit_info=hit_info,
+            view_dir=view_dir,
+            visibility_function=visibility_fn,
+            bias=bias
+        )
+        
+        final_color += direct_light
+
+        # 6. Ambient Light (Optional)
+        # Adds a flat base color so shadowed areas aren't pitch black
+        if self.ambient_enabled:
+            final_color += material.get_ambient_color(scene.ambient_color, scene.ambient_intensity)
+
+        return final_color
+
+    def _calculate_shadow_visibility(self, scene: Scene, point: np.ndarray, light: LightSource, light_dir: np.ndarray, sampler: Sampler) -> float:
+        """
+        Calculates what fraction of the light is visible from 'point'.
+        Returns 0.0 (Fully Blocked) to 1.0 (Fully Visible).
+        """
+        if not self.enable_shadows:
+            return 1.0
+
+        radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
+        
+        # Case A: Point Light (Hard Shadows)
+        if radius <= 0.0 or self.shadow_samples <= 1:
+            # Check if a ray from point -> light is blocked
+            is_blocked = scene.is_occluded(point, light.position, bias=self.shadow_bias)
+            return 0.0 if is_blocked else 1.0
+        
+        # Case B: Area Light (Soft Shadows)
+        else:
+            visible_count = 0
+            for _ in range(self.shadow_samples):
+                # Pick a random point on the light source
+                # Note: light_dir here is the general direction, but for area lights 
+                # we usually sample the disc facing the point.
+                sample_pos = self._random_point_on_disc(light.position, -light_dir, float(radius), sampler)
+                
+                if not scene.is_occluded(point, sample_pos, bias=self.shadow_bias):
+                    visible_count += 1
             
-        # Create a minimal color using ambient only
-        ambient: Color = getattr(scene, 'ambient_color', Color(0.03, 0.03, 0.03))
-        intensity: float = getattr(scene, 'ambient_intensity', 0.1)
-            
-        albedo: Color = getattr(mat, 'albedo', Color(1.0, 1.0, 1.0)) if mat is not None else Color(1.0, 1.0, 1.0)
-        return ambient * intensity * albedo
-
-    def _calculate_shadow_visibility(self, scene: Scene, point: np.ndarray, light: LightSource, light_dir: np.ndarray, sampler: Sampler):
-        visibility = 1.0
-
-        if self.enable_shadows:
-            radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
-            if not radius or self.shadow_samples == 1:
-                # single test for occlusion
-                occluded = scene.is_occluded(point, light.position, bias=self.shadow_bias)
-                visibility = 0.0 if occluded else 1.0
-            
-            else:
-                # soft shadow by sampling area light
-                visible_count = 0
-                for _ in range(self.shadow_samples):
-                    sample_pos = self._random_point_on_disc(light.position, -light_dir, float(radius), sampler)
-                    if not scene.is_occluded(point, sample_pos, bias=self.shadow_bias):
-                        visible_count += 1
-                visibility = visible_count / float(self.shadow_samples)
-
-        return visibility
-
+            return float(visible_count) / float(self.shadow_samples)
+        
 class RecursiveLambertShading(BasicLambertShading):
-    """
-    Standard recursive shading. 
-    Handles Direct Light (Shadow Rays) and Indirect Light (Reflection/Refraction Rays).
-    """
     def shade(
             self,
             scene: Scene,
             ray: TracingRay,
             hit_info: HitInfo,
-            current_depth: int,
-            trace_function: Callable[[Scene, TracingRay, int, Sampler], Color], 
-            intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], HitInfo],
-            interaction_function: Callable[[TracingRay, HitInfo, Sampler, float, Optional["TracingStats"]], Optional[TracingRay]],
+            recursions_left: int,
+            trace_function: Callable, 
+            intersection_function: Callable,
+            interaction_function: Callable,
             sampler: Sampler,
             bias: float = 1e-4,
             stats: Optional["TracingStats"] = None
         ) -> Color:
-        if not (hit_info.hit or hasattr(hit_info, "obj")):
-            return Color(0.0, 1.0, 1.0) # Cyan for missing object
 
-        material = getattr(hit_info.obj, "material", None)
+        # Material validation
+        material = getattr(hit_info.obj, 'material', None)
         if material is None:
-            return Color(1.0, 0.0, 1.0) # Pink for missing material
-        
-        # --- 1. Emission (The Glow) ---
-        # Added first so even if we stop recursing, we see the light.
+            return Color(1.0, 0.0, 1.0) # Material Error
+
         final_color = Color(0.0, 0.0, 0.0)
-        if material.type == MaterialType.EMISSIVE:
-            final_color += material.get_emissive_component()
-            # Emissive materials usually don't reflect/receive shadow, so we can return early
-            return final_color
-
-        # --- 2. Direct Lighting (Next Event Estimation) ---
-        view_dir = -unit(ray.orientation)
         
-        def visibility_function(point: np.ndarray, light: LightSource):
-            return self._calculate_shadow_visibility(scene, point, light, light.get_light_direction(point), sampler)
+        # --- 1. Direct Lighing, reuse basic lambert shading
+        # Even in basic shading, emissive objects should glow.
+        if material.type == MaterialType.EMISSIVE:
+            return material.get_emissive_component()
+        
+        direct_light = super().shade(scene, ray, hit_info, recursions_left, trace_function, intersection_function, interaction_function, sampler, bias, stats)
 
-        direct_light = material.evaluate_direct_light(
-            scene.get_lights(), hit_info, view_dir, visibility_function
-        )
-
-        # --- 3. Indirect Lighting (Recursion) ---
+        # --- 2. Indirect Lighting (Recursion) ---
         indirect_light = Color(0.0, 0.0, 0.0)
 
-        # The 'interaction_function' calculates the physics of the bounce.
-        # It performs Russian Roulette (Reflect OR Refract) and sets 'new_ray.throughput'.
-        if current_depth > 0:
-            probe_color = Color(1.0, 1.0, 1.0)
+        if recursions_left > 0:
+            next_ray = interaction_function(ray, hit_info, sampler, bias, stats)
 
-            new_ray = interaction_function(ray, hit_info, sampler, bias, stats)
-            
-            if new_ray is not None:
-                if stats is not None:
-                    stats.max_depth_reached = max(stats.max_depth_reached, getattr(new_ray, "depth", 0))
+            if stats is not None:
+                stats.max_depth_reached = max(stats.max_depth_reached, getattr(next_ray, "current_depth", 0))
 
-                incoming_light = trace_function(scene, new_ray, current_depth - 1, sampler)
+            if next_ray is not None:
+                incoming_radiance = trace_function(scene, next_ray, recursions_left - 1, sampler)
                 
-                indirect_light = incoming_light * Color(*new_ray.throughput)
-            else:
-                indirect_light = probe_color
+                # Apply the throughput (The Albedo/Tint of the glass)
+                # throughput is usually [r, g, b] list or numpy array
+                bounce_weight = Color(*next_ray.throughput)
+                indirect_light = incoming_radiance * bounce_weight
 
+        # --- 3. Combine ---
         final_color = direct_light + indirect_light
 
-        if self.ambient_enabled:
-            final_color += material.get_ambient_color(scene.ambient_color, scene.ambient_intensity)
-        
-        # --- 5. Volumetrics (Beer's Law) ---
-        # If the ray passed THROUGH an object to get here, absorb some color.
+        # --- 4. Volumetrics (Beer's Law) ---
+        # If the ray that *arrived* here was traveling through the material, absorb light.
         if getattr(ray, "is_inside", False):
             final_color = material.get_volumetric_component(final_color, hit_info.distance)
 
@@ -1051,7 +1066,7 @@ class XRayThicknessShading(ShadingStrategy):
         scene: "Scene",
         ray: "TracingRay",
         hit_info: "HitInfo",
-        current_depth: int,
+        recursions_left: int,
         trace_function: Callable[[Scene, TracingRay, int, Sampler], Color], 
         intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], HitInfo],
         interaction_function: Callable[[TracingRay, HitInfo, Sampler, float, Optional["TracingStats"]], Optional[TracingRay]],
@@ -1063,8 +1078,6 @@ class XRayThicknessShading(ShadingStrategy):
         # Normal pointing OUT of the surface
         normal = getattr(hit_info, "normal", np.array([0.0, 1.0, 0.0]))
         hit_point = getattr(hit_info, "point", None)
-        if hit_point is None:
-            return Color(0.0, 0.0, 0.0)
         
         view_dir = unit(-ray.orientation)
 
@@ -1257,15 +1270,15 @@ class Raytracer(Algorithm):
         self.custom_background = custom_background
         self.enable_scene_background = enable_scene_background
 
-        self.stats = TracingStats()
+        self.stats: TracingStats = TracingStats()
 
-    def _trace_ray(self, scene: Scene, ray: TracingRay, depth: int, sampler: Sampler) -> Color:
+    def _trace_ray(self, scene: Scene, ray: TracingRay, recursions_left: int, sampler: Sampler) -> Color:
         """
         The recursive engine. It takes a ray, finds what it hits, and calculates the color.
         If the surface is reflective, this function will be called again by the shader.
         """
-        if depth < 0:
-            return Color(1.0, 0.0, 0.0) # Red for depth error
+        if recursions_left < 0:
+            return Color(-1.0, 0.0, 0.0) # depth error
 
         hit_info = self.intersector.find_hit(scene, ray, self.stats)
 
@@ -1274,7 +1287,7 @@ class Raytracer(Algorithm):
                 scene=scene, 
                 ray=ray, 
                 hit_info=hit_info,
-                current_depth=depth,
+                recursions_left=recursions_left,
                 trace_function=self._trace_ray,
                 intersection_function=self.intersector.find_hit,
                 interaction_function=self.interactor.interact,
@@ -1285,8 +1298,8 @@ class Raytracer(Algorithm):
         # The ray missed all scene objects
         if self.enable_scene_background:
             return self.custom_background if self.custom_background is not None else Color(0.0, 0.0, 0.0)
-        orientation = getattr(ray, "orientation", [0.0, 0.0, -1.0])
-        return scene.get_background_color(orientation)
+    
+        return scene.get_background_color(ray.orientation)
 
     def render(
         self,

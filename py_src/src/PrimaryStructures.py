@@ -114,14 +114,13 @@ class TracingRay(Ray):
     """
     A Ray that carries extra state for the recursive path tracing engine.
     """
-    depth: int = 0
+    current_depth: int = 0
     pixel_x: int = -1
     pixel_y: int = -1
     
     # How much light this ray carries (Color multiplier)
     # Storing as object to avoid import cycles with 'Color' class
     throughput: List[float] = field(default_factory=lambda: [1.0, 1.0, 1.0, 1.0])
-    pdf: float = 0
     
     # Is the ray currently traveling inside a medium (like glass)?
     is_inside: bool = False
@@ -146,7 +145,7 @@ class RayPool:
             ray.orientation = orientation
             ray.pixel_x = x
             ray.pixel_y = y
-            ray.depth = 0
+            ray.current_depth = 0
             ray.is_inside = False
             ray.throughput = np.array([1.0, 1.0, 1.0])
             return ray
@@ -255,7 +254,8 @@ class Transform:
             scale=np.ones(3),
         )
 
-    def _matrix_to_euler(self, R: np.ndarray) -> np.ndarray:
+    @classmethod
+    def _matrix_to_euler(cls, R: np.ndarray) -> np.ndarray:
         """Converts a 3x3 rotation matrix to ZYX Euler angles."""
         sy = np.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
         singular = sy < 1e-6
@@ -431,6 +431,31 @@ class Transform:
 
         return Ray(local_origin, local_orientation)
     
+    def matrix_transform(self, matrix: np.ndarray):
+        """
+        Modifies THIS transform by multiplying it with the given 4x4 matrix.
+        Mathematically: Self = Matrix * Self
+        """
+        if matrix.shape != (4, 4):
+            raise ValueError("Matrix must be 4x4")
+
+        # 1. Get current state as matrix
+        current_mat = self.get_global_matrix()
+
+        # 2. Apply the new matrix (Matrix @ Current)
+        # This effectively applies 'matrix' as a parent/modifier to the current state
+        new_mat = matrix @ current_mat
+
+        # 3. Decompose back into P/R/S and update self
+        # (Using the decompose helper defined in the previous step)
+        p, r, s = self.decompose_matrix(new_mat)
+        
+        self.position = p
+        self.rotation = r
+        self.scale = s
+        
+        self.update_orientations()
+    
     def get_inverse_matrix(self) -> np.ndarray:
         """Returns the inverse of the global transform matrix (World -> Local)."""
         # Note: For high-performance rendering engines, this is usually cached.
@@ -504,27 +529,65 @@ class Transform:
         local_orientation = unit(self.inverse_transform_direction(ray.orientation, normalize))
 
         return Ray(local_origin, local_orientation)
+    
+    def matrix_inverse_transform(self, matrix: np.ndarray):
+        """
+        Modifies THIS transform by multiplying it with the INVERSE of the given matrix.
+        Useful for undoing a parent transformation (World Space -> Local Space).
+        Mathematically: Self = Inv(Matrix) * Self
+        """
+        if matrix.shape != (4, 4):
+            raise ValueError("Matrix must be 4x4")
+
+        # 1. Calculate Inverse
+        try:
+            inv_matrix = np.linalg.inv(matrix)
+        except np.linalg.LinAlgError:
+            print("Warning: Cannot invert matrix in matrix_inverse_transform. Operation skipped.")
+            return
+
+        # 2. Reuse the logic from matrix_transform
+        self.matrix_transform(inv_matrix)
 
     def reflect_axis(self, axis: np.ndarray, space: str = "global"):
         """
-        Reflect the transform across the given axis (2D only).
-        space: "global" reflects the public/base scale, "local" reflects the local_scale.
+        Reflects the transform scale across the given axis.
         """
         ax = np.asarray(axis, dtype=float)
-        if ax.shape != (2,):
-            raise ValueError("Reflection axis must be 2D")
-        norm = np.linalg.norm(ax)
-        if norm == 0:
-            raise ValueError("Cannot reflect across a zero-length axis")
         
-        # Extend axis to 3D for compatibility with scale
-        axis3d = np.zeros(3, dtype=float)
-        axis3d[:2] = ax / norm
-        reflection = np.sign(axis3d)
+        # Ensure 3D axis
+        if ax.shape != (3,):
+            # Try to handle 2D input gracefully
+            if ax.shape == (2,):
+                ax = np.append(ax, 0.0) 
+            else:
+                raise ValueError("Reflection axis must be 3D vector")
+
+        norm = np.linalg.norm(ax)
+        if norm == 0: return # Safety check
+
+        # Normalize axis
+        ax = ax / norm
+        
+        # Calculate reflection sign vector
+        # If axis is (1,0,0), signs are (-1, 1, 1) -> Flip X
+        # Standard reflection logic for scale is usually just flipping the sign 
+        # of the component aligned with the normal.
+        
+        # Simple axis-aligned reflection:
+        reflection_signs = np.ones(3)
+        
+        # If axis dominates X, flip X, etc.
+        # (This is a simplified reflection for axis-aligned scaling)
+        if abs(ax[0]) > 0.9: reflection_signs[0] = -1
+        if abs(ax[1]) > 0.9: reflection_signs[1] = -1
+        if abs(ax[2]) > 0.9: reflection_signs[2] = -1
+
         if space == "global":
-            self.scale = self.scale * reflection
+            self.scale *= reflection_signs
         else:
-            self.local_scale = self.local_scale * reflection
+            self.local_scale *= reflection_signs
+            
         self.update_orientations()
 
     def copy_transform(self, other: 'Transform') -> 'Transform':
@@ -544,6 +607,116 @@ class Transform:
         combined.update_orientations()
         return combined
     
+    @classmethod
+    def decompose_matrix(cls, matrix: np.ndarray, epsilon: float = 1e-8):
+        """
+        Extracts Position, Rotation (Euler), and Scale from a 4x4 transformation matrix.
+        Required to create a new Transform object after matrix multiplication.
+        """
+        # 1. Extract Translation (Position)
+        position = matrix[:3, 3]
+
+        # 2. Extract Scale
+        # Scale is the length of the column vectors of the upper-left 3x3
+        col_0 = matrix[:3, 0]
+        col_1 = matrix[:3, 1]
+        col_2 = matrix[:3, 2]
+
+        sx = np.linalg.norm(col_0)
+        sy = np.linalg.norm(col_1)
+        sz = np.linalg.norm(col_2)
+        scale = np.array([sx, sy, sz])
+
+        # 3. Extract Rotation
+        # Normalize the columns to remove scale, leaving pure rotation
+        if sx > epsilon: col_0 /= sx
+        if sy > epsilon: col_1 /= sy
+        if sz > epsilon: col_2 /= sz
+
+        # Reconstruct pure rotation matrix
+        rotation_mat = np.column_stack((col_0, col_1, col_2))
+        
+        # Check determinant to handle negative scale (reflection)
+        if np.linalg.det(rotation_mat) < 0:
+            scale = -scale
+            rotation_mat = -rotation_mat
+
+        rotation = cls._matrix_to_euler(rotation_mat)
+
+        return position, rotation, scale
+    
+    def __add__(self, other: 'Transform') -> 'Transform':
+        """
+        Component-wise addition. Useful for applying deltas or accumulation.
+        Returns a NEW Transform object.
+        """
+        if not isinstance(other, Transform):
+            raise TypeError(f"unsupported operand type(s) for +: 'Transform' and '{type(other).__name__}'")
+            
+        # Standard vector addition for all components
+        # Note: Adding Euler angles directly is simple but can lead to gimbal issues 
+        # if the angles are large. For small deltas, this is fine.
+        return Transform(
+            position = self.position + other.position,
+            rotation = self.rotation + other.rotation,
+            scale    = self.scale + other.scale
+        )
+
+    def __sub__(self, other: 'Transform') -> 'Transform':
+        """
+        Component-wise subtraction. Useful for calculating deltas.
+        Returns a NEW Transform object.
+        """
+        if not isinstance(other, Transform):
+            raise TypeError(f"unsupported operand type(s) for -: 'Transform' and '{type(other).__name__}'")
+            
+        return Transform(
+            position = self.position - other.position,
+            rotation = self.rotation - other.rotation,
+            scale    = self.scale - other.scale
+        )
+    
+    def __mul__(self, other):
+        """
+        Enables: new_transform = parent_transform * child_transform
+        """
+        if isinstance(other, Transform):
+            # 1. Convert both to matrices
+            # Note: We use the local construction helper to treat them as independent blocks
+            mat_a = self._make_transform_matrix(self.position, self.rotation, self.scale)
+            mat_b = other._make_transform_matrix(other.position, other.rotation, other.scale)
+            
+            # Add local offsets if needed (assuming "global" multiplication usually implies baking everything)
+            # For simplicity, we multiply the base components here:
+            new_matrix = mat_a @ mat_b
+            
+            # 2. Decompose back into components
+            new_pos, new_rot, new_scale = self.decompose_matrix(new_matrix)
+            
+            # 3. Return NEW Transform (baked, no parent)
+            return Transform(new_pos, new_rot, new_scale)
+
+        elif isinstance(other, np.ndarray):
+            # Handle Matrix * Vector (Point/Direction)
+            vec = np.asarray(other, dtype=float)
+            mat = self.get_global_matrix()
+            
+            # If 3D vector, decide if point (w=1) or direction (w=0) based on context?
+            # Standard convention for generic * operator is usually Point (w=1)
+            if vec.shape == (3,):
+                vec = np.append(vec, 1.0)
+            
+            result = mat @ vec
+            return result[:3]  # Return XYZ
+        
+        else:
+            raise TypeError(f"Cannot multiply Transform by type {type(other)}")
+    
+    def __eq__(self, other):
+        if isinstance(other, Transform):
+            return np.allclose(self.get_global_matrix(), other.get_global_matrix())
+        return False
+
     def __repr__(self):
         return (f"Transform(position={self.position}, rotation={self.rotation}, scale={self.scale}, "
                 f"local_position={self.local_position}, local_rotation={self.local_rotation}, local_scale={self.local_scale})")
