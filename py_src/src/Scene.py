@@ -13,7 +13,7 @@ class Scene:
         self.name = name
         self.objects: List[VObject] = []
         self.lights: List[LightSource] = []
-        self.camera: Optional[VCamera] = camera
+        self.camera: VCamera = camera if camera is not None else VCamera(Transform.identity())
 
         # Ambient lighting defaults (can be overridden via kwargs)
         # small neutral ambient to avoid complete black shadows by default
@@ -241,7 +241,7 @@ class Scene:
     def clear_objects(self):
         self.objects.clear()
         self.lights.clear()
-        self.camera = None
+        self.camera = VCamera(Transform.identity())
     
     def is_occluded(self, point: np.ndarray, light_pos: np.ndarray, bias: float = 1e-4, epsilon: float = 1e-4, max_steps: int = 256) -> bool:
         """

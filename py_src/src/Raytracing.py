@@ -726,13 +726,13 @@ class StandardInteraction(InteractionStrategy):
     ) -> Optional[TracingRay]:
         
         obj = hit_info.obj
-        material = getattr(obj, "material", None)
+        material: Optional[PBRMaterial] = getattr(obj, "material", None)
         if material is None: return None
 
         # 1. Geometry Setup
         # -----------------
-        geometric_normal = hit_info.normal
-        hit_point = hit_info.point
+        geometric_normal: np.ndarray = getattr(hit_info, "normal", np.array([0.0, 1.0, 0.0]))
+        hit_point: np.ndarray = hit_info.point
         
         # Check if we are Entering or Exiting the medium
         # Dot product < 0 means Ray and Normal oppose each other (Entering)
@@ -787,7 +787,7 @@ class StandardInteraction(InteractionStrategy):
                 # Set Throughput (Color)
                 # For Glass, the math cancels out to 1.0 (conservation), so we just use Albedo tint.
                 # We cast to list/tuple if your Color class requires it
-                color_val = material.albedo.to_list() if hasattr(material.albedo, "to_list") else material.albedo
+                color_val = material.data.albedo
                 new_ray.throughput = color_val
 
         # Handle Diffuse/Specular fallback if needed
@@ -910,7 +910,7 @@ class BasicLambertShading(ShadingStrategy):
         ) -> Color:
 
         # Material validation
-        material = getattr(hit_info.obj, 'material', None)
+        material: Optional[PBRMaterial] = getattr(hit_info.obj, 'material', None)
         if material is None:
             return Color(1.0, 0.0, 1.0) # Material Error
 
