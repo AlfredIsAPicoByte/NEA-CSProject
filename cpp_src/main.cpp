@@ -49,6 +49,52 @@ GLuint lightIndices[] =
 	4, 6, 7
 };
 
+// Debug triangle helper (temporary diagnostic)
+struct DebugTriangle { GLuint VAO = 0, VBO = 0, program = 0; };
+static DebugTriangle g_debugTri;
+static bool g_showDebugTri = true;
+
+static void CreateDebugTriangle() {
+	float triVerts[] = {
+		// pos           // color
+		0.0f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f,
+		-0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,
+		0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,
+	};
+	GLuint vertShader = glCreateShader(GL_VERTEX_SHADER);
+	const char* vsrc = "#version 460 core\nlayout(location=0) in vec3 aPos; layout(location=1) in vec3 aColor; out vec3 vColor; void main(){ vColor=aColor; gl_Position=vec4(aPos,1.0); }";
+	glShaderSource(vertShader, 1, &vsrc, NULL); glCompileShader(vertShader);
+	GLint ok = 0; glGetShaderiv(vertShader, GL_COMPILE_STATUS, &ok);
+	if (!ok) { GLchar buf[1024]; glGetShaderInfoLog(vertShader, 1024, NULL, buf); AppendGraphicsError(std::string("Debug tri vertex shader compile: ") + buf); }
+
+	GLuint fragShader = glCreateShader(GL_FRAGMENT_SHADER);
+	const char* fsrc = "#version 460 core\nin vec3 vColor; out vec4 FragColor; void main(){ FragColor = vec4(vColor, 1.0); }";
+	glShaderSource(fragShader, 1, &fsrc, NULL); glCompileShader(fragShader); glGetShaderiv(fragShader, GL_COMPILE_STATUS, &ok);
+	if (!ok) { GLchar buf[1024]; glGetShaderInfoLog(fragShader, 1024, NULL, buf); AppendGraphicsError(std::string("Debug tri fragment shader compile: ") + buf); }
+
+	g_debugTri.program = glCreateProgram(); glAttachShader(g_debugTri.program, vertShader); glAttachShader(g_debugTri.program, fragShader); glLinkProgram(g_debugTri.program); glGetProgramiv(g_debugTri.program, GL_LINK_STATUS, &ok);
+	if (!ok) { GLchar buf[1024]; glGetProgramInfoLog(g_debugTri.program, 1024, NULL, buf); AppendGraphicsError(std::string("Debug tri program link: ") + buf); }
+	glDeleteShader(vertShader); glDeleteShader(fragShader);
+
+	glGenVertexArrays(1, &g_debugTri.VAO); glGenBuffers(1, &g_debugTri.VBO);
+	glBindVertexArray(g_debugTri.VAO);
+	glBindBuffer(GL_ARRAY_BUFFER, g_debugTri.VBO); glBufferData(GL_ARRAY_BUFFER, sizeof(triVerts), triVerts, GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0); glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float))); glEnableVertexAttribArray(1);
+	glBindVertexArray(0);
+}
+
+static void DrawDebugTriangle() {
+	if (g_debugTri.program == 0) return;
+	glUseProgram(g_debugTri.program);
+	glBindVertexArray(g_debugTri.VAO);
+	glDrawArrays(GL_TRIANGLES, 0, 3);
+	glBindVertexArray(0);
+	GLenum e = glGetError(); if (e != GL_NO_ERROR) { AppendGraphicsError(std::string("GL error after drawing debug triangle: ") + std::to_string(e)); }
+}
+
+static void DeleteDebugTriangle() { if (g_debugTri.VAO) glDeleteVertexArrays(1, &g_debugTri.VAO); if (g_debugTri.VBO) glDeleteBuffers(1, &g_debugTri.VBO); if (g_debugTri.program) glDeleteProgram(g_debugTri.program); g_debugTri = DebugTriangle(); }
+
 int main()
 {
 	AppendMessage("Starting Engine...");
@@ -205,7 +251,7 @@ int main()
 	testScene.SetOpenGLRenderFunction(std::make_shared<std::function<void()>>([&]() {
 		// Debug: draw test triangle to verify pipeline
 		if (g_showDebugTri) DrawDebugTriangle();
-		
+
 		// update shader camera uniforms every frame
 		litShaderProgram.Activate();
 		camera.SetModelMatrixUniform(litShaderProgram, "u_camMatrix");
@@ -308,7 +354,11 @@ int main()
 				});
 				InputManager::Instance(window).doWhenKey(GLFW_KEY_R, false, [&]() {
 					resetKeyPressed = false;
-				});			InputManager::Instance(window).doWhenKey(GLFW_KEY_H, true, [&]() { g_showDebugTri = !g_showDebugTri; AppendMessage(std::string("Debug triangle toggled: ") + (g_showDebugTri ? "ON" : "OFF")); });				InputManager::Instance(window).doWhenKey(GLFW_KEY_T, true, [&]() {
+				});
+				InputManager::Instance(window).doWhenKey(GLFW_KEY_H, true, [&]() {
+					g_showDebugTri = !g_showDebugTri; AppendMessage(std::string("Debug triangle toggled: ") + (g_showDebugTri ? "ON" : "OFF"));
+				});			
+				InputManager::Instance(window).doWhenKey(GLFW_KEY_T, true, [&]() {
 					if (!resetKeyPressed) {
 						camera.ResetPlane();
 						AppendMessage("Camera Plane mode reset to default orientation and power");
