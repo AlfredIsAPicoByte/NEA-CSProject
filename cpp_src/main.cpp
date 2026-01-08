@@ -203,6 +203,9 @@ int main()
 	testScene.SetCamera(&camera);
 	testScene.Initialize();
 	testScene.SetOpenGLRenderFunction(std::make_shared<std::function<void()>>([&]() {
+		// Debug: draw test triangle to verify pipeline
+		if (g_showDebugTri) DrawDebugTriangle();
+		
 		// update shader camera uniforms every frame
 		litShaderProgram.Activate();
 		camera.SetModelMatrixUniform(litShaderProgram, "u_camMatrix");
@@ -237,6 +240,7 @@ int main()
 	// testScene.SaveScene("scenes/test_save.scn");
 
 	// Main loop
+	CreateDebugTriangle();
 	Engine::Instance().Start();
 	Engine::Instance().applyClearColor(bgClolor);
 	Engine::Instance().setDepthTest(true);
@@ -304,8 +308,7 @@ int main()
 				});
 				InputManager::Instance(window).doWhenKey(GLFW_KEY_R, false, [&]() {
 					resetKeyPressed = false;
-				});
-				InputManager::Instance(window).doWhenKey(GLFW_KEY_T, true, [&]() {
+				});			InputManager::Instance(window).doWhenKey(GLFW_KEY_H, true, [&]() { g_showDebugTri = !g_showDebugTri; AppendMessage(std::string("Debug triangle toggled: ") + (g_showDebugTri ? "ON" : "OFF")); });				InputManager::Instance(window).doWhenKey(GLFW_KEY_T, true, [&]() {
 					if (!resetKeyPressed) {
 						camera.ResetPlane();
 						AppendMessage("Camera Plane mode reset to default orientation and power");
@@ -596,6 +599,7 @@ int main()
 
 		
 	// Clean up and exit
+	DeleteDebugTriangle();
 	litShaderProgram.Delete();
 	materialProgram.Delete();
 	unlitShaderProgram.Delete();
