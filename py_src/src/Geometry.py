@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
-from typing import Optional, Union, List, Tuple, Iterator, cast
+from typing import Optional, Union, List, Tuple, cast
 from dataclasses import dataclass, field
 
 from CommonUtils import unit
@@ -189,13 +189,12 @@ class Shape2D(Shape):
         return abs(local_point[1])
 
 class Circle(Shape2D):
-    def __init__(self, radius: float, **kwargs):
+    def __init__(self, **kwargs):
         """
         A Disk on the XZ plane (Y=0).
         """
         super().__init__(**kwargs)
-        if radius <= 0: raise ValueError("Radius must be > 0")
-        self.radius = float(radius)
+        self.radius = 1
 
     def signed_distance(self, local_point: np.ndarray) -> float:
         """SDF for a Disk on the XZ plane."""
@@ -236,136 +235,6 @@ class Circle(Shape2D):
     @property
     def area(self) -> float:
         return np.pi * self.radius ** 2
-
-class Triangle(Shape2D):
-    def __init__(self, v1: np.ndarray, v2: np.ndarray, v3: np.ndarray, **kwargs):
-        super().__init__(**kwargs)
-        
-        # Centroid (World Space)
-        centroid = (v1 + v2 + v3) / 3.0
-        
-        # Store Vertices relative to Centroid (Local Space)
-        self.v1 = v1 - centroid
-        self.v2 = v2 - centroid
-        self.v3 = v3 - centroid
-        
-        self.edge1 = self.v2 - self.v1
-        self.edge2 = self.v3 - self.v1
-        self.normal = np.cross(self.edge1, self.edge2)
-        self.normal /= np.linalg.norm(self.normal)
-
-    def signed_distance(self, p: np.ndarray) -> float:
-        # Logic remains generic 3D vector math
-        ba = self.v2 - self.v1; pa = p - self.v1
-        cb = self.v3 - self.v2; pb = p - self.v2
-        ac = self.v1 - self.v3; pc = p - self.v3
-        
-        # Clamp to edges
-        d = min(min(
-            np.dot(ba * np.clip(np.dot(ba, pa) / np.dot(ba, ba), 0.0, 1.0) - pa, 
-                   ba * np.clip(np.dot(ba, pa) / np.dot(ba, ba), 0.0, 1.0) - pa),
-            np.dot(cb * np.clip(np.dot(cb, pb) / np.dot(cb, cb), 0.0, 1.0) - pb, 
-                   cb * np.clip(np.dot(cb, pb) / np.dot(cb, cb), 0.0, 1.0) - pb)),
-            np.dot(ac * np.clip(np.dot(ac, pc) / np.dot(ac, ac), 0.0, 1.0) - pc, 
-                   ac * np.clip(np.dot(ac, pc) / np.dot(ac, ac), 0.0, 1.0) - pc))
-        
-        d = np.sqrt(d)
-        return d
-
-    def get_ray_intersections(self, ray: "Ray") -> List[np.ndarray]:
-        # Moller-Trumbore algorithm (Vector math is axis-agnostic)
-        h = np.cross(ray.orientation, self.edge2)
-        a = np.dot(self.edge1, h)
-
-        if abs(a) < 1e-8:
-            return []
-
-        f = 1.0 / a
-        s = ray.origin - self.v1
-        u = f * np.dot(s, h)
-
-        if u < 0.0 or u > 1.0:
-            return []
-
-        q = np.cross(s, self.edge1)
-        v = f * np.dot(ray.orientation, q)
-
-        if v < 0.0 or u + v > 1.0:
-            return []
-
-        t = f * np.dot(self.edge2, q)
-
-        if t > 1e-8:
-            return [ray.point_at(t)]
-            
-        return []
-
-    def get_normal(self, local_point: np.ndarray) -> np.ndarray:
-        return self.normal
-
-    def get_uv(self, local_point: np.ndarray, local_normal: np.ndarray) -> np.ndarray:
-        # Planar projection mapping
-        # If normal is roughly Up (Y), map XZ. Else standard planar.
-        # Simple fallback:
-        return local_point[:2]
-
-    @property
-    def area(self) -> float:
-        return float(0.5 * np.linalg.norm(np.cross(self.edge1, self.edge2)))
-
-class Polygon(Shape2D):
-    def __init__(self, vertices: List[np.ndarray], **kwargs):
-        super().__init__(**kwargs)
-        self.vertices = [np.asarray(v, dtype=float) for v in vertices]
-        if len(self.vertices) < 3:
-            raise ValueError("Polygon requires at least 3 vertices")
-
-    def signed_distance(self, point: np.ndarray) -> float:
-        return self.get_distance(point)
-
-    def get_distance(self, point: np.ndarray, bias: float = 1e-10) -> float:
-        # Generic 3D distance to edges
-        def point_to_segment_dist(p, a, b):
-            ab = b - a
-            ap = p - a
-            ab_sq = np.dot(ab, ab)
-            if ab_sq < bias:
-                return np.linalg.norm(ap)
-            t = np.clip(np.dot(ap, ab) / ab_sq, 0, 1)
-            return np.linalg.norm(p - (a + t * ab))
-        
-        min_dist = float('inf')
-        for i in range(len(self.vertices)):
-            v1 = self.vertices[i]
-            v2 = self.vertices[(i + 1) % len(self.vertices)]
-            dist = point_to_segment_dist(point, v1, v2)
-            min_dist = min(min_dist, dist)
-        return float(min_dist)
-
-    def check_ray_intersection(self, ray: "Ray") -> bool:
-        return len(self.get_ray_intersections(ray)) > 0
-
-    def get_ray_intersections(self, ray: "Ray") -> List[np.ndarray]:
-        intersections = []
-        for i in range(1, len(self.vertices) - 1):
-            tri = Triangle(self.vertices[0], self.vertices[i], self.vertices[i + 1])
-            intersections.extend(tri.get_ray_intersections(ray))
-        return intersections
-
-    def get_normal(self, point: np.ndarray, bias: float = 1e-12) -> np.ndarray:
-        edge1 = self.vertices[1] - self.vertices[0]
-        edge2 = self.vertices[2] - self.vertices[0]
-        normal = np.cross(edge1, edge2)
-        return normal / (np.linalg.norm(normal) + bias)
-
-    @property
-    def area(self) -> float:
-        area = 0
-        for i in range(len(self.vertices)):
-            v1 = self.vertices[i]
-            v2 = self.vertices[(i + 1) % len(self.vertices)]
-            area += np.cross(v1, v2)
-        return float(abs(area) / 2)
 
 class Plane(Shape2D):
     def __init__(self, **kwargs):
@@ -475,11 +344,173 @@ class Shape3D(Shape):
     def convex_hull(self) -> List[np.ndarray]:
         raise NotImplementedError
     
-class Sphere(Shape3D):
-    def __init__(self, radius: float = 1.0, **kwargs):
+class Triangle(Shape3D):
+    def __init__(self, v1: np.ndarray, v2: np.ndarray, v3: np.ndarray, **kwargs):
         super().__init__(**kwargs)
-        if radius <= 0: raise ValueError("Radius must be > 0")
-        self.radius = float(radius)
+        
+        # Vertices in Local Space
+        self.v1 = np.asarray(v1, dtype=float)
+        self.v2 = np.asarray(v2, dtype=float)
+        self.v3 = np.asarray(v3, dtype=float)
+        
+        # Edges
+        self.edge1 = self.v2 - self.v1
+        self.edge2 = self.v3 - self.v1
+        self.edge3 = self.v3 - self.v2 # Used for area calc logic
+        
+        # Normal
+        self.normal = np.cross(self.edge1, self.edge2)
+        norm_mag = np.linalg.norm(self.normal)
+        if norm_mag > 1e-12:
+            self.normal /= norm_mag
+        else:
+            self.normal = np.array([0.0, 1.0, 0.0]) # Degenerate triangle fallback
+
+        # Cached vectors for SDF optimization
+        self.ba = self.v2 - self.v1
+        self.cb = self.v3 - self.v2
+        self.ac = self.v1 - self.v3
+
+    def signed_distance(self, p: np.ndarray) -> float:
+        """
+        Calculates distance to the face if projected inside, 
+        or distance to the nearest edge if projected outside.
+        """
+        pa = p - self.v1
+        pb = p - self.v2
+        pc = p - self.v3
+        
+        # 1. Project point to plane to check if inside the triangle "cone"
+        # Uses cross product to determine which side of the edge vector the point lies on
+        nor = self.normal
+        c1 = np.dot(np.cross(self.ba, nor), pa)
+        c2 = np.dot(np.cross(self.cb, nor), pb)
+        c3 = np.dot(np.cross(self.ac, nor), pc)
+
+        if c1 <= 0.0 and c2 <= 0.0 and c3 <= 0.0:
+            # Inside the triangle face: Distance is distance to plane
+            return float(abs(np.dot(nor, pa)))
+        
+        # 2. Outside: Distance to closest edge segment
+        d1 = np.dot(self.ba * np.clip(np.dot(self.ba, pa) / np.dot(self.ba, self.ba), 0.0, 1.0) - pa, 
+                    self.ba * np.clip(np.dot(self.ba, pa) / np.dot(self.ba, self.ba), 0.0, 1.0) - pa)
+        d2 = np.dot(self.cb * np.clip(np.dot(self.cb, pb) / np.dot(self.cb, self.cb), 0.0, 1.0) - pb, 
+                    self.cb * np.clip(np.dot(self.cb, pb) / np.dot(self.cb, self.cb), 0.0, 1.0) - pb)
+        d3 = np.dot(self.ac * np.clip(np.dot(self.ac, pc) / np.dot(self.ac, self.ac), 0.0, 1.0) - pc, 
+                    self.ac * np.clip(np.dot(self.ac, pc) / np.dot(self.ac, self.ac), 0.0, 1.0) - pc)
+
+        return float(np.sqrt(min(d1, min(d2, d3))))
+
+    def get_ray_intersections(self, local_ray: "Ray") -> List[np.ndarray]:
+        # Möller–Trumbore intersection algorithm
+        h = np.cross(local_ray.orientation, self.edge2)
+        a = np.dot(self.edge1, h)
+
+        if abs(a) < 1e-8: return [] # Ray is parallel to triangle
+
+        f = 1.0 / a
+        s = local_ray.origin - self.v1
+        u = f * np.dot(s, h)
+
+        if u < 0.0 or u > 1.0: return []
+
+        q = np.cross(s, self.edge1)
+        v = f * np.dot(local_ray.orientation, q)
+
+        if v < 0.0 or u + v > 1.0: return []
+
+        t = f * np.dot(self.edge2, q)
+
+        if t > 1e-8:
+            return [local_ray.point_at(t)]
+        return []
+
+    def get_normal(self, local_point: np.ndarray) -> np.ndarray:
+        return self.normal
+
+    def get_uv(self, local_point: np.ndarray, local_normal: np.ndarray) -> np.ndarray:
+        # Barycentric UV mapping could go here, for now simpler planar projection
+        return local_point[:2]
+
+    # --- Shape3D Implementation ---
+
+    @property
+    def volume(self) -> float:
+        # A 2D plane in 3D space has zero volume
+        return 0.0
+
+    @property
+    def surface_area(self) -> float:
+        # 0.5 * |AB x AC|
+        return float(0.5 * np.linalg.norm(np.cross(self.edge1, self.edge2)))
+
+    def convex_hull(self) -> List[np.ndarray]:
+        # The convex hull of a triangle is just its 3 vertices
+        return [self.v1, self.v2, self.v3]
+
+class Polygon(Shape3D):
+    def __init__(self, vertices: List[np.ndarray], **kwargs):
+        super().__init__(**kwargs)
+        self.vertices = [np.asarray(v, dtype=float) for v in vertices]
+        if len(self.vertices) < 3:
+            raise ValueError("Polygon requires at least 3 vertices")
+
+        # Create sub-triangles (Fan Triangulation - assumes CONVEX polygon)
+        # If your polygons are concave, you must use Ear Clipping here.
+        self._triangles: List[Triangle] = []
+        for i in range(1, len(self.vertices) - 1):
+            self._triangles.append(
+                Triangle(self.vertices[0], self.vertices[i], self.vertices[i + 1])
+            )
+        
+        # Store normal from the first triangle (assuming planar polygon)
+        self.normal = self._triangles[0].normal
+
+    def signed_distance(self, local_point: np.ndarray) -> float:
+        # The distance to the polygon is the minimum distance to any of its triangles
+        min_d = float("inf")
+        for tri in self._triangles:
+            d = tri.signed_distance(local_point)
+            if d < min_d:
+                min_d = d
+        return min_d
+
+    def get_ray_intersections(self, local_ray: "Ray") -> List[np.ndarray]:
+        all_hits = []
+        for tri in self._triangles:
+            hits = tri.get_ray_intersections(local_ray)
+            all_hits.extend(hits)
+        
+        # Sort by distance
+        if all_hits:
+            all_hits.sort(key=lambda p: np.linalg.norm(p - local_ray.origin))
+        return all_hits
+
+    def get_normal(self, local_point: np.ndarray) -> np.ndarray:
+        return self.normal
+        
+    def get_uv(self, local_point: np.ndarray, local_normal: np.ndarray) -> np.ndarray:
+        return local_point[:2]
+
+    # --- Shape3D Implementation ---
+
+    @property
+    def volume(self) -> float:
+        return 0.0
+
+    @property
+    def surface_area(self) -> float:
+        # Sum of all sub-triangle areas
+        return sum(tri.surface_area for tri in self._triangles)
+
+    def convex_hull(self) -> List[np.ndarray]:
+        # For a convex polygon, the hull is simply the vertices.
+        return self.vertices
+    
+class Sphere(Shape3D):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.radius = 1
 
     def signed_distance(self, local_point: np.ndarray) -> float:
         return float(np.linalg.norm(local_point) - self.radius)
@@ -867,11 +898,12 @@ class VObject:
     """
     transform: 'Transform' = field(default_factory=lambda: Transform.identity())
     shape: Optional['Shape'] = None # Optional so we can have empty "Group" nodes
-    material: Optional["PBRMaterial"] = None
+    material: Optional['PBRMaterial'] = None
     name: str = "VObject"
 
-    children: List["VObject"] = field(default_factory=list)
-    parent: Optional["VObject"] = field(default=None, repr=False) # Exclude from repr to avoid recursion
+    bounds: Optional['AABB'] = None
+    children: List['VObject'] = field(default_factory=list)
+    parent: Optional['VObject'] = field(default=None, repr=False) # Exclude from repr to avoid recursion
 
     @property
     def world_transform(self) -> 'Transform':

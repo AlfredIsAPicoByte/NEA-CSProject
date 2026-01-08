@@ -4,7 +4,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from src.PrimaryStructures import Transform
-from src.Geometry import Sphere, Cube, VObject
+from src.Geometry import *
 from src.Scene import Scene
 from src.Camera import VCamera, CameraType
 from src.Luminance import LightSource, Color, ColorGradient, PBRMaterial
@@ -69,29 +69,32 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     return scene
 
 def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
-    cam_transform = Transform(np.array([0.0, 0.0, -3.0]), np.zeros(3), np.ones(3))
+    cam_transform = Transform(np.array([0.0, 0.0, -100.0]), np.zeros(3), np.ones(3))
     cam = VCamera(
         cam_transform,
-        fov=70.0, near=0.1, far=86.0,
+        fov=60.0, near=0.1, far=1000.0,
         resolution_width=width, resolution_height=height,
-        camera_type=CameraType.PERSPECTIVE
+        camera_type=CameraType.ORTHOGRAPHIC,
+        distance=100
     )
     scene = Scene(name="minimal_scene", camera=cam, background_color=Color.from_hex("#403A43"))
 
     # Sphere at origin
-    sphere_shape = Sphere(radius=1, name="BallMin")
+    sphere_shape = Sphere(name="BallMin")
     mat = PBRMaterial.create_diffuse(Color.from_hex("#227DD7"), 0.2)
     v_sphere = VObject(shape=sphere_shape, name="SphereMin")
+    v_sphere.transform.enlarge(np.ones(3) * 0.5)
     v_sphere.material = mat
     # No translation needed as it is at (0,0,0)
     scene.add_object(v_sphere)
 
     # Ground
-    ground_shape = Sphere(radius=100.0, name="GroundMin")
+    ground_shape = Sphere(name="GroundMin")
     matg = PBRMaterial.create_diffuse(Color.from_hex("#3F3F3F"), 0.9)
     v_ground = VObject(shape=ground_shape, name="GroundMin")
+    v_ground.transform.translate(np.array([0.0, -200.5, 0.0]))
+    v_sphere.transform.enlarge(np.ones(3) * 10)
     v_ground.material = matg
-    v_ground.transform.translate(np.array([0.0, -100.5, 0.0]))
     scene.add_object(v_ground)
 
     # Single light
@@ -111,27 +114,30 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
     scene = Scene(name="emissive_scene", camera=cam, background_color=Color.from_hex("#000000"))
 
     # Emissive sphere
-    emissive_shape = Sphere(radius=0.3, name="EmissiveOrb")
+    emissive_shape = Sphere(name="EmissiveOrb")
     mat_glow = PBRMaterial.create_emissive(Color.from_hex("#FFEA62"), 1.2)
     v_emissive = VObject(shape=emissive_shape, name="GlowingSphere")
-    v_emissive.material = mat_glow
+    v_emissive.transform.enlarge(np.ones(3) * 0.3)
     v_emissive.transform.translate(np.array([0.8, 1.0, 0.0]))
+    v_emissive.material = mat_glow
     scene.add_object(v_emissive)
 
     # Reflective sphere
-    mirror_shape = Sphere(radius=0.5, name="Mirror")
+    mirror_shape = Sphere(name="Mirror")
     mat_reflect = PBRMaterial.create_specular(Color.from_hex("#6B6666"), roughness=0.1, metallicness=0.5, specular_intensity=1.0, specular_tint_amount=1.0)
     v_mirror = VObject(shape=mirror_shape, name="MirrorSphere")
-    v_mirror.material = mat_reflect
+    v_mirror.transform.enlarge(np.ones(3) * 0.5)
     v_mirror.transform.translate(np.array([-0.5, 0.5, 0.0]))
+    v_mirror.material = mat_reflect
     scene.add_object(v_mirror)
 
     # Ground
-    ground_shape = Sphere(radius=100.0, name="GroundEmissive")
+    ground_shape = Sphere(name="GroundEmissive")
     matg = PBRMaterial.create_diffuse(Color.from_hex("#202020"), roughness=0.8)
     v_ground = VObject(shape=ground_shape, name="GroundEmissive")
-    v_ground.material = matg
+    v_ground.transform.enlarge(np.ones(3) * 100)
     v_ground.transform.translate(np.array([0.0, -100.5, 0.0]))
+    v_ground.material = matg
     scene.add_object(v_ground)
 
     # Small ambient fill light
@@ -151,28 +157,30 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     scene = Scene(name="lit_studio", camera=cam, background_color=Color.from_hex("#BEC2CF"))
 
     # Objects: two spheres and box as background
-    s1_shape = Sphere(radius=0.4, name="StudioBallA")
+    s1_shape = Sphere(name="StudioBallA")
     mat1 = PBRMaterial.create_specular(Color.from_hex("#FFB86B"), 0.2, 0.1, 0.9, 0)
     v_s1 = VObject(shape=s1_shape, name="StudioBallA")
-    v_s1.material = mat1
+    v_s1.transform.enlarge(np.ones(3) * 0.4)
     v_s1.transform.translate(np.array([-0.6, 0.4, 0.5]))
+    v_s1.material = mat1
     scene.add_object(v_s1)
 
-    s2_shape = Sphere(radius=0.45, name="StudioBallB")
+    s2_shape = Sphere(name="StudioBallB")
     mat2 = PBRMaterial.create_specular(Color.from_hex("#6B9BFF"), 0.2, 0.4, 0.9, 0)
     v_s2 = VObject(shape=s2_shape, name="StudioBallB")
-    v_s2.material = mat2
+    v_s2.transform.enlarge(np.ones(3) * 0.45)
     v_s2.transform.translate(np.array([0.8, 0.45, 0.2]))
+    v_s2.material = mat2
     scene.add_object(v_s2)
 
     # Background 
-    box_shape = Cube(side_length=6.0, name="StudioBack")
-    mat_box = PBRMaterial.create_diffuse(Color.from_hex("#C1CBD0"), roughness=1.0)
-    v_box = VObject(shape=box_shape, name="StudioBox")
-    v_box.material = mat_box
-    v_box.transform.translate(np.array([0.0, 0.5, 2.0]))
-    v_box.transform.enlarge(np.array([1.0, 1.0, 0.1]))
-    scene.add_object(v_box)
+    plane_shape = Plane(name="StudioBack")
+    mat_plane = PBRMaterial.create_diffuse(Color.from_hex("#C1CBD0"), roughness=1.0)
+    v_plane = VObject(shape=plane_shape, name="StudioBox")
+    v_plane.transform.translate(np.array([0.0, 0.5, 2.0]))
+    v_plane.transform.rotate(np.deg2rad(90), np.array([1.0, 0.0, 0.0]))
+    v_plane.material = mat_plane
+    scene.add_object(v_plane)
 
     # Lights
     key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#EEE0BA"), intensity=25.0, radius=100, name="StudioKey")

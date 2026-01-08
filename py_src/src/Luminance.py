@@ -333,9 +333,9 @@ class PBRMaterial:
             albedo=albedo,            # Surface tint (usually White for clear glass)
             roughness=roughness,      # 0.0 = Clear, 0.5 = Frosted
             metallic=metallicness,    # Usually 0.0
-            ior=ior,
             
             # Volumetric/Transmission Properties
+            ior=ior,
             transmission=transmission,         # Enables Refraction logic
             absorption_color=absorption_color, # The color inside the glass (Beer's Law)
             absorption_density=absorption_density
@@ -365,9 +365,9 @@ class PBRMaterial:
         """
         data = PBRMaterialData(
             name="EmissiveMat",
+            type=MaterialType.EMISSIVE,
             emission_color=color,
             emission_intensity=intensity,
-            type=MaterialType.EMISSIVE,
         )
         return cls(data)
     
@@ -576,7 +576,7 @@ class PBRMaterial:
         """Get the specular component of the material response using the Micro-Facet BRDF."""
         
         # --- 0. Pre-Calculations and Constants ---
-        safe_roughness = max(self.data.roughness, bias)
+        safe_roughness = max(self.data.roughness, 1e-2)
         alpha = safe_roughness ** 2
         alpha_sq = alpha ** 2
         

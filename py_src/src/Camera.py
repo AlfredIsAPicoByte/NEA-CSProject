@@ -40,7 +40,8 @@ class VCamera:
             resolution_height: int = 9,
             camera_type: CameraType = CameraType.PERSPECTIVE,
             camera_mode: CameraMode = CameraMode.FIRST_PERSON,
-            name: str = "Camera"
+            name: str = "Camera",
+            **kwargs
         ):
         self.transform = transform
 
@@ -57,6 +58,9 @@ class VCamera:
         self.aspect_ratio = Ratio(self.resolution_width, self.resolution_height)
 
         self.name = name
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def __post_init__(self):
         if self.fov <= 0:
@@ -92,14 +96,15 @@ class VCamera:
 
     def get_projection_matrix(self) -> np.ndarray:
         import math
+        tan_half_fov = math.tan(math.radians(self.fov) / 2.0)
         if self.type == CameraType.PERSPECTIVE:
             # Perspective projection matrix calculation (column-major as standard)
-            f = 1.0 / math.tan(math.radians(self.fov) / 2.0)
+            inverse_thf = 1.0 / tan_half_fov
             aspect = float(self.aspect_ratio.value)
             near, far = self.near, self.far
             m = np.array([
-                [f / aspect, 0.0, 0.0, 0.0],
-                [0.0, f, 0.0, 0.0],
+                [inverse_thf / aspect, 0.0, 0.0, 0.0],
+                [0.0, inverse_thf, 0.0, 0.0],
                 [0.0, 0.0, (far + near) / (near - far), (2.0 * far * near) / (near - far)],
                 [0.0, 0.0, -1.0, 0.0]
             ], dtype=float)
@@ -107,7 +112,7 @@ class VCamera:
         elif self.type == CameraType.ORTHOGRAPHIC:
             # Orthographic projection matrix calculation
             # 'fov' here acts as half-height for the orthographic plane
-            half_height = float(self.fov)
+            half_height = tan_half_fov * getattr(self, "distance", 1)
             half_width = half_height * float(self.aspect_ratio.value)
 
             left = -half_width
@@ -187,13 +192,15 @@ class VCamera:
         """
         Generates a ray (origin, direction) for UV coordinates (0-1).
         """
+        tan_half_fov = math.tan(math.radians(self.fov) / 2.0)
+
         # --- ORTHOGRAPHIC ---
         if self.type == CameraType.ORTHOGRAPHIC:
             # 1. Direction is always forward
             direction = self.transform.forward
             
             # 2. Origin shifts along the camera plane
-            height_size = self.fov
+            height_size = tan_half_fov * getattr(self, "distance", 1)
             width_size = height_size * self.aspect_ratio.value
 
             # Map 0..1 to -Width/2 .. +Width/2
@@ -210,14 +217,8 @@ class VCamera:
         # --- PERSPECTIVE ---
         # Geometric approach (Snippet 1 style) is usually faster for CPU raytracing 
         # than matrix inversion if you aren't caching the inverse matrix.
-        
-        # 1. NDC (-1 to 1)
         ndc_x = (2.0 * u) - 1.0
         ndc_y = 1.0 - (2.0 * v)
-
-        # 2. Scale by FOV
-        # vertical_fov is in degrees
-        tan_half_fov = math.tan(math.radians(self.fov) / 2.0)
         
         # Camera Space Direction
         # Assuming standard camera: Right=+X, Up=+Y, Forward=+Z (or -Z depending on convention)

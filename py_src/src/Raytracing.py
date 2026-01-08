@@ -189,7 +189,6 @@ class RayMarchingIntersection(IntersectionStrategy):
         distance_traveled = 0.0
 
         for _ in range(self.max_steps):
-            # Update cheap test counters per iteration
             if stats is not None:
                 stats.aabb_tests += 1
 
@@ -204,10 +203,25 @@ class RayMarchingIntersection(IntersectionStrategy):
             # Hit Check
             if distance_to_closest <= self.epsilon:
                 surface_normal = np.array([0.0, 0.0, 1.0])
-                closest_object_shape = getattr(closest_object, "shape", None)
+                
+                if closest_object is not None:
+                    shape = getattr(closest_object, "shape", None)
+                    transform = closest_object.world_transform
 
-                if closest_object_shape is not None:
-                    surface_normal = closest_object_shape.get_normal(point)
+                    if shape is not None:
+                        shape = cast(Shape, shape)
+                        
+                        # 1. Convert hit point to local space
+                        local_hit_point = transform.inverse_transform_point(point)
+                        
+                        # 2. Calculate normal in local space (e.g., via finite difference)
+                        local_normal = shape.get_normal(local_hit_point)
+                        
+                        # 3. Rotate normal back to world space
+                        world_normal = transform.transform_normal(local_normal)
+                        
+                        # Normalize to be safe
+                        surface_normal = unit(world_normal)
 
                 if stats is not None:
                     stats.triangle_tests += 1
@@ -265,8 +279,13 @@ class InverseSDFIntersection(IntersectionStrategy):
             if not hasattr(obj, 'shape'):
                 continue
 
-            if self.use_bounding_box and hasattr(obj, "bounds"):
-                if obj.bounds.intersect(ray) == float('inf'):
+            if self.use_bounding_box:
+                bounds = getattr(obj, "bounds", None)
+                if bounds is None:
+                    continue
+                
+                bounds = cast(AABB, bounds)
+                if bounds.intersect(ray) == float('inf'):
                     continue
 
             # Attempt to intersect this specific object
@@ -732,7 +751,8 @@ class StandardInteraction(InteractionStrategy):
         # 1. Geometry Setup
         # -----------------
         geometric_normal: np.ndarray = getattr(hit_info, "normal", np.array([0.0, 1.0, 0.0]))
-        hit_point: np.ndarray = hit_info.point
+        hit_point = getattr(hit_info, "point", None)
+        if hit_point is None: return None
         
         # Check if we are Entering or Exiting the medium
         # Dot product < 0 means Ray and Normal oppose each other (Entering)
@@ -832,9 +852,9 @@ class NormalShading(ShadingStrategy):
         
         # 2. Map from range [-1, 1] to [0, 1] for color display
         # Normal (0,0,0) becomes Gray (0.5, 0.5, 0.5)
-        r = (normal[0] + 1.0) * 0.5
-        g = (normal[1] + 1.0) * 0.5
-        b = (normal[2] + 1.0) * 0.5
+        r = np.clip((normal[0]), 0.0, 1.0)
+        g = np.clip((normal[1]), 0.0, 1.0)
+        b = np.clip((normal[2]), 0.0, 1.0)
         
         return Color(r, g, b)
 
@@ -883,7 +903,9 @@ class FlatShading(ShadingStrategy):
             recursions_left: int,
             *args, **kwargs
         ) -> Color:
-        material = hit_info.obj.material
+        
+        # Material validation
+        material: Optional[PBRMaterial] = getattr(hit_info.obj, 'material', None)
         if material is None:
             return Color(1.0, 0.0, 1.0) # Material Error
 
@@ -1079,6 +1101,8 @@ class XRayThicknessShading(ShadingStrategy):
         normal = getattr(hit_info, "normal", np.array([0.0, 1.0, 0.0]))
         hit_point = getattr(hit_info, "point", None)
         
+        if hit_point is None: return Color(0.0, 0.0, 0.0)
+
         view_dir = unit(-ray.orientation)
 
         # 2. Calculate Thickness (The "Through" Ray)
