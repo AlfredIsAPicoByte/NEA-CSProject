@@ -205,15 +205,15 @@ int main()
 	auto sword = std::make_shared<ModelAdapter>(swordPtr, 0);
 	sword->SetName("Sword");
 
-	auto dountPtr = std::make_shared<Model>("custom_donut_low/scene.gltf");
-	glm::vec3 donutPos = glm::vec3(0.0f, 1.0f, 0.0f);
-	glm::vec3 donutScale = glm::vec3(0.5f);
-	glm::mat4 donutModelMatrix = glm::mat4(1.0f);
-	donutModelMatrix = glm::translate(donutModelMatrix, donutPos);
-	donutModelMatrix = glm::scale(donutModelMatrix, donutScale);
-	dountPtr->SetModelMatricesForAllMeshes(std::vector<glm::mat4>{ donutModelMatrix });
-	auto dount = std::make_shared<ModelAdapter>(dountPtr, 0);
-	dount->SetName("Donut");
+	// auto dountPtr = std::make_shared<Model>("custom_donut_low/scene.gltf");
+	// glm::vec3 donutPos = glm::vec3(0.0f, 1.0f, 0.0f);
+	// glm::vec3 donutScale = glm::vec3(0.5f);
+	// glm::mat4 donutModelMatrix = glm::mat4(1.0f);
+	// donutModelMatrix = glm::translate(donutModelMatrix, donutPos);
+	// donutModelMatrix = glm::scale(donutModelMatrix, donutScale);
+	// dountPtr->SetModelMatricesForAllMeshes(std::vector<glm::mat4>{ donutModelMatrix });
+	// auto dount = std::make_shared<ModelAdapter>(dountPtr, 0);
+	// dount->SetName("Donut");
 
 	Time time;
 	Camera camera(windowWidth, windowHeight, glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, -1.0f));
@@ -270,7 +270,7 @@ int main()
 		floorMesh.Draw(litShaderProgram, camera);
 		bunny->Draw(litShaderProgram, camera);
 		sword->Draw(litShaderProgram, camera);
-		dount->Draw(unlitShaderProgram, camera);
+		// dount->Draw(unlitShaderProgram, camera);
 		lightMesh.Draw(unlitShaderProgram, camera);
 	}));
 	testScene.AddRenderable(std::make_shared<Mesh>(floorMesh));
@@ -278,7 +278,7 @@ int main()
 
 	testScene.AddRenderable(bunny);
 	testScene.AddRenderable(sword);
-	testScene.AddRenderable(dount);
+	// testScene.AddRenderable(dount);
 
 	testScene.selectedRenderable = 0;
 	testScene.renderSettings->usePythonRendering = false;
@@ -356,8 +356,15 @@ int main()
 					resetKeyPressed = false;
 				});
 				InputManager::Instance(window).doWhenKey(GLFW_KEY_H, true, [&]() {
-					g_showDebugTri = !g_showDebugTri; AppendMessage(std::string("Debug triangle toggled: ") + (g_showDebugTri ? "ON" : "OFF"));
-				});			
+					if (!resetKeyPressed) {
+						g_showDebugTri = !g_showDebugTri;
+						AppendMessage(std::string("Debug triangle toggled: ") + (g_showDebugTri ? "ON" : "OFF"));
+						resetKeyPressed = true;
+					}
+				});
+				InputManager::Instance(window).doWhenKey(GLFW_KEY_H, false, [&]() {
+					resetKeyPressed = false;
+				});	
 				InputManager::Instance(window).doWhenKey(GLFW_KEY_T, true, [&]() {
 					if (!resetKeyPressed) {
 						camera.ResetPlane();
@@ -628,7 +635,10 @@ int main()
 
 					if (ImGui::Button("Look at Selected")) {
 						if (check_valid_renderable(testScene)) {
+							std::string name = testScene.renderables[testScene.selectedRenderable]->GetName();
 							camera.LookAt(glm::vec3(testScene.renderables[testScene.selectedRenderable]->GetModelMatrix()[3]));
+							camera.SelectOrbitTarget(glm::vec3(testScene.renderables[testScene.selectedRenderable]->GetModelMatrix()[3]));
+							AppendMessage("Looking at: " + name);
 						} else {
 							AppendMessage("No renderable selected, or invalid index, or NULL renderable.");
 						}
@@ -656,6 +666,9 @@ int main()
 	
 	floorMesh.CleanUp();
 	lightMesh.CleanUp();
+	bunny->CleanUp();
+	sword->CleanUp();
+	// dount->CleanUp();
 	testScene.CleanUp();
 	
 	Engine::Instance().CleanUp(window);
