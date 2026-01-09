@@ -6,8 +6,8 @@ void CreateLightsUBO()
     glGenBuffers(1, &g_LightsUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, g_LightsUBO);
 
-    // std140: u_lightCount (4 bytes) padded to 16 + 3 * vec4 * MAX_LIGHTS
-    GLsizeiptr size = 16 + sizeof(float) * 4 * 3 * MAX_LIGHTS;
+    // std140: u_lightCount (4 bytes) padded to 16 + 4 * vec4 * MAX_LIGHTS (pos, dir, color, radius)
+    GLsizeiptr size = 16 + sizeof(float) * 4 * 4 * MAX_LIGHTS;
     glBufferData(GL_UNIFORM_BUFFER, size, nullptr, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, LIGHTS_BINDING_POINT, g_LightsUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);

@@ -476,7 +476,7 @@ int main()
 					ImGui::SetClipboardText(buf.c_str());
 				}
 				ImGui::SameLine();
-				if (ImGui::Button("Pause")) {
+				if (ImGui::Button(pause ? "Resume" : "Pause")) {
 					pause = !pause;
 				}
 				ImGui::SameLine();
