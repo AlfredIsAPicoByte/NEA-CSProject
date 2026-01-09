@@ -377,6 +377,7 @@ class PBRMaterial:
             hit_info: HitInfo,
             view_dir: np.ndarray,
             visibility_function: Callable[[np.ndarray, LightSource], float],
+            transformation_matrix: Optional[np.ndarray] = None,
             bias: float = 1e-4
         ) -> Color:
         """
@@ -409,8 +410,16 @@ class PBRMaterial:
 
         for light in scene_lights:
             # --- Light Setup ---
-            light_dir = light.get_light_direction(hit_point)
-            light_dist = np.linalg.norm(light.position - hit_point)
+            if transformation_matrix is not None:
+                light_pos_homogeneous = np.append(light.position, 1.0)
+                transformed_pos = transformation_matrix @ light_pos_homogeneous
+                light_position = transformed_pos[:3] / transformed_pos[3]
+                light_dir = unit(light_position - hit_point)
+            else:
+                light_position = light.position
+                light_dir = light.get_light_direction(hit_point)
+                
+            light_dist = np.linalg.norm(light_position - hit_point)
             
             if light_dist <= bias: continue
             
