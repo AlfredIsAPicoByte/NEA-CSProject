@@ -11,6 +11,9 @@
 
 #include "renderClass.h"
 #include "colorClass.h"
+#include "cameraClass.h"
+#include "Mesh.h"
+#include "Model.h"
 #include "ModelAdapter.h"
 #include "Light.hpp"
 #include "Material.hpp"

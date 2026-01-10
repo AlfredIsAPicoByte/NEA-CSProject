@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -8,14 +9,13 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 #include <glm/gtx/vector_angle.hpp>
-#include <string>
+#include <json.hpp>
 
 #include "shaderClass.h"
 #include "timeClass.h"
 #include "IVirtualObject.hpp"
 #include "InputManager.h"
 #include "Debugger.h"
-
 
 enum CameraType {
     PERSPECTIVE,

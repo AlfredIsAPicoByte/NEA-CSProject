@@ -1,4 +1,9 @@
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include "Engine.h"
+
 
 int windowWidth = 1080;
 int windowHeight = 810;
@@ -73,7 +78,15 @@ static void CreateDebugTriangle() {
 	if (!ok) { GLchar buf[1024]; glGetShaderInfoLog(fragShader, 1024, NULL, buf); AppendGraphicsError(std::string("Debug tri fragment shader compile: ") + buf); }
 
 	g_debugTri.program = glCreateProgram(); glAttachShader(g_debugTri.program, vertShader); glAttachShader(g_debugTri.program, fragShader); glLinkProgram(g_debugTri.program); glGetProgramiv(g_debugTri.program, GL_LINK_STATUS, &ok);
-	if (!ok) { GLchar buf[1024]; glGetProgramInfoLog(g_debugTri.program, 1024, NULL, buf); AppendGraphicsError(std::string("Debug tri program link: ") + buf); }
+	if (!ok) { GLchar buf[1024]; glGetShaderInfoLog(vertShader, 1024, NULL, buf); AppendGraphicsError(std::string("Debug tri program link (link failed): ") + buf); }
+	// Validate program to catch any runtime issues
+	glValidateProgram(g_debugTri.program);
+	GLint validate_ok = 0; glGetProgramiv(g_debugTri.program, GL_VALIDATE_STATUS, &validate_ok);
+	if (!validate_ok) { GLchar buf[1024]; glGetProgramInfoLog(g_debugTri.program, 1024, NULL, buf); AppendGraphicsError(std::string("Debug tri program validation: ") + buf); }
+	// Report attribute locations and program id
+	GLint aPosLoc = glGetAttribLocation(g_debugTri.program, "aPos");
+	GLint aColorLoc = glGetAttribLocation(g_debugTri.program, "aColor");
+	AppendGraphicsMessage(std::string("Debug tri program id: ") + std::to_string(g_debugTri.program) + std::string(", aPos=") + std::to_string(aPosLoc) + std::string(", aColor=") + std::to_string(aColorLoc));
 	glDeleteShader(vertShader); glDeleteShader(fragShader);
 
 	glGenVertexArrays(1, &g_debugTri.VAO); glGenBuffers(1, &g_debugTri.VBO);
@@ -82,15 +95,45 @@ static void CreateDebugTriangle() {
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0); glEnableVertexAttribArray(0);
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float))); glEnableVertexAttribArray(1);
 	glBindVertexArray(0);
+	// Verify VAO/VBO were created
+	AppendGraphicsMessage(std::string("Debug tri VAO/VBO: ") + std::to_string(g_debugTri.VAO) + std::string(",") + std::to_string(g_debugTri.VBO));
+	AppendGraphicsMessage(std::string("glIsVertexArray: ") + (glIsVertexArray(g_debugTri.VAO) ? "true" : "false") + std::string(", glIsBuffer: ") + (glIsBuffer(g_debugTri.VBO) ? "true" : "false"));
 }
 
 static void DrawDebugTriangle() {
-	if (g_debugTri.program == 0) return;
+	if (g_debugTri.program == 0) { AppendGraphicsError("Debug triangle program is 0"); return; }
+	// Temporarily force visible state: disable depth test and draw wireframe
+	GLboolean depthWasEnabled = glIsEnabled(GL_DEPTH_TEST);
+	if (depthWasEnabled) glDisable(GL_DEPTH_TEST);
+	GLint lastMode[2]; // Not a real GL query for polygon mode, keep simple and restore to fill below
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+	// Diagnostics: check for GL errors before drawing
+	GLenum pre = glGetError(); if (pre != GL_NO_ERROR) { AppendGraphicsError(std::string("GL pre-error before drawing debug triangle: ") + std::to_string(pre)); }
+
 	glUseProgram(g_debugTri.program);
 	glBindVertexArray(g_debugTri.VAO);
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 	glBindVertexArray(0);
+
+	// restore polygon mode and depth test
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	if (depthWasEnabled) glEnable(GL_DEPTH_TEST);
+
 	GLenum e = glGetError(); if (e != GL_NO_ERROR) { AppendGraphicsError(std::string("GL error after drawing debug triangle: ") + std::to_string(e)); }
+}
+
+// Diagnostic: read back center pixel to detect whether any non-background colour is present
+static void LogCenterPixelColor(GLFWwindow* window) {
+	int fbW = 0, fbH = 0;
+	glfwGetFramebufferSize(window, &fbW, &fbH);
+	if (fbW <= 0 || fbH <= 0) { AppendGraphicsError("Framebuffer size invalid when reading center pixel."); return; }
+	int cx = fbW / 2;
+	int cy = fbH / 2;
+	unsigned char pixel[3] = {0,0,0};
+	// Read from the backbuffer before swap
+	glReadPixels(cx, cy, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, pixel);
+	AppendGraphicsMessage(std::string("Center pixel RGB: ") + std::to_string(pixel[0]) + "," + std::to_string(pixel[1]) + "," + std::to_string(pixel[2]));
 }
 
 static void DeleteDebugTriangle() { if (g_debugTri.VAO) glDeleteVertexArrays(1, &g_debugTri.VAO); if (g_debugTri.VBO) glDeleteBuffers(1, &g_debugTri.VBO); if (g_debugTri.program) glDeleteProgram(g_debugTri.program); g_debugTri = DebugTriangle(); }
@@ -98,12 +141,27 @@ static void DeleteDebugTriangle() { if (g_debugTri.VAO) glDeleteVertexArrays(1, 
 int main()
 {
 	AppendMessage("Starting Engine...");
-	
+
+#ifdef _WIN32
+	static HANDLE g_singleInstanceMutex = NULL;
+	g_singleInstanceMutex = CreateMutexW(NULL, FALSE, L"Global\\NEA_CSProject_MainMutex_v1");
+	if (g_singleInstanceMutex == NULL) {
+		AppendGraphicsError("Failed to create mutex for single-instance check");
+	} else if (GetLastError() == ERROR_ALREADY_EXISTS) {
+		AppendMessage("Another instance of the application is already running; exiting.");
+		return 0;
+	}
+#endif
+
     // Initialize GLFW
     if (!glfwInit()) {
 		AppendGraphicsError("Failed to initialize GLFW");
 		return -1;
 	}
+
+	Scene testScene;
+	testScene.Initialize();
+
 
     // Tell GLFW what version of OpenGL we are using 
     // Example: OpenGL 4.6
@@ -245,9 +303,7 @@ int main()
 	int camMode = 1;
 	bool resetKeyPressed = false;
 
-	Scene testScene;
 	testScene.SetCamera(&camera);
-	testScene.Initialize();
 	testScene.SetOpenGLRenderFunction(std::make_shared<std::function<void()>>([&]() {
 		// Debug: draw test triangle to verify pipeline
 		if (g_showDebugTri) DrawDebugTriangle();
@@ -296,7 +352,7 @@ int main()
 			time.update();
 			
 			float roundFramerate = (int)(time.frameRate * 100 + .5);
-    		roundFramerate = value / 100;
+    		roundFramerate = roundFramerate / 100;
 			std::string newTitle = "A level NEA Rendering Engine - (" + testScene.name + ") - " + std::to_string(roundFramerate) + "FPS, " + std::to_string(time.deltaTime * 1000.0f) + "ms";
 			glfwSetWindowTitle(window, newTitle.c_str());
 			
@@ -414,6 +470,8 @@ int main()
 					testScene.renderSettings->usePythonRendering = false;
 				}
 			);
+			// Diagnostic: check center pixel after OpenGL rendering (before ImGui draws & before buffer swap)
+			LogCenterPixelColor(window);
 		},
 		// Post-processing
 		[]() {
@@ -674,6 +732,14 @@ int main()
 	
 	Engine::Instance().CleanUp(window);
 	Engine::Instance().Exit();
+
+#ifdef _WIN32
+	if (g_singleInstanceMutex) {
+		ReleaseMutex(g_singleInstanceMutex);
+		CloseHandle(g_singleInstanceMutex);
+		g_singleInstanceMutex = NULL;
+	}
+#endif
 
 	return 0;
 }

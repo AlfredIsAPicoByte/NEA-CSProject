@@ -7,8 +7,10 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <json.hpp>
 
 #include "Mesh.h"
+#include "textureClass.h"
 #include "IVirtualObject.hpp"
 
 class Model : public IVirtualObject {

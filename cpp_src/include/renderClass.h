@@ -7,10 +7,12 @@
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
 #include <stb_image_write.h>
+#include <json.hpp>
 
-#include "Model.h"
 #include "Image.hpp"
 #include "IVirtualObject.hpp"
+#include "Mesh.h"
+#include "Model.h"
 #include "ModelAdapter.h"
 #include "PythonManager.h"
 

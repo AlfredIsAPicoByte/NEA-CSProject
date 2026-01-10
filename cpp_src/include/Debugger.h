@@ -38,7 +38,7 @@ struct DebugMessage {
     enum Type {
         MESSAGE,
         WARNING,
-        ERROR,
+        D_ERROR,
         DEPRECATED_BEHAVIOR,
         UNDEFINED_BEHAVIOR,
         PORTABILITY,
@@ -91,7 +91,7 @@ struct DebugMessage {
         switch (t) {
             case MESSAGE: return "Message";
             case WARNING: return "Warning";
-            case ERROR: return "Error";
+            case D_ERROR: return "Error";
             case DEPRECATED_BEHAVIOR: return "Deprecated Behavior";
             case UNDEFINED_BEHAVIOR: return "Undefined Behavior";
             case PORTABILITY: return "Portability";

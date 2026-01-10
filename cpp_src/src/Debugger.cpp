@@ -48,7 +48,7 @@ void APIENTRY glDebugOutput(GLenum source,
     DebugMessage::Type typ;
     switch (type)
     {
-        case GL_DEBUG_TYPE_ERROR:               typ = DebugMessage::ERROR; break;
+        case GL_DEBUG_TYPE_ERROR:               typ = DebugMessage::D_ERROR; break;
         case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: typ = DebugMessage::DEPRECATED_BEHAVIOR; break;
         case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  typ = DebugMessage::UNDEFINED_BEHAVIOR; break;
         case GL_DEBUG_TYPE_PORTABILITY:         typ = DebugMessage::PORTABILITY; break;
@@ -175,7 +175,7 @@ void AppendWarning(const std::string& msg, DebugMessage::Severity severity) {
     AppendDebugMessage(msg, DebugMessage::Source::APPLICATION, DebugMessage::Type::WARNING, severity);
 }
 void AppendError(const std::string& msg, DebugMessage::Severity severity) {
-    AppendDebugMessage(msg, DebugMessage::Source::APPLICATION, DebugMessage::Type::ERROR, severity);
+    AppendDebugMessage(msg, DebugMessage::Source::APPLICATION, DebugMessage::Type::D_ERROR, severity);
 }
 void AppendGraphicsMessage(const std::string& msg, DebugMessage::Severity severity) {
     AppendDebugMessage(msg, DebugMessage::Source::GRAPHICS, DebugMessage::Type::MESSAGE, severity);
@@ -184,7 +184,7 @@ void AppendGraphicsWarning(const std::string& msg, DebugMessage::Severity severi
     AppendDebugMessage(msg, DebugMessage::Source::GRAPHICS, DebugMessage::Type::WARNING, severity);
 }
 void AppendGraphicsError(const std::string& msg, DebugMessage::Severity severity) {
-    AppendDebugMessage(msg, DebugMessage::Source::GRAPHICS, DebugMessage::Type::ERROR, severity);
+    AppendDebugMessage(msg, DebugMessage::Source::GRAPHICS, DebugMessage::Type::D_ERROR, severity);
 }
 void AppendPythonMessage(const std::string& msg, DebugMessage::Severity severity) {
     AppendDebugMessage(msg, DebugMessage::Source::PYTHON, DebugMessage::Type::MESSAGE, severity);
@@ -193,7 +193,7 @@ void AppendPythonWarning(const std::string& msg, DebugMessage::Severity severity
     AppendDebugMessage(msg, DebugMessage::Source::PYTHON, DebugMessage::Type::WARNING, severity);
 }
 void AppendPythonError(const std::string& msg, DebugMessage::Severity severity) {
-    AppendDebugMessage(msg, DebugMessage::Source::PYTHON, DebugMessage::Type::ERROR, severity);
+    AppendDebugMessage(msg, DebugMessage::Source::PYTHON, DebugMessage::Type::D_ERROR, severity);
 }
 
 void PrintDebugLog(int truncateLength) {

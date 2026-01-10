@@ -110,19 +110,36 @@ else()
 endif()
 
 # ---- Optional: support embedding Python. Disabled by default; enable with -DUSE_EMBEDDED_PYTHON=ON ----
+add_compile_definitions(USE_EMBEDDED_PYTHON=0)
 option(USE_EMBEDDED_PYTHON "Enable embedding Python into the executable" OFF)
 if(USE_EMBEDDED_PYTHON)
     find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
     if(Python3_FOUND)
         message(STATUS "Embedding Python: ${Python3_VERSION}")
         target_include_directories(main PRIVATE ${Python3_INCLUDE_DIRS})
-        target_link_libraries(main PRIVATE ${Python3_LIBRARIES})
+        # Add library directory explicitly when the full path is available (helps MSVC find unqualified names)
+        if(DEFINED Python3_LIBRARY_RELEASE)
+            get_filename_component(_PY3_LIB_DIR "${Python3_LIBRARY_RELEASE}" DIRECTORY)
+            target_link_directories(main PRIVATE ${_PY3_LIB_DIR})
+        endif()
+        # Prefer explicit per-configuration library paths when available to avoid missing-linker-search-path issues
+        if(DEFINED Python3_LIBRARY_RELEASE AND DEFINED Python3_LIBRARY_DEBUG)
+            target_link_libraries(main PRIVATE
+                $<$<CONFIG:Debug>:${Python3_LIBRARY_DEBUG}>
+                $<$<CONFIG:Release>:${Python3_LIBRARY_RELEASE}>
+            )
+        elseif(DEFINED Python3_LIBRARY)
+            target_link_libraries(main PRIVATE ${Python3_LIBRARY})
+        else()
+            target_link_libraries(main PRIVATE ${Python3_LIBRARIES})
+        endif()
         target_compile_definitions(main PRIVATE USE_EMBEDDED_PYTHON=1)
     endif()
 endif()
 
 # ---- Optional: Copy py_src directory after build (ON, OFF) ----
-option(COPY_PY_SRC "Copy py_src directory after build" OFF)
+add_compile_definitions(COPY_PY_SRC=1)
+option(COPY_PY_SRC "Copy py_src directory after build" ON)
 if(COPY_PY_SRC)
     add_custom_command(TARGET main POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory

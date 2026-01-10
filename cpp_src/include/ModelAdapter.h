@@ -2,8 +2,10 @@
 
 #include <memory>
 #include <stdexcept>
+#include <json.hpp>
 
 #include "Model.h"
+#include "cameraClass.h"
 #include "IRenderable.hpp"
 
 class ModelAdapter : public IRenderable {

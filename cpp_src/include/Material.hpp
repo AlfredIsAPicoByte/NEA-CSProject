@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp>
 #include <glad/glad.h>
+#include <json.hpp>
 
 #include "IVirtualObject.hpp"
 #include "Debugger.h"

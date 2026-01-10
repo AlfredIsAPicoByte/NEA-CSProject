@@ -5,6 +5,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <json.hpp>
 
 #include "shaderClass.h"
 #include "cameraClass.h"

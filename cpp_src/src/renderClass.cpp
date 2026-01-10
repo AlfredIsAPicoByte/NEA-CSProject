@@ -14,11 +14,11 @@ Scene::~Scene()
 
 void Scene::Initialize()
 {
-    PythonManager::Instance().AddModulePath("src");
+    PythonManager::Instance().AddModulePath("py_src/src");
 
     pyAlgorithmModule = PythonManager::Instance().LoadModule("RenderingAlgorithms");
     pyRaytracingModule = PythonManager::Instance().LoadModule("Raytracing");
-    pySamplerModule = PythonManager::Instance().LoadModule("Sampler");
+    pySamplerModule = PythonManager::Instance().LoadModule("Sampling");
     pySceneModule = PythonManager::Instance().LoadModule("Scene");
     pyCameraModule = PythonManager::Instance().LoadModule("Camera");
     pyLuminanceModule = PythonManager::Instance().LoadModule("Luminance");

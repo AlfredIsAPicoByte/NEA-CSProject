@@ -1,10 +1,9 @@
 #pragma once
-#include <glm/glm.hpp>
-#include <vector>
-#include <glad/glad.h>
-#include <algorithm>
 
-#include "shaderClass.h"
+#include <glm/glm.hpp>
+#include <glad/glad.h>
+#include <json.hpp>
+
 #include "IVirtualObject.hpp"
 #include "Debugger.h"
 
