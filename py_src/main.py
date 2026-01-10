@@ -65,8 +65,8 @@ if __name__ == "__main__":
 
     all_scenes = [
         get_minimal_scene(img_w, img_h),
-        # get_gradient_scene(img_w, img_h),
-        # get_emissive_scene(img_w, img_h),
+        get_gradient_scene(img_w, img_h),
+        get_emissive_scene(img_w, img_h),
         # get_lit_studio_scene(img_w, img_h),
         # get_rgb_room_with_objects_scene(img_w, img_h),
         # get_cyberpunk_scene(img_w, img_h),
@@ -85,12 +85,12 @@ if __name__ == "__main__":
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     generator = JitterRayGenerator()
-    intersection = BVHIntersection(max_distance=1000, max_steps=512)
-    interactor = TerminalInteraction()
-    shading = NormalShading()
+    intersection = BVHIntersection(max_distance=1000, max_steps=1024)
+    interactor = StandardInteraction()
+    shading = BasicLambertShading()
 
     raytracer = Raytracer(
-        max_depth=1,
+        max_depth=6,
         sampling_manager=sampling_manager,
         ray_generator=generator,
         intersection_strategy=intersection,

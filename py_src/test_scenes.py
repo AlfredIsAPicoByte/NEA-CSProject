@@ -69,31 +69,27 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     return scene
 
 def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
-    cam_transform = Transform(np.array([0.0, 0.0, -100.0]), np.zeros(3), np.ones(3))
+    cam_transform = Transform(np.array([0.0, 0.0, -5.0]), np.zeros(3), np.ones(3))
     cam = VCamera(
         cam_transform,
         fov=60.0, near=0.1, far=1000.0,
         resolution_width=width, resolution_height=height,
-        camera_type=CameraType.ORTHOGRAPHIC,
-        distance=100
+        camera_type=CameraType.PERSPECTIVE,
+        distance=5
     )
     scene = Scene(name="minimal_scene", camera=cam, background_color=Color.from_hex("#403A43"))
 
     # Sphere at origin
     sphere_shape = Sphere(name="BallMin")
     mat = PBRMaterial.create_diffuse(Color.from_hex("#227DD7"), 0.2)
-    v_sphere = VObject(shape=sphere_shape, name="SphereMin")
-    v_sphere.transform.enlarge(np.ones(3) * 0.5)
+    v_sphere = VObject(Transform(np.array([0.0, 0.0, 0.0]), np.zeros(3), np.ones(3)), shape=sphere_shape, name="SphereMin")
     v_sphere.material = mat
-    # No translation needed as it is at (0,0,0)
     scene.add_object(v_sphere)
 
     # Ground
     ground_shape = Sphere(name="GroundMin")
     matg = PBRMaterial.create_diffuse(Color.from_hex("#3F3F3F"), 0.9)
-    v_ground = VObject(shape=ground_shape, name="GroundMin")
-    v_ground.transform.translate(np.array([0.0, -200.5, 0.0]))
-    v_sphere.transform.enlarge(np.ones(3) * 10)
+    v_ground = VObject(Transform(np.array([0.0, -100.5, 0.0]), np.zeros(3), np.array([100, 100, 100])), shape=ground_shape, name="GroundMin")
     v_ground.material = matg
     scene.add_object(v_ground)
 
@@ -134,9 +130,7 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
     # Ground
     ground_shape = Sphere(name="GroundEmissive")
     matg = PBRMaterial.create_diffuse(Color.from_hex("#202020"), roughness=0.8)
-    v_ground = VObject(shape=ground_shape, name="GroundEmissive")
-    v_ground.transform.enlarge(np.ones(3) * 100)
-    v_ground.transform.translate(np.array([0.0, -100.5, 0.0]))
+    v_ground = VObject(Transform(np.array([0.0, -100.5, 0.0]), np.zeros(3), np.array([100, 100, 100])), shape=ground_shape, name="GroundEmissive")
     v_ground.material = matg
     scene.add_object(v_ground)
 

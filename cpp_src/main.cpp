@@ -294,8 +294,10 @@ int main()
 		// PreProcecing 
 		[&]() {
 			time.update();
-
-			std::string newTitle = "A level NEA Rendering Engine - (" + testScene.name + ") - " + std::to_string(time.frameRate) + "FPS, " + std::to_string(time.deltaTime * 1000.0f) + "ms";
+			
+			float roundFramerate = (int)(time.frameRate * 100 + .5);
+    		roundFramerate = value / 100;
+			std::string newTitle = "A level NEA Rendering Engine - (" + testScene.name + ") - " + std::to_string(roundFramerate) + "FPS, " + std::to_string(time.deltaTime * 1000.0f) + "ms";
 			glfwSetWindowTitle(window, newTitle.c_str());
 			
 			// Handle window resizing
@@ -420,8 +422,7 @@ int main()
 		// ImGui Objects
 		[&]() {
 			{
-				ImGui::Begin("Info Panel");
-				ImGui::Text("Controls:");
+				ImGui::Begin("Controls Info");
 				ImGui::Text("  - WASD to move");
 				ImGui::Text("  - QE to move up and down, or roll in Plane mode");
 				ImGui::Text("  - Mouse to look around");
@@ -447,7 +448,7 @@ int main()
         	}
 
 			{
-				ImGui::Begin("Debugging Log Panel");
+				ImGui::Begin("Debug Logger");
 				// Persistent UI state
 				static bool autoScroll = true;
 				static bool pause = false;
@@ -574,7 +575,7 @@ int main()
 			}
 			
 			{
-				ImGui::Begin("Scene Panel");
+				ImGui::Begin("Scene Details");
 
 				// Add try-catch and individual checks
 				try {
