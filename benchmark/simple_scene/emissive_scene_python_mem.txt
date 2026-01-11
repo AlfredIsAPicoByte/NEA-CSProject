@@ -1,22 +1,22 @@
-Time: 36.7929s | RSS Δ: 1.250 MB
-RSS start: 72.922 MB | RSS end: 74.172 MB
-tracemalloc current: 243.23 KB | peak: 2170.83 KB
+Time: 10.1851s | RSS Δ: 0.000 MB
+RSS start: 74.125 MB | RSS end: 74.125 MB
+tracemalloc current: 137.29 KB | peak: 2063.61 KB
 Top allocations (most recent frame):
   1. /workspaces/NEA-CSProject/py_src/main.py:28 | 108.09 KB (2 allocs)
-  2. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/numeric.py:1469 | 46.73 KB (997 allocs)
-  3. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/numeric.py:1548 | 46.69 KB (996 allocs)
-  4. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1409 | 13.67 KB (250 allocs)
-  5. /usr/lib/python3.12/dataclasses.py:1581 | 7.28 KB (62 allocs)
-  6. /workspaces/NEA-CSProject/py_src/src/Luminance.py:567 | 4.61 KB (105 allocs)
+  2. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1409 | 13.67 KB (250 allocs)
+  3. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/psutil/_pslinux.py:1593 | 4.80 KB (41 allocs)
+  4. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1379 | 4.10 KB (75 allocs)
+  5. /workspaces/NEA-CSProject/py_src/src/Sampling.py:201 | 1.05 KB (45 allocs)
+  6. /workspaces/NEA-CSProject/py_src/src/Sampling.py:202 | 1.03 KB (44 allocs)
 
 Postproccesing:
-Time: 0.0021s | RSS Δ: 0.000 MB
-RSS start: 74.172 MB | RSS end: 74.172 MB
-tracemalloc current: 217.00 KB | peak: 1146.21 KB
+Time: 0.0022s | RSS Δ: 0.000 MB
+RSS start: 74.125 MB | RSS end: 74.125 MB
+tracemalloc current: 217.08 KB | peak: 1146.13 KB
 Top allocations (most recent frame):
   1. /workspaces/NEA-CSProject/py_src/src/PostProcessing.py:198 | 216.09 KB (2 allocs)
-  2. /usr/lib/python3.12/tracemalloc.py:560 | 0.26 KB (2 allocs)
-  3. /usr/lib/python3.12/tracemalloc.py:423 | 0.26 KB (2 allocs)
-  4. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/psutil/_pslinux.py:1593 | 0.12 KB (1 allocs)
-  5. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:57 | 0.12 KB (1 allocs)
-  6. /workspaces/NEA-CSProject/py_src/src/MemoryProfiler.py:44 | 0.06 KB (2 allocs)
+  2. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:57 | 0.23 KB (2 allocs)
+  3. /usr/lib/python3.12/tracemalloc.py:560 | 0.22 KB (2 allocs)
+  4. /usr/lib/python3.12/tracemalloc.py:423 | 0.22 KB (2 allocs)
+  5. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/psutil/_pslinux.py:1593 | 0.12 KB (1 allocs)
+  6. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/lib/_stride_tricks_impl.py:358 | 0.10 KB (2 allocs)

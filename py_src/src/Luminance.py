@@ -221,6 +221,10 @@ class ColorGradient:
         # Calculates R, G, B, A simultaneously
         return lerp(c0, c1, factor)
         
+class LightType(Enum):
+    POINT = 1
+    DIRECTIONAL = 2
+
 class LightSource:
     def __init__(self, position: np.ndarray, color: Color, intensity: float = 1.0, radius: float = 1.0, name: str = "Light Source"):
         self.position = position
@@ -372,19 +376,19 @@ class PBRMaterial:
         return cls(data)
     
     def evaluate_direct_light(
-            self,
-            scene_lights: List[LightSource],
-            hit_info: HitInfo,
-            view_dir: np.ndarray,
-            visibility_function: Callable[[np.ndarray, LightSource], float],
-            transformation_matrix: Optional[np.ndarray] = None,
-            bias: float = 1e-4
-        ) -> Color:
+        self,
+        scene_lights: List[LightSource],
+        hit_info: HitInfo,
+        view_dir: np.ndarray,
+        visibility_function: Callable[[np.ndarray, LightSource], float],
+        bias: float = 1e-4
+    ) -> Color:
         """
-        Calculates Direct Lighting contribution for Glass (Reflection + Refraction).
+        Calculates Direct Lighting contribution.
+        Assumes hit_info.point and scene_lights are ALL in World Space.
         """
-        surface_normal = hit_info.normal
-        hit_point = hit_info.point
+        surface_normal = hit_info.obj.world_transform.inverse_transform_normal(hit_info.normal)
+        hit_point = hit_info.obj.world_transform.inverse_transform_point(hit_info.point)
         accumulated_light = Color(0.0, 0.0, 0.0)
         
         if hit_point is None or surface_normal is None:
@@ -392,76 +396,89 @@ class PBRMaterial:
 
         # 1. Determine IOR Context (Entering vs Exiting)
         # -----------------------------------------------
-        # Assuming view_dir points FROM surface TO camera.
-        # If dot(N, V) > 0, we are outside looking in.
-        # If dot(N, V) < 0, we are inside looking out.
+        # view_dir is Surface -> Camera
         dot_n_v = np.dot(surface_normal, view_dir)
         
         if dot_n_v > 0:
-            # Front face (Air -> Glass)
+            # Outside looking in (Entering)
             ior_in = 1.000293  # Air
             ior_trans = self.ior
             working_normal = surface_normal
         else:
-            # Back face (Glass -> Air)
+            # Inside looking out (Exiting)
             ior_in = self.ior
             ior_trans = 1.000293
             working_normal = -surface_normal 
 
         for light in scene_lights:
-            # --- Light Setup ---
-            if transformation_matrix is not None:
-                light_pos_homogeneous = np.append(light.position, 1.0)
-                transformed_pos = transformation_matrix @ light_pos_homogeneous
-                light_position = transformed_pos[:3] / transformed_pos[3]
-                light_dir = unit(light_position - hit_point)
-            else:
-                light_position = light.position
-                light_dir = light.get_light_direction(hit_point)
-                
-            light_dist = np.linalg.norm(light_position - hit_point)
+            if self.data.type == MaterialType.EMISSIVE:
+                break
+            # --- Light Setup (World Space) ---
+            light_position = light.position
+            
+            # Vector from Surface -> Light
+            light_vec = light_position - hit_point
+            dist_sq = np.dot(light_vec, light_vec)
+            light_dist = np.sqrt(dist_sq)
             
             if light_dist <= bias: continue
             
+            light_dir = light_vec / light_dist
+            
             # --- Visibility Check (Shadows) ---
+            # Note: If checking visibility through glass, this simple function 
+            # usually returns 0 (blocked) unless you implement "Transparent Shadows"
             visibility = visibility_function(hit_point, light)
             if visibility <= 0.0:
                 continue
 
             # --- Lighting Calculations ---
-            # 1. Cosine Law (N dot L)
+            # N dot L (Clamped to 0 for opaque, abs for transmission)
             NdotL = np.dot(working_normal, light_dir)
-            abs_NdotL = abs(NdotL) # Use this for weighting
-    
-            # 2. Incoming Radiance (Li)
-            attenuation = attenuate_sqr_distance(float(light_dist))
-            att_intensity = (light.intensity * attenuation * visibility)
-            incoming_radiance = light.color * att_intensity
-        
+            
+            # Pre-calculate attenuation
+            attenuation = attenuate_sqr_distance(light_dist)
+            intensity = light.intensity * attenuation * NdotL * visibility
+            incoming_radiance = light.color * intensity # This is 'Li'
+
+            # --- Material Handling ---
+            
             if self.type == MaterialType.DIFFUSE:
-                diffuse_component = self.get_diffuse_component(light.color, att_intensity * abs_NdotL, light_dir, surface_normal)
-                accumulated_light += diffuse_component 
+                # Diffuse only reflects light on the side of the normal
+                if NdotL > 0:
+                    diffuse = self.get_diffuse_component(
+                        light.color, intensity, light_dir, working_normal
+                    )
+                    accumulated_light += diffuse 
 
-            if self.type == MaterialType.SPECULAR:
-                diffuse_component = self.get_diffuse_component(light.color, att_intensity * abs_NdotL, light_dir, surface_normal)
-                specular_component = self.get_specular_component(light.color, att_intensity * abs_NdotL, light_dir, surface_normal, view_dir)
-                accumulated_light += diffuse_component + specular_component
+            elif self.type == MaterialType.SPECULAR:
+                if NdotL > 0:
+                    diff = self.get_diffuse_component(light.color, intensity, light_dir, working_normal)
+                    spec = self.get_specular_component(light.color, intensity, light_dir, working_normal, view_dir)
+                    accumulated_light += diff + spec
 
-            if self.type == MaterialType.GLASS:
+            elif self.type == MaterialType.GLASS:
+                # We use the BSDF to evaluate how much light reflects towards the camera
                 bsdf_val = self.evaluate_bsdf(
-                    incident_dir=light_dir, 
-                    view_dir=view_dir, 
+                    incident_dir=light_dir,      # L
+                    view_dir=view_dir,           # V
                     surface_normal=working_normal, 
                     roughness=self.roughness, 
                     ior_incident=ior_in, 
                     ior_transmitted=ior_trans
                 )
-                accumulated_light += bsdf_val * incoming_radiance * abs_NdotL
+                
+                # Valid reflection requires Light and View to be on the same side
+                # so we multiply by NdotL.
+                # If doing rough transmission, you might use abs(NdotL).
+                if NdotL > 0:
+                    accumulated_light += bsdf_val * incoming_radiance * NdotL
             
-            if self.type == MaterialType.TRANSPARENT:
-                transparent_component = self.get_transparency_component(light.color)
-                accumulated_light += transparent_component * visibility
-            
+            elif self.type == MaterialType.TRANSPARENT:
+                # Simple alpha-blended transparency (fake glass)
+                # Just add the light color tinted by the object color
+                accumulated_light += self.get_transparency_component(light.color)
+
         return accumulated_light
     
     def evaluate_bsdf(
@@ -521,45 +538,52 @@ class PBRMaterial:
 
         else:
             # --- REFRACTION LOBE ---
-            # 1. Calculate Half Vector (H) for Refraction
-            # This H must align with the "bend" between L and V.
-            # Standard formula: H = - (eta_i * V + eta_t * L)
-            eta_i = ior_incident
-            eta_t = ior_transmitted
-            
-            # Note: Depending on your convention, V might need to be negated if it points IN.
-            # Here we assume V and L both point AWAY from surface.
-            # Since it's refraction, one is 'above' (dot > 0) and one 'below' (dot < 0).
-            
+            # 1. Assign Indices based on Vectors
+            # We need strictly: eta_L (side of Light) and eta_V (side of View)
+            # If V is outside (dot_n_v > 0), eta_V is Air.
             if dot_n_v > 0:
-                # Entering: V is outside, L is inside
-                H_raw = -(eta_i * V + eta_t * L)
+                eta_v = 1.000293       # Air
+                eta_l = self.ior       # Glass (Light is inside)
             else:
-                # Exiting: V is inside, L is outside
-                H_raw = -(eta_t * V + eta_i * L)
+                eta_v = self.ior       # Glass
+                eta_l = 1.000293       # Air (Light is outside)
 
+            # 2. Calculate Refraction Half Vector (H)
+            # H aligns with the "halfway" vector weighted by IORs.
+            # Standard Formula: H = -(eta_L * L + eta_V * V)
+            # (Note: We normalize, so the sign of H depends on convention. 
+            #  We usually want H to point into the denser medium or align with N).
+            
+            H_raw = -(eta_l * L + eta_v * V)
             H = unit(H_raw)
             
-            # 2. Calculate Fresnel (F)
-            dot_v_h = np.abs(np.dot(V, H))
-            dot_l_h = np.abs(np.dot(L, H))
-            
-            F = calculate_reflectance(np.degrees(math.acos(dot_v_h)), ior_incident, ior_transmitted)
+            # 3. Calculate Dot Products
+            # Critical: Keep signs for the denominator!
+            dot_v_h = np.dot(V, H)
+            dot_l_h = np.dot(L, H)
+            dot_h_n = np.dot(H, N) # Used for D
+
+            # 4. Fresnel (F)
+            # Use abs for Fresnel calc as it depends on angle magnitude
+            F = calculate_reflectance(np.degrees(math.acos(abs(dot_v_h))), ior_incident, ior_transmitted)
             if F is None: F = 1.0
 
-            # 3. Calculate D and G
+            # 5. Geometry & Distribution
             D = ggx_distribution(N, H, roughness)
             G = smith_geometry(N, V, L, roughness)
 
-            # 4. Microfacet BTDF (Transmittance) Formula
-            # f = |V.H| * |L.H| * eta_t^2 * D * G * (1-F)
-            #     ---------------------------------------
-            #     |N.V| * |N.L| * (eta_i * (V.H) + eta_t * (L.H))^2
+            # 6. The Walter '07 BTDF Formula
+            # Term: (eta_L * (L.H) + eta_V * (V.H))^2
+            # Since L and V are opposite, one dot is (+) and one is (-).
+            # This results in a small number squared.
+            sqrt_denom = (eta_l * dot_l_h + eta_v * dot_v_h)
             
-            denom_part = (eta_i * dot_v_h + eta_t * dot_l_h)
-            denominator = np.abs(dot_n_v) * np.abs(dot_n_l) * (denom_part ** 2) + 1e-8
+            # Numerator
+            # Note: For Radiance transport, we scale by the OUTGOING IOR squared (eta_v^2).
+            # We use abs() for the geometric factors in the numerator/denominator logic.
+            numerator = abs(dot_v_h) * abs(dot_l_h) * (eta_v ** 2) * D * G * (1.0 - F)
             
-            numerator = dot_v_h * dot_l_h * (eta_t ** 2) * D * G * (1.0 - F)
+            denominator = abs(dot_n_l) * abs(dot_n_v) * (sqrt_denom ** 2) + 1e-8
             
             val = numerator / denominator
             

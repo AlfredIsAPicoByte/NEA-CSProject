@@ -964,8 +964,7 @@ class BasicLambertShading(ShadingStrategy):
             hit_info=hit_info,
             view_dir=view_dir,
             visibility_function=visibility_fn,
-            bias=bias,
-            transformation_matrix=hit_info.obj.world_transform.matrix
+            bias=bias
         )
         
         final_color += direct_light

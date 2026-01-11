@@ -85,7 +85,7 @@ if __name__ == "__main__":
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     generator = JitterRayGenerator()
-    intersection = BVHIntersection(max_distance=1000, max_steps=1024)
+    intersection = BVHIntersection(max_distance=100, max_steps=10)
     interactor = StandardInteraction()
     shading = BasicLambertShading()
 
