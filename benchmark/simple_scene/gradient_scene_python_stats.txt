@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 === Tracing Stats ===
 Time: 34.580s | Mem: 73.50MB
 -------------------------
@@ -17,4 +18,25 @@ BVH Health:
 Path Diagnostics:
   - Max Depth Hit:   0
   - Roulette Kills:  0
+=======
+=== Tracing Stats ===
+Time: 496.922s | Mem: 66.48MB
+-------------------------
+Ray Traffic:
+  - Total:       9,216
+  - Primary:     9,216      (100.0%)
+  - Shadow:      0          (Lights used: 0)
+  - Bounce:      0         
+-------------------------
+BVH Health:
+  - AABB Tests:      18,432
+  - Tri Tests:       30,037
+  - Nodes Visited:   10,257
+  - Cost/Ray:        5.26 (Target: < 50)
+  - Culling Ratio:   0.61 (Target: > 2.0)
+-------------------------
+Path Diagnostics:
+  - Max Depth Hit:   0
+  - Roulette Kills:  0
+>>>>>>> refs/remotes/origin/feature/python-raycasting-link-cpp
   - NaN Errors:      0
