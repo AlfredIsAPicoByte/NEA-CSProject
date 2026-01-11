@@ -4,11 +4,10 @@
 
 #include "Engine.h"
 
-
 int windowWidth = 1080;
-int windowHeight = 810;
+int windowHeight = 720;
 std::string windowTitle = "My OpenGL Window";
-Color bgClolor("#454749ff");
+Color bgColor("#454749ff");
 
 // Vertices coordinates
 Vertex vertices[] =
@@ -133,7 +132,7 @@ static void LogCenterPixelColor(GLFWwindow* window) {
 	unsigned char pixel[3] = {0,0,0};
 	// Read from the backbuffer before swap
 	glReadPixels(cx, cy, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, pixel);
-	AppendGraphicsMessage(std::string("Center pixel RGB: ") + std::to_string(pixel[0]) + "," + std::to_string(pixel[1]) + "," + std::to_string(pixel[2]));
+	AppendGraphicsMessage(std::string("Center pixel RGB: (" + std::to_string(pixel[0]) + ", " + std::to_string(pixel[1]) + ", " + std::to_string(pixel[2]) + ")\nBackground Color: (" + std::to_string(int(bgColor.toVec3()[0] * 255)) + ", " + std::to_string(int(bgColor.toVec3()[1] * 255)) + ", " + std::to_string(int(bgColor.toVec3()[2] * 255)) + ")"));
 }
 
 static void DeleteDebugTriangle() { if (g_debugTri.VAO) glDeleteVertexArrays(1, &g_debugTri.VAO); if (g_debugTri.VBO) glDeleteBuffers(1, &g_debugTri.VBO); if (g_debugTri.program) glDeleteProgram(g_debugTri.program); g_debugTri = DebugTriangle(); }
@@ -158,10 +157,6 @@ int main()
 		AppendGraphicsError("Failed to initialize GLFW");
 		return -1;
 	}
-
-	Scene testScene;
-	testScene.Initialize();
-
 
     // Tell GLFW what version of OpenGL we are using 
     // Example: OpenGL 4.6
@@ -303,6 +298,9 @@ int main()
 	int camMode = 1;
 	bool resetKeyPressed = false;
 
+	Scene testScene;
+	testScene.Initialize();
+
 	testScene.SetCamera(&camera);
 	testScene.SetOpenGLRenderFunction(std::make_shared<std::function<void()>>([&]() {
 		// Debug: draw test triangle to verify pipeline
@@ -344,14 +342,14 @@ int main()
 	// Main loop
 	CreateDebugTriangle();
 	Engine::Instance().Start();
-	Engine::Instance().applyClearColor(bgClolor);
+	Engine::Instance().applyClearColor(bgColor);
 	Engine::Instance().setDepthTest(true);
 	Engine::Instance().Update(window,
 		// PreProcecing 
 		[&]() {
 			time.update();
 			
-			float roundFramerate = (int)(time.frameRate * 100 + .5);
+			int roundFramerate = (int)(time.frameRate * 100 + 0.5f);
     		roundFramerate = roundFramerate / 100;
 			std::string newTitle = "A level NEA Rendering Engine - (" + testScene.name + ") - " + std::to_string(roundFramerate) + "FPS, " + std::to_string(time.deltaTime * 1000.0f) + "ms";
 			glfwSetWindowTitle(window, newTitle.c_str());

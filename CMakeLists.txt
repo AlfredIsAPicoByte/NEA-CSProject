@@ -110,8 +110,9 @@ else()
 endif()
 
 # ---- Optional: support embedding Python. Disabled by default; enable with -DUSE_EMBEDDED_PYTHON=ON ----
-add_compile_definitions(USE_EMBEDDED_PYTHON=0)
 option(USE_EMBEDDED_PYTHON "Enable embedding Python into the executable" OFF)
+option(Python3_LIBRARY_RELEASE "" "C:/Libraries/vcpkg/installed/x64-windows/lib/python312.lib")
+option(Python3_LIBRARY_DEBUG "" "C:/Libraries/vcpkg/installed/x64-windows/debug/lib/python312_d.lib")
 if(USE_EMBEDDED_PYTHON)
     find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
     if(Python3_FOUND)
@@ -134,11 +135,12 @@ if(USE_EMBEDDED_PYTHON)
             target_link_libraries(main PRIVATE ${Python3_LIBRARIES})
         endif()
         target_compile_definitions(main PRIVATE USE_EMBEDDED_PYTHON=1)
+    else()
+        target_compile_definitions(main PRIVATE USE_EMBEDDED_PYTHON=0)
     endif()
 endif()
 
 # ---- Optional: Copy py_src directory after build (ON, OFF) ----
-add_compile_definitions(COPY_PY_SRC=1)
 option(COPY_PY_SRC "Copy py_src directory after build" ON)
 if(COPY_PY_SRC)
     add_custom_command(TARGET main POST_BUILD

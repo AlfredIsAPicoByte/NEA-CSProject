@@ -1,28 +1,3 @@
-<<<<<<< HEAD
 
 
 Postproccesing:
-=======
-Time: 125.7981s | RSS Δ: 7.699 MB
-RSS start: 64.598 MB | RSS end: 72.297 MB
-tracemalloc current: 234.13 KB | peak: 2187.96 KB
-Top allocations (most recent frame):
-  1. /workspaces/NEA-CSProject/py_src/main.py:28 | 108.16 KB (4 allocs)
-  2. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/numeric.py:1548 | 46.78 KB (998 allocs)
-  3. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/numeric.py:1469 | 46.78 KB (998 allocs)
-  4. /workspaces/NEA-CSProject/py_src/src/Luminance.py:567 | 11.34 KB (258 allocs)
-  5. /usr/lib/python3.12/dataclasses.py:1581 | 9.51 KB (81 allocs)
-  6. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1379 | 4.05 KB (74 allocs)
-
-Postproccesing:
-Time: 0.1097s | RSS Δ: 0.500 MB
-RSS start: 72.422 MB | RSS end: 72.922 MB
-tracemalloc current: 221.58 KB | peak: 1147.41 KB
-Top allocations (most recent frame):
-  1. /workspaces/NEA-CSProject/py_src/src/PostProcessing.py:198 | 216.09 KB (2 allocs)
-  2. /workspaces/NEA-CSProject/py_src/src/PostProcessing.py:170 | 1.50 KB (2 allocs)
-  3. /workspaces/NEA-CSProject/py_src/src/PostProcessing.py:186 | 1.00 KB (1 allocs)
-  4. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/_methods.py:115 | 0.62 KB (1 allocs)
-  5. /workspaces/NEA-CSProject/py_src/src/PostProcessing.py:138 | 0.55 KB (2 allocs)
-  6. /workspaces/NEA-CSProject/py_src/src/PostProcessing.py:122 | 0.50 KB (1 allocs)
->>>>>>> 3240b28092188ccbf2fcd06f04f778542a3e787b

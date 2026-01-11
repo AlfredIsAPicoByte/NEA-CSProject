@@ -24,6 +24,7 @@ void PythonManager::Initialize() {
                 if (decoded) {
                     pythonHome = decoded; // keep pointer to free later
                     Py_SetPythonHome(pythonHome);
+                    AppendPythonWarning("Py_SetPythonHome is deprecated");
                     AppendPythonMessage(std::string("Set PYTHONHOME to VIRTUAL_ENV: ") + venvBuf);
                 }
                 free(venvBuf);
