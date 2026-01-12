@@ -387,43 +387,26 @@ class PBRMaterial:
         Calculates Direct Lighting contribution.
         Assumes hit_info.point and scene_lights are ALL in World Space.
         """
-        surface_normal = hit_info.obj.world_transform.inverse_transform_normal(hit_info.normal)
-        hit_point = hit_info.obj.world_transform.inverse_transform_point(hit_info.point)
+        # Use world-space hit info directly for lighting calculations.
+        # Mixing object-space and world-space (e.g., transforming hit point to local
+        # space while using world-space light positions) caused incorrect shading.
+        surface_normal = unit(hit_info.normal)
+        hit_point = hit_info.point
         accumulated_light = Color(0.0, 0.0, 0.0)
         
         if hit_point is None or surface_normal is None:
             return accumulated_light
 
-        # 1. Determine IOR Context (Entering vs Exiting)
-        # -----------------------------------------------
-        # view_dir is Surface -> Camera
-        dot_n_v = np.dot(surface_normal, view_dir)
-        
-        if dot_n_v > 0:
-            # Outside looking in (Entering)
-            ior_in = 1.000293  # Air
-            ior_trans = self.ior
-            working_normal = surface_normal
-        else:
-            # Inside looking out (Exiting)
-            ior_in = self.ior
-            ior_trans = 1.000293
-            working_normal = -surface_normal 
-
         for light in scene_lights:
             if self.data.type == MaterialType.EMISSIVE:
                 break
+
             # --- Light Setup (World Space) ---
-            light_position = light.position
-            
-            # Vector from Surface -> Light
-            light_vec = light_position - hit_point
-            dist_sq = np.dot(light_vec, light_vec)
-            light_dist = np.sqrt(dist_sq)
+            light_dir = light.get_light_direction(hit_point)
+            light_dist = np.linalg.norm(light.position - hit_point)
+            print(light_dist)
             
             if light_dist <= bias: continue
-            
-            light_dir = light_vec / light_dist
             
             # --- Visibility Check (Shadows) ---
             # Note: If checking visibility through glass, this simple function 
@@ -434,45 +417,27 @@ class PBRMaterial:
 
             # --- Lighting Calculations ---
             # N dot L (Clamped to 0 for opaque, abs for transmission)
-            NdotL = np.dot(working_normal, light_dir)
+            NdotL = np.dot(surface_normal, light_dir)
+            if NdotL <= 0.0 and self.type != MaterialType.TRANSPARENT and self.type != MaterialType.GLASS:
+                continue # behind the surface, ignore for glass and transparent materials
             
-            # Pre-calculate attenuation
+            # Pre-calculate attenuation (distance-based). We do NOT include the cosine term
+            # here — the BRDF functions (diffuse/specular) handle the N·L geometry factor.
             attenuation = attenuate_sqr_distance(light_dist)
-            intensity = light.intensity * attenuation * NdotL * visibility
+            intensity = light.intensity * attenuation * visibility
             incoming_radiance = light.color * intensity # This is 'Li'
 
             # --- Material Handling ---
-            
             if self.type == MaterialType.DIFFUSE:
-                # Diffuse only reflects light on the side of the normal
-                if NdotL > 0:
-                    diffuse = self.get_diffuse_component(
-                        light.color, intensity, light_dir, working_normal
-                    )
-                    accumulated_light += diffuse 
+                diffuse = self.get_diffuse_component(
+                    light.color, intensity, light_dir, surface_normal
+                )
+                accumulated_light += diffuse 
 
             elif self.type == MaterialType.SPECULAR:
-                if NdotL > 0:
-                    diff = self.get_diffuse_component(light.color, intensity, light_dir, working_normal)
-                    spec = self.get_specular_component(light.color, intensity, light_dir, working_normal, view_dir)
-                    accumulated_light += diff + spec
-
-            elif self.type == MaterialType.GLASS:
-                # We use the BSDF to evaluate how much light reflects towards the camera
-                bsdf_val = self.evaluate_bsdf(
-                    incident_dir=light_dir,      # L
-                    view_dir=view_dir,           # V
-                    surface_normal=working_normal, 
-                    roughness=self.roughness, 
-                    ior_incident=ior_in, 
-                    ior_transmitted=ior_trans
-                )
-                
-                # Valid reflection requires Light and View to be on the same side
-                # so we multiply by NdotL.
-                # If doing rough transmission, you might use abs(NdotL).
-                if NdotL > 0:
-                    accumulated_light += bsdf_val * incoming_radiance * NdotL
+                diff = self.get_diffuse_component(light.color, intensity, light_dir, surface_normal)
+                spec = self.get_specular_component(light.color, intensity, light_dir, surface_normal, view_dir)
+                accumulated_light += diff + spec
             
             elif self.type == MaterialType.TRANSPARENT:
                 # Simple alpha-blended transparency (fake glass)
@@ -487,8 +452,7 @@ class PBRMaterial:
         view_dir: np.ndarray,       # View Direction (V) - Pointing OUT from surface
         surface_normal: np.ndarray, # Geometric Normal (N)
         roughness: float,
-        ior_incident: float,
-        ior_transmitted: float
+        other_ior: float
     ) -> Color:
         """
         Evaluates the Microfacet BSDF for a specific pair of input/output directions.
@@ -508,6 +472,13 @@ class PBRMaterial:
         # If they are on opposite sides, it's Refraction.
         is_reflection = (dot_n_l * dot_n_v) > 0
 
+        if dot_n_v > 0:
+            eta_v = other_ior       # Air
+            eta_l = self.ior        # Glass (Light is inside)
+        else:
+            eta_v = self.ior        # Glass
+            eta_l = other_ior       # Air (Light is outside)
+
         if is_reflection:
             # --- REFLECTION LOBE ---
             # 1. Calculate Half Vector (H)
@@ -522,7 +493,7 @@ class PBRMaterial:
             # Using your helper or Schlick directly
             # Note: We use H as the normal for Fresnel
             dot_v_h = np.abs(np.dot(V, H))
-            F = calculate_reflectance(np.degrees(math.acos(dot_v_h)), ior_incident, ior_transmitted)
+            F = calculate_reflectance(np.degrees(math.acos(dot_v_h)), eta_v, eta_l)
             if F is None: F = 1.0 # Handle TIR case
 
             # 4. Calculate D and G
@@ -541,12 +512,6 @@ class PBRMaterial:
             # 1. Assign Indices based on Vectors
             # We need strictly: eta_L (side of Light) and eta_V (side of View)
             # If V is outside (dot_n_v > 0), eta_V is Air.
-            if dot_n_v > 0:
-                eta_v = 1.000293       # Air
-                eta_l = self.ior       # Glass (Light is inside)
-            else:
-                eta_v = self.ior       # Glass
-                eta_l = 1.000293       # Air (Light is outside)
 
             # 2. Calculate Refraction Half Vector (H)
             # H aligns with the "halfway" vector weighted by IORs.
@@ -565,7 +530,7 @@ class PBRMaterial:
 
             # 4. Fresnel (F)
             # Use abs for Fresnel calc as it depends on angle magnitude
-            F = calculate_reflectance(np.degrees(math.acos(abs(dot_v_h))), ior_incident, ior_transmitted)
+            F = calculate_reflectance(np.degrees(math.acos(abs(dot_v_h))), eta_l, eta_l)
             if F is None: F = 1.0
 
             # 5. Geometry & Distribution

@@ -61,12 +61,12 @@ if __name__ == "__main__":
     OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    img_w, img_h = 16 * 8, 9 * 8
+    img_w, img_h = 16 * 5, 9 * 5
 
     all_scenes = [
         get_minimal_scene(img_w, img_h),
-        get_gradient_scene(img_w, img_h),
-        get_emissive_scene(img_w, img_h),
+        # get_gradient_scene(img_w, img_h),
+        # get_emissive_scene(img_w, img_h),
         # get_lit_studio_scene(img_w, img_h),
         # get_rgb_room_with_objects_scene(img_w, img_h),
         # get_cyberpunk_scene(img_w, img_h),
@@ -121,15 +121,15 @@ if __name__ == "__main__":
                 with open(stats_report_path, "w") as f:
                     f.write(raytracer.stats.format_report())
                     print(" + Wrote rendering statistics")
-            except Exception:
-                print(" / Failed to write rendering statistics")
+            except Exception as e:
+                print(" / Failed to write rendering statistics:", e)
                 pass
             try:
                 with open(mem_report_path, "w") as f:
                     f.write(mp.format_report())
                     print(" + Wrote memory report")
-            except Exception:
-                print(" / Failed to write memory report")
+            except Exception as e:
+                print(" / Failed to write memory report:", e)
                 pass
 
             save_image(raw_img_data, out_path=out_path + "_raw.png")

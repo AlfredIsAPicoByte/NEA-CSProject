@@ -555,7 +555,7 @@ class BVHIntersection(IntersectionStrategy):
             return HitInfo.miss()
         
         # 1. Transform Ray to Local Space
-        obj_transform = cast(Transform, getattr(obj, 'transform', Transform.identity()))
+        obj_transform = obj.world_transform
         local_ray = obj_transform.inverse_transform_ray(ray)
         
         local_dir_len = np.linalg.norm(local_ray.orientation)
@@ -579,7 +579,6 @@ class BVHIntersection(IntersectionStrategy):
             # Check convergence
             if dist_local < self.epsilon:
                 # --- Hit Found ---
-                
                 # A. Transform Point to World
                 p_world = obj_transform.transform_point(p)
                 
