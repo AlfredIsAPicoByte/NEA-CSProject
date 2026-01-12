@@ -111,25 +111,43 @@ endif()
 
 # ---- Optional: support embedding Python. Disabled by default; enable with -DUSE_EMBEDDED_PYTHON=ON ----
 option(USE_EMBEDDED_PYTHON "Enable embedding Python into the executable" OFF)
-option(Python3_LIBRARY_RELEASE "" "C:/Libraries/vcpkg/installed/x64-windows/lib/python312.lib")
-option(Python3_LIBRARY_DEBUG "" "C:/Libraries/vcpkg/installed/x64-windows/debug/lib/python312_d.lib")
+
+# Allow developers to override explicit Python import libraries when needed (cache as FILEPATH)
+# Typical defaults point to vcpkg-installed Python libs (adjust per-machine as needed)
+set(Python3_LIBRARY_RELEASE "C:/Libraries/vcpkg/installed/x64-windows/lib/python312.lib" CACHE FILEPATH "Path to Python3 release import library (optional)")
+set(Python3_LIBRARY_DEBUG "C:/Libraries/vcpkg/installed/x64-windows/debug/lib/python312_d.lib" CACHE FILEPATH "Path to Python3 debug import library (optional)")
+
 if(USE_EMBEDDED_PYTHON)
     find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
     if(Python3_FOUND)
         message(STATUS "Embedding Python: ${Python3_VERSION}")
+        message(STATUS "Python3_EXECUTABLE=${Python3_EXECUTABLE}")
+        message(STATUS "Python3_LIBRARY_RELEASE=${Python3_LIBRARY_RELEASE}")
+        message(STATUS "Python3_LIBRARY_DEBUG=${Python3_LIBRARY_DEBUG}")
+
         target_include_directories(main PRIVATE ${Python3_INCLUDE_DIRS})
-        # Add library directory explicitly when the full path is available (helps MSVC find unqualified names)
+        # Add both debug and release library directories to the link search path.
         if(DEFINED Python3_LIBRARY_RELEASE)
-            get_filename_component(_PY3_LIB_DIR "${Python3_LIBRARY_RELEASE}" DIRECTORY)
-            target_link_directories(main PRIVATE ${_PY3_LIB_DIR})
+            get_filename_component(_PY3_LIB_DIR_RELEASE "${Python3_LIBRARY_RELEASE}" DIRECTORY)
+            target_link_directories(main PRIVATE ${_PY3_LIB_DIR_RELEASE})
+        endif()
+        if(DEFINED Python3_LIBRARY_DEBUG)
+            get_filename_component(_PY3_LIB_DIR_DEBUG "${Python3_LIBRARY_DEBUG}" DIRECTORY)
+            target_link_directories(main PRIVATE ${_PY3_LIB_DIR_DEBUG})
+        endif()
+
+        # Some Python distributions / wrappers inject an unqualified library name (e.g. pragma comment(lib, "python312.lib"))
+        # Ensure the common vcpkg library directory is in the link search path as a fallback so the linker can resolve those unqualified names.
+        if(EXISTS "C:/Libraries/vcpkg/installed/x64-windows/lib")
+            target_link_directories(main PRIVATE "C:/Libraries/vcpkg/installed/x64-windows/lib")
         endif()
         # Prefer explicit per-configuration library paths when available to avoid missing-linker-search-path issues
-        if(DEFINED Python3_LIBRARY_RELEASE AND DEFINED Python3_LIBRARY_DEBUG)
+        if(Python3_LIBRARY_RELEASE AND Python3_LIBRARY_DEBUG)
             target_link_libraries(main PRIVATE
                 $<$<CONFIG:Debug>:${Python3_LIBRARY_DEBUG}>
                 $<$<CONFIG:Release>:${Python3_LIBRARY_RELEASE}>
             )
-        elseif(DEFINED Python3_LIBRARY)
+        elseif(Python3_LIBRARY)
             target_link_libraries(main PRIVATE ${Python3_LIBRARY})
         else()
             target_link_libraries(main PRIVATE ${Python3_LIBRARIES})

@@ -67,7 +67,6 @@ class Scene:
                 min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
                 
                 d_world = d_local * min_scale
-                
             except Exception:
                 continue
 
