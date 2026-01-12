@@ -401,11 +401,9 @@ class PBRMaterial:
             if self.data.type == MaterialType.EMISSIVE:
                 break
 
-            
             # --- Light Setup (World Space) ---
             light_dir = light.get_light_direction(hit_point)
             light_dist = np.linalg.norm(light.position - hit_point)
-            print(light_dist)
             
             if light_dist <= bias: continue
             
@@ -415,18 +413,9 @@ class PBRMaterial:
             visibility = visibility_function(hit_point, light)
             if visibility <= 0.0:
                 continue
-
-            # --- Lighting Calculations ---
-            # N dot L (Clamped to 0 for opaque, abs for transmission)
-            NdotL = np.dot(surface_normal, light_dir)
-            if NdotL <= 0.0 and self.type != MaterialType.TRANSPARENT and self.type != MaterialType.GLASS:
-                continue # behind the surface, ignore for glass and transparent materials
             
-            # Pre-calculate attenuation (distance-based). We do NOT include the cosine term
-            # here — the BRDF functions (diffuse/specular) handle the N·L geometry factor.
+            # Pre-calculate attenuation (distance-based).
             attenuation = attenuate_sqr_distance(light_dist)
-            intensity = light.intensity * attenuation * visibility
-            incoming_radiance = light.color * intensity # This is 'Li'
             intensity = light.intensity * attenuation * visibility
 
             # --- Material Handling ---
@@ -436,20 +425,11 @@ class PBRMaterial:
                 )
                 accumulated_light += diffuse 
 
-                diffuse = self.get_diffuse_component(light.color, intensity, light_dir, working_normal)
+                diffuse = self.get_diffuse_component(light.color, intensity, light_dir, surface_normal)
                 accumulated_light += diffuse 
             elif self.type == MaterialType.SPECULAR:
                 diff = self.get_diffuse_component(light.color, intensity, light_dir, surface_normal)
                 spec = self.get_specular_component(light.color, intensity, light_dir, surface_normal, view_dir)
-                accumulated_light += diff + spec
-            
-            elif self.type == MaterialType.TRANSPARENT:
-                # Simple alpha-blended transparency (fake glass)
-                # Just add the light color tinted by the object color
-                accumulated_light += self.get_transparency_component(light.color)
-
-                diff = self.get_diffuse_component(light.color, intensity, light_dir, working_normal)
-                spec = self.get_specular_component(light.color, intensity, light_dir, working_normal, view_dir)
                 accumulated_light += diff + spec
 
         return accumulated_light

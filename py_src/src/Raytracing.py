@@ -132,8 +132,6 @@ class Raytracer(Algorithm):
         interaction_strategy: Optional[Shading.ShadingStrategy] = None,
         shading_strategy: Optional[Interactions.InteractionStrategy] = None,
         sample_settings: Optional[SampleSettings] = None,
-        custom_background: Optional[Color] = None,
-        enable_scene_background: bool = False
     ):
         super().__init__()
         self.sampling_manager = sampling_manager
@@ -155,6 +153,9 @@ class Raytracer(Algorithm):
 
         # 2. Geometry Intersection
         hit_info = self.intersector.find_hit(scene, ray, self.stats)
+
+        if not hit_info.hit:
+            return self.shader.background_settings.get_background_color(ray.orientation)
         
         # 3. Direct Lighting / Local Shading
         # (Assuming this calculates direct light or calls recursion for mirror reflections)
@@ -168,15 +169,12 @@ class Raytracer(Algorithm):
             stats=self.stats
         )
 
-        # 4. Generate the Secondary Ray (e.g., Diffuse bounce, Refraction)
-        # Note: Ensure your interact method returns the 'throughput' or 'attenuation' 
-        # (how much color creates the bounce) along with the ray.
+        # 4. Generate the next ray
         interaction_result = self.interactor.interact(ray, hit_info, sampler, stats=self.stats)
         
         # Check if a ray was actually generated (it might be absorbed)
         if interaction_result and interaction_result.new_ray:
             new_ray = interaction_result.new_ray
-            attenuation = interaction_result.attenuation # You likely need this value!
 
             # --- THE RECURSIVE STEP ---
             incoming_light = self._trace_ray(
@@ -187,9 +185,7 @@ class Raytracer(Algorithm):
             )
 
             # 5. Combine Direct and Indirect Light
-            # Standard rendering equation: Out = Emitted + (Incoming * BRDF * cos_theta)
-            # Assuming 'attenuation' includes the BRDF * cos_theta part:
-            return shaded_color + (incoming_light * attenuation)
+            return shaded_color + incoming_light
 
         return shaded_color
 
@@ -265,7 +261,7 @@ class Raytracer(Algorithm):
                         continue
 
                     # Trace
-                    pixel_color = self._trace_ray(scene, ray, self.max_depth, sampler)
+                    pixel_color = self._trace_ray(scene, ray, self.max_recursions, sampler)
 
                     # Create Sample Object
                     s_u = getattr(ray, "sample_u", (px + 0.5) / cam_width)

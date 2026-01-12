@@ -93,13 +93,13 @@ if __name__ == "__main__":
         intersection = BVHIntersection(max_distance=100, max_steps=10)
         interactor = StandardInteraction()
         shading = LambertShading(
-            ambience_settings=AmbienceSettings(False, Color.from_hex("#FFFFFF"), 0.5),
+            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03, 1.0)), getattr(scene, "ambient_intensity", 0.1)),
             shadow_settings=ShadowSettings(True, 8, 2e-3),
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
         )
 
         raytracer = Raytracer(
-            max_depth=6,
+            max_recursions=1,
             sampling_manager=sampling_manager,
             ray_generator=generator,
             intersection_strategy=intersection,
@@ -126,15 +126,15 @@ if __name__ == "__main__":
                 with open(stats_report_path, "w") as f:
                     f.write(raytracer.stats.format_report())
                     print(" + Wrote rendering statistics")
-            except Exception as e:
-                print(" / Failed to write rendering statistics:", e)
+            except Exception:
+                print(" / Failed to write rendering statistics")
                 pass
             try:
                 with open(mem_report_path, "w") as f:
                     f.write(mp.format_report())
                     print(" + Wrote memory report")
-            except Exception as e:
-                print(" / Failed to write memory report:", e)
+            except Exception:
+                print(" / Failed to write memory report")
                 pass
 
             save_image(raw_img_data, out_path=out_path + "_raw.png")
@@ -183,9 +183,9 @@ if __name__ == "__main__":
                     with open(mem_report_path, "a") as f:
                         f.write("\n\nPostproccesing:\n")
                         f.write(mp.format_report())
-                        print(" + Wrote memory report")
+                        print(" + Appended to memory report")
                 except Exception:
-                    print(" / Failed to write memory report")
+                    print(" / Failed to append to memory report")
                     pass
 
                 save_image(processed_img, out_path=out_path + ".png")

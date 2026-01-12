@@ -28,7 +28,7 @@ class ShadowSettings:
 @dataclass
 class BackgroundSettings:
     enabled: bool = True
-    default: Color = field(default_factory=Color(0.0, 0.0, 0.0, 0.0))
+    default: Color = field(default_factory=Color(0.0, 0.0, 1.0, 0.0))
     custom: Color | ColorGradient | np.ndarray = field(default_factory=Color(1.0, 1.0, 1.0, 0.0))
 
     def get_background_color(self, direction: np.ndarray) -> Color:
@@ -39,8 +39,14 @@ class BackgroundSettings:
         if not self.enabled:
             return self.default
         
+        type_name = type(self.custom).__name__
+
+        # --- Solid ---
+        if type_name == 'Color':
+            return self.custom
+        
         # --- Skybox --- 
-        if isinstance(self.custom, ColorGradient):
+        elif type_name == 'ColorGradient':
             # Resolve Direction
             dir = unit(direction)
 
@@ -48,17 +54,12 @@ class BackgroundSettings:
             t = 0.5 * (dir[1] + 1.0)
             return self.custom.get_color(t)
 
-        # 4. Handle Texture Map (Numpy Array)
+        # --- Texture Map ---
         elif isinstance(self.custom, np.ndarray):
             # Resolve Direction (Reuse logic or recalculate)
             dir = safe_norm(direction)
             
             return self._sample_equirectangular_map(self.custom, dir)
-
-        # 5. Handle Solid Color (Color Object)
-        # We check the name OR the instance to be safe
-        elif isinstance(self.custom, Color):
-            return self.custom
 
         return self.default
     
@@ -268,8 +269,8 @@ class LambertShading(ShadingStrategy):
 
         # 6. Ambient Light (Optional)
         # Adds a flat base color so shadowed areas aren't pitch black
-        if self.ambient_enabled:
-            final_color += material.get_ambient_color(scene.ambient_color, scene.ambient_intensity)
+        if self.ambience_settings.enabled:
+            final_color += material.get_ambient_color(self.ambience_settings.color, self.ambience_settings.intensity)
 
         return final_color
 
@@ -278,30 +279,30 @@ class LambertShading(ShadingStrategy):
         Calculates what fraction of the light is visible from 'point'.
         Returns 0.0 (Fully Blocked) to 1.0 (Fully Visible).
         """
-        if not self.enable_shadows:
+        if not self.shadow_settings.enabled:
             return 1.0
 
         radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
         
         # Case A: Point Light (Hard Shadows)
-        if radius <= 0.0 or self.shadow_samples <= 1:
+        if radius <= 0.0 or self.shadow_settings.samples <= 1:
             # Check if a ray from point -> light is blocked
-            is_blocked = scene.is_occluded(point, light.position, bias=self.shadow_bias)
+            is_blocked = scene.is_occluded(point, light.position, bias=self.shadow_settings.bias)
             return 0.0 if is_blocked else 1.0
         
         # Case B: Area Light (Soft Shadows)
         else:
             visible_count = 0
-            for _ in range(self.shadow_samples):
+            for _ in range(self.shadow_settings.samples):
                 # Pick a random point on the light source
                 # Note: light_dir here is the general direction, but for area lights 
                 # we usually sample the disc facing the point.
                 sample_pos = self._random_point_on_disc(light.position, -light_dir, float(radius), sampler)
                 
-                if not scene.is_occluded(point, sample_pos, bias=self.shadow_bias):
+                if not scene.is_occluded(point, sample_pos, bias=self.shadow_settings.bias):
                     visible_count += 1
             
-            return float(visible_count) / float(self.shadow_samples)
+            return float(visible_count) / float(self.shadow_settings.samples)
         
 class RecursiveLambertShading(LambertShading):
     def shade(
