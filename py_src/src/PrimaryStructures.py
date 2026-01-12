@@ -5,10 +5,6 @@ from dataclasses import dataclass, field
 
 from CommonUtils import unit
 
-def unit_vector(v):
-    norm = np.linalg.norm(v)
-    return v / norm if norm > 0 else np.array([0.0, 0.0, 1.0])
-
 @dataclass(slots=True)
 class Ray:
     origin: np.ndarray
@@ -26,13 +22,11 @@ class Ray:
             object.__setattr__(self, 'orientation', np.array([0.0, 1.0, 0.0]))
         else:
             # Normalize and re-assign (bypass frozen check if frozen=True, though unnecessary here)
-            object.__setattr__(self, 'orientation', unit_vector(self.orientation))
+            object.__setattr__(self, 'orientation', unit(self.orientation))
 
-    # alias 'direction' to the same data (keeps compatibility)
     @property
     def direction(self) -> np.ndarray:
         return self.orientation
-
     @direction.setter
     def direction(self, v):
         self.orientation = v
@@ -147,7 +141,7 @@ class RayPool:
             ray.pixel_y = y
             ray.current_depth = 0
             ray.is_inside = False
-            ray.throughput = np.array([1.0, 1.0, 1.0])
+            ray.throughput = np.array([1.0, 1.0, 1.0, 1.0])
             return ray
         else:
             # Create new if pool is empty

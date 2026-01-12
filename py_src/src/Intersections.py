@@ -1,0 +1,483 @@
+from __future__ import annotations
+import numpy as np
+from typing import Optional, cast
+from abc import ABC, abstractmethod
+
+from CommonUtils import unit
+from PrimaryStructures import Transform, TracingRay, HitInfo
+from Scene import Scene
+from Geometry import Shape, VObject, AABB, BVHNode 
+from RenderingAlgorithms import RenderStats
+
+class IntersectionStrategy(ABC):
+    def __init__(
+            self,
+            epsilon: float = 1e-4,          # Hit Threshold
+            max_steps: int = 128,           # Performance Cap
+            max_distance: float = 1000.0,   # Far Clip Plane
+            step_relaxation: float = 0.9
+        ):
+        self.epsilon = epsilon
+        self.max_distance = max_distance
+        self.max_steps = max_steps
+        self.step_relaxation = step_relaxation
+    
+    @abstractmethod
+    def find_hit(
+        self,
+        scene: Scene,
+        ray: TracingRay,
+        stats: Optional["RenderStats"] = None,
+    ) -> HitInfo:
+        ...
+
+class RayMarchingIntersection(IntersectionStrategy):
+    """
+    Find hits between rays and objects using the Ray Marching method.
+    """
+    def find_hit(
+            self,
+            scene: Scene,
+            ray: TracingRay,
+            stats: Optional["RenderStats"] = None
+        ) -> HitInfo:
+        distance_traveled = 0.0
+
+        for _ in range(self.max_steps):
+            if stats is not None:
+                stats.aabb_tests += 1
+
+            point = ray.point_at(distance_traveled)
+
+            closest_object, distance_to_closest = scene.distance_estimator(point)
+
+            # Optimization: If we marched into the void
+            if closest_object is None:
+                break
+            
+            # Hit Check
+            if distance_to_closest <= self.epsilon:
+                surface_normal = np.array([0.0, 0.0, 1.0])
+                
+                if closest_object is not None:
+                    shape = getattr(closest_object, "shape", None)
+                    transform = closest_object.world_transform
+
+                    if shape is not None:
+                        shape = cast(Shape, shape)
+                        
+                        # 1. Convert hit point to local space
+                        local_hit_point = transform.inverse_transform_point(point)
+                        
+                        # 2. Calculate normal in local space (e.g., via finite difference)
+                        local_normal = shape.get_normal(local_hit_point)
+                        
+                        # 3. Rotate normal back to world space
+                        world_normal = transform.transform_normal(local_normal)
+                        
+                        # Normalize to be safe
+                        surface_normal = unit(world_normal)
+
+                if stats is not None:
+                    stats.triangle_tests += 1
+
+                return HitInfo(
+                    did_hit=True,
+                    point=point,
+                    direction=ray.orientation,
+                    normal=surface_normal,
+                    distance=distance_traveled,
+                    obj=closest_object,
+                )
+            
+            # Advance
+            distance_traveled += distance_to_closest * self.step_relaxation
+            
+            # Frustum/Far Plane checks
+            if scene.camera:
+                obj_pos = getattr(closest_object, 'transform', Transform.identity()).position
+                far_plane_dist = np.linalg.norm(scene.camera.transform.position - obj_pos)
+                if distance_traveled >= self.max_distance or far_plane_dist >= scene.camera.far:
+                    break
+
+        if stats is not None:
+            stats.missed_rays += 1
+
+        return HitInfo.miss()
+
+class InverseSDFIntersection(IntersectionStrategy):
+    """
+    Find hits between rays and objects using the Inverse SDF method.
+    """
+    def __init__(
+            self,
+            epsilon: float = 1e-4,
+            max_steps: int = 128,
+            max_distance: float = 1000,
+            step_relaxation: float = 0.9,   # Step Safety Factor
+            use_bounding_box: bool = True   # Optimization Flag
+        ):
+        super().__init__(epsilon, max_steps, max_distance, step_relaxation)
+        self.use_bounding_box = use_bounding_box
+
+    def find_hit(
+            self,
+            scene: Scene,
+            ray: TracingRay,
+            stats: Optional["RenderStats"] = None
+        ) -> "HitInfo":
+        closest_hit = HitInfo.miss()
+        
+        # We check every object in the scene independently
+        for obj in scene.objects:
+            # Skip objects that don't have an SDF shape defined
+            if not hasattr(obj, 'shape'):
+                continue
+
+            if self.use_bounding_box:
+                bounds = getattr(obj, "bounds", None)
+                if bounds is None:
+                    continue
+                
+                bounds = cast(AABB, bounds)
+                if bounds.intersect(ray) == float('inf'):
+                    continue
+
+            # Attempt to intersect this specific object
+            hit_info = self._intersect_object(obj, ray, scene.camera.far, scene.camera.transform.position, stats)
+            
+            # Keep track of the closest hit only
+            hit_obj = getattr(hit_info, "obj", None)
+            if hit_obj is None:
+                break
+            
+            if scene.camera is None:
+                break
+
+            far_plane_distance = np.linalg.norm(scene.camera.transform.position - hit_obj.transform.position)
+            if hit_info.hit and (hit_info.distance < closest_hit.distance or hit_info.distance < far_plane_distance) :
+                closest_hit = hit_info
+                
+        if not closest_hit.hit and stats is not None:
+            stats.missed_rays += 1
+
+        return closest_hit
+
+    def _intersect_object(
+            self,
+            obj: VObject,
+            ray: "TracingRay",
+            far_plane: float,
+            cam_pos: np.ndarray,
+            stats: Optional["RenderStats"] = None
+        ) -> "HitInfo":
+        """
+        Performs the 'Inverse SDF' logic:
+        1. Transform Ray -> Local Space
+        2. March in Local Space (Unscaled)
+        3. Transform Hit -> World Space
+        """
+        obj_shape = getattr(obj, "shape", None)
+        if obj_shape is None:
+            return HitInfo.miss()
+
+        # --- 2. Raymarch Loop ---
+        t = 0.0
+
+        # Check for "Inside-Out" logic (for X-ray/Dielectrics)
+        # If we are inside, we treat negative distance as empty space (flip sign)
+        sign_modifier = -1.0 if ray.is_inside else 1.0
+        
+        for _ in range(self.max_steps):
+            # 1. Calculate World Point
+            p = ray.point_at(t)
+            
+            # 2. Sample the Object's SDF (It handles the transform internally)
+            raw_dist = obj_shape.signed_distance(p)
+            
+            if stats is not None:
+                stats.triangle_tests += 1
+
+            # Apply Modifier (flips distance if inside)
+            dist = raw_dist * sign_modifier
+            
+            # 3. Hit Check
+            if dist < self.epsilon:
+                normal = self._calc_local_gradient(obj_shape, p)
+                
+                if ray.is_inside:
+                    normal = -normal
+                    
+                return HitInfo(
+                    did_hit=True,
+                    distance=t,
+                    point=p,
+                    normal=normal,
+                    obj=obj
+                )
+            
+            # 4. Step
+            t += (dist * self.step_relaxation)
+            
+            # Frustum/Far Plane checks
+            obj_pos = getattr(obj, 'transform', Transform.identity()).position
+            far_plane_dist = np.linalg.norm(cam_pos - obj_pos)
+            if t >= self.max_distance or far_plane_dist >= far_plane:
+                break
+                
+        return HitInfo.miss()
+
+    def _calc_local_gradient(self, shape: Shape, p: np.ndarray, h: float = 1e-4) -> np.ndarray:
+        """
+        Calculates the normal in Local Space using central differences.
+        """
+        dx = np.array([h, 0, 0])
+        dy = np.array([0, h, 0])
+        dz = np.array([0, 0, h])
+        
+        grad = np.array([
+            shape.signed_distance(p + dx) - shape.signed_distance(p - dx),
+            shape.signed_distance(p + dy) - shape.signed_distance(p - dy),
+            shape.signed_distance(p + dz) - shape.signed_distance(p - dz)
+        ])
+        
+        # Normalize the gradient to get the normal
+        norm = np.linalg.norm(grad)
+        if norm > 0:
+            return grad / norm
+        return np.array([0.0, 0.0, 1.0]) # Fallback
+    
+class BVHIntersection(IntersectionStrategy):
+    def __init__(
+            self,
+            epsilon: float = 1e-4,
+            max_steps: int = 64,
+            max_distance: float = 50,
+            step_relaxation: float = 0.9
+        ):
+        super().__init__(epsilon, max_steps, max_distance, step_relaxation)
+        self._cached_bvh_root: Optional[BVHNode] = None
+        self._cached_scene_id: Optional[int] = None
+
+    def find_hit(self, scene: Scene, ray: TracingRay, stats: Optional["RenderStats"] = None) -> HitInfo:
+        # 1. Check if we need to build/rebuild the BVH
+        # (We use id(scene.objects) as a cheap way to detect if the list changed)
+        current_scene_id = id(scene.objects)
+        if self._cached_bvh_root is None or current_scene_id != self._cached_scene_id:
+            print(f"[BVH] Building Hierarchy for {len(scene.objects)} objects...")
+            self._cached_bvh_root = self._build_bvh(scene.objects)
+            self._cached_scene_id = current_scene_id
+
+        # 2. Traverse
+        closest_hit = HitInfo.miss()
+        
+        # Stack-based traversal (avoids recursion overhead)
+        # Stack stores tuples: (Node, Distance_To_Box)
+        stack = [(self._cached_bvh_root, 0.0)]
+        
+        while stack:
+            node, dist_to_box = stack.pop()
+            
+            # Optimization: If the box is further than our current closest hit,
+            # there is no point checking inside it.
+            if closest_hit.hit and dist_to_box >= closest_hit.distance:
+                continue
+                
+            if stats: stats.bvh_nodes_visited += 1
+
+            # Case A: Leaf Node (Test Objects)
+            if node.objects:
+                for obj in node.objects:
+                    # We reuse your existing per-object test logic here
+                    # Assuming you have a basic geometric intersector or reuse the standard logic
+                    hit = self._test_single_object(obj, ray, scene.camera.far, scene.camera.transform.position, stats)
+                    
+                    if hit.hit:
+                        if not closest_hit.hit or hit.distance < closest_hit.distance:
+                            closest_hit = hit
+                continue
+
+            # Case B: Internal Node (Test Children)
+            # We want to push the FAR child first, so we pop the CLOSE child later
+            # This ensures we check the closest boxes first (Front-to-Back ordering)
+            
+            d_left = float('inf')
+            d_right = float('inf')
+            
+            if node.left:
+                if stats: stats.aabb_tests += 1
+                l_box = getattr(node.left, "box", None)
+                if l_box is None:
+                    continue
+                d_left = l_box.intersect(ray)
+                
+            if node.right:
+                if stats: stats.aabb_tests += 1
+                r_box = getattr(node.right, "box", None)
+                if r_box is None:
+                    continue
+                d_right = r_box.intersect(ray)
+
+
+            l_node = getattr(node, "left", None)
+            r_node = getattr(node, "right", None)
+
+            if l_node is None or r_node is None:
+                continue
+
+            # Push valid children to stack
+            # Push the furthest one first, so the closest is at top of stack
+            if d_left != float('inf') and d_right != float('inf'):
+                if d_left < d_right:
+                    stack.append((r_node, d_right))
+                    stack.append((l_node, d_left))
+                else:
+                    stack.append((l_node, d_left))
+                    stack.append((r_node, d_right))
+            elif d_left != float('inf'):
+                stack.append((l_node, d_left))
+            elif d_right != float('inf'):
+                stack.append((r_node, d_right))
+
+        if not closest_hit.hit and stats:
+            stats.missed_rays += 1
+            
+        return closest_hit
+
+    def _build_bvh(self, objects: list[VObject]) -> BVHNode:
+        """
+        Recursively splits the object list to build the tree.
+        """
+        node = BVHNode([])
+        
+        # 1. Calculate Bounds for all objects in this list
+        # We cache AABBs for performance
+        object_bounds = [(obj, AABB.from_object(obj)) for obj in objects]
+        
+        # Calculate Union of all bounds for this node
+        if not object_bounds:
+            node.box = AABB(np.zeros(3), np.zeros(3))
+            return node
+
+        first_box = object_bounds[0][1]
+        node_min = first_box.min_point.copy()
+        node_max = first_box.max_point.copy()
+        
+        for _, box in object_bounds:
+            node_min = np.minimum(node_min, box.min_point)
+            node_max = np.maximum(node_max, box.max_point)
+        
+        node.box = AABB(node_min, node_max)
+
+        # 2. Leaf Condition
+        # If few objects, stop splitting
+        if len(objects) <= 2:
+            node.objects = objects
+            return node
+
+        # 3. Split Strategy: Longest Axis
+        # Find the widest dimension of the node's box
+        extent = node_max - node_min
+        axis = np.argmax(extent) # 0=x, 1=y, 2=z
+        
+        # Sort objects by their center along that axis
+        object_bounds.sort(key=lambda item: (item[1].min_point[axis] + item[1].max_point[axis]) * 0.5)
+        
+        mid = len(objects) // 2
+        
+        sorted_objs = [item[0] for item in object_bounds]
+        
+        node.left = self._build_bvh(sorted_objs[:mid])
+        node.right = self._build_bvh(sorted_objs[mid:])
+        
+        return node
+
+    def _test_single_object(
+            self,
+            obj: VObject,
+            ray: TracingRay,
+            far_plane: float,
+            cam_pos: np.ndarray,
+            stats: Optional["RenderStats"]) -> HitInfo:
+        """
+        Hybrid Intersection:
+        1. Transforms the World Ray into Object Local Space.
+        2. Performs a small Ray March loop against the unit_signed_distance.
+        3. Transforms the result back to World Space.
+        """
+        obj_shape = getattr(obj, "shape", None)
+        if obj_shape is None:
+            return HitInfo.miss()
+        
+        # 1. Transform Ray to Local Space
+        obj_transform = cast(Transform, getattr(obj, 'transform', Transform.identity()))
+        local_ray = obj_transform.inverse_transform_ray(ray)
+        
+        local_dir_len = np.linalg.norm(local_ray.orientation)
+        if local_dir_len > 0:
+            local_ray.orientation /= local_dir_len
+
+        # 2. Get an minimum Scale Factor for safe stepping. Imagine the object is uniform in size
+        scale = obj_transform.scale
+        min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
+
+        t = 0.0
+        sign_modifier = -1.0 if getattr(ray, "is_inside", False) else 1.0
+
+        for _ in range(self.max_steps): 
+            p = local_ray.point_at(t)
+            
+            if stats: stats.triangle_tests += 1
+
+            dist_local = obj_shape.unit_signed_distance(p) * sign_modifier * min_scale
+            
+            # Check convergence
+            if dist_local < self.epsilon:
+                # --- Hit Found ---
+                
+                # A. Transform Point to World
+                p_world = obj_transform.transform_point(p)
+                
+                # B. Calculate Normal (Local Gradient -> World Normal)
+                local_normal = self._calc_local_gradient(obj_shape, p)
+                if ray.is_inside: 
+                    local_normal = -local_normal
+                normal_world = obj_transform.transform_normal(local_normal)
+                
+                # C. True World Distance
+                distance_world = np.linalg.norm(p_world - ray.origin)
+                
+                return HitInfo(
+                    did_hit=True,
+                    distance=float(distance_world),
+                    point=p_world,
+                    normal=normal_world,
+                    obj=obj
+                )
+            
+            t += dist_local * self.step_relaxation
+            
+            # Frustum/Far Plane checks
+            obj_pos = getattr(obj, 'transform', Transform.identity()).position
+            far_plane_dist = np.linalg.norm(cam_pos - obj_pos)
+            if t >= self.max_distance or far_plane_dist >= far_plane:
+                break
+                
+        return HitInfo.miss()
+
+    def _calc_local_gradient(self, shape: Shape, p: np.ndarray, h: float = 1e-4) -> np.ndarray:
+        """
+        Calculates surface normal using central differences on the SDF.
+        """
+        dx = np.array([h, 0, 0])
+        dy = np.array([0, h, 0])
+        dz = np.array([0, 0, h])
+        
+        grad = np.array([
+            shape.unit_signed_distance(p + dx) - shape.unit_signed_distance(p - dx),
+            shape.unit_signed_distance(p + dy) - shape.unit_signed_distance(p - dy),
+            shape.unit_signed_distance(p + dz) - shape.unit_signed_distance(p - dz)
+        ])
+        
+        norm = np.linalg.norm(grad)
+        return grad / norm if norm > 0 else np.array([0.0, 0.0, 1.0])

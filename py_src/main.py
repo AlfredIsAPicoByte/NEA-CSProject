@@ -9,6 +9,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 from src.Scene import Scene
 from src.RenderingAlgorithms import Algorithm
 from src.Raytracing import *
+from src.Generation import *
+from src.Intersections import *
+from src.Shading import *
+from src.Interactions import *
 from src.Sampling import SamplingManager, SampleSettings, PixelFilter, reconstruct_pixel
 from src.MemoryProfiler import MemoryProfiler
 from test_scenes import *
@@ -84,23 +88,24 @@ if __name__ == "__main__":
     sample_settings = SampleSettings(samples_per_pixel=1, filter_type=PixelFilter.BOX, filter_width=2)
     sampling_manager = SamplingManager(sample_settings, "halton")
 
-    generator = JitterRayGenerator()
-    intersection = BVHIntersection(max_distance=100, max_steps=10)
-    interactor = StandardInteraction()
-    shading = BasicLambertShading()
-
-    raytracer = Raytracer(
-        max_depth=6,
-        sampling_manager=sampling_manager,
-        ray_generator=generator,
-        intersection_strategy=intersection,
-        interaction_strategy=interactor,
-        shading_strategy=shading,
-        # custom_background=Color(0.0, 0.0, 0.0),
-        # enable_scene_background=True
-    )
-
     for scene in all_scenes:
+        generator = RayGenerator()
+        intersection = BVHIntersection(max_distance=100, max_steps=10)
+        interactor = StandardInteraction()
+        shading = LambertShading(
+            ambience_settings=AmbienceSettings(False, Color.from_hex("#FFFFFF"), 0.5),
+            shadow_settings=ShadowSettings(True, 8, 2e-3),
+            background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
+        )
+
+        raytracer = Raytracer(
+            max_depth=6,
+            sampling_manager=sampling_manager,
+            ray_generator=generator,
+            intersection_strategy=intersection,
+            interaction_strategy=interactor,
+            shading_strategy=shading,
+        )
         # Reset tracing stats per-scene to avoid accumulation and keep reported memory accurate
         raytracer.stats = TracingStats()
 

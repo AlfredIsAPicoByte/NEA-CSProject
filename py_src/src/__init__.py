@@ -9,18 +9,23 @@ import sys
 from importlib import import_module
 
 _submodules = [
-    "PrimaryStructures",  # Must be loaded before Geometry
+    "PrimaryStructures",
     "Geometry",
+    "Reflections",
+    "Refractions",
     "Luminance",
     "Camera",
     "Scene",
-    "RenderingAlgorithms",
     "Sampling",
-    "Reflections",
-    "Refractions",
+    "Generation",
+    "Intersection",
+    "Shading",
+    "Interaction",
+    "RenderingAlgorithms",
     "Raytracing",
+    "MemoryUtils",
+    "MemoryProfiler"
     "PostProcessing",
-    "MemoryUtils"
 ]
 
 __all__ = []

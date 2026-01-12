@@ -15,14 +15,9 @@ class Scene:
         self.lights: List[LightSource] = []
         self.camera: VCamera = camera if camera is not None else VCamera(Transform.identity())
 
-        # Ambient lighting defaults (can be overridden via kwargs)
-        # small neutral ambient to avoid complete black shadows by default
-        self.ambient_color: Color = Color(0.03, 0.03, 0.03)
-        self.ambient_intensity: float = 0.1
-
         for key, value in kwargs.items():
             setattr(self, key, value)
-    
+
     def set_camera(self, camera: VCamera):
         self.camera = camera
     
@@ -157,83 +152,6 @@ class Scene:
             distance=float(min_distance), 
             obj=closest_obj 
         )
-    
-    def get_background_color(self, direction: np.ndarray) -> Color:
-        """
-        Return the background color based on the ray's direction vector.
-        Handles Solid Color, ColorGradient (Skybox), or Texture Map safely.
-        """
-        # 1. Safe Access to Background
-        bg = getattr(self, 'background_color', None)
-        if bg is None:
-            return Color(0.0, 0.0, 0.0)
-
-        # 2. Get the Class Name (Avoids NameError if classes aren't imported)
-        bg_type_name = type(bg).__name__
-
-        # 3. Handle ColorGradient (Skybox)
-        if bg_type_name == 'ColorGradient':
-            # Resolve Direction
-            try:
-                norm = np.linalg.norm(direction)
-                if norm > 1e-6:
-                    dir_vec = direction / norm
-                else:
-                    dir_vec = np.array([0.0, 1.0, 0.0])
-            except (ValueError, TypeError):
-                dir_vec = np.array([0.0, 1.0, 0.0])
-
-            # Map Y [-1, 1] to [0, 1]
-            t = 0.5 * (dir_vec[1] + 1.0)
-            return bg.get_color(t)
-
-        # 4. Handle Texture Map (Numpy Array)
-        elif isinstance(bg, np.ndarray):
-            # Resolve Direction (Reuse logic or recalculate)
-            norm = np.linalg.norm(direction)
-            if norm > 1e-6: direction /= norm
-            
-            return self._sample_equirectangular_map(bg, direction)
-
-        # 5. Handle Solid Color (Color Object)
-        # We check the name OR the instance to be safe
-        elif bg_type_name == 'Color' or isinstance(bg, Color):
-            return bg
-        # Tuple/List fallback
-        elif isinstance(bg, (tuple, list)) and len(bg) == 3:
-            return Color(*bg)
-
-        return Color(0.0, 0.0, 0.0)
-    
-    def _sample_equirectangular_map(self, texture: np.ndarray, direction: np.ndarray) -> Color:
-        """
-        Samples a 2D texture using Spherical (Equirectangular) mapping.
-        Texture is assumed to be a numpy array of shape (H, W, 3).
-        """
-        # Convert 3D Direction -> 2D UV Coordinates
-        # u = atan2(z, x) / 2pi + 0.5
-        # v = asin(y) / pi + 0.5
-        x, y, z = direction
-        
-        u = atan2(z, x) / (2 * pi) + 0.5
-        v = asin(y) / pi + 0.5
-        
-        # Map UV to Pixel Coordinates
-        height, width, _ = texture.shape
-        
-        # Clamp coordinates and convert to integer indices
-        u_idx = int(floor(u * width)) % width
-        v_idx = int(floor(v * height))
-        v_idx = max(0, min(height - 1, v_idx)) # Clamp vertical to avoid out of bounds
-        
-        # Retrieve pixel (assume float 0-1 or uint8 0-255)
-        pixel = texture[v_idx, u_idx]
-        
-        # Normalize if the texture is 0-255 (integers)
-        if texture.dtype.kind in 'iu': # int or uint
-            pixel = pixel / 255.0
-            
-        return Color(*pixel)
     
     def clear_objects(self):
         self.objects.clear()

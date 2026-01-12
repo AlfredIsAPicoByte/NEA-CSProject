@@ -413,6 +413,7 @@ class PBRMaterial:
         for light in scene_lights:
             if self.data.type == MaterialType.EMISSIVE:
                 break
+            
             # --- Light Setup (World Space) ---
             light_position = light.position
             
@@ -431,53 +432,19 @@ class PBRMaterial:
             visibility = visibility_function(hit_point, light)
             if visibility <= 0.0:
                 continue
-
-            # --- Lighting Calculations ---
-            # N dot L (Clamped to 0 for opaque, abs for transmission)
-            NdotL = np.dot(working_normal, light_dir)
             
             # Pre-calculate attenuation
             attenuation = attenuate_sqr_distance(light_dist)
-            intensity = light.intensity * attenuation * NdotL * visibility
-            incoming_radiance = light.color * intensity # This is 'Li'
+            intensity = light.intensity * attenuation * visibility
 
             # --- Material Handling ---
-            
             if self.type == MaterialType.DIFFUSE:
-                # Diffuse only reflects light on the side of the normal
-                if NdotL > 0:
-                    diffuse = self.get_diffuse_component(
-                        light.color, intensity, light_dir, working_normal
-                    )
-                    accumulated_light += diffuse 
-
+                diffuse = self.get_diffuse_component(light.color, intensity, light_dir, working_normal)
+                accumulated_light += diffuse 
             elif self.type == MaterialType.SPECULAR:
-                if NdotL > 0:
-                    diff = self.get_diffuse_component(light.color, intensity, light_dir, working_normal)
-                    spec = self.get_specular_component(light.color, intensity, light_dir, working_normal, view_dir)
-                    accumulated_light += diff + spec
-
-            elif self.type == MaterialType.GLASS:
-                # We use the BSDF to evaluate how much light reflects towards the camera
-                bsdf_val = self.evaluate_bsdf(
-                    incident_dir=light_dir,      # L
-                    view_dir=view_dir,           # V
-                    surface_normal=working_normal, 
-                    roughness=self.roughness, 
-                    ior_incident=ior_in, 
-                    ior_transmitted=ior_trans
-                )
-                
-                # Valid reflection requires Light and View to be on the same side
-                # so we multiply by NdotL.
-                # If doing rough transmission, you might use abs(NdotL).
-                if NdotL > 0:
-                    accumulated_light += bsdf_val * incoming_radiance * NdotL
-            
-            elif self.type == MaterialType.TRANSPARENT:
-                # Simple alpha-blended transparency (fake glass)
-                # Just add the light color tinted by the object color
-                accumulated_light += self.get_transparency_component(light.color)
+                diff = self.get_diffuse_component(light.color, intensity, light_dir, working_normal)
+                spec = self.get_specular_component(light.color, intensity, light_dir, working_normal, view_dir)
+                accumulated_light += diff + spec
 
         return accumulated_light
     
@@ -538,22 +505,7 @@ class PBRMaterial:
 
         else:
             # --- REFRACTION LOBE ---
-            # 1. Assign Indices based on Vectors
-            # We need strictly: eta_L (side of Light) and eta_V (side of View)
-            # If V is outside (dot_n_v > 0), eta_V is Air.
-            if dot_n_v > 0:
-                eta_v = 1.000293       # Air
-                eta_l = self.ior       # Glass (Light is inside)
-            else:
-                eta_v = self.ior       # Glass
-                eta_l = 1.000293       # Air (Light is outside)
-
-            # 2. Calculate Refraction Half Vector (H)
-            # H aligns with the "halfway" vector weighted by IORs.
-            # Standard Formula: H = -(eta_L * L + eta_V * V)
-            # (Note: We normalize, so the sign of H depends on convention. 
-            #  We usually want H to point into the denser medium or align with N).
-            
+            # 1. Calculate Refraction Half Vector (H)
             H_raw = -(eta_l * L + eta_v * V)
             H = unit(H_raw)
             
