@@ -26,42 +26,37 @@ class CameraMode (Enum):
     PLANE = 2
     ORBIT = 3
 
-class VCamera:
+class Camera:
     """
-    A virtual camera class used to store properties and process calculations.
+    Integrates VCamera logic with Ray Tracing sampler requirements.
     """
-    def __init__ (
-            self,
-            transform: Transform,
-            fov: float = 60,
-            near: float = 0.01,
-            far: float = 1000,
-            resolution_width: int = 16,
-            resolution_height: int = 9,
-            camera_type: CameraType = CameraType.PERSPECTIVE,
-            camera_mode: CameraMode = CameraMode.FIRST_PERSON,
-            name: str = "Camera",
-            **kwargs
-        ):
+    def __init__(
+        self,
+        transform: Transform,
+        resolution_width: int = 800,
+        resolution_height: int = 600,
+        fov: float = 60.0,
+        near: float = 0.1,
+        far: float = 1000.0,
+        camera_type: CameraType = CameraType.PERSPECTIVE,
+        aperture_radius: float = 0.0, # For Depth of Field
+        focal_distance: float = 10.0  # Distance to focus plane
+    ):
         self.transform = transform
-
+        self.transform.update_basis() # Ensure vectors are ready
+        
+        self.width = resolution_width
+        self.height = resolution_height
+        self.aspect_ratio = float(self.width) / float(self.height)
+        
         self.fov = fov
         self.near = near
         self.far = far
-
-        # Allow either camera_type or legacy camType
         self.type = camera_type
-        self.mode = camera_mode
-
-        self.resolution_width = resolution_width
-        self.resolution_height = resolution_height
-        self.aspect_ratio = Ratio(self.resolution_width, self.resolution_height)
-
-        self.name = name
-
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
+        
+        # Ray Tracing Specifics
+        self.aperture_radius = aperture_radius
+        self.focal_distance = focal_distance
     def __post_init__(self):
         if self.fov <= 0:
             raise ValueError("FOV must be greater than 0")
