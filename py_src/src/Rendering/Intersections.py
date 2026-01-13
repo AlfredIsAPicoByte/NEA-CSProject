@@ -8,9 +8,9 @@ from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
 from src.Data.AABB import AABB
 from Core import RenderStats
-from src.Geomety.Core import Shape
-from src.Geomety.BVH import BVHNode
-from src.Geomety.Primitive import Primitive
+from src.Geometry.Core import Shape
+from src.Geometry.BVH import BVHNode
+from src.Geometry.Primitive import Primitive
 from src.Utilities.Common import unit
 from src.Utilities.Scene import Scene
 

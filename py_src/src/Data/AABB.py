@@ -2,7 +2,7 @@ import numpy as np
 
 from src.Data.Transfrom import Transform
 from src.Data.Ray import Ray
-from src.Geomety.Core import Shape
+from src.Geometry.Core import Shape
 
 class AABB:
     """

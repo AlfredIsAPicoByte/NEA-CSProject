@@ -1,15 +1,20 @@
+import sys
+import os
+import pytest
 import numpy as np
-import sys, os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
 
-from Scene import Scene
-from Geometry import Primitive, Plane
-from Luminance import LightSource, Color
-from Camera import VCamera
-from PrimaryStructures import Ray, Transform
-from Shading import LambertShading, ShadowSettings, AmbienceSettings, BackgroundSettings
-from Luminance import PBRMaterial, MaterialType
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(current_dir, 'src'))
 
+sys.path.insert(0, current_dir)
+
+from src.Data.Transfrom import Transform
+from src.Data.Color import Color
+from src.Geometry.Core import Plane
+from src.Geometry.Primitive import Primitive
+from src.Lighting import LightSource
+from src.Rendering.Shading import LambertShading, ShadowSettings, AmbienceSettings, BackgroundSettings
+from src.Utilities.Scene import Scene
 
 def test_self_shadow_ignored():
     scene = Scene()
@@ -39,7 +44,5 @@ def test_self_shadow_ignored():
 
     assert vis == 1.0
 
-
 if __name__ == '__main__':
-    test_self_shadow_ignored()
-    print('Shadow test passed')
+    sys.exit(pytest.main(["-v", __file__]))

@@ -1,13 +1,18 @@
+import sys
+import os
+import pytest
 import numpy as np
-import sys, os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(current_dir, 'src'))
+
+sys.path.insert(0, current_dir)
 
 from src.Data.Transfrom import Transform
 from src.Data.Color import Color, ColorGradient
-from src.Geomety.Core import *
-from src.Geomety.Primitive import *
-from src.Geomety.Mesh import *
+from src.Geometry.Core import *
+from src.Geometry.Primitive import *
+from src.Geometry.Mesh import *
 from src.Utilities.Scene import Scene
 from src.Utilities.Camera import Camera, CameraType
 from src.Lighting.Core import LightSource

@@ -8,15 +8,19 @@ sys.path.insert(0, os.path.join(current_dir, 'src'))
 
 sys.path.insert(0, current_dir)
 
-# --- 1. IMPORTS ---
-from src.PrimaryStructures import Ray, Transform, Ratio
-from src.Geometry import Primitive, Sphere, SphereFactory, CircleFactory, ShapeFactory
-from src.Luminance import LightSource, Color, ColorGradient, PBRMaterial
-from src.Camera import VCamera, CameraType
-from src.Scene import Scene
-from src.Raytracing import BasicLambertShading, Raytracer
+from src.Data.Transfrom import Transform
+from src.Data.Ray import Ray
+from src.Data.Color import Color, ColorGradient
+from src.Data.Ratio import Ratio
+from src.Geometry.Core import Sphere
+from src.Geometry.Primitive import Primitive
+from src.Lighting.Core import LightSource
+from src.Material.Core import PBRMaterial
+from src.Rendering.Raytracing import Raytracer
+from src.Rendering.Shading import LambertShading
+from src.Utilities.Camera import Camera, CameraType
+from src.Utilities.Scene import Scene
 
-# --- 2. THE TESTS ---
 def test_ray_structure():
     """Test basic Ray structure functionality."""
     origin = np.zeros(3)
@@ -101,7 +105,7 @@ def test_ray_check_points(t, expected_point, should_match):
 
 def test_Primitive_creation():
     transform = Transform.identity()
-    shape = SphereFactory().create(np.array([0, 0, 0]), 1)
+    shape = Sphere()
     
     obj = Primitive(shape, transform)
     
@@ -122,7 +126,7 @@ def test_color_math():
 
 def test_camera_logic():
     transform = Transform.identity()
-    cam = VCamera(transform, 90, 0.1, 1000, 1440, 810)
+    cam = Camera(transform, 90, 0.1, 1000, 1440, 810)
     
     cam.aspect_ratio.simplify()
     assert cam.aspect_ratio.width == 16 and cam.aspect_ratio.height == 9 # Assuming internally simplified
@@ -133,7 +137,7 @@ def test_camera_logic():
     assert cam.aspect_ratio.width == 4 and cam.aspect_ratio.height == 3
 
 def test_ray_shape_intersection():
-    sphere = SphereFactory().create(np.zeros(3), 1)
+    sphere = Sphere()
     
     ray_hit = Ray(np.zeros(3), np.array([1, 0, 0])) # Originates inside
     ray_miss = Ray(np.array([2, 2, 2]), np.array([1, 0, 0]))
@@ -142,7 +146,7 @@ def test_ray_shape_intersection():
     assert sphere.check_ray_intersection(ray_miss) == False
 
 def test_background_gradient():
-    cam = VCamera(Transform(np.array([0,0,-3]), np.zeros(3), np.ones(3)), 60, 0.1, 100, 8, 8, CameraType.PERSPECTIVE)
+    cam = Camera(Transform(np.array([0,0,-3]), np.zeros(3), np.ones(3)), 60, 0.1, 100, 8, 8, CameraType.PERSPECTIVE)
     grad = ColorGradient([Color.from_hex("#000033"), Color.from_hex("#87CEEB")], np.array([0.0, 1.0]))
     scene = Scene(name="bg_test", camera=cam, background_color=grad)
     
@@ -166,7 +170,7 @@ def test_background_gradient():
 
 def test_ambient_lighting():
     # Setup scene
-    cam = VCamera(
+    cam = Camera(
         transform=Transform(np.array([0,0,-5]), np.zeros(3), np.ones(3)),
         fov=60,
         near=0.1,
@@ -179,7 +183,7 @@ def test_ambient_lighting():
         albedo=Color(0.8, 0.8, 0.8),
         roughness=0.5,
     )
-    sphere = Primitive(SphereFactory().create(np.array([0, 0, 0]), 1), Transform.identity())
+    sphere = Primitive(Sphere(), Transform.identity())
     # Attach PBR data to shape for compatibility
     sphere.material = material
     scene = Scene(name="ambient_test", camera=cam, objects=[sphere], lights=[
@@ -191,7 +195,7 @@ def test_ambient_lighting():
         ray_generator=None,
         intersection_strategy=None,
         interaction_strategy=None,
-        shading_strategy=BasicLambertShading(),
+        shading_strategy=LambertShading(),
         custom_background=scene.get_background_color([0.0, 0.0, -1.0]),
         enable_scene_background=True
     )
@@ -208,5 +212,4 @@ def test_ambient_lighting():
     assert not np.allclose(rgb, 1.0), f"Result was white {rgb}, expected ambient gray"
 
 if __name__ == "__main__":
-    # This allows you to run the file directly like a script if you prefer
     sys.exit(pytest.main(["-v", __file__]))

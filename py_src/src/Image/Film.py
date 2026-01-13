@@ -8,22 +8,23 @@ class Film:
     def __init__(self, width: int, height: int):
         self.width = width
         self.height = height
-        
-        # A flat list of lists.
-        # Index = y * width + x
-        # Content = List of (Sample, ColorArray) tuples
-        self.samples: List[List[Tuple[Sample, np.ndarray]]] = [[] for _ in range(width * height)]
 
-    def add_sample(self, x: int, y: int, sample: Sample, color: Color):
-        """
-        Thread-safe storage of a raw sample.
-        """
-        # Convert Color object to simple numpy array [r, g, b] for the pipeline
-        col_array = np.array([color.r, color.g, color.b], dtype=np.float32)
-        
-        idx = y * self.width + x
-        self.samples[idx].append((sample, col_array))
+        self.accum_color = np.zeros((width, height, 3), dtype=np.float32)
+        self.accum_weight = np.zeros((width, height), dtype=np.float32)
 
-    def get_raw_data(self):
-        """Pass this to the PostProcessingPipeline."""
-        return self.samples
+    def add_pixle_batch(self, x: int, y: int, color_sum: np.ndarray, weighted_sum: float):
+        if 0 <= x <= self.width and 0 <= y <= self.height:
+            self.accum_color[x, y] += color_sum
+            self.accum_weight[x, y] += weighted_sum
+    
+    def get_image(self) -> np.ndarray:
+        natural_mask = self.accum_weight > 0
+
+        result = np.zeros_like(self.accum_color)
+
+        result[natural_mask] = (
+            self.accum_color[natural_mask] / self.accum_weight[natural_mask][..., np.newaxis]
+        )
+
+        return result
+    

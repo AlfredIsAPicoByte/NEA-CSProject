@@ -1,14 +1,23 @@
+import sys
+import os
+import pytest
 import numpy as np
-import sys, os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
 
-from src.Scene import Scene
-from src.Geometry import Primitive, Sphere
-from src.PrimaryStructures import TracingRay as Ray, Transform
-from src.Raytracing import Raytracer, TracingStats
-from src.Sampling import RandomSampler
-from src.Shading import ShadingStrategy, AmbienceSettings, ShadowSettings, BackgroundSettings
-from src.Luminance import Color
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(current_dir, 'src'))
+
+sys.path.insert(0, current_dir)
+
+from src.Data.Transfrom import Transform
+from src.Data.Ray import Ray
+from src.Data.Color import Color
+from src.Geometry.Core import  Sphere
+from src.Geometry.Primitive import Primitive
+from src.Rendering.Raytracing import Raytracer, TracingStats
+from src.Rendering.Intersections import BVHIntersection
+from src.Rendering.Shading import LambertShading, ShadingStrategy, AmbienceSettings, ShadowSettings, BackgroundSettings
+from src.Utilities.Sampling import RandomSampler
+from src.Utilities.Scene import Scene
 
 class NaNShading(ShadingStrategy):
     def __init__(self):
@@ -26,8 +35,6 @@ def test_nan_tracking():
 
     ray = Ray(origin=np.array([0.0, 0.0, -5.0]), orientation=np.array([0.0, 0.0, 1.0]))
 
-    from src.Shading import LambertShading, AmbienceSettings, ShadowSettings, BackgroundSettings
-    from py_src.src.Rendering.Intersections import BVHIntersection
 
     tracer = Raytracer(
         intersection_strategy=BVHIntersection(max_distance=100, max_steps=10),
@@ -55,5 +62,4 @@ def test_nan_tracking():
     assert tracer._last_nan_logged >= tracer.stats.nan_errors - 0, "Expected last-nan-logged to be updated after threshold crossing"
 
 if __name__ == '__main__':
-    test_nan_tracking()
-    print('NaN tracking test passed')
+    sys.exit(pytest.main(["-v", __file__]))

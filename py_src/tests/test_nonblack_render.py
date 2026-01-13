@@ -1,10 +1,16 @@
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+import sys
+import os
+import pytest
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(current_dir, 'src'))
+
+sys.path.insert(0, current_dir)
 
 from test_scenes import get_minimal_scene
-from src.Raytracing import Raytracer, JitterRayGenerator, RayMarchingIntersection, StandardInteraction, RecursiveLambertShading
-from src.Sampling import SamplingManager, SampleSettings, PixelFilter
-
+from src.Rendering.Raytracing import Raytracer, RayMarchingIntersection, StandardInteraction, RecursiveLambertShading
+from src.Utilities.Sampling import SamplingManager, SampleSettings, PixelFilter
+from src.Utilities.Camera import Camera
 
 def test_minimal_scene_not_all_background():
     scene = get_minimal_scene(16, 9)
@@ -14,7 +20,7 @@ def test_minimal_scene_not_all_background():
     raytracer = Raytracer(
         max_depth=4,
         sampling_manager=sampling_manager,
-        ray_generator=JitterRayGenerator(),
+        camera=Camera(),
         intersection_strategy=RayMarchingIntersection(max_distance=100),
         interaction_strategy=StandardInteraction(),
         shading_strategy=RecursiveLambertShading(),
@@ -27,3 +33,6 @@ def test_minimal_scene_not_all_background():
 
     # Assert at least one pixel differs from background
     assert any((float(p.r), float(p.g), float(p.b)) != (float(bg.r), float(bg.g), float(bg.b)) for p in pixels), "All pixels match the background; objects were not rendered."
+
+if __name__ == '__main__':
+    sys.exit(pytest.main(["-v", __file__]))

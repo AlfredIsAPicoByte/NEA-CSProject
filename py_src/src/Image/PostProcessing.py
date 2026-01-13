@@ -6,7 +6,7 @@ from scipy.ndimage import gaussian_filter, uniform_filter
 from src.Utilities.Common import clamp
 from src.Utilities.Sampling import SampleSettings, Sample, reconstruct_pixel
 
-@dataclass
+@dataclass(slots=True)
 class BloomSettings:
     enabled: bool = False
     threshold: float = 1.0
@@ -15,45 +15,24 @@ class BloomSettings:
     radius: int = 4
     fast: bool = True
 
-@dataclass
+@dataclass(slots=True)
 class ChromaticAberrationSettings:
     enabled: bool = False
     strength: int = 0
 
-@dataclass
+@dataclass(slots=True)
 class VignetteSettings:
-    enabled: bool = False
-    strength: float = 0.5
+    intensity: float = 0.5
+    softness: float =  0.4
     curve: float = 1.0
 
-@dataclass
-class AcesToneMapSettings:
-    enabled: bool = True
-
-@dataclass
-class CustomToneMapSettings:
-    enabled: bool = False
-    # ACES approximate constants (Knarkowicz)
-    a: float = 2.51
-    b: float = 0.03
-    c: float = 2.43
-    d: float = 0.59
-    e: float = 0.14
-
-@dataclass
+@dataclass(slots=True)
 class GammaSettings:
-    enabled: bool = True
     gamma: float = 2.2
 
-@dataclass
-class PostProcessingSettings:
-    # We use default_factory to ensure every new instance gets its own fresh settings
-    bloom: BloomSettings = field(default_factory=BloomSettings)
-    chromatic_abberation: ChromaticAberrationSettings = field(default_factory=ChromaticAberrationSettings)
-    vignette: VignetteSettings = field(default_factory=VignetteSettings)
-    aces_tone_map: AcesToneMapSettings = field(default_factory=AcesToneMapSettings)
-    custom_tone_map: CustomToneMapSettings = field(default_factory=CustomToneMapSettings)
-    gamma_correction: GammaSettings = field(default_factory=GammaSettings)
+@dataclass(slots=True)
+class ExposureSettings:
+    value: float = 1.0
 
 class PostProcessingPipeline:
     @staticmethod

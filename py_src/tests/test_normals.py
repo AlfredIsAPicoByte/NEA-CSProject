@@ -1,11 +1,18 @@
+import sys
+import os
+import pytest
 import numpy as np
-import sys, os
-# Ensure local 'src' folder is on path for tests
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
-from PrimaryStructures import Transform
-from Geometry import Primitive, Sphere
-from Scene import Scene
-from PrimaryStructures import Ray
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(current_dir, 'src'))
+
+sys.path.insert(0, current_dir)
+
+from src.Data.Transfrom import Transform
+from src.Data.Ray import Ray
+from src.Geometry.Core import Sphere
+from src.Geometry.Primitive import Primitive
+from src.Utilities.Scene import Scene
 
 
 def test_world_transform_applied_to_normals():
@@ -48,7 +55,5 @@ def test_world_transform_applied_to_normals():
 
     assert np.allclose(got, expected, atol=1e-6), f"Normal mismatch: got={got}, expected={expected}"
 
-
 if __name__ == '__main__':
-    test_world_transform_applied_to_normals()
-    print('Test passed')
+    sys.exit(pytest.main(["-v", __file__]))

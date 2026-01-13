@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Type, Any, Tuple, List
 
-from src.Data.Color import Color
+from src.Image.Film import Film
 from src.Utilities.Scene import Scene
 from src.Utilities.Sampling import Sampler
 from src.Utilities.Memory.Core import get_process_id, get_memory_mb
@@ -62,7 +62,7 @@ class Algorithm(ABC):
             sampler: Optional[Sampler] = None,
             region: Optional[Tuple[int, int, int, int]] = None,
             tile_size: Optional[int] = None
-        ) -> List[Color]:
+        ) -> Film:
         """
         High-level render entry point: produce an image/buffer from the scene and camera.
         """

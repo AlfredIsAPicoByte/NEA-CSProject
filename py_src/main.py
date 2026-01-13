@@ -6,16 +6,15 @@ import gc
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from src.Scene import Scene
-from py_src.src.Rendering.Core import Algorithm
-from src.Raytracing import *
-from src.Generation import *
-from py_src.src.Rendering.Intersections import *
-from src.Shading import *
-from py_src.src.Rendering.Interactions import *
-from src.Sampling import SamplingManager, SampleSettings, PixelFilter, reconstruct_pixel
-from py_src.src.Utilities.Memory.Profiler import MemoryProfiler
-from test_scenes import *
+from src.Rendering.Core import Algorithm
+from src.Rendering.Raytracing import *
+from src.Rendering.Intersections import *
+from src.Rendering.Shading import *
+from src.Rendering.Interactions import *
+from src.Utilities.Scene import Scene
+from src.Utilities.Sampling import SamplingManager, SampleSettings, PixelFilter, reconstruct_pixel
+from src.Utilities.Memory.Profiler import MemoryProfiler
+from tests.test_scenes import *
 PostProcessingPipeline = None
 
 def render_process(scene: Scene, algorithm: Algorithm):
@@ -89,7 +88,6 @@ if __name__ == "__main__":
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
-        generator = RayGenerator()
         intersection = BVHIntersection(max_distance=500, max_steps=64)
         interactor = TerminalInteraction()
         shading = FlatShading(
@@ -101,7 +99,6 @@ if __name__ == "__main__":
         raytracer = Raytracer(
             max_recursions=1,
             sampling_manager=sampling_manager,
-            ray_generator=generator,
             intersection_strategy=intersection,
             interaction_strategy=interactor,
             shading_strategy=shading,
@@ -148,7 +145,7 @@ if __name__ == "__main__":
                 with MemoryProfiler(enable_tracemalloc=True, top=6) as mp:
                     print(" > Running post-processing")
                     # Import lazily so heavy deps (scipy) are only loaded when needed
-                    from src.PostProcessing import *
+                    from src.Image.PostProcessing import *
 
                     # We chain the effects directly on the numpy array
                     # A. Bloom (Make bright lights glow)

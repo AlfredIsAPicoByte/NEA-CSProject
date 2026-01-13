@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Optional, List, Tuple, Any
+from typing import Optional, Tuple, Any
 from dataclasses import dataclass
 
 from src.Data.Ray import TracingRay
@@ -8,8 +8,9 @@ from Core import Algorithm, RenderStats, register_algorithm, update_memory_stats
 import Intersections
 import Shading
 import Interactions
+from src.Image.Film import Film
 from src.Utilities.Sampling import SamplingManager, SampleSettings, Sampler, Sample, reconstruct_pixel, RandomSampler
-from src.Utilities.Camera import Camera
+from src.Utilities.Scene import Scene
 
 # TODO: Pool tracing rays and hit info to reduce memory useage at runtime
 # TODO: Localise stat updates, dont use global referenced up until the end of the logic
@@ -129,7 +130,6 @@ class Raytracer(Algorithm):
         self,
         max_recursions: int = 4,
         sampling_manager: Optional[SamplingManager] = None,
-        camera: Optional[Camera] = None,
         intersection_strategy: Optional[Intersections.IntersectionStrategy] = None,
         interaction_strategy: Optional[Shading.ShadingStrategy] = None,
         shading_strategy: Optional[Interactions.InteractionStrategy] = None,
@@ -256,7 +256,7 @@ class Raytracer(Algorithm):
         sampler: Optional[Sampler] = None,
         region: Optional[Tuple[int, int, int, int]] = None,
         tile_size: Optional[int] = None,
-    ) -> List[Color]:
+    ) -> Film:
         self.stats.reset_ray_counter()
         self.stats.start_timer()
 
@@ -264,13 +264,15 @@ class Raytracer(Algorithm):
         if camera is None: raise ValueError("No camera provided in Scene")
         cam_width, cam_height = camera.width, camera.height
 
+        # Create a film for sample_color buffer
+        film = Film(cam_width, cam_height)
+
         if region:
             rx, ry, rw, rh = region
         else:
             rx, ry, rw, rh = 0, 0, cam_width, cam_height
 
         # Initialize output image and sample counter
-        full_image_pixels = [Color(0.0, 0.0, 0.0) for _ in range(rw * rh)]
         self.sample_settings.width = rw
         self.sample_settings.height = rh
         pixels_processed = 0
@@ -295,18 +297,15 @@ class Raytracer(Algorithm):
                 # Define tile region: (x, y, w, h)
                 tile_region = (tile_x, tile_y, current_w, current_h)
                 
-                # 1. Generate Rays for this Tile ONLY
-                rays = self.ray_generator.generate(camera=camera, region=tile_region, sampler=sampler)
+                # Generate Rays for this Tile ONLY
+                rays = camera.generate_screen_rays(region=tile_region, sampler=sampler)
                 self.stats.rays_primary += len(rays)
 
-                # 2. Local Storage for this Tile
-                # Map: (local_tile_index) -> List[(Sample, Color)]
-                tile_samples = [[] for _ in range(current_w * current_h)]
-
-
                 self.stats = update_memory_stats(self.stats)
+                
+                sample_colors = []
+                sample_weights = []
 
-                # 3. Trace Rays
                 for ray in rays:
                     if ray is None: continue
                     
@@ -321,7 +320,7 @@ class Raytracer(Algorithm):
                     if not (0 <= local_x < current_w and 0 <= local_y < current_h):
                         continue
 
-                    # Trace
+                    # Trace Ray
                     pixel_color = self._trace_ray(scene, ray, self.max_recursions, sampler)
 
                     # Create Sample Object
@@ -329,12 +328,18 @@ class Raytracer(Algorithm):
                     s_v = getattr(ray, "sample_v", (py + 0.5) / cam_height)
                     sample = Sample(s_u, s_v, 1.0) # weight 1.0
 
-                    # Store in Local Tile Buffer
-                    local_idx = local_y * current_w + local_x
-                    tile_samples[local_idx].append((sample, pixel_color))
+                    # Store in Film Sample Buffer
+                    film.add_sample(local_y, local_x, sample, pixel_color)
                     pixels_processed += 1
 
-                # 4. Reconstruct Tile (Resolve samples to final color)
+        self.stats.pixels_processed = pixels_processed
+        self.stats.stop_timer()
+
+        return film
+
+
+"""
+# 4. Reconstruct Tile (Resolve samples to final color)
                 for i in range(len(tile_samples)):
                     samples_and_colors = tile_samples[i]
                     
@@ -362,8 +367,4 @@ class Raytracer(Algorithm):
                     # Calculate index in the *region* buffer
                     final_idx = (global_y - ry) * rw + (global_x - rx)
                     full_image_pixels[final_idx] = final_color
-
-        self.stats.pixels_processed = pixels_processed
-        self.stats.stop_timer()
-
-        return full_image_pixels
+"""

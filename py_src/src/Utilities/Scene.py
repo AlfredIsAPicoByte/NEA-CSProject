@@ -7,8 +7,8 @@ from src.Data.Ray import Ray
 from src.Data.Color import Color
 from src.Data.Hit import HitInfo
 from Camera import Camera
-from src.Geomety.Core import Shape
-from src.Geomety.Primitive import Primitive
+from src.Geometry.Core import Shape
+from src.Geometry.Primitive import Primitive
 from src.Lighting.Core import LightSource
 from Common import safe_norm
 
