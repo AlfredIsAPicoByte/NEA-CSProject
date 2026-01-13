@@ -1,22 +1,22 @@
-Time: 60.6421s | RSS Δ: 0.375 MB
-RSS start: 53.582 MB | RSS end: 53.957 MB
-tracemalloc current: 168.51 KB | peak: 1100.13 KB
+Time: 51.0296s | RSS Δ: 0.285 MB
+RSS start: 70.195 MB | RSS end: 70.480 MB
+tracemalloc current: 140.27 KB | peak: 2149.79 KB
 Top allocations (most recent frame):
-  1. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/numeric.py:1469 | 46.73 KB (997 allocs)
-  2. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/numeric.py:1548 | 46.69 KB (996 allocs)
-  3. /workspaces/NEA-CSProject/py_src/main.py:28 | 42.28 KB (2 allocs)
-  4. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1372 | 13.67 KB (250 allocs)
-  5. /usr/lib/python3.12/dataclasses.py:1581 | 8.10 KB (71 allocs)
-  6. /workspaces/NEA-CSProject/py_src/src/Raytracing.py:1342 | 4.27 KB (78 allocs)
+  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\main.py:32 | 108.09 KB (2 allocs)
+  2. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Raytracing.py:336 | 13.73 KB (251 allocs)
+  3. C:\Python311\Lib\dataclasses.py:1501 | 7.29 KB (62 allocs)
+  4. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Raytracing.py:306 | 4.27 KB (78 allocs)
+  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\psutil\_pswindows.py:666 | 1.52 KB (13 allocs)
+  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Sampling.py:201 | 1.05 KB (45 allocs)
 
-Postproccesing:
-Time: 0.0014s | RSS Δ: 0.000 MB
-RSS start: 53.957 MB | RSS end: 53.957 MB
-tracemalloc current: 85.05 KB | peak: 487.71 KB
+Postprocessing:
+Time: 0.0049s | RSS Δ: 1.047 MB
+RSS start: 68.738 MB | RSS end: 69.785 MB
+tracemalloc current: 216.78 KB | peak: 1145.86 KB
 Top allocations (most recent frame):
-  1. /workspaces/NEA-CSProject/py_src/src/PostProcessing.py:198 | 84.47 KB (2 allocs)
-  2. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/psutil/_pslinux.py:1593 | 0.12 KB (1 allocs)
-  3. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:57 | 0.12 KB (1 allocs)
-  4. /workspaces/NEA-CSProject/.venv/lib/python3.12/site-packages/numpy/lib/_stride_tricks_impl.py:358 | 0.10 KB (2 allocs)
-  5. /usr/lib/python3.12/tracemalloc.py:560 | 0.08 KB (2 allocs)
-  6. /usr/lib/python3.12/tracemalloc.py:423 | 0.07 KB (2 allocs)
+  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\PostProcessing.py:198 | 216.09 KB (2 allocs)
+  2. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\psutil\_pswindows.py:791 | 0.12 KB (1 allocs)
+  3. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\psutil\_pswindows.py:666 | 0.12 KB (1 allocs)
+  4. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:57 | 0.12 KB (1 allocs)
+  5. C:\Python311\Lib\tracemalloc.py:560 | 0.09 KB (2 allocs)
+  6. C:\Python311\Lib\tracemalloc.py:423 | 0.08 KB (2 allocs)

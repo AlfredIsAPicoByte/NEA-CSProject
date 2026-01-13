@@ -65,24 +65,24 @@ if __name__ == "__main__":
     OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    img_w, img_h = 16 * 5, 9 * 5
+    img_w, img_h = 16 * 8, 9 * 8
 
     all_scenes = [
         get_minimal_scene(img_w, img_h),
-        # get_gradient_scene(img_w, img_h),
-        # get_emissive_scene(img_w, img_h),
-        # get_lit_studio_scene(img_w, img_h),
-        # get_rgb_room_with_objects_scene(img_w, img_h),
-        # get_cyberpunk_scene(img_w, img_h),
-        # get_material_deck_scene(img_w, img_h),
-        # get_refraction_lab_scene(img_w, img_h),
-        # get_scifi_corridor_scene(img_w, img_h),
-        # get_sunset_monolith_scene(img_w, img_h),
-        # get_pastel_blocks_scene(img_w, img_h),
-        # get_glass_prism_scene(img_w, img_h),
-        # get_glass_sculpture_scene(img_w, img_h),
-        # get_100_spheres_grid_scene(img_w, img_h),
-        # get_low_ior_scene(img_w, img_h),
+        get_gradient_scene(img_w, img_h),
+        get_emissive_scene(img_w, img_h),
+        get_lit_studio_scene(img_w, img_h),
+        get_rgb_room_with_objects_scene(img_w, img_h),
+        get_cyberpunk_scene(img_w, img_h),
+        get_material_deck_scene(img_w, img_h),
+        get_refraction_lab_scene(img_w, img_h),
+        get_scifi_corridor_scene(img_w, img_h),
+        get_sunset_monolith_scene(img_w, img_h),
+        get_pastel_blocks_scene(img_w, img_h),
+        get_glass_prism_scene(img_w, img_h),
+        get_glass_sculpture_scene(img_w, img_h),
+        get_100_spheres_grid_scene(img_w, img_h),
+        get_low_ior_scene(img_w, img_h),
     ]
 
     sample_settings = SampleSettings(samples_per_pixel=1, filter_type=PixelFilter.BOX, filter_width=2)
@@ -90,11 +90,11 @@ if __name__ == "__main__":
 
     for scene in all_scenes:
         generator = RayGenerator()
-        intersection = BVHIntersection(max_distance=100, max_steps=10)
-        interactor = StandardInteraction()
-        shading = LambertShading(
-            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03, 1.0)), getattr(scene, "ambient_intensity", 0.1)),
-            shadow_settings=ShadowSettings(True, 8, 2e-3),
+        intersection = BVHIntersection(max_distance=500, max_steps=64)
+        interactor = TerminalInteraction()
+        shading = FlatShading(
+            ambience_settings=AmbienceSettings(False, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03, 1.0)), getattr(scene, "ambient_intensity", 0.1)),
+            shadow_settings=ShadowSettings(False, 8, 2e-3),
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
         )
 
@@ -123,19 +123,21 @@ if __name__ == "__main__":
                 raw_img_data = render_process(scene, raytracer)
             
             try:
-                with open(stats_report_path, "w") as f:
+                with open(stats_report_path, "w", encoding="utf-8") as f:
                     f.write(raytracer.stats.format_report())
                     print(" + Wrote rendering statistics")
-            except Exception:
-                print(" / Failed to write rendering statistics")
-                pass
+            except Exception as e:
+                print(f" / Failed to write rendering statistics: {e}")
+                import traceback
+                traceback.print_exc()
             try:
-                with open(mem_report_path, "w") as f:
+                with open(mem_report_path, "w", encoding="utf-8") as f:
                     f.write(mp.format_report())
                     print(" + Wrote memory report")
-            except Exception:
-                print(" / Failed to write memory report")
-                pass
+            except Exception as e:
+                print(f" / Failed to write memory report: {e}")
+                import traceback
+                traceback.print_exc()
 
             save_image(raw_img_data, out_path=out_path + "_raw.png")
 
@@ -180,13 +182,14 @@ if __name__ == "__main__":
                     processed_img = PostProcessingPipeline.gamma_correct(processed_img, gamma=2.0)
                 
                 try:
-                    with open(mem_report_path, "a") as f:
-                        f.write("\n\nPostproccesing:\n")
+                    with open(mem_report_path, "a", encoding="utf-8") as f:
+                        f.write("\n\nPostprocessing:\n")
                         f.write(mp.format_report())
                         print(" + Appended to memory report")
-                except Exception:
-                    print(" / Failed to append to memory report")
-                    pass
+                except Exception as e:
+                    print(f" / Failed to append to memory report: {e}")
+                    import traceback
+                    traceback.print_exc()
 
                 save_image(processed_img, out_path=out_path + ".png")
             else:

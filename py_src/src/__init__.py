@@ -49,11 +49,6 @@ for name in _submodules:
             if Ray:
                 globals()["Ray"] = Ray
                 __all__.append("Ray")
-            
-            Transform = getattr(module, 'Transform', Transform.identity())
-            if Transform:
-                globals()['Transform'] = Transform
-                __all__.append('Transform')
 
         # 2. Expose Color from Luminance (+ Builtin Hack)
         if name == "Luminance":

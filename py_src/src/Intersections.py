@@ -95,7 +95,7 @@ class RayMarchingIntersection(IntersectionStrategy):
             
             # Frustum/Far Plane checks
             if scene.camera:
-                obj_pos = getattr(closest_object, 'transform', Transform.identity()).position
+                obj_pos = getattr(closest_object, 'world_transform', Transform.identity()).position
                 far_plane_dist = np.linalg.norm(scene.camera.transform.position - obj_pos)
                 if distance_traveled >= self.max_distance or far_plane_dist >= scene.camera.far:
                     break
@@ -154,7 +154,7 @@ class InverseSDFIntersection(IntersectionStrategy):
             if scene.camera is None:
                 break
 
-            far_plane_distance = np.linalg.norm(scene.camera.transform.position - hit_obj.transform.position)
+            far_plane_distance = np.linalg.norm(scene.camera.transform.position - hit_obj.world_transform.position)
             if hit_info.hit and (hit_info.distance < closest_hit.distance or hit_info.distance < far_plane_distance) :
                 closest_hit = hit_info
                 
@@ -191,28 +191,43 @@ class InverseSDFIntersection(IntersectionStrategy):
         for _ in range(self.max_steps):
             # 1. Calculate World Point
             p = ray.point_at(t)
-            
-            # 2. Sample the Object's SDF (It handles the transform internally)
-            raw_dist = obj_shape.signed_distance(p)
-            
+
+            # Convert to local object space for SDF queries
+            obj_transform = getattr(obj, 'world_transform', Transform.identity())
+            local_p = obj_transform.inverse_transform_point(p)
+
+            # 2. Sample the Object's SDF in LOCAL space
+            raw_dist_local = obj_shape.signed_distance(local_p)
+
             if stats is not None:
                 stats.triangle_tests += 1
 
-            # Apply Modifier (flips distance if inside)
-            dist = raw_dist * sign_modifier
-            
-            # 3. Hit Check
+            # 3. Scale local distance back to world units
+            # Find minimum absolute scale to conservatively convert distance
+            scale = getattr(obj_transform, 'scale', np.array([1.0, 1.0, 1.0]))
+            min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
+
+            dist = raw_dist_local * sign_modifier * min_scale
+
+            # 4. Hit Check (in world units)
             if dist < self.epsilon:
-                normal = self._calc_local_gradient(obj_shape, p)
-                
+                # Compute local normal using the local point
+                local_normal = self._calc_local_gradient(obj_shape, local_p)
                 if ray.is_inside:
-                    normal = -normal
-                    
+                    local_normal = -local_normal
+
+                # Transform normal to world space properly
+                world_normal = obj_transform.transform_normal(local_normal)
+
+                # Compute accurate world-space hit point and distance
+                p_world = obj_transform.transform_point(local_p)
+                distance_world = np.linalg.norm(p_world - ray.origin)
+
                 return HitInfo(
                     did_hit=True,
-                    distance=t,
-                    point=p,
-                    normal=normal,
+                    distance=float(distance_world),
+                    point=p_world,
+                    normal=world_normal,
                     obj=obj
                 )
             
@@ -220,7 +235,7 @@ class InverseSDFIntersection(IntersectionStrategy):
             t += (dist * self.step_relaxation)
             
             # Frustum/Far Plane checks
-            obj_pos = getattr(obj, 'transform', Transform.identity()).position
+            obj_pos = getattr(obj, 'world_transform', Transform.identity()).position
             far_plane_dist = np.linalg.norm(cam_pos - obj_pos)
             if t >= self.max_distance or far_plane_dist >= far_plane:
                 break
@@ -410,7 +425,7 @@ class BVHIntersection(IntersectionStrategy):
             return HitInfo.miss()
         
         # 1. Transform Ray to Local Space
-        obj_transform = cast(Transform, getattr(obj, 'transform', Transform.identity()))
+        obj_transform = cast(Transform, getattr(obj, 'world_transform', Transform.identity()))
         local_ray = obj_transform.inverse_transform_ray(ray)
         
         local_dir_len = np.linalg.norm(local_ray.orientation)
@@ -458,7 +473,7 @@ class BVHIntersection(IntersectionStrategy):
             t += dist_local * self.step_relaxation
             
             # Frustum/Far Plane checks
-            obj_pos = getattr(obj, 'transform', Transform.identity()).position
+            obj_pos = getattr(obj, 'world_transform', Transform.identity()).position
             far_plane_dist = np.linalg.norm(cam_pos - obj_pos)
             if t >= self.max_distance or far_plane_dist >= far_plane:
                 break

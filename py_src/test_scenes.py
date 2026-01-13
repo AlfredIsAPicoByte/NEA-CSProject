@@ -850,7 +850,7 @@ def get_100_spheres_grid_scene(width: int = 128, height: int = 128) -> Scene:
 
     # Optimization: Create ONE shape instance and reuse it 100 times
     # The geometry is identical; only the position (Transform) and Material change.
-    shared_sphere_shape = Sphere(radius=0.4)
+    shared_sphere_shape = Sphere(radius=0.2)
 
     rows = 10
     cols = 10
@@ -901,8 +901,8 @@ def get_100_spheres_grid_scene(width: int = 128, height: int = 128) -> Scene:
     # Light
     scene.add_light(LightSource(np.array([10.0, 20.0, -10.0]), Color(1.0, 1.0, 0.9), 50.0, name="Sun"))
     
-    # Ensure camera looks at origin
-    cam.transform.look_at(np.array([0, 0, 0]))
+    # Ensure camera looks below the origin
+    cam.transform.look_at(np.array([0, -1, 0]))
 
     return scene
 
