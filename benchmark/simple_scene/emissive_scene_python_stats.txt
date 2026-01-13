@@ -1,42 +1,21 @@
-<<<<<<< HEAD
 === Tracing Stats ===
-Time: 10.114s | Mem: 74.12MB
+Time: 19.951s | Mem: 71.02MB
 -------------------------
 Ray Traffic:
-  - Total:       9,216
-  - Primary:     9,216      (100.0%)
+  - Total:       9,648
+  - Primary:     9,216      (95.5%)
   - Shadow:      0          (Lights used: 0)
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      18,432
-  - Tri Tests:       20,625
-  - Nodes Visited:   14,546
-  - Cost/Ray:        4.24 (Target: < 50)
-  - Culling Ratio:   0.89 (Target: > 2.0)
+  - AABB Tests:      18,864
+  - Tri Tests:       63,507
+  - Nodes Visited:   14,909
+  - Cost/Ray:        8.54 (Target: < 50)
+  - Culling Ratio:   0.30 (Target: > 2.0)
 -------------------------
 Path Diagnostics:
   - Max Depth Hit:   0
   - Roulette Kills:  0
-=======
-=== Tracing Stats ===
-Time: 133.207s | Mem: 66.52MB
--------------------------
-Ray Traffic:
-  - Total:       9,216
-  - Primary:     9,216      (100.0%)
-  - Shadow:      0          (Lights used: 0)
-  - Bounce:      0         
--------------------------
-BVH Health:
-  - AABB Tests:      18,432
-  - Tri Tests:       63,635
-  - Nodes Visited:   14,467
-  - Cost/Ray:        8.90 (Target: < 50)
-  - Culling Ratio:   0.29 (Target: > 2.0)
--------------------------
-Path Diagnostics:
-  - Max Depth Hit:   0
-  - Roulette Kills:  0
->>>>>>> refs/remotes/origin/feature/python-raycasting-link-cpp
   - NaN Errors:      0
+  - NaN Rate:        0.00 per 1000 rays

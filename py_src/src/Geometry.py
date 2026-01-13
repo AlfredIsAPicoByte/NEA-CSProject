@@ -915,9 +915,15 @@ class VObject:
             # Combine Parent(World) * Self(Local)
             # Assuming your Transform class supports composition via multiplication
             t_m = self.parent.world_transform * self.transform
-            if isinstance(t_m, 'Transform'):
+            # If multiplication returned a Transform object, return it directly
+            if isinstance(t_m, Transform):
                 return t_m
-            return Transform(*Transform.decompose_matrix(t_m))
+            # If it returned a 4x4 matrix, decompose and wrap it
+            if isinstance(t_m, (list, tuple, np.ndarray)):
+                p, r, s = Transform.decompose_matrix(np.array(t_m))
+                return Transform(p, r, s)
+            # Fallback (shouldn't happen)
+            return Transform.identity()
         return self.transform
 
     def add_child(self, child: "VObject"):
@@ -1071,7 +1077,7 @@ class AABB:
         # Fallback: Approximate with a unit cube scaled by transform
         
         # 1. Get Transform Matrix
-        obj_transform = cast(Transform, getattr(obj, 'transform', Transform.identity()))
+        obj_transform = cast(Transform, getattr(obj, 'world_transform', Transform.identity()))
         matrix = obj_transform.get_global_matrix()
         
         # 2. Define the 8 corners of a cube localy

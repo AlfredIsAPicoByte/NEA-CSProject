@@ -36,7 +36,8 @@ class TerminalInteraction(InteractionStrategy):
         ray: TracingRay, 
         hit_info: HitInfo,
         bias: float = 1e-4,
-        stats: Optional["RenderStats"] = None
+        stats: Optional["RenderStats"] = None,
+        *args, **kwargs
     ) -> Optional["TracingRay"]:
         hit_point = getattr(hit_info, "point", None)
         if hit_point is None:
@@ -114,10 +115,8 @@ class StandardInteraction(InteractionStrategy):
         bias: float = 1e-4,
         stats: Optional["RenderStats"] = None
     ) -> Optional[TracingRay]:
-        new_ray = None
+        new_ray = ray
 
-        # Copy depth for recursion safety
-        if new_ray:
-            new_ray.current_depth = getattr(ray, "current_depth", 0) + 1
+        new_ray.current_depth += 1
 
         return new_ray

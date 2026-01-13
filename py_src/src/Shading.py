@@ -14,7 +14,7 @@ from Sampling import Sampler
 @dataclass
 class AmbienceSettings:
     enabled: bool = True
-    color: Color = field(default_factory=Color(0.03, 0.03, 0.03, 1.0))
+    color: Color = field(default_factory=lambda: Color(0.03, 0.03, 0.03, 1.0))
     intensity: float = 0.1
 
     occlusion_enabled: bool = False
@@ -28,8 +28,8 @@ class ShadowSettings:
 @dataclass
 class BackgroundSettings:
     enabled: bool = True
-    default: Color = field(default_factory=Color(0.0, 0.0, 1.0, 0.0))
-    custom: Color | ColorGradient | np.ndarray = field(default_factory=Color(1.0, 1.0, 1.0, 0.0))
+    default: Color = field(default_factory=lambda: Color(0.0, 0.0, 1.0, 0.0))
+    custom: Color | ColorGradient | np.ndarray = field(default_factory=lambda: Color(1.0, 1.0, 1.0, 0.0))
 
     def get_background_color(self, direction: np.ndarray) -> Color:
         """
@@ -56,9 +56,10 @@ class BackgroundSettings:
 
         # --- Texture Map ---
         elif isinstance(self.custom, np.ndarray):
-            # Resolve Direction (Reuse logic or recalculate)
-            dir = safe_norm(direction)
-            
+            # Resolve Direction (reuse logic or recalculate)
+            dir = unit(direction)
+            # Ensure we never feed invalid values to asin by normalizing & clamping
+            dir = dir / (np.linalg.norm(dir) + 1e-12)
             return self._sample_equirectangular_map(self.custom, dir)
 
         return self.default
@@ -72,26 +73,42 @@ class BackgroundSettings:
         # u = atan2(z, x) / 2pi + 0.5
         # v = asin(y) / pi + 0.5
         x, y, z = direction
+
+        # Compute u robustly
+        u = np.arctan2(z, x) / (2 * np.pi) + 0.5
+
+        # Compute v with safe clamping to avoid domain errors
+        y_clamped = float(max(-1.0, min(1.0, y)))
+        v = float(np.arcsin(y_clamped)) / np.pi + 0.5
         
-        u = np.atan2(z, x) / (2 * np.pi) + 0.5
-        v = safe_asin(y) / np.pi + 0.5
-        
-        # Map UV to Pixel Coordinates
+        # Map UV to Pixel Coordinates (robust to tiny floating errors)
         height, width, _ = texture.shape
-        
-        # Clamp coordinates and convert to integer indices
+
+        # Ensure u/v are in [0,1)
+        u = u % 1.0
+        # Clamp v to [0,1]
+        v = max(0.0, min(1.0, v))
+
+        # Convert to pixel indices
         u_idx = int(np.floor(u * width)) % width
         v_idx = int(np.floor(v * height))
         v_idx = max(0, min(height - 1, v_idx)) # Clamp vertical to avoid out of bounds
-        
+
         # Retrieve pixel (assume float 0-1 or uint8 0-255)
         pixel = texture[v_idx, u_idx]
-        
+
         # Normalize if the texture is 0-255 (integers)
         if texture.dtype.kind in 'iu': # int or uint
             pixel = pixel / 255.0
-            
-        return Color(*pixel)
+
+        # Defensive: ensure we return 3 components
+        pix = np.asarray(pixel, dtype=float)
+        if pix.size >= 3:
+            return Color(pix[0], pix[1], pix[2], pix[3] if pix.size > 3 else 1.0)
+        if pix.size == 1:
+            return Color(pix[0], pix[0], pix[0], 1.0)
+        # Fallback
+        return Color(0.0, 0.0, 0.0, 1.0)
 
 class ShadingStrategy(ABC):
     def __init__(
@@ -249,9 +266,9 @@ class LambertShading(ShadingStrategy):
         # ----------------------------
         def visibility_fn(point: np.ndarray, light: LightSource) -> float:
             # Calculate direction to this specific light (or sample point)
-            # Note: _calculate_shadow_visibility expects light_dir
+            # Note: _calculate_shadow_visibility expects light_dir and we pass the hit object to avoid self-shadowing
             light_dir_to_source = light.get_light_direction(point)
-            return self._calculate_shadow_visibility(scene, point, light, light_dir_to_source, sampler)
+            return self._calculate_shadow_visibility(scene, point, light, light_dir_to_source, sampler, exclude_obj=hit_info.obj)
 
         # 4. Evaluate Direct Lighting
         # The material class already contains the logic to loop over lights
@@ -274,7 +291,7 @@ class LambertShading(ShadingStrategy):
 
         return final_color
 
-    def _calculate_shadow_visibility(self, scene: Scene, point: np.ndarray, light: LightSource, light_dir: np.ndarray, sampler: Sampler) -> float:
+    def _calculate_shadow_visibility(self, scene: Scene, point: np.ndarray, light: LightSource, light_dir: np.ndarray, sampler: Sampler, exclude_obj = None) -> float:
         """
         Calculates what fraction of the light is visible from 'point'.
         Returns 0.0 (Fully Blocked) to 1.0 (Fully Visible).
@@ -287,7 +304,7 @@ class LambertShading(ShadingStrategy):
         # Case A: Point Light (Hard Shadows)
         if radius <= 0.0 or self.shadow_settings.samples <= 1:
             # Check if a ray from point -> light is blocked
-            is_blocked = scene.is_occluded(point, light.position, bias=self.shadow_settings.bias)
+            is_blocked = scene.is_occluded(point, light.position, bias=self.shadow_settings.bias, exclude_obj=exclude_obj)
             return 0.0 if is_blocked else 1.0
         
         # Case B: Area Light (Soft Shadows)
@@ -299,7 +316,7 @@ class LambertShading(ShadingStrategy):
                 # we usually sample the disc facing the point.
                 sample_pos = self._random_point_on_disc(light.position, -light_dir, float(radius), sampler)
                 
-                if not scene.is_occluded(point, sample_pos, bias=self.shadow_settings.bias):
+                if not scene.is_occluded(point, sample_pos, bias=self.shadow_settings.bias, exclude_obj=exclude_obj):
                     visible_count += 1
             
             return float(visible_count) / float(self.shadow_settings.samples)

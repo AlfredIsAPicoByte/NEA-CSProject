@@ -1,4 +1,5 @@
-from typing import Optional, List, Tuple
+import numpy as np
+from typing import Optional, List, Tuple, Any
 from dataclasses import dataclass
 
 from PrimaryStructures import TracingRay
@@ -113,6 +114,8 @@ class TracingStats(RenderStats):
         lines.append(f"  - Max Depth Hit:   {self.max_recursions}")
         lines.append(f"  - Roulette Kills:  {self.roulette_kills:,}")
         lines.append(f"  - NaN Errors:      {self.nan_errors}")
+        na_rate = (self.nan_errors / max(1, self.total_rays)) * 1000.0
+        lines.append(f"  - NaN Rate:        {na_rate:.2f} per 1000 rays")
         
         return "\n".join(lines)
     
@@ -146,6 +149,45 @@ class Raytracer(Algorithm):
 
         self.stats: TracingStats = TracingStats()
 
+        # NaN logging: tracks when we last emitted a NaN warning and threshold to avoid spam
+        self._last_nan_logged: int = 0
+        self._nan_log_threshold: int = 10  # Emit a log every N new NaN events
+
+    def _record_nan(self, reason: str = "", ray: Optional[TracingRay] = None) -> None:
+        """Record a NaN event and emit a warning if we've crossed the reporting threshold."""
+        self.stats.nan_errors += 1
+        # Call logger if threshold reached
+        if (self.stats.nan_errors - self._last_nan_logged) >= self._nan_log_threshold:
+            self._maybe_log_nan(ray=ray, reason=reason)
+
+    def _maybe_log_nan(self, ray: Optional[TracingRay] = None, reason: str = "") -> None:
+        """Emit a short warning about NaN events and advance the last-logged counter.
+        Kept minimal to avoid spamming logs; updates `_last_nan_logged` when emitted."""
+        delta = self.stats.nan_errors - self._last_nan_logged
+        if delta < self._nan_log_threshold:
+            return
+
+        loc = f" (ray={ray.name})" if ray is not None else ""
+        print(f" NaN events: {self.stats.nan_errors} total{loc}. Reason: {reason}. Emitting summary log.")
+        self._last_nan_logged = self.stats.nan_errors
+
+    def _sanitize_color(self, c: Any, ray: Optional[TracingRay] = None, reason: str = "") -> Color:
+        """Turn arbitrary shader output into a finite Color and record NaN events if needed."""
+        if c is None:
+            self._record_nan(reason=reason, ray=ray)
+            return Color(0.0, 0.0, 0.0)
+        try:
+            vals = np.array([c.r, c.g, c.b], dtype=float)
+        except Exception:
+            self._record_nan(reason=reason, ray=ray)
+            return Color(0.0, 0.0, 0.0)
+
+        if not np.all(np.isfinite(vals)):
+            # Record NaN and clamp values
+            self._record_nan(reason=reason, ray=ray)
+            vals = np.nan_to_num(vals, nan=0.0, posinf=1e6, neginf=-1e6)
+        return Color(float(vals[0]), float(vals[1]), float(vals[2]), getattr(c, 'a', 1.0))
+
     def _trace_ray(self, scene: Scene, ray: TracingRay, recursions_left: int, sampler: Sampler) -> Color:
         # 1. Base Case
         if recursions_left < 0:
@@ -156,7 +198,16 @@ class Raytracer(Algorithm):
 
         if not hit_info.hit:
             return self.shader.background_settings.get_background_color(ray.orientation)
-        
+
+        # Validate hit_info (point and normal must be finite and present)
+        if getattr(hit_info, 'point', None) is None or getattr(hit_info, 'normal', None) is None:
+            self._record_nan(reason='hit_info missing point/normal', ray=ray)
+            return self.shader.background_settings.get_background_color(ray.orientation)
+
+        if not (np.all(np.isfinite(np.asarray(hit_info.point))) and np.all(np.isfinite(np.asarray(hit_info.normal)))):
+            self._record_nan(reason='hit_info point/normal not finite', ray=ray)
+            return self.shader.background_settings.get_background_color(ray.orientation)
+
         # 3. Direct Lighting / Local Shading
         # (Assuming this calculates direct light or calls recursion for mirror reflections)
         shaded_color = self.shader.shade(
@@ -169,12 +220,18 @@ class Raytracer(Algorithm):
             stats=self.stats
         )
 
+        # Sanitize shaded color; track NaNs
+        if shaded_color is None:
+            self._record_nan(reason='shader returned None', ray=ray)
+            shaded_color = Color(0.0, 0.0, 0.0)
+        shaded_color = self._sanitize_color(shaded_color, ray=ray, reason='shaded output')
+
         # 4. Generate the next ray
-        interaction_result = self.interactor.interact(ray, hit_info, sampler, stats=self.stats)
+        interaction_result = self.interactor.interact(ray=ray, hit_info=hit_info, sampler=sampler, bias=1e-4, stats=self.stats)
         
         # Check if a ray was actually generated (it might be absorbed)
-        if interaction_result and interaction_result.new_ray:
-            new_ray = interaction_result.new_ray
+        if interaction_result is not None:
+            new_ray = interaction_result
 
             # --- THE RECURSIVE STEP ---
             incoming_light = self._trace_ray(
@@ -183,6 +240,12 @@ class Raytracer(Algorithm):
                 recursions_left=recursions_left - 1,
                 sampler=sampler
             )
+
+            # Sanitize incoming light
+            if incoming_light is None:
+                self._record_nan(reason='incoming light None', ray=new_ray)
+                incoming_light = Color(0.0, 0.0, 0.0)
+            incoming_light = self._sanitize_color(incoming_light, ray=new_ray, reason='incoming light')
 
             # 5. Combine Direct and Indirect Light
             return shaded_color + incoming_light

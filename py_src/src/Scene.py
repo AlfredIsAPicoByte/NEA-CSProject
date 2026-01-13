@@ -88,9 +88,10 @@ class Scene:
         # Threshold to ignore self-intersections (Shadow Acne)
         epsilon = 1e-4
 
-        for obj in self.objects:
+        # Iterate over all objects including children to ensure we test child shapes
+        for obj in get_all_objects_flattened(self.objects):
             shape = getattr(obj, "shape", None)
-            if shape is None: 
+            if shape is None:
                 continue
 
             # Get all intersection points (World Space)
@@ -133,7 +134,9 @@ class Scene:
             # We need to manually do the normal transform pipeline:
             # World Point -> Local Point -> Local Gradient -> World Normal
             
-            transform = getattr(closest_obj, 'transform', Transform.identity())
+            # Use the object's WORLD transform so the normal is transformed
+            # consistently with how the hit point was computed (handles parents)
+            transform = getattr(closest_obj, 'world_transform', Transform.identity())
             local_pt = transform.inverse_transform_point(closest_point)
             
             # Calculate Local Normal (Gradient)
@@ -157,11 +160,14 @@ class Scene:
         self.lights.clear()
         self.camera = VCamera(Transform.identity())
     
-    def is_occluded(self, point: np.ndarray, light_pos: np.ndarray, bias: float = 1e-4, epsilon: float = 1e-4, max_steps: int = 256) -> bool:
+    def is_occluded(self, point: np.ndarray, light_pos: np.ndarray, bias: float = 1e-4, epsilon: float = 1e-4, max_steps: int = 256, exclude_obj = None) -> bool:
         """
         Return True if there's an occluder between `point` and `light_pos`.
         Uses geometry intersection (get_closest_intersection) if available; otherwise
         falls back to sampling with distance_estimator (SDF ray-march).
+
+        Args:
+            exclude_obj: Optional object instance to ignore during occlusion (useful to avoid self-shadowing).
         """
         dir_vec = np.array(light_pos, dtype=float) - np.array(point, dtype=float)
         dist_to_light = np.linalg.norm(dir_vec)
@@ -179,9 +185,11 @@ class Scene:
             hit_info = self.get_closest_intersection(ray)
             v_object = getattr(hit_info, "obj", None)
             if hit_info.hit and v_object is not None and hit_info.point is not None:
-                hit_dist = np.linalg.norm(hit_info.point - origin)
-                if hit_dist < (dist_to_light - epsilon):
-                    return True
+                # Ignore hits on the excluded object to prevent self-shadowing
+                if v_object is not exclude_obj:
+                    hit_dist = np.linalg.norm(hit_info.point - origin)
+                    if hit_dist < (dist_to_light - epsilon):
+                        return True
         except Exception:
             # geometry intersection may not be supported; fall back to distance estimator below
             pass
