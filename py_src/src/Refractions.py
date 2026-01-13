@@ -342,6 +342,57 @@ def calculate_refraction_vector(
 
     return unit(refracted_vector, bias)
 
+def schlick_fresnel(cos_theta: float, f0: np.ndarray) -> np.ndarray:
+    """
+    Calculates the portion of light that is reflected (Specular) vs. absorbed/refracted (Diffuse).
+    """
+    return f0 + (1.0 - f0) * ((1.0 - cos_theta) ** 5)
+
+def calculate_fresnel_ratio(
+    incident_dir: np.ndarray, 
+    surface_normal: np.ndarray, 
+    ior_incident: float, 
+    ior_transmitted: float,
+    approx: bool = True,
+) -> float:
+    """
+    Calculates the ratio of light that reflects vs refracts.
+    """
+    # 1. Calculate Cosine of the Incident Angle
+    # Ensure vectors are normalized
+    unit_incident = unit(incident_dir)
+    unit_normal = unit(surface_normal)
+    
+    # cos_theta is usually -dot(view, normal).
+    # Since incident_dir points INTO the surface, we negate it.
+    cos_theta = np.dot(-unit_incident, unit_normal)
+
+    if not approx:
+        fresnel_reflectance = calculate_reflectance(cos_theta, ior_incident, ior_transmitted)
+        return fresnel_reflectance if fresnel_reflectance is not None else 1.0
+    
+    # 2. Handle Total Internal Reflection (TIR) Check
+    # This is required when moving from dense -> rare medium (e.g. Glass -> Air)
+    if ior_incident > ior_transmitted:
+        eta = ior_incident / ior_transmitted
+        sin2_t = (eta ** 2) * (1.0 - cos_theta ** 2)
+        
+        # If sin2_t > 1.0, the angle is too shallow to escape.
+        if sin2_t > 1.0:
+            return 1.0 # 100% Reflection (Total Internal Reflection)
+
+        # If not TIR, we must update cos_theta to use the cosine of the 
+        # TRANSMITTED angle for the Schlick curve to be accurate.
+        cos_theta = np.sqrt(max(0.0, 1.0 - sin2_t))
+
+    # 3. Calculate R0 (Base Reflectivity at 0 degrees)
+    r0 = ((ior_incident - ior_transmitted) / (ior_incident + ior_transmitted)) ** 2
+    
+    # 4. Schlick Approximation
+    fresnel_reflectance = schlick_fresnel(cos_theta, np.array([r0, r0, r0]))
+    
+    return float(np.linalg.norm(fresnel_reflectance))
+
 """
 Refraction module: Provides functions to calculate refraction angles, refractive indices, and refracted ray directions based on Snell's Law.
 """

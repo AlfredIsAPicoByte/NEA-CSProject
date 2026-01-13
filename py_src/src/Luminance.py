@@ -9,7 +9,7 @@ from CommonUtils import clamp, lerp, unit, orthonormal_basis, attenuate_sqr_dist
 from PrimaryStructures import TracingRay, HitInfo
 from Sampling import Sampler
 from Reflections import calculate_reflection_vector
-from Refractions import calculate_refraction_vector, calculate_reflectance
+from Refractions import calculate_refraction_vector, calculate_reflectance, schlick_fresnel
 
 @dataclass
 class Color:
@@ -232,13 +232,11 @@ class LightSource:
         self.intensity = intensity
         self.radius = radius
         self.name = name
+        self.type = LightType.POINT
 
-    def get_light_direction(self, hit_point: np.ndarray, bias: float = 1e-4) -> np.ndarray:
+    def get_light_direction(self, hit_point: np.ndarray, bias: float = 1e-8) -> np.ndarray:
         """Return the normalized direction vector from the hit point towards the light source."""
-        direction = self.position - hit_point
-        norm = np.linalg.norm(direction)
-        
-        return direction / (norm + bias)
+        return unit(self.position - hit_point, bias)
 
     def __repr__(self):
         return (
@@ -291,90 +289,6 @@ class PBRMaterial:
         """
         return getattr(self.data, name)
 
-    @classmethod
-    def create_diffuse(cls, albedo: Color, roughness: float = 0.5):
-        """
-        Creates a standard non-metallic (dielectric) material like plastic, wood, or chalk.
-        """
-        data = PBRMaterialData(
-            name="DiffuseMat",
-            type=MaterialType.DIFFUSE,
-            albedo=albedo,
-            roughness=roughness,
-            metallic=0.0,             # Non-metal
-            specular_intensity=0.0,   # Most dielectrics have approx 4% reflectance
-            transmission=0.0
-        )
-        return cls(data)
-
-    @classmethod
-    def create_specular(cls, albedo: Color, roughness: float = 0.2, metallicness: float = 1.0, specular_intensity: float = 1.0, specular_tint_amount: float = 0.5):
-        """
-        Creates a reflective material like gold, aluminum, or copper.
-        """
-        data = PBRMaterialData(
-            name="MetalMat",
-            type=MaterialType.SPECULAR,
-            albedo=albedo,
-            roughness=roughness,
-            metallic=metallicness,
-            specular_intensity=specular_intensity,
-            specular_tint=specular_tint_amount,
-            transmission=0.0
-        )
-        return cls(data)
-
-    @classmethod
-    def create_glass(cls, albedo: Color, absorption_color: Color, roughness: float = 0.0, metallicness: float = 0.0, ior: float = 1.5, transmission: float = 1.0, absorption_density: float = 1.0):
-        """
-        Creates a dielectric transparent material (Refractive).
-        """
-        data = PBRMaterialData(
-            name="GlassMat",
-            type=MaterialType.GLASS,
-            
-            # Surface Properties
-            albedo=albedo,            # Surface tint (usually White for clear glass)
-            roughness=roughness,      # 0.0 = Clear, 0.5 = Frosted
-            metallic=metallicness,    # Usually 0.0
-            
-            # Volumetric/Transmission Properties
-            ior=ior,
-            transmission=transmission,         # Enables Refraction logic
-            absorption_color=absorption_color, # The color inside the glass (Beer's Law)
-            absorption_density=absorption_density
-        )
-        return cls(data)
-
-    @classmethod
-    def create_transparent(cls, albedo: Color):
-        """
-        Creates a "See-Through" material using Alpha Blending (Ghosts, Holograms, Decals).
-        Different from Glass because it does not refract light.
-        """
-        data = PBRMaterialData(
-            name="TransparentMat",
-            type=MaterialType.TRANSPARENT,
-            albedo=albedo,            # albedo.a (Alpha) controls opacity
-            roughness=0.8,            # Usually fairly rough to avoid sharp specular highlights on a ghost
-            metallic=0.0,
-            transmission=0.0          # 0 because we use Alpha Blending, not Refraction
-        )
-        return cls(data)
-
-    @classmethod
-    def create_emissive(cls, color: Color, intensity: float = 1.0):
-        """
-        Creates a glowing material (Light Bulb, Neon Sign).
-        """
-        data = PBRMaterialData(
-            name="EmissiveMat",
-            type=MaterialType.EMISSIVE,
-            emission_color=color,
-            emission_intensity=intensity,
-        )
-        return cls(data)
-    
     def evaluate_direct_light(
         self,
         scene_lights: List[LightSource],
@@ -497,16 +411,6 @@ class PBRMaterial:
 
         else:
             # --- REFRACTION LOBE ---
-            # 1. Assign Indices based on Vectors
-            # We need strictly: eta_L (side of Light) and eta_V (side of View)
-            # If V is outside (dot_n_v > 0), eta_V is Air.
-
-            # 2. Calculate Refraction Half Vector (H)
-            # H aligns with the "halfway" vector weighted by IORs.
-            # Standard Formula: H = -(eta_L * L + eta_V * V)
-            # (Note: We normalize, so the sign of H depends on convention. 
-            #  We usually want H to point into the denser medium or align with N).
-            
             # 1. Calculate Refraction Half Vector (H)
             H_raw = -(eta_l * L + eta_v * V)
             H = unit(H_raw)
@@ -519,7 +423,7 @@ class PBRMaterial:
 
             # 4. Fresnel (F)
             # Use abs for Fresnel calc as it depends on angle magnitude
-            F = calculate_reflectance(np.degrees(math.acos(abs(dot_v_h))), eta_l, eta_l)
+            F = calculate_reflectance(np.degrees(math.acos(abs(dot_v_h))), eta_l, eta_v)
             if F is None: F = 1.0
 
             # 5. Geometry & Distribution
@@ -682,57 +586,91 @@ class PBRMaterial:
         return (
             f"Material(albedo={self.data.albedo}, other={self.data})"
         )
-
-def schlick_fresnel(cos_theta: float, f0: np.ndarray) -> np.ndarray:
-    """
-    Calculates the portion of light that is reflected (Specular) vs. absorbed/refracted (Diffuse).
-    """
-    return f0 + (1.0 - f0) * ((1.0 - cos_theta) ** 5)
-
-def calculate_fresnel_ratio(
-    incident_dir: np.ndarray, 
-    surface_normal: np.ndarray, 
-    ior_incident: float, 
-    ior_transmitted: float,
-    approx: bool = True,
-) -> float:
-    """
-    Calculates the ratio of light that reflects vs refracts.
-    """
-    # 1. Calculate Cosine of the Incident Angle
-    # Ensure vectors are normalized
-    unit_incident = unit(incident_dir)
-    unit_normal = unit(surface_normal)
     
-    # cos_theta is usually -dot(view, normal).
-    # Since incident_dir points INTO the surface, we negate it.
-    cos_theta = np.dot(-unit_incident, unit_normal)
+class MaterialFactory:
+    @classmethod
+    def create_diffuse(cls, albedo: Color, roughness: float = 0.5):
+        """
+        Creates a standard non-metallic (dielectric) material like plastic, wood, or chalk.
+        """
+        data = PBRMaterialData(
+            name="DiffuseMat",
+            type=MaterialType.DIFFUSE,
+            albedo=albedo,
+            roughness=roughness,
+            metallic=0.0,             # Non-metal
+            specular_intensity=0.0,   # Most dielectrics have approx 4% reflectance
+            transmission=0.0
+        )
+        return PBRMaterial(*data)
 
-    if not approx:
-        fresnel_reflectance = calculate_reflectance(cos_theta, ior_incident, ior_transmitted)
-        return fresnel_reflectance if fresnel_reflectance is not None else 1.0
-    
-    # 2. Handle Total Internal Reflection (TIR) Check
-    # This is required when moving from dense -> rare medium (e.g. Glass -> Air)
-    if ior_incident > ior_transmitted:
-        eta = ior_incident / ior_transmitted
-        sin2_t = (eta ** 2) * (1.0 - cos_theta ** 2)
-        
-        # If sin2_t > 1.0, the angle is too shallow to escape.
-        if sin2_t > 1.0:
-            return 1.0 # 100% Reflection (Total Internal Reflection)
+    @classmethod
+    def create_specular(cls, albedo: Color, roughness: float = 0.2, metallicness: float = 1.0, specular_intensity: float = 1.0, specular_tint_amount: float = 0.5):
+        """
+        Creates a reflective material like gold, aluminum, or copper.
+        """
+        data = PBRMaterialData(
+            name="MetalMat",
+            type=MaterialType.SPECULAR,
+            albedo=albedo,
+            roughness=roughness,
+            metallic=metallicness,
+            specular_intensity=specular_intensity,
+            specular_tint=specular_tint_amount,
+            transmission=0.0
+        )
+        return PBRMaterial(*data)
 
-        # If not TIR, we must update cos_theta to use the cosine of the 
-        # TRANSMITTED angle for the Schlick curve to be accurate.
-        cos_theta = np.sqrt(max(0.0, 1.0 - sin2_t))
+    @classmethod
+    def create_glass(cls, albedo: Color, absorption_color: Color, roughness: float = 0.0, metallicness: float = 0.0, ior: float = 1.5, transmission: float = 1.0, absorption_density: float = 1.0):
+        """
+        Creates a dielectric transparent material (Refractive).
+        """
+        data = PBRMaterialData(
+            name="GlassMat",
+            type=MaterialType.GLASS,
+            
+            # Surface Properties
+            albedo=albedo,            # Surface tint (usually White for clear glass)
+            roughness=roughness,      # 0.0 = Clear, 0.5 = Frosted
+            metallic=metallicness,    # Usually 0.0
+            
+            # Volumetric/Transmission Properties
+            ior=ior,
+            transmission=transmission,         # Enables Refraction logic
+            absorption_color=absorption_color, # The color inside the glass (Beer's Law)
+            absorption_density=absorption_density
+        )
+        return PBRMaterial(*data)
 
-    # 3. Calculate R0 (Base Reflectivity at 0 degrees)
-    r0 = ((ior_incident - ior_transmitted) / (ior_incident + ior_transmitted)) ** 2
-    
-    # 4. Schlick Approximation
-    fresnel_reflectance = schlick_fresnel(cos_theta, np.array([r0, r0, r0]))
-    
-    return float(np.linalg.norm(fresnel_reflectance))
+    @classmethod
+    def create_transparent(cls, albedo: Color):
+        """
+        Creates a "See-Through" material using Alpha Blending (Ghosts, Holograms, Decals).
+        Different from Glass because it does not refract light.
+        """
+        data = PBRMaterialData(
+            name="TransparentMat",
+            type=MaterialType.TRANSPARENT,
+            albedo=albedo,            # albedo.a (Alpha) controls opacity
+            roughness=0.8,            # Usually fairly rough to avoid sharp specular highlights on a ghost
+            metallic=0.0,
+            transmission=0.0          # 0 because we use Alpha Blending, not Refraction
+        )
+        return PBRMaterial(*data)
+
+    @classmethod
+    def create_emissive(cls, color: Color, intensity: float = 1.0):
+        """
+        Creates a glowing material (Light Bulb, Neon Sign).
+        """
+        data = PBRMaterialData(
+            name="EmissiveMat",
+            type=MaterialType.EMISSIVE,
+            emission_color=color,
+            emission_intensity=intensity,
+        )
+        return PBRMaterial(*data)
 
 def ggx_distribution(normal: np.ndarray, half_vector: np.ndarray, roughness: float) -> float:
     """Calculates the GGX/Trowbridge-Reitz Normal Distribution Function (D)."""
@@ -872,7 +810,7 @@ def sample_microfacet_glass(
     # -------------------------
     # Both reflection and refraction rely on the same microfacet distribution.
     # We sample H once.
-    u, v = sampler.next_2d()
+    u, v = sampler.sample_bsdf()
     alpha = max(roughness ** 2, bias) # Prevent div by zero
 
     phi = 2.0 * np.pi * u
@@ -911,8 +849,7 @@ def sample_microfacet_glass(
     # 4. Russian Roulette: Reflect or Refract?
     # -------------------------
     # We use a new random sample to decide the path.
-    # Note: Some integrators pass a specific sample for this. We'll ask the sampler.
-    w = sampler.next_1d()
+    w = sampler.sample_roulette()
     dot_v_h = np.dot(view_dir, H_world)
 
     if w < F:
