@@ -7,14 +7,14 @@ import gc
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from src.Scene import Scene
-from src.RenderingAlgorithms import Algorithm
+from py_src.src.Rendering.Core import Algorithm
 from src.Raytracing import *
 from src.Generation import *
-from src.Intersections import *
+from py_src.src.Rendering.Intersections import *
 from src.Shading import *
-from src.Interactions import *
+from py_src.src.Rendering.Interactions import *
 from src.Sampling import SamplingManager, SampleSettings, PixelFilter, reconstruct_pixel
-from src.MemoryProfiler import MemoryProfiler
+from py_src.src.Utilities.Memory.Profiler import MemoryProfiler
 from test_scenes import *
 PostProcessingPipeline = None
 
