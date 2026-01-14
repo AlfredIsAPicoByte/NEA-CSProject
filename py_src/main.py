@@ -42,24 +42,24 @@ if __name__ == "__main__":
     OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    img_w, img_h = 16 * 8, 9 * 8
+    img_width, img_height = 16 * 8, 9 * 8
 
     all_scenes = [
-        get_minimal_scene(img_w, img_h),
-        get_gradient_scene(img_w, img_h),
-        get_emissive_scene(img_w, img_h),
-        get_lit_studio_scene(img_w, img_h),
-        get_rgb_room_with_objects_scene(img_w, img_h),
-        get_cyberpunk_scene(img_w, img_h),
-        get_material_deck_scene(img_w, img_h),
-        get_refraction_lab_scene(img_w, img_h),
-        get_scifi_corridor_scene(img_w, img_h),
-        get_sunset_monolith_scene(img_w, img_h),
-        get_pastel_blocks_scene(img_w, img_h),
-        get_glass_prism_scene(img_w, img_h),
-        get_glass_sculpture_scene(img_w, img_h),
-        get_100_spheres_grid_scene(img_w, img_h),
-        get_low_ior_scene(img_w, img_h),
+        get_minimal_scene(img_width, img_height),
+        get_gradient_scene(img_width, img_height),
+        get_emissive_scene(img_width, img_height),
+        get_lit_studio_scene(img_width, img_height),
+        get_rgb_room_with_objects_scene(img_width, img_height),
+        get_cyberpunk_scene(img_width, img_height),
+        get_material_deck_scene(img_width, img_height),
+        get_refraction_lab_scene(img_width, img_height),
+        get_scifi_corridor_scene(img_width, img_height),
+        get_sunset_monolith_scene(img_width, img_height),
+        get_pastel_blocks_scene(img_width, img_height),
+        get_glass_prism_scene(img_width, img_height),
+        get_glass_sculpture_scene(img_width, img_height),
+        get_100_spheres_grid_scene(img_width, img_height),
+        get_low_ior_scene(img_width, img_height),
     ]
 
     sample_settings = SampleSettings(samples_per_pixel=1, filter_type=PixelFilter.BOX, filter_width=2)
@@ -86,8 +86,8 @@ if __name__ == "__main__":
 
         sanitized_name = scene.name.replace(" ", "_").lower()
         out_path = os.path.join(OUT_DIR, f"{sanitized_name}_python")
-        width = scene.camera.width if scene.camera is not None else img_w
-        height = scene.camera.height if scene.camera is not None else img_h
+        width = scene.camera.width if scene.camera is not None else img_width
+        height = scene.camera.height if scene.camera is not None else img_height
         print(f"Rendering '{scene.name}' -> {OUT_DIR} ({width}x{height})")
         
         try:
@@ -114,6 +114,7 @@ if __name__ == "__main__":
                 traceback.print_exc()
 
             raw_img_data = film_data.get_image()
+            raw_img_data = np.rot90(raw_img_data, k=-1)
             Film.save(raw_img_data, out_path + "_raw.png")
 
             # 2. Post-Process (The Pipeline)
@@ -130,13 +131,15 @@ if __name__ == "__main__":
                     
                     pipeline.add_pass(Bloom(0.8, 1, 0.5, 0.75))
 
-                    pipeline.add_pass(ChromaticAberration(0))
+                    # pipeline.add_pass(ChromaticAberration(1))
 
                     pipeline.add_pass(Vignette())
 
                     pipeline.add_pass(ACESFilmicToneMapping())
 
                     pipeline.add_pass(GammaCorrection(2.2))
+
+                    processed_img = pipeline.execute(processed_img)
 
                 try:
                     with open(mem_report_path, "a", encoding="utf-8") as f:

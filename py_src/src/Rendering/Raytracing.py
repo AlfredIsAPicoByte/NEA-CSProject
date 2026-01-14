@@ -325,8 +325,3 @@ class Raytracer(Algorithm):
         self.stats.stop_timer()
 
         return film
-
-
-"""
-                
-"""

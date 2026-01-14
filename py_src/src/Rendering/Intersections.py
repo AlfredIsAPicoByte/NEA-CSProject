@@ -372,7 +372,7 @@ class BVHIntersection(IntersectionStrategy):
         
         # 1. Calculate Bounds for all objects in this list
         # We cache AABBs for performance
-        object_bounds = [(obj, AABB.from_object(obj)) for obj in objects]
+        object_bounds = [(obj, AABB.from_transform_shape(obj.transform, obj.shape)) for obj in objects]
         
         # Calculate Union of all bounds for this node
         if not object_bounds:

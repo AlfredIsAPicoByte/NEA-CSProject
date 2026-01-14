@@ -1,10 +1,6 @@
 import sys, os
 import numpy as np
-from typing import List, Tuple
 from PIL import Image
-
-from src.Utilities.Sampling import Sample
-from src.Data.Color import Color
 
 class Film:
     def __init__(self, width: int, height: int):
@@ -16,7 +12,7 @@ class Film:
 
     def add_pixle_batch(self, x: int, y: int, color_sum: np.ndarray, weighted_sum: float):
         if 0 <= x <= self.width and 0 <= y <= self.height:
-            self.accum_color[x, y] += color_sum
+            self.accum_color[x, y] += color_sum[:3]
             self.accum_weight[x, y] += weighted_sum
     
     def get_image(self) -> np.ndarray:

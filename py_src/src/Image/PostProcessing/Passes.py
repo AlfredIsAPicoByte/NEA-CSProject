@@ -61,7 +61,7 @@ class AutoExposure(PostProcessPass):
         luminance = np.dot(image, [0.2126, 0.7152, 0.0722])
         avg_lum = np.mean(luminance)
         
-        if avg_lum < 0.0001: 
+        if avg_lum < 1e-4: 
             return image # Avoid divide by zero for black images
             
         # Target middle gray (0.18)
@@ -116,30 +116,35 @@ class Vignette(PostProcessPass):
         height, width, _ = image.shape
         
         # 1. Create a coordinate grid from -1 to 1
-        # (0,0 is center)
         y, x = np.ogrid[:height, :width]
         
-        # Normalize coordinates to range [-1, 1]
+        # Normalize coordinates to range [-0.5, 0.5]
         x = (x / width) - 0.5
         y = (y / height) - 0.5
         
         # 2. Calculate Distance from center
-        # We multiply by aspect ratio (width/height) so the vignette is circular, not oval
-        aspect_ratio = Ratio(width, height)
-        x *= aspect_ratio.value
+        # Correct for aspect ratio to ensure circular vignette
+        try:
+            aspect = width / height
+        except ZeroDivisionError:
+            aspect = 1.0
+            
+        x_corrected = x * aspect
         
-        radius = np.sqrt(x**2 + y**2)
+        # Calculate radius from center
+        radius = np.sqrt(x_corrected**2 + y**2)
         
-        # 3. Compute Falloff (Smoothstep-like curve)
-        # We want 1.0 at center, fading to (1-intensity) at corners
-        # This formula is a simple cosine falloff approximation
+        # Normalize radius roughly so edges are near 1.0
+        # (multiplying by ~1.5 to 2.0 usually scales it nicely to the corners)
+        radius = radius * 1.5 
+        
+        # 3. Compute Falloff
         vignette = 1.0 - (self.intensity * (radius * (1.0 + self.softness))) ** self.curve
         
-        # Clamp to ensure we don't invert colors or go negative
+        # Clamp
         vignette = np.clip(vignette, 0.0, 1.0)
         
         # 4. Multiply
-        # Broadcast (H, W) to (H, W, 3)
         return image * vignette[..., np.newaxis]
 
 class ChromaticAberration(PostProcessPass):
@@ -148,22 +153,33 @@ class ChromaticAberration(PostProcessPass):
 
     def apply(self, image: np.ndarray) -> np.ndarray:
         height, width, channels = image.shape
-        result = np.zeros_like(image)
         
-        # We will shift Red channel OUT and Blue channel IN. Green stays put.
+        # Calculate shift in pixels
         shift_amount = int(width * self.intensity)
         
-        # Simple implementation: Shifting whole image
-        # (Real CA is radial, but linear shift is a good "retro" approximation)
+        # Early exit if shift is negligible
+        if shift_amount == 0:
+            return image
+
+        # Split channels
+        r = image[:, :, 0]
+        g = image[:, :, 1]
+        b = image[:, :, 2]
         
-        # 1. Red Channel (Shift Left)
-        # Take pixels from index 'shift' to end, put them at 0
-        result[:-shift_amount, :-shift_amount, 0] = image[shift_amount:, shift_amount:, 0]
+        # Apply Shifts using np.roll (Linear shift)
+        # Shift Red channel LEFT
+        r_shifted = np.roll(r, shift=-shift_amount, axis=1)
+        # (Optional) Fix the "wrap around" effect of roll by blacking out the edge
+        r_shifted[:, -shift_amount:] = 0 
         
-        # 2. Green Channel (No Shift)
-        result[:, :, 1] = image[:, :, 1]
+        # Green stays centered
+        g_shifted = g 
         
-        # 3. Blue Channel (Shift Right)
-        result[shift_amount:, shift_amount:, 2] = image[:-shift_amount, :-shift_amount, 2]
+        # Shift Blue channel RIGHT
+        b_shifted = np.roll(b, shift=shift_amount, axis=1)
+        # (Optional) Fix wrap around
+        b_shifted[:, :shift_amount] = 0
         
-        return result
+        # Merge channels back
+        # Ensure we use np.stack (new array) instead of modifying in place
+        return np.stack([r_shifted, g_shifted, b_shifted], axis=2)

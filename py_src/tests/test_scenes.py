@@ -397,8 +397,8 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
     scene.add_object(v_s5)
 
     # Lighting
-    scene.add_light(LightSource(np.array([0.0, 5.0, -5.0]), Color(1.0, 1.0, 1.0), 15.0, name="Main"))
-    scene.add_light(LightSource(np.array([5.0, 2.0, -2.0]), Color(0.8, 0.8, 1.0), 10.0, name="Fill"))
+    scene.add_light(LightSource(position=np.array([0.0, 5.0, -5.0]), color=Color(1.0, 1.0, 1.0), intensity=15.0, name="Main"))
+    scene.add_light(LightSource(position=np.array([5.0, 2.0, -2.0]), color=Color(0.8, 0.8, 1.0), intensity=10.0, name="Fill"))
 
     cam.transform.look_at(v_s3.transform.position)
     return scene
@@ -453,7 +453,7 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
     scene.add_object(v_s_water)
 
     # Lighting
-    scene.add_light(LightSource(np.array([2.0, 3.0, -3.0]), Color(1.0, 1.0, 1.0), 15.0, name="FrontLight"))
+    scene.add_light(LightSource(position=np.array([2.0, 3.0, -3.0]), color=Color(1.0, 1.0, 1.0), intensity=15.0, name="FrontLight"))
     
     cam.transform.look_at(np.array([0, 0.5, 0]))
     return scene
@@ -740,7 +740,7 @@ def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
         scene.add_object(v_bar)
 
     # Light
-    scene.add_light(LightSource(np.array([0.0, 5.0, -3.0]), Color(1.0, 1.0, 1.0), 20.0, name="TopLight"))
+    scene.add_light(LightSource(position=np.array([0.0, 5.0, -3.0]), color=Color(1.0, 1.0, 1.0), intensity=20.0, name="TopLight"))
 
     return scene
 
@@ -796,9 +796,9 @@ def get_glass_sculpture_scene(width: int = 120, height: int = 120) -> Scene:
 
     # Lights
     # Cyan light to contrast with red glass
-    scene.add_light(LightSource(np.array([4.0, 4.0, -4.0]), Color.from_hex("#00FFFF"), 15.0, name="CyanKey"))
+    scene.add_light(LightSource(position=np.array([4.0, 4.0, -4.0]), color=Color.from_hex("#00FFFF"), intensity=15.0, name="CyanKey"))
     # White rim
-    scene.add_light(LightSource(np.array([-4.0, 1.0, 0.0]), Color.from_hex("#FFFFFF"), 5.0, name="Rim"))
+    scene.add_light(LightSource(position=np.array([-4.0, 1.0, 0.0]), color=Color.from_hex("#FFFFFF"), intensity=5.0, name="Rim"))
 
     return scene
 
@@ -868,10 +868,10 @@ def get_100_spheres_grid_scene(width: int = 128, height: int = 128) -> Scene:
     
     mat_floor = MaterialFactory.create_diffuse(Color.from_hex("#333333"), roughness=0.5)
     
-    scene.add_object(Primitive(t_floor, floor_shape, mat_floor, "Floor"))
+    scene.add_object(Primitive("Floor", t_floor, floor_shape, mat_floor))
 
     # Light
-    scene.add_light(LightSource(np.array([10.0, 20.0, -10.0]), Color(1.0, 1.0, 0.9), 50.0, name="Sun"))
+    scene.add_light(LightSource(position=np.array([10.0, 20.0, -10.0]), color=Color(1.0, 1.0, 0.9), intensity=50.0, name="Sun"))
     
     # Ensure camera looks below the origin
     cam.transform.look_at(np.array([0, -1, 0]))
@@ -899,7 +899,7 @@ def get_low_ior_scene(width: int = 120, height: int = 120) -> Scene:
     t_anomaly = Transform(position=np.array([0.0, 0.0, 0.0]), rotation=np.zeros(3), scale=np.ones(3))
             
     
-    scene.add_object(Primitive(t_anomaly, anomaly_shape, mat_low_ior, "AnomalyObj"))
+    scene.add_object(Primitive("AnomalyObj", t_anomaly, anomaly_shape, mat_low_ior))
 
     # 2. Background Grid
     # Reuse a single cube shape for all tiles
@@ -928,6 +928,6 @@ def get_low_ior_scene(width: int = 120, height: int = 120) -> Scene:
             ))
 
     # Light
-    scene.add_light(LightSource(np.array([2.0, 2.0, -3.0]), Color(1.0, 1.0, 1.0), 10.0, name="Front"))
+    scene.add_light(LightSource(position=np.array([2.0, 2.0, -3.0]), color=Color(1.0, 1.0, 1.0), intensity=10.0, name="Front"))
 
     return scene
