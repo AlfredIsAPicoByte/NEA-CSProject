@@ -66,9 +66,9 @@ if __name__ == "__main__":
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
-        intersection = BVHIntersection(max_distance=500, max_steps=64)
+        intersection = BVHIntersection(max_distance=500, max_steps=128)
         interactor = TerminalInteraction()
-        shading = FlatShading(
+        shading = LambertShading(
             ambience_settings=AmbienceSettings(False, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03, 1.0)), getattr(scene, "ambient_intensity", 0.1)),
             shadow_settings=ShadowSettings(False, 8, 2e-3),
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
@@ -133,7 +133,7 @@ if __name__ == "__main__":
 
                     # pipeline.add_pass(ChromaticAberration(1))
 
-                    pipeline.add_pass(Vignette())
+                    pipeline.add_pass(Vignette(0.15, 0.6))
 
                     pipeline.add_pass(ACESFilmicToneMapping())
 

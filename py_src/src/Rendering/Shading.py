@@ -204,7 +204,7 @@ class DistanceShading(ShadingStrategy):
         dist = hit_info.distance
 
         if dist < 0:
-            return Color(0.0, -1.0, 0.0) # Negative Distance
+            return Color(0.0, 1.0, 0.0) # Negative Distance
 
         range_dist = self.max_dist - self.min_dist
         if range_dist == 0: range_dist = 1.0

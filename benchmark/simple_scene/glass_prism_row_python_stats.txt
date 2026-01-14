@@ -1,5 +1,5 @@
 === Tracing Stats ===
-Time: 58.021s | Mem: 68.79MB
+Time: 58.607s | Mem: 68.81MB
 -------------------------
 Ray Traffic:
   - Total:       9,216
@@ -8,9 +8,9 @@ Ray Traffic:
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      57,346
-  - Tri Tests:       246,602
-  - Nodes Visited:   39,146
+  - AABB Tests:      57,348
+  - Tri Tests:       246,604
+  - Nodes Visited:   39,147
   - Cost/Ray:        32.98 (Target: < 50)
   - Culling Ratio:   0.23 (Target: > 2.0)
 -------------------------

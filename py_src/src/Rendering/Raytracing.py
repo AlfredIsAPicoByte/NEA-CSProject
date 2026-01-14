@@ -189,7 +189,7 @@ class Raytracer(Algorithm):
     def _trace_ray(self, scene: Scene, ray: TracingRay, recursions_left: int, sampler: Sampler) -> Color:
         # 1. Base Case
         if recursions_left < 0:
-            return Color(-1.0, 0.0, 0.0) # depth error or background color
+            return Color(1.0, 0.0, 0.0) # depth error or background color
 
         # 2. Geometry Intersection
         hit_info = self.intersector.find_hit(scene, ray, self.stats)

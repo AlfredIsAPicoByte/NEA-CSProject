@@ -1,18 +1,18 @@
-Time: 59.4798s | RSS Δ: 0.125 MB
-RSS start: 68.551 MB | RSS end: 68.676 MB
-tracemalloc current: 159.55 KB | peak: 465.79 KB
+Time: 60.0174s | RSS Δ: 0.125 MB
+RSS start: 68.402 MB | RSS end: 68.527 MB
+tracemalloc current: 159.62 KB | peak: 465.86 KB
 Top allocations (most recent frame):
-  1. /workspaces/NEA-CSProject/py_src/src/Image/Film.py:14 | 108.09 KB (2 allocs)
-  2. /workspaces/NEA-CSProject/py_src/src/Image/Film.py:15 | 36.09 KB (2 allocs)
+  1. /workspaces/NEA-CSProject/py_src/src/Image/Film.py:10 | 108.09 KB (2 allocs)
+  2. /workspaces/NEA-CSProject/py_src/src/Image/Film.py:11 | 36.09 KB (2 allocs)
   3. /home/codespace/.local/lib/python3.12/site-packages/psutil/_pslinux.py:1632 | 4.80 KB (41 allocs)
   4. /workspaces/NEA-CSProject/py_src/src/Data/Ray.py:117 | 4.05 KB (74 allocs)
   5. /workspaces/NEA-CSProject/py_src/src/Utilities/Sampling.py:335 | 1.03 KB (44 allocs)
   6. /workspaces/NEA-CSProject/py_src/src/Utilities/Sampling.py:334 | 1.03 KB (44 allocs)
 
 Postprocessing:
-Time: 0.0026s | RSS Δ: 0.633 MB
-RSS start: 68.801 MB | RSS end: 69.434 MB
-tracemalloc current: 218.89 KB | peak: 1256.13 KB
+Time: 0.0025s | RSS Δ: 0.734 MB
+RSS start: 68.527 MB | RSS end: 69.262 MB
+tracemalloc current: 218.79 KB | peak: 1256.03 KB
 Top allocations (most recent frame):
   1. /workspaces/NEA-CSProject/py_src/src/Image/PostProcessing/Passes.py:41 | 216.09 KB (2 allocs)
   2. /home/codespace/.local/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:57 | 0.35 KB (3 allocs)
