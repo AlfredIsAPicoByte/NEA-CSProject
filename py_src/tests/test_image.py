@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(current_dir, 'src'))
 
 sys.path.insert(0, current_dir)
 
-from main import save_image
+from src.Image.Film import Film
 import numpy as np, os
 
 def test_image_creation():
@@ -20,8 +20,8 @@ def test_image_creation():
         for x in range(width):
             image[y, x] = [x % 256, y % 256, (x + y) % 256]
     
-    output_path = os.path.join(os.path.dirname(__file__), "test_output.png")
-    save_image(image, output_path)
+    output_path = os.path.join(os.path.dirname(__file__), "image", "testing", "test_output.png")
+    Film.save(image, output_path)
     print(f"Test image saved to {output_path}")
 
 if __name__ == '__main__':

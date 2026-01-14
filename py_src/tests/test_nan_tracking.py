@@ -35,8 +35,8 @@ def test_nan_tracking():
 
     ray = Ray(origin=np.array([0.0, 0.0, -5.0]), orientation=np.array([0.0, 0.0, 1.0]))
 
-
     tracer = Raytracer(
+        max_recursions=1,
         intersection_strategy=BVHIntersection(max_distance=100, max_steps=10),
         shading_strategy=LambertShading(AmbienceSettings(), ShadowSettings(), BackgroundSettings())
     )

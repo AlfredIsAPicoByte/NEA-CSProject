@@ -39,7 +39,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    OUT_DIR = os.path.join(PROJECT_ROOT, "benchmark", "simple_scene")
+    OUT_DIR = os.path.join(PROJECT_ROOT, "image", "benchmarking", "scenes")
     os.makedirs(OUT_DIR, exist_ok=True)
 
     img_width, img_height = 16 * 8, 9 * 8
@@ -69,7 +69,7 @@ if __name__ == "__main__":
         intersection = BVHIntersection(max_distance=500, max_steps=128)
         interactor = TerminalInteraction()
         shading = LambertShading(
-            ambience_settings=AmbienceSettings(False, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03, 1.0)), getattr(scene, "ambient_intensity", 0.1)),
+            ambience_settings=AmbienceSettings(False, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.1)),
             shadow_settings=ShadowSettings(False, 8, 2e-3),
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
         )
