@@ -1,15 +1,10 @@
 import numpy as np
-from enum import Enum
-
-from src.Data.Color import Color
-from src.Utilities.Common import unit
-        
-import numpy as np
 import math
 from enum import Enum
 from dataclasses import dataclass, field
+
 from src.Data.Color import Color
-from src.Utilities.Common import unit, attenuate_sqr_distance, clamp, lerp
+from src.Utilities.Common import unit
 
 class LightType(Enum):
     POINT = 1        # Light bulb: Radiates in all directions from a position
@@ -37,9 +32,11 @@ class LightSource:
     spot_inner_angle: float = 15.0 # Full brightness inside this angle
     spot_outer_angle: float = 45.0 # Falls off to zero at this angle
 
+    name: str = "Light"
+
     def __post_init__(self):
         # Ensure direction is always normalized for Directional/Spot lights
-        if self.type != LightType.POINT:
+        if not self.type == LightType.POINT:
             self.direction = unit(self.direction)
 
         if self.radius <= 1e-16:

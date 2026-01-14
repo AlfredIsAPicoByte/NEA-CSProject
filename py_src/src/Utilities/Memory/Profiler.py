@@ -3,7 +3,8 @@ import tracemalloc
 import time
 from dataclasses import dataclass
 from typing import cast, Any, List, Dict, Any, Optional
-from py_src.src.Utilities.Memory.Core import get_current_memory_usage
+
+from .Core import get_current_memory_usage
 
 @dataclass
 class MemoryProfileResult:

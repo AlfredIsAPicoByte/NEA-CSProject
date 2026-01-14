@@ -1,6 +1,6 @@
 import numpy as np
 
-from src.Data.Transfrom import Transform
+from src.Data.Transform import Transform
 from src.Data.Ray import Ray
 from src.Geometry.Core import Shape
 
@@ -40,7 +40,7 @@ class AABB:
         return float('inf')
 
     @staticmethod
-    def from_transform_shape(world_transfrom: Transform, shape: Shape, padding: float = 1e-2) -> 'AABB':
+    def from_transform_shape(world_Transform: Transform, shape: Shape, padding: float = 1e-2) -> 'AABB':
         """
         Calculates the world-space AABB for a given object.
         """
@@ -49,7 +49,7 @@ class AABB:
         # Fallback: Approximate with a unit cube scaled by transform
         
         # 1. Get Transform Matrix
-        matrix = world_transfrom.get_global_matrix()
+        matrix = world_Transform.get_global_matrix()
         
         # 2. Define the 8 corners of a cube localy
         local_corners = None

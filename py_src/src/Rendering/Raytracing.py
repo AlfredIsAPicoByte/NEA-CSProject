@@ -4,10 +4,10 @@ from dataclasses import dataclass
 
 from src.Data.Ray import TracingRay
 from src.Data.Color import Color
-from Core import Algorithm, RenderStats, register_algorithm, update_memory_stats
-import Intersections
-import Shading
-import Interactions
+from .Core import Algorithm, RenderStats, register_algorithm, update_memory_stats
+from . import Intersections
+from . import Shading
+from . import Interactions
 from src.Image.Film import Film
 from src.Utilities.Sampling import SamplingManager, SampleSettings, Sampler, Sample, reconstruct_pixel, RandomSampler
 from src.Utilities.Scene import Scene
@@ -131,8 +131,8 @@ class Raytracer(Algorithm):
         max_recursions: int = 4,
         sampling_manager: Optional[SamplingManager] = None,
         intersection_strategy: Optional[Intersections.IntersectionStrategy] = None,
-        interaction_strategy: Optional[Shading.ShadingStrategy] = None,
-        shading_strategy: Optional[Interactions.InteractionStrategy] = None,
+        interaction_strategy: Optional[Interactions.InteractionStrategy] = None,
+        shading_strategy: Optional[Shading.ShadingStrategy] = None,
         sample_settings: Optional[SampleSettings] = None,
     ):
         super().__init__()
@@ -301,35 +301,24 @@ class Raytracer(Algorithm):
                 rays = camera.generate_screen_rays(region=tile_region, sampler=sampler)
                 self.stats.rays_primary += len(rays)
 
-                self.stats = update_memory_stats(self.stats)
-                
-                sample_colors = []
-                sample_weights = []
+                self.stats = update_memory_stats(self.stats) # type: ignore
 
                 for ray in rays:
                     if ray is None: continue
                     
-                    # Global Coordinates
-                    px, py = ray.pixel_x, ray.pixel_y
-                    
-                    # Convert to Local Tile Coordinates
-                    local_x = px - tile_x
-                    local_y = py - tile_y
-
-                    # Safety Check
-                    if not (0 <= local_x < current_w and 0 <= local_y < current_h):
-                        continue
-
                     # Trace Ray
                     pixel_color = self._trace_ray(scene, ray, self.max_recursions, sampler)
 
-                    # Create Sample Object
-                    s_u = getattr(ray, "sample_u", (px + 0.5) / cam_width)
-                    s_v = getattr(ray, "sample_v", (py + 0.5) / cam_height)
-                    sample = Sample(s_u, s_v, 1.0) # weight 1.0
+                    # sample = Sample(ray.sample_u, ray.sample_v, 1.0) # weight 1.0
+
+                    film.add_pixle_batch(
+                        ray.pixel_x,
+                        ray.pixel_y,
+                        pixel_color.to_np_array(),
+                        1.0
+                    )
 
                     # Store in Film Sample Buffer
-                    film.add_sample(local_y, local_x, sample, pixel_color)
                     pixels_processed += 1
 
         self.stats.pixels_processed = pixels_processed
@@ -339,32 +328,5 @@ class Raytracer(Algorithm):
 
 
 """
-# 4. Reconstruct Tile (Resolve samples to final color)
-                for i in range(len(tile_samples)):
-                    samples_and_colors = tile_samples[i]
-                    
-                    if not samples_and_colors: continue
-                    # Calculate Global Pixel Index
-                    local_y_in_tile = i // current_w
-                    local_x_in_tile = i % current_w
-                        
-                    global_x = tile_x + local_x_in_tile
-                    global_y = tile_y + local_y_in_tile
-                        
-                    # Reconstruct
-                    samples = [sc[0] for sc in samples_and_colors]
-                    # Convert Color objects to RGBA arrays
-                    colors = []
-                    for sc in samples_and_colors:
-                        color_obj: Color = sc[1]
-                        color_array = color_obj.to_np_array(include_alpha=True)
-                        colors.append(color_array)
-                    
-                    rec_rgb = reconstruct_pixel(global_x, global_y, samples, colors, self.sample_settings)
-                    final_color = Color(*rec_rgb)
-
-                    # Write to Final Image Buffer
-                    # Calculate index in the *region* buffer
-                    final_idx = (global_y - ry) * rw + (global_x - rx)
-                    full_image_pixels[final_idx] = final_color
+                
 """

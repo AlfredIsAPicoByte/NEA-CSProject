@@ -1,5 +1,5 @@
 from src.Data.Color import Color
-from Core import MaterialType, MaterialData, PBRMaterial
+from .Core import MaterialType, MaterialData, PBRMaterial
 
 class MaterialFactory:
     @classmethod

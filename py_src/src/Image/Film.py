@@ -1,5 +1,7 @@
+import sys, os
 import numpy as np
 from typing import List, Tuple
+from PIL import Image
 
 from src.Utilities.Sampling import Sample
 from src.Data.Color import Color
@@ -27,4 +29,18 @@ class Film:
         )
 
         return result
-    
+
+    @classmethod
+    def save(cls, pixles: np.ndarray, filename: str):    
+        out_dir = os.path.dirname(filename)
+        if out_dir and not os.path.exists(out_dir):
+            os.makedirs(out_dir, exist_ok=True)
+        
+        # 1. Quantization (0.0-1.0 float -> 0-255 uint8)
+        # Clip to ensure no math errors pushed us outside range
+        final_pixels = (np.clip(pixles, 0.0, 1.0) * 255.0).astype(np.uint8)
+        
+        # 2. Save
+        img = Image.fromarray(final_pixels, 'RGB')
+        img.save(filename)
+        print(f" > Saved to {filename}")

@@ -3,11 +3,11 @@ import numpy as np
 from abc import ABC, abstractmethod
 from typing import Optional, cast
 
-from src.Data.Transfrom import Transform
+from src.Data.Transform import Transform
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
 from src.Data.AABB import AABB
-from Core import RenderStats
+from .Core import RenderStats
 from src.Geometry.Core import Shape
 from src.Geometry.BVH import BVHNode
 from src.Geometry.Primitive import Primitive

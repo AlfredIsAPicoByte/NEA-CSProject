@@ -1,6 +1,6 @@
 import numpy as np
 
-from Ray import Ray
+from .Ray import Ray
 from src.Utilities.Common import unit
 
 class Transform:
@@ -12,15 +12,15 @@ class Transform:
     """
     def __init__(
         self, 
-        position: np.ndarray = None, 
-        rotation: np.ndarray = None, 
-        scale: np.ndarray = None,
+        position: np.ndarray = np.zeros(3), 
+        rotation: np.ndarray = np.zeros(3), 
+        scale: np.ndarray = np.ones(3),
         name: str = 'transform'
     ):
         # Default values if None
-        self.position = np.array(position, dtype=float) if position is not None else np.zeros(3)
-        self.rotation = np.array(rotation, dtype=float) if rotation is not None else np.zeros(3)
-        self.scale    = np.array(scale, dtype=float)    if scale is not None else np.ones(3)
+        self.position = np.array(position, dtype=float)
+        self.rotation = np.array(rotation, dtype=float)
+        self.scale    = np.array(scale, dtype=float)
 
         # explicit local offsets applied on top of the base transform
         self.local_position = np.zeros(3, dtype=float)
@@ -198,6 +198,11 @@ class Transform:
         delta = axis * angle
         if space == "global": self.rotation += delta
         else: self.local_rotation += delta
+        self.update_orientations()
+    
+    def enlarge(self, vector: np.ndarray, space: str = "global"):
+        if space == "global": self.scale *= vector
+        else: self.local_scale *= vector
         self.update_orientations()
 
     # -------------------------------------------------------------------------

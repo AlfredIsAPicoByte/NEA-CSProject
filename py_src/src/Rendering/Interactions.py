@@ -6,7 +6,9 @@ from dataclasses import replace
 
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
-from Core import RenderStats
+from .Core import RenderStats
+from src.Material.Core import PBRMaterial, MaterialType
+from src.Material.BSDF import * 
 from src.Lighting.Optics import REFRACTIVE_INDICES
 from src.Utilities.Sampling import Sampler
 
@@ -38,15 +40,10 @@ class TerminalInteraction(InteractionStrategy):
         stats: Optional["RenderStats"] = None,
         *args, **kwargs
     ) -> Optional[TracingRay]:
-        hit_point = getattr(hit_info, "point", None)
-        if hit_point is None:
-            stats.roulette_kills += 1
+        if not hit_info.hit:
             return None
         
-        next_origin = hit_point + (ray.orientation * bias)
-        
-        if stats is not None:
-            stats.rays_transparency += 1
+        next_origin = hit_info.point + (ray.orientation * bias)
 
         return replace(ray, origin=next_origin)
 
@@ -54,17 +51,11 @@ class PassthroughInteraction(InteractionStrategy):
     """
     A passthrough interaction. 
     The ray passes perfectly straight through the object, ignoring refraction.
+    Using stochastic alpha clipping/opacity checking to determine if the ray interacts or not.
     - 'Ghost' objects (semi-transparent overlays).
     - Volumetric boundaries (fog containers).
     - Debugging geometry without occluding the scene.
     """
-    def __init__(
-        self,
-        opacity_cutoff: float = 0.0, # 0.0 = Invisible/Clear, 1.0 = Opaque (Absorbs ray)
-    ):
-        # Initialize base to handle samplers/IOR if needed later
-        self.opacity_cutoff = np.clip(opacity_cutoff, 0.0, 1.0)
-    
     def interact(
         self, 
         ray: TracingRay, 
@@ -73,27 +64,22 @@ class PassthroughInteraction(InteractionStrategy):
         bias: float = 1e-4,
         stats: Optional["RenderStats"] = None
     ) -> Optional[TracingRay]:
-        # 1. Stochastic Opacity Check (Russian Roulette)
-        # If opacity is 0.5, 50% of rays are blocked, 50% pass through.
-        # This simulates semi-transparency without splitting rays.
-        if self.opacity_cutoff > 0.0:
-            if sampler.random_float() < self.opacity_cutoff:
-                stats.roulette_kills += 1
-                return None # Ray is absorbed/blocked by the "smoke"
-
-        # 2. Passthrough Logic
-        # We spawn a new ray continuing in the exact same direction.
-        hit_point = getattr(hit_info, "point", None)
-        if hit_point is None:
-            stats.roulette_kills += 1
+        if not hit_info.hit:
+            if stats: stats.roulette_kills += 1
             return None
         
-        next_origin = hit_point + (ray.orientation * bias)
-        
-        if stats is not None:
-            stats.rays_transparency += 1
+        # Alpha Clipping
+        material: Optional[PBRMaterial] = getattr(hit_info.obj, "material", None)
 
-        return replace(ray, origin=next_origin)
+        if material is None:
+            if stats: stats.roulette_kills += 1
+            return None
+
+        if sampler.next_1d() > np.clip(material.data.albedo.a, 0.0, 1.0):
+            return TerminalInteraction().interact(ray, hit_info, bias, stats)
+        
+        if stats: stats.rays_transparency += 1
+        return None
 
 class StandardInteraction(InteractionStrategy):
     """
@@ -114,8 +100,181 @@ class StandardInteraction(InteractionStrategy):
         bias: float = 1e-4,
         stats: Optional["RenderStats"] = None
     ) -> Optional[TracingRay]:
-        new_ray = ray
+        if not hit_info.hit:
+            if stats: stats.roulette_kills += 1
+            return None
+        
+        alpha_cliped = PassthroughInteraction().interact(ray, hit_info, sampler, bias, stats)
+        if alpha_cliped is not None:
+            if stats: stats.roulette_kills += 1
+            return alpha_cliped
+        
+        # 1. Russian Roulette (Path Termination)
+        # If the ray is very dim (low throughput), randomly kill it to save time.
+        # ray.throughput is carried over from previous bounces
+        current_throughput = ray.throughput
+        max_component = max(current_throughput[0], current_throughput[1], current_throughput[2])
+        
+        # Only start killing after a few bounces (e.g. depth > 3) to reduce noise
+        if ray.current_depth > 3:
+            probability = min(max_component, 0.95) # Keep at least 5% chance
+            if sampler.sample_roulette() > probability:
+                if stats: stats.roulette_kills += 1
+                return None
+            
+            # If we survive, boost the energy to compensate for the killed rays
+            current_throughput /= probability
 
-        new_ray.current_depth += 1
+        # 2. Material Sampling
+        # Ask material: "Give me a random direction based on your roughness"
+        material: Optional[PBRMaterial] = getattr(hit_info.obj, "material", None)
 
-        return new_ray
+        if material is None:
+            if stats: stats.roulette_kills += 1
+            return None
+        
+        # Emissive sources terminate ray, becuase they are also considered light sources.
+        if material.type == MaterialType.EMISSIVE:
+            if stats: stats.roulette_kills += 1
+            return None
+        
+        # Prepare Geometry
+        N = unit(hit_info.normal)
+        I = unit(ray.orientation) # Incident vector
+        P = hit_info.point
+
+        # ==========================================================
+        # CASE 1: DIFFUSE (Matte / Plastic / Wood)
+        # ==========================================================
+        if material.type == MaterialType.DIFFUSE:
+            if stats: stats.rays_reflection += 1
+
+            # 1. Importance Sample the Cosine Hemisphere
+            # (Prefers directions close to the normal)
+            new_dir = sampler.sample_cosine_hemisphere(N)
+
+            new_throughput = current_throughput * material.data.albedo.to_np_array(False)
+            
+            return TracingRay(
+                origin=P + (N * bias),
+                orientation=new_dir,
+                throughput=new_throughput,
+                current_depth=ray.current_depth + 1,
+            )
+
+        # ==========================================================
+        # CASE 2: SPECULAR (Metals: Gold, Copper, Mirror)
+        # ==========================================================
+        elif material.type == MaterialType.SPECULAR:
+            if stats: stats.rays_reflection += 1
+
+            relect_dir = reflect(I, N)
+
+            roughness = material.data.roughness
+            if roughness > bias:
+                # Add a random vector in a sphere and normalize
+                fuzz = sampler.sample_unit_sphere() * roughness
+                reflect_dir = normalize(reflect_dir + fuzz)
+                
+                # Check if we reflected back into the surface (absorb ray)
+                if np.dot(reflect_dir, N) <= 0:
+                    return None
+
+            # Throughput for metals is usually the Albedo (they tint reflection)
+            new_throughput = current_throughput * mat.data.albedo
+
+            return TracingRay(
+                origin=P + (N * bias),
+                orientation=reflect_dir,
+                throughput=new_throughput,
+                current_depth=ray.current_depth + 1,
+                medium_density=ray.medium_density,
+                medium_color=ray.medium_color
+            )
+            
+        # ==========================================================
+        # CASE 3: GLASS (Dielectric Refraction)
+        # ==========================================================
+        elif material.type == MaterialType.GLASS:
+            if stats: stats.rays_refraction += 1
+            
+            ior = getattr(mat.data, "ior", 1.5)
+            
+            # Determine Entering vs Exiting
+            dt = np.dot(I, N)
+            n1, n2 = 0, 0
+            if dt > 0:
+                # Ray is inside object, going out
+                outward_normal = -N
+                n1, n2 = ior, self.scene_ior
+                cosine = n1 * dt / len(I) # Correct cosine for Snell
+                entering = False
+            else:
+                # Ray is outside, going in
+                outward_normal = N
+                n1, n2 = ior, self.scene_ior
+                ni_over_nt = self.scene_ior / ior
+                cosine = -dt / len(I)
+                entering = True
+            
+            ni_over_nt = n1 / n2
+
+            # 1. Calculate Fresnel (Reflection Probability)
+            reflect_prob = schlick_fresnel_refactive(cosine, n1, n2)
+            
+            # 2. Decide: Reflect or Refract?
+            if sampler.sample_roulette() < reflect_prob:
+                # --- REFLECTION ---
+                reflected = reflect(I, N)
+                return TracingRay(
+                    origin=P + (outward_normal * bias),
+                    orientation=reflected,
+                    throughput=current_throughput, # Glass reflection is white (usually)
+                    current_depth=ray.current_depth + 1,
+                    # Medium properties don't change on reflection
+                    medium_density=ray.medium_density,
+                    medium_color=ray.medium_color,
+                    is_inside=ray.is_inside
+                )
+            else:
+                # --- REFRACTION ---
+                refracted = refract(I, outward_normal, ni_over_nt)
+                
+                if refracted is None:
+                    # Total Internal Reflection (TIR) - Force Reflection
+                    reflected = reflect(I, N)
+                    return TracingRay(
+                        origin=P + (outward_normal * bias),
+                        orientation=reflected,
+                        throughput=current_throughput,
+                        current_depth=ray.current_depth + 1,
+                        medium_density=ray.medium_density,
+                        medium_color=ray.medium_color,
+                        is_inside=ray.is_inside
+                    )
+                
+                # Successful Refraction
+                # Color tint is usually White (1.0) for the surface event itself.
+                # The COLOR of glass comes from absorption (Beer's Law) inside the volume,
+                # which is handled by the Ray properties below.
+                
+                new_ray = TracingRay(
+                    origin=P - (outward_normal * bias), # Push THROUGH surface
+                    orientation=refracted,
+                    throughput=current_throughput, # Transmission is 1.0 at interface
+                    current_depth=ray.current_depth + 1,
+                    is_inside=not ray.is_inside
+                )
+                
+                # Update Medium Tracking for Volumetrics
+                if entering:
+                    new_ray.medium_color = mat.data.color # or albedo
+                    new_ray.medium_density = getattr(mat.data, "density", 0.0)
+                else:
+                    # Exiting to air (reset to defaults)
+                    new_ray.medium_color = Color(1,1,1) 
+                    new_ray.medium_density = 0.0
+                    
+                return new_ray
+
+        return None

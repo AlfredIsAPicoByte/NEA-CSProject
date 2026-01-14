@@ -6,6 +6,16 @@ import bisect
 
 from src.Utilities.Common import clamp, lerp
 
+import numpy as np
+import numbers
+from dataclasses import dataclass, replace
+from typing import Callable, List, Tuple, Union
+import bisect
+import math
+
+# Assuming clamp and lerp are available from your common utilities
+from src.Utilities.Common import clamp, lerp
+
 @dataclass(slots=True)
 class Color:
     """
@@ -24,7 +34,10 @@ class Color:
         self.b = clamp(self.b)
         self.a = clamp(self.a)
 
-    # --- Static Methods ---
+    # =========================================================================
+    # STATIC CONVERTERS (Color Spaces & Formats)
+    # =========================================================================
+
     @staticmethod
     def hsv_to_rgb(h: float, s: float, v: float) -> Tuple[float, float, float]:
         """Converts HSV (0.0-1.0) to RGB (0.0-1.0)."""
@@ -65,14 +78,226 @@ class Color:
             
         return (h / 360.0, (0 if mx == 0 else df / mx), mx)
 
-    # --- Constructors ---
+    @staticmethod
+    def hsl_to_rgb(h: float, s: float, l: float) -> Tuple[float, float, float]:
+        """Converts HSL (0.0-1.0) to RGB (0.0-1.0)."""
+        def hue_to_rgb(p, q, t):
+            if t < 0: t += 1
+            if t > 1: t -= 1
+            if t < 1/6: return p + (q - p) * 6 * t
+            if t < 1/2: return q
+            if t < 2/3: return p + (q - p) * (2/3 - t) * 6
+            return p
+
+        if s == 0:
+            return l, l, l
+
+        q = l * (1 + s) if l < 0.5 else l + s - l * s
+        p = 2 * l - q
+        
+        r = hue_to_rgb(p, q, h + 1/3)
+        g = hue_to_rgb(p, q, h)
+        b = hue_to_rgb(p, q, h - 1/3)
+        return r, g, b
+
+    @staticmethod
+    def rgb_to_hsl(r: float, g: float, b: float) -> Tuple[float, float, float]:
+        """Converts RGB (0.0-1.0) to HSL (0.0-1.0)."""
+        mx = max(r, g, b)
+        mn = min(r, g, b)
+        h, s, l = 0.0, 0.0, (mx + mn) / 2
+
+        if mx == mn:
+            h = 0.0
+            s = 0.0 # Achromatic
+        else:
+            d = mx - mn
+            s = d / (2 - mx - mn) if l > 0.5 else d / (mx + mn)
+            
+            if mx == r:
+                h = (g - b) / d + (6 if g < b else 0)
+            elif mx == g:
+                h = (b - r) / d + 2
+            elif mx == b:
+                h = (r - g) / d + 4
+            h /= 6
+            
+        return h, s, l
+
+    @staticmethod
+    def cmyk_to_rgb(c: float, m: float, y: float, k: float) -> Tuple[float, float, float]:
+        """Converts CMYK (0.0-1.0) to RGB (0.0-1.0)."""
+        r = (1.0 - c) * (1.0 - k)
+        g = (1.0 - m) * (1.0 - k)
+        b = (1.0 - y) * (1.0 - k)
+        return r, g, b
+
+    @staticmethod
+    def rgb_to_cmyk(r: float, g: float, b: float) -> Tuple[float, float, float, float]:
+        """Converts RGB (0.0-1.0) to CMYK (0.0-1.0)."""
+        if r == 0 and g == 0 and b == 0:
+            return 0.0, 0.0, 0.0, 1.0
+        
+        k = 1.0 - max(r, g, b)
+        c = (1.0 - r - k) / (1.0 - k)
+        m = (1.0 - g - k) / (1.0 - k)
+        y = (1.0 - b - k) / (1.0 - k)
+        return c, m, y, k
+
+    @staticmethod
+    def rgb_to_grayscale(r: float, g: float, b: float) -> float:
+        """Standard luminance conversion (Rec. 709)."""
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    @staticmethod
+    def hex_to_rgb(hex_str: str) -> Tuple[float, float, float, float]:
+        """
+        Parses hex strings: #RGB, #RGBA, #RRGGBB, #RRGGBBAA.
+        Returns (r, g, b, a) as floats 0.0-1.0.
+        """
+        hex_str = hex_str.lstrip('#')
+        length = len(hex_str)
+        
+        r, g, b, a = 0.0, 0.0, 0.0, 1.0
+        
+        if length == 3: # RGB
+            r = int(hex_str[0]*2, 16) / 255.0
+            g = int(hex_str[1]*2, 16) / 255.0
+            b = int(hex_str[2]*2, 16) / 255.0
+        elif length == 4: # RGBA
+            r = int(hex_str[0]*2, 16) / 255.0
+            g = int(hex_str[1]*2, 16) / 255.0
+            b = int(hex_str[2]*2, 16) / 255.0
+            a = int(hex_str[3]*2, 16) / 255.0
+        elif length == 6: # RRGGBB
+            r = int(hex_str[0:2], 16) / 255.0
+            g = int(hex_str[2:4], 16) / 255.0
+            b = int(hex_str[4:6], 16) / 255.0
+        elif length == 8: # RRGGBBAA
+            r = int(hex_str[0:2], 16) / 255.0
+            g = int(hex_str[2:4], 16) / 255.0
+            b = int(hex_str[4:6], 16) / 255.0
+            a = int(hex_str[6:8], 16) / 255.0
+        else:
+            raise ValueError(f"Invalid hex string format: {hex_str}")
+            
+        return r, g, b, a
+
+    @staticmethod
+    def rgb_to_hex(r: float, g: float, b: float, a: float = 1.0, include_alpha: bool = False) -> str:
+        """Returns hex string #RRGGBB or #RRGGBBAA."""
+        ri = clamp(int(r * 255), 0, 255)
+        gi = clamp(int(g * 255), 0, 255)
+        bi = clamp(int(b * 255), 0, 255)
+        
+        if include_alpha:
+            ai = clamp(int(a * 255), 0, 255)
+            return f"#{ri:02X}{gi:02X}{bi:02X}{ai:02X}"
+        return f"#{ri:02X}{gi:02X}{bi:02X}"
+
+    @staticmethod
+    def kelvin_to_rgb(temp_k: float) -> Tuple[float, float, float]:
+        """
+        Approximates RGB from color temperature (Kelvin).
+        Valid range roughly 1000K to 40000K.
+        """
+        temp = clamp(temp_k, 1000.0, 40000.0) / 100.0
+        
+        # Red
+        if temp <= 66:
+            r = 255.0
+        else:
+            r = temp - 60
+            r = 329.698727446 * (r ** -0.1332047592)
+            
+        # Green
+        if temp <= 66:
+            g = temp
+            g = 99.4708025861 * math.log(g) - 161.1195681661
+        else:
+            g = temp - 60
+            g = 288.1221695283 * (g ** -0.0755148492)
+            
+        # Blue
+        if temp >= 66:
+            b = 255.0
+        elif temp <= 19:
+            b = 0.0
+        else:
+            b = temp - 10
+            b = 138.5177312231 * math.log(b) - 305.0447927307
+
+        return (
+            clamp(r / 255.0, 0.0, 1.0),
+            clamp(g / 255.0, 0.0, 1.0),
+            clamp(b / 255.0, 0.0, 1.0)
+        )
+
+    @staticmethod
+    def wavelength_to_rgb(wavelength: float) -> Tuple[float, float, float]:
+        """
+        Converts light wavelength (nm) to RGB.
+        Valid range ~380nm to ~780nm.
+        """
+        wl = float(wavelength)
+        gamma = 0.8
+        
+        r, g, b = 0.0, 0.0, 0.0
+        factor = 0.0
+
+        if 380 <= wl < 440:
+            r = -(wl - 440) / (440 - 380)
+            g = 0.0
+            b = 1.0
+        elif 440 <= wl < 490:
+            r = 0.0
+            g = (wl - 440) / (490 - 440)
+            b = 1.0
+        elif 490 <= wl < 510:
+            r = 0.0
+            g = 1.0
+            b = -(wl - 510) / (510 - 490)
+        elif 510 <= wl < 580:
+            r = (wl - 510) / (580 - 510)
+            g = 1.0
+            b = 0.0
+        elif 580 <= wl < 645:
+            r = 1.0
+            g = -(wl - 645) / (645 - 580)
+            b = 0.0
+        elif 645 <= wl <= 780:
+            r = 1.0
+            g = 0.0
+            b = 0.0
+        else:
+            r = 0.0
+            g = 0.0
+            b = 0.0
+
+        # Let the intensity fall off near the vision limits
+        if 380 <= wl < 420:
+            factor = 0.3 + 0.7 * (wl - 380) / (420 - 380)
+        elif 420 <= wl < 700:
+            factor = 1.0
+        elif 700 <= wl <= 780:
+            factor = 0.3 + 0.7 * (780 - wl) / (780 - 700)
+        else:
+            factor = 0.0
+
+        def adjust(c, factor):
+            if c == 0.0: return 0.0
+            return (c * factor) ** gamma
+
+        return adjust(r, factor), adjust(g, factor), adjust(b, factor)
+
+    # =========================================================================
+    # CONSTRUCTORS / FACTORY METHODS
+    # =========================================================================
+
     @classmethod
     def from_hex(cls, hex_str: str):
-        hex_str = hex_str.lstrip('#')
-        if len(hex_str) != 6:
-            raise ValueError(f"Invalid hex string: {hex_str}")
-        r, g, b = tuple(int(hex_str[i:i+2], 16) for i in (0, 2, 4))
-        return cls(r / 255.0, g / 255.0, b / 255.0)
+        r, g, b, a = cls.hex_to_rgb(hex_str)
+        return cls(r, g, b, a)
 
     @classmethod
     def from_hsv(cls, h: float, s: float, v: float, a: float = 1.0):
@@ -80,12 +305,80 @@ class Color:
         return cls(r, g, b, a)
 
     @classmethod
+    def from_hsl(cls, h: float, s: float, l: float, a: float = 1.0):
+        r, g, b = cls.hsl_to_rgb(h, s, l)
+        return cls(r, g, b, a)
+
+    @classmethod
+    def from_cmyk(cls, c: float, m: float, y: float, k: float, a: float = 1.0):
+        r, g, b = cls.cmyk_to_rgb(c, m, y, k)
+        return cls(r, g, b, a)
+
+    @classmethod
+    def from_kelvin(cls, k: float, a: float = 1.0):
+        r, g, b = cls.kelvin_to_rgb(k)
+        return cls(r, g, b, a)
+    
+    @classmethod
+    def from_wavelength(cls, nm: float, a: float = 1.0):
+        r, g, b = cls.wavelength_to_rgb(nm)
+        return cls(r, g, b, a)
+
+    @classmethod
     def from_int_rgb(cls, r: int, g: int, b: int, a: int = 255):
         return cls(r / 255.0, g / 255.0, b / 255.0, a / 255.0)
 
-    # --- Output / Conversions ---
+    @classmethod
+    def from_np(cls, arr: np.ndarray):
+        """Creates color from numpy array (size 3 or 4)."""
+        if arr.shape[0] == 3:
+            return cls(float(arr[0]), float(arr[1]), float(arr[2]), 1.0)
+        elif arr.shape[0] >= 4:
+            return cls(float(arr[0]), float(arr[1]), float(arr[2]), float(arr[3]))
+        raise ValueError("Numpy array must have at least 3 elements")
+
+    # =========================================================================
+    # INSTANCE CONVERSION METHODS
+    # =========================================================================
+    
+    def to_hsv(self) -> Tuple[float, float, float]:
+        return self.rgb_to_hsv(self.r, self.g, self.b)
+
+    def to_hsl(self) -> Tuple[float, float, float]:
+        return self.rgb_to_hsl(self.r, self.g, self.b)
+    
+    def to_cmyk(self) -> Tuple[float, float, float, float]:
+        return self.rgb_to_cmyk(self.r, self.g, self.b)
+
+    def to_grayscale(self) -> 'Color':
+        lum = self.rgb_to_grayscale(self.r, self.g, self.b)
+        return Color(lum, lum, lum, self.a)
+    
+    def to_hex(self, include_alpha: bool = False) -> str:
+        return self.rgb_to_hex(self.r, self.g, self.b, self.a, include_alpha)
+
+    def to_int_rgb(self) -> Tuple[int, int, int]:
+        return (
+            int(clamp(int(self.r * 255), 0, 255)),
+            int(clamp(int(self.g * 255), 0, 255)),
+            int(clamp(int(self.b * 255), 0, 255))
+        )
+    
+    def to_int_rgba(self) -> Tuple[int, int, int, int]:
+        return (
+            int(clamp(int(self.r * 255), 0, 255)),
+            int(clamp(int(self.g * 255), 0, 255)),
+            int(clamp(int(self.b * 255), 0, 255)),
+            int(clamp(int(self.a * 255), 0, 255))
+        )
+
+    def to_np_array(self, include_alpha: bool = True) -> np.ndarray:
+        if include_alpha:
+            return np.array([self.r, self.g, self.b, self.a], dtype=np.float32)
+        return np.array([self.r, self.g, self.b], dtype=np.float32)
+
+    # --- Operator Overloads (Kept from original) ---
     def __add__(self, other: Union['Color', float, int, np.number]):
-        """Handles: Color + Color, Color + float"""
         if isinstance(other, numbers.Number):
             return Color(self.r + other, self.g + other, self.b + other, self.a)
         if isinstance(other, Color):
@@ -93,11 +386,9 @@ class Color:
         return NotImplemented
 
     def __radd__(self, other: Union['Color', float, int, np.number]):
-        """Handles: float + Color"""
         return self.__add__(other)
 
     def __sub__(self, other: Union['Color', float, int, np.number]):
-        """Handles: Color - Color, Color - float"""
         if isinstance(other, numbers.Number):
             return Color(self.r - other, self.g - other, self.b - other, self.a)
         if isinstance(other, Color):
@@ -105,17 +396,11 @@ class Color:
         return NotImplemented
 
     def __rsub__(self, other: Union['Color', float, int, np.number]):
-        """
-        Handles: float - Color
-        Example: 1.0 - Color(0.2, 0.2, 0.2) = Color(0.8, 0.8, 0.8)
-        """
         if isinstance(other, numbers.Number):
-            # precise order: number - color_component
             return Color(other - self.r, other - self.g, other - self.b, self.a)
         return NotImplemented
 
     def __mul__(self, scale: Union['Color', float, int, np.number]):
-        """Handles: Color * Color, Color * float"""
         if isinstance(scale, numbers.Number):
             return Color(self.r * scale, self.g * scale, self.b * scale, self.a)
         if isinstance(scale, Color):
@@ -123,22 +408,15 @@ class Color:
         return NotImplemented
 
     def __rmul__(self, scale: Union['Color', float, int, np.number]):
-        """Handles: float * Color"""
         return self.__mul__(scale)
 
     def __truediv__(self, scale: Union[float, int, np.number]):
-        """Handles: Color / float"""
         if isinstance(scale, numbers.Number) and scale != 0:
             recip = 1.0 / scale
             return Color(self.r * recip, self.g * recip, self.b * recip, self.a)
         return NotImplemented
     
     def __rtruediv__(self, other: Union[float, int, np.number]):
-        """
-        Handles: float / Color 
-        Note: This is mathematically ambiguous for vectors, but usually implies 
-        component-wise division: (x/r, x/g, x/b).
-        """
         if isinstance(other, numbers.Number):
              return Color(other / (self.r + 1e-8), other / (self.g + 1e-8), other / (self.b + 1e-8), self.a)
         return NotImplemented
@@ -147,11 +425,11 @@ class Color:
         if index == 0 or index == "r" or index == "red":
             return self.r
         elif index == 1 or index == "g" or index == "green":
-            return self.g  # Fixed
+            return self.g 
         elif index == 2 or index == "b" or index == "blue":
-            return self.b  # Fixed
+            return self.b
         elif index == 3 or index == "a" or index == "alpha":
-            return self.a  # Fixed
+            return self.a
         raise IndexError(f"Invalid index for Color: {index}")
 
     def __repr__(self):

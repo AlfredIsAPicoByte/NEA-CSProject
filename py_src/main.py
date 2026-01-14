@@ -1,5 +1,3 @@
-import numpy as np
-from PIL import Image
 import sys, os
 import argparse
 import gc
@@ -11,8 +9,9 @@ from src.Rendering.Raytracing import *
 from src.Rendering.Intersections import *
 from src.Rendering.Shading import *
 from src.Rendering.Interactions import *
+from src.Image.Film import Film
 from src.Utilities.Scene import Scene
-from src.Utilities.Sampling import SamplingManager, SampleSettings, PixelFilter, reconstruct_pixel
+from src.Utilities.Sampling import SamplingManager, SampleSettings, PixelFilter
 from src.Utilities.Memory.Profiler import MemoryProfiler
 from tests.test_scenes import *
 PostProcessingPipeline = None
@@ -22,38 +21,17 @@ def render_process(scene: Scene, algorithm: Algorithm):
     Execute the rendering algorithm on the scene and return the rendered image as a numpy array.
     """
     # Render using the algorithm
-    pixel_colors = algorithm.render(scene, tile_size=16)
+    film = algorithm.render(scene, tile_size=16)
     
     # Convert List[Color] to numpy array (width x height x 3)
     cam = scene.camera
     width = cam.width if cam is not None else 64
     height = cam.height if cam is not None else 32
-    img_array = np.zeros((height, width, 3), dtype=np.float32)
     
-    for i, color in enumerate(pixel_colors):
-        y = i // width
-        x = i % width
-        if hasattr(color, 'to_np_array'):
-            img_array[y, x] = color.to_np_array()[:3]
-        else:
-            img_array[y, x] = [color[0], color[1], color[2]]
-    
-    return img_array
+    if len(film.accum_color) * len(film.accum_color[1]) != width * height:
+        print(f"Warning: Rendered pixel count ({len(film.accum_color) * len(film.accum_color[1])}) does not match Camera dimensions ({width}x{height}={width*height}).")
 
-def save_image(img_data: np.ndarray, out_path="render_out.png"):
-    """
-    Saves the float image data to PNG.
-    """
-    out_dir = os.path.dirname(out_path)
-    if out_dir and not os.path.exists(out_dir):
-        os.makedirs(out_dir, exist_ok=True)
-    
-    # Quantize: Float(0..1) -> Int(0..255)
-    final_pixels = np.clip(img_data * 255.0, 0, 255).astype(np.uint8)
-    
-    im = Image.fromarray(final_pixels, mode="RGB")
-    im.save(out_path)
-    print(f" > Saved to {out_path}")
+    return film
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Raytracer CLI")
@@ -113,11 +91,10 @@ if __name__ == "__main__":
         print(f"Rendering '{scene.name}' -> {OUT_DIR} ({width}x{height})")
         
         try:
-            # 1. Render to Float Array (profile memory during render)
             mem_report_path = out_path + "_mem.txt"
             stats_report_path = out_path + "_stats.txt"
             with MemoryProfiler(enable_tracemalloc=True, top=6) as mp:
-                raw_img_data = render_process(scene, raytracer)
+                film_data = render_process(scene, raytracer)
             
             try:
                 with open(stats_report_path, "w", encoding="utf-8") as f:
@@ -136,48 +113,31 @@ if __name__ == "__main__":
                 import traceback
                 traceback.print_exc()
 
-            save_image(raw_img_data, out_path=out_path + "_raw.png")
+            raw_img_data = film_data.get_image()
+            Film.save(raw_img_data, out_path + "_raw.png")
 
             # 2. Post-Process (The Pipeline)
             processed_img = raw_img_data
 
             if not args.disable_post:
+                from src.Image.PostProcessing.Pipeline import ImagePipeline
+                from src.Image.PostProcessing.Passes import *
+
                 with MemoryProfiler(enable_tracemalloc=True, top=6) as mp:
-                    print(" > Running post-processing")
-                    # Import lazily so heavy deps (scipy) are only loaded when needed
-                    from src.Image.PostProcessing import *
+                    pipeline =  ImagePipeline()
 
-                    # We chain the effects directly on the numpy array
-                    # A. Bloom (Make bright lights glow)
-                    processed_img = PostProcessingPipeline.apply_bloom(
-                        processed_img, 
-                        threshold=0.8, 
-                        intensity=0.05,
-                        softness=0.75,
-                        radius=1,
-                        fast=False
-                    )
+                    pipeline.add_pass(Exposure(1.0))
                     
-                    # B. Cromatic Aberration (Shifts Red and Blue channels)
-                    processed_img = PostProcessingPipeline.apply_chromatic_aberration(
-                        processed_img,
-                        strength=0
-                    )
+                    pipeline.add_pass(Bloom(0.8, 1, 0.5, 0.75))
 
-                    # C. Vignette (Darken corners slightly)
-                    processed_img = PostProcessingPipeline.apply_vignette(
-                        processed_img, 
-                        strength=0.2
-                    )
+                    pipeline.add_pass(ChromaticAberration(0))
 
-                    # D. Tone Mapping (Compress HDR values to 0-1)
-                    # Without this, bright spots just clip to white
-                    processed_img = PostProcessingPipeline.aces_tone_map(processed_img)
+                    pipeline.add_pass(Vignette())
 
-                    # E. Gamma Correction (Linear -> sRGB)
-                    # Without this, the image looks too dark
-                    processed_img = PostProcessingPipeline.gamma_correct(processed_img, gamma=2.0)
-                
+                    pipeline.add_pass(ACESFilmicToneMapping())
+
+                    pipeline.add_pass(GammaCorrection(2.2))
+
                 try:
                     with open(mem_report_path, "a", encoding="utf-8") as f:
                         f.write("\n\nPostprocessing:\n")
@@ -188,7 +148,7 @@ if __name__ == "__main__":
                     import traceback
                     traceback.print_exc()
 
-                save_image(processed_img, out_path=out_path + ".png")
+                Film.save(processed_img, out_path + ".png")
             else:
                 print(" > Skipping post-processing (--no-post active)")
 

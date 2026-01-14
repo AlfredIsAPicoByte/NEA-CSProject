@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(current_dir, 'src'))
 
 sys.path.insert(0, current_dir)
 
-from src.Data.Transfrom import Transform
+from src.Data.Transform import Transform
 from src.Data.Ray import Ray
 from src.Geometry.Core import Sphere
 from src.Geometry.Primitive import Primitive

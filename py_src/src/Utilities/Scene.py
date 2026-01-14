@@ -2,15 +2,14 @@ from typing import Callable, List, Tuple, Optional, cast
 import numpy as np
 from math import atan2, asin, pi, floor
 
-from src.Data.Transfrom import Transform
+from src.Data.Transform import Transform
 from src.Data.Ray import Ray
 from src.Data.Color import Color
 from src.Data.Hit import HitInfo
-from Camera import Camera
 from src.Geometry.Core import Shape
 from src.Geometry.Primitive import Primitive
 from src.Lighting.Core import LightSource
-from Common import safe_norm
+from .Camera import Camera
 
 class Scene:
     def __init__(self, name: str = "Scene", camera: Optional[Camera] = None, **kwargs):
@@ -57,7 +56,7 @@ class Scene:
 
             # 3. Calculate Distance
             # The Shape is responsible for transforming the world 'point' to its local space.
-            transform = obj.world_transform
+            transform = obj.transform
             local_point = transform.inverse_transform_point(point)
 
             try:
@@ -101,7 +100,7 @@ class Scene:
             # Get all intersection points (World Space)
             # The Shape class handles the Ray transformation (World->Local) internally
             # and returns the points transformed back to World Space.
-            transform = obj.world_transform
+            transform = obj.transform
 
             # 1. Transform Ray -> Local Space
             # "Shoot the ray as if the camera moved relative to the object"

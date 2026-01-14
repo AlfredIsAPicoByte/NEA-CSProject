@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, replace
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
 from src.Data.Color import Color, ColorGradient
-from Core import RenderStats
+from .Core import RenderStats
 from src.Material.Core import PBRMaterial, MaterialType
 from src.Lighting.Core import LightSource
 from src.Utilities.Sampling import Sampler
@@ -32,7 +32,7 @@ class ShadowSettings:
 class BackgroundSettings:
     enabled: bool = True
     default: Color = field(default_factory=lambda: Color(0.0, 0.0, 1.0, 0.0))
-    custom: Color | ColorGradient | np.ndarray = field(default_factory=lambda: Color(1.0, 1.0, 1.0, 0.0))
+    custom: Optional[Color | ColorGradient | np.ndarray] = field(default_factory=lambda: Color(1.0, 1.0, 1.0, 0.0))
 
     def get_background_color(self, direction: np.ndarray) -> Color:
         """

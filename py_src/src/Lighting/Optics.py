@@ -2,7 +2,7 @@ import numpy as np
 import math
 from typing import Optional
 
-from src.Utilities.Common import unit, safe_asin
+from src.Utilities.Common import safe_asin
 
 def reflect(direction: np.ndarray, normal: np.ndarray) -> np.ndarray:
     """

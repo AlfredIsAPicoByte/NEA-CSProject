@@ -1,6 +1,5 @@
 import sys
 import os
-import pytest
 import numpy as np
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -8,7 +7,7 @@ sys.path.insert(0, os.path.join(current_dir, 'src'))
 
 sys.path.insert(0, current_dir)
 
-from src.Data.Transfrom import Transform
+from src.Data.Transform import Transform
 from src.Data.Color import Color, ColorGradient
 from src.Geometry.Core import *
 from src.Geometry.Primitive import *
@@ -36,44 +35,33 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
         Color.from_hex("#5B6791"),
         Color.from_hex("#87BFC6"),
     ]
-    sky_positions = np.array([0.0, 0.4, 0.45, 1.0]) 
+    sky_positions = np.array([0.0, 0.4, 0.45, 1.0])
+
+    scene = Scene("gradient_scene", cam, background_color=ColorGradient(sky_colors, sky_positions))
 
     # Primary Key Light (Sharp, slightly yellow, placed high and to the left for side lighting)
     key_light = LightSource(position=np.array([4.0, 5.0, 0.0]), color=Color.from_hex("#FFEDC7"), intensity=15.0, radius=0.5, name="Key Light")
-    
+    scene.add_light(key_light)
+
     # Soft Fill Light (Simulates general ambient light or bounce light)
     fill_light = LightSource(position=np.array([-5.0, 2.0, -5.0]), color=Color.from_hex("#C7E5FF"), intensity=3.0, radius=4, name="Fill Light")
-
-    # Main Sphere (Mid-Ground): Highly Reflective Metal
-    sphere_shape_1 = Sphere(radius=2.5, name="MainReflectiveBall")
-    mat_metal = MaterialFactory.create_specular(Color.from_hex("#47505C"), 0.2, 0.9, 1.0, 1.0)
-    sph_1 = Primitive(shape=sphere_shape_1, name="ReflectiveSphere")
-    sph_1.transform.translate(np.array([0.0, 2.25, 5.0]))
-    sph_1.material = mat_metal
-
-    # Additional Object 1: Cube (Background/Visual Anchor) - Matte and Rough
-    box_shape = Cube(center=np.array([2.0, 3.0, 4.0]), side_length=2.5, name="BackgroundBox")
-    mat_matte = MaterialFactory.create_diffuse(Color.from_hex("#C27A23"), roughness=0.8)
-    bx_1 = Primitive(shape=box_shape, name="MatteBoxObject")
-    bx_1.transform.rotate(np.radians(15), np.array([0, 1, 0]))
-    bx_1.material = mat_matte
-    
-    # Additional Object 2: Small Emissive Sphere (Light Source Helper) - Floating in air
-    sphere_shape_2 = Sphere(radius=1, name="EmissiveOrb")
-    mat_glow = MaterialFactory.create_emissive(Color.from_hex("#EE1717"), 2)
-    sph_2 = Primitive(shape=sphere_shape_2, name="EmissiveOrbObject")
-    sph_2.material = mat_glow
-    sph_2.transform.translate(np.array([-0.5, 2.5, 1.5]))
-
-    scene = Scene(name="gradient_scene", camera=cam, background_color=ColorGradient(sky_colors, sky_positions))
-
-    scene.add_light(key_light)
     scene.add_light(fill_light)
 
+    # Main Sphere (Mid-Ground): Highly Reflective Metal
+    mat_metal = MaterialFactory.create_specular(Color.from_hex("#47505C"), 0.2, 0.9, 1.0, 1.0)
+    sph_1 = Primitive("ReflectiveSphere", Transform(np.array([0.0, 2.25, 5.0])), Sphere(), mat_metal)
     cam.transform.look_at(sph_1.transform.position, np.array([0, 1, 0]))
-
     scene.add_object(sph_1)
+
+    # Additional Object 1: Cube (Background/Visual Anchor) - Matte and Rough
+    mat_matte = MaterialFactory.create_diffuse(Color.from_hex("#C27A23"), 0.8)
+    bx_1 = Primitive("MatteBoxObject", shape=Cube(size=2.5), material=mat_matte)
+    bx_1.transform.rotate(np.deg2rad(15), np.array([0, 1, 0]))
     scene.add_object(bx_1)
+    
+    # Additional Object 2: Small Emissive Sphere (Light Source Helper) - Floating in air
+    mat_glow = MaterialFactory.create_emissive(Color.from_hex("#EE1717"), 2)
+    sph_2 = Primitive("EmissiveOrbObject", Transform(np.array([-0.5, 2.5, 1.5])), Sphere(), mat_glow)
     scene.add_object(sph_2)
 
     return scene
@@ -84,23 +72,18 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
         cam_transform,
         fov=60.0, near=0.1, far=1000.0,
         resolution_width=width, resolution_height=height,
-        camera_type=CameraType.PERSPECTIVE,
-        distance=5
+        camera_type=CameraType.PERSPECTIVE
     )
-    scene = Scene(name="minimal_scene", camera=cam, background_color=Color.from_hex("#403A43"))
+    scene = Scene("minimal_scene", cam, background_color=Color.from_hex("#3A4655"))
 
     # Sphere at origin
-    sphere_shape = Sphere(name="BallMin")
     mat = MaterialFactory.create_diffuse(Color.from_hex("#227DD7"), 0.2)
-    v_sphere = Primitive(Transform(np.array([0.0, 0.0, 0.0]), np.zeros(3), np.ones(3)), shape=sphere_shape, name="SphereMin")
-    v_sphere.material = mat
+    v_sphere = Primitive("SphereMin", shape=Sphere(), material=mat)
     scene.add_object(v_sphere)
 
     # Ground
-    ground_shape = Sphere(name="GroundMin")
     matg = MaterialFactory.create_diffuse(Color.from_hex("#3F3F3F"), 0.9)
-    v_ground = Primitive(Transform(np.array([0.0, -100.5, 0.0]), np.zeros(3), np.array([100, 100, 100])), shape=ground_shape, name="GroundMin")
-    v_ground.material = matg
+    v_ground = Primitive("GroundMin", Transform(np.array([0.0, -100.5, 0.0]), scale=np.array([100, 100, 100])), Sphere(), matg)
     scene.add_object(v_ground)
 
     # Single light
@@ -120,28 +103,18 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
     scene = Scene(name="emissive_scene", camera=cam, background_color=Color.from_hex("#000000"))
 
     # Emissive sphere
-    emissive_shape = Sphere(name="EmissiveOrb")
     mat_glow = MaterialFactory.create_emissive(Color.from_hex("#FFEA62"), 1.2)
-    v_emissive = Primitive(shape=emissive_shape, name="GlowingSphere")
-    v_emissive.transform.enlarge(np.ones(3) * 0.3)
-    v_emissive.transform.translate(np.array([0.8, 1.0, 0.0]))
-    v_emissive.material = mat_glow
+    v_emissive = Primitive("GlowingSphere", Transform(np.array([0.8, 1.0, 0.0]), scale=np.ones(3) * 0.3), Sphere(), mat_glow)
     scene.add_object(v_emissive)
 
     # Reflective sphere
-    mirror_shape = Sphere(name="Mirror")
     mat_reflect = MaterialFactory.create_specular(Color.from_hex("#6B6666"), roughness=0.1, metallicness=0.5, specular_intensity=1.0, specular_tint_amount=1.0)
-    v_mirror = Primitive(shape=mirror_shape, name="MirrorSphere")
-    v_mirror.transform.enlarge(np.ones(3) * 0.5)
-    v_mirror.transform.translate(np.array([-0.5, 0.5, 0.0]))
-    v_mirror.material = mat_reflect
+    v_mirror = Primitive("MirrorSphere", Transform(np.array([-0.5, 0.5, 0.0]), scale=np.ones(3) * 0.5), Sphere(), mat_reflect)
     scene.add_object(v_mirror)
 
     # Ground
-    ground_shape = Sphere(name="GroundEmissive")
     matg = MaterialFactory.create_diffuse(Color.from_hex("#202020"), roughness=0.8)
-    v_ground = Primitive(Transform(np.array([0.0, -100.5, 0.0]), np.zeros(3), np.array([100, 100, 100])), shape=ground_shape, name="GroundEmissive")
-    v_ground.material = matg
+    v_ground = Primitive("Ground", Transform(np.array([0.0, -100.5, 0.0]), scale=np.ones(3) * 100), Sphere(), matg)
     scene.add_object(v_ground)
 
     # Small ambient fill light
@@ -161,29 +134,18 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     scene = Scene(name="lit_studio", camera=cam, background_color=Color.from_hex("#BEC2CF"))
 
     # Objects: two spheres and box as background
-    s1_shape = Sphere(name="StudioBallA")
     mat1 = MaterialFactory.create_specular(Color.from_hex("#FFB86B"), 0.2, 0.1, 0.9, 0)
-    v_s1 = Primitive(shape=s1_shape, name="StudioBallA")
-    v_s1.transform.enlarge(np.ones(3) * 0.4)
-    v_s1.transform.translate(np.array([-0.6, 0.4, 0.5]))
-    v_s1.material = mat1
+    v_s1 = Primitive("StudioBallA", Transform(np.array([-0.6, 0.4, 0.5]), scale=np.ones(3) * 0.4), Sphere(), mat1)
     scene.add_object(v_s1)
 
-    s2_shape = Sphere(name="StudioBallB")
     mat2 = MaterialFactory.create_specular(Color.from_hex("#6B9BFF"), 0.2, 0.4, 0.9, 0)
-    v_s2 = Primitive(shape=s2_shape, name="StudioBallB")
-    v_s2.transform.enlarge(np.ones(3) * 0.45)
-    v_s2.transform.translate(np.array([0.8, 0.45, 0.2]))
-    v_s2.material = mat2
+    v_s2 = Primitive("StudioBallB", Transform(np.array([0.8, 0.45, 0.2]), scale=np.ones(3) * 0.45), Sphere(), mat2)
     scene.add_object(v_s2)
 
-    # Background 
-    plane_shape = Plane(name="StudioBack")
+    # Background
     mat_plane = MaterialFactory.create_diffuse(Color.from_hex("#C1CBD0"), roughness=1.0)
-    v_plane = Primitive(shape=plane_shape, name="StudioBox")
-    v_plane.transform.translate(np.array([0.0, 0.5, 2.0]))
+    v_plane = Primitive("StudioBack", Transform(np.array([0.0, 0.5, 2.0])), Plane(), mat_plane)
     v_plane.transform.rotate(np.deg2rad(90), np.array([1.0, 0.0, 0.0]))
-    v_plane.material = mat_plane
     scene.add_object(v_plane)
 
     # Lights
@@ -601,7 +563,7 @@ def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
     v_monolith.material = mat_mono
     v_monolith.transform.translate(np.array([0.0, 2.0, 0.0]))
     v_monolith.transform.enlarge(np.array([0.4, 2.0, 0.4]))
-    v_monolith.transform.rotate(np.radians(25), np.array([0, 1, 0]))
+    v_monolith.transform.rotate(np.deg2rad(25), np.array([0, 1, 0]))
     scene.add_object(v_monolith)
 
     # Sand Dunes (Matte, rough)
@@ -666,7 +628,7 @@ def get_pastel_blocks_scene(width: int = 120, height: int = 120) -> Scene:
     v_base = Primitive(shape=base_shape, name="BaseObj")
     v_base.material = mat_mint
     v_base.transform.translate(np.array([0.0, 0.0, 0.0]))
-    v_base.transform.rotate(np.radians(15), np.array([0, 1, 0]))
+    v_base.transform.rotate(np.deg2rad(15), np.array([0, 1, 0]))
     scene.add_object(v_base)
 
     # Middle Cylinder (Simulated by stretched sphere or cube? using Sphere for variety)
@@ -681,7 +643,7 @@ def get_pastel_blocks_scene(width: int = 120, height: int = 120) -> Scene:
     v_top = Primitive(shape=top_shape, name="TopObj")
     v_top.material = mat_purple
     v_top.transform.translate(np.array([0.2, 2.8, 0.2]))
-    v_top.transform.rotate(np.radians(45), np.array([1, 1, 0]))
+    v_top.transform.rotate(np.deg2rad(45), np.array([1, 1, 0]))
     scene.add_object(v_top)
 
     # Lighting (Soft Studio setup)
@@ -752,8 +714,8 @@ def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
     v_cube_glass.material = mat_flint
     v_cube_glass.transform.translate(np.array([1.5, 0.5, 0.0]))
     # Rotate to show refraction through edges
-    v_cube_glass.transform.rotate(np.radians(30), np.array([0, 1, 0]))
-    v_cube_glass.transform.rotate(np.radians(10), np.array([1, 0, 0]))
+    v_cube_glass.transform.rotate(np.deg2rad(30), np.array([0, 1, 0]))
+    v_cube_glass.transform.rotate(np.deg2rad(10), np.array([1, 0, 0]))
     scene.add_object(v_cube_glass)
 
     # Checkerboard Floor (to make refraction obvious)

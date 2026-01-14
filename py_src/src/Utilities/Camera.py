@@ -3,10 +3,10 @@ import math
 from enum import Enum
 from typing import List, Tuple, Optional
 
-from src.Data.Transfrom import Transform
+from src.Data.Transform import Transform
 from src.Data.Ray import Ray, TracingRay
 from src.Data.Ratio import Ratio
-from Sampling import Sampler
+from .Sampling import Sampler
 
 class CameraType (Enum):
     """
@@ -74,22 +74,6 @@ class Camera:
     
         if self.resolution_width is None or self.resolution_height is None:
             raise ValueError("Width and Height must be provided (as 'resolution_width, resolution_height')")
-
-    @property
-    def width(self) -> int:
-        return int(self.resolution_width)
-    @width.setter
-    def width(self, val: int):
-        self.resolution_width = int(val)
-        self.aspect_ratio = Ratio(self.resolution_width, self.resolution_height)
-
-    @property
-    def height(self) -> int:
-        return int(self.resolution_height)
-    @height.setter
-    def height(self, val: int):
-        self.resolution_height = int(val)
-        self.aspect_ratio = Ratio(self.resolution_width, self.resolution_height)
 
     def get_view_matrix(self) -> np.ndarray:
         # The view matrix is typically the inverse of the camera's global transform

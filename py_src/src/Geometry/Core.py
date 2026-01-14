@@ -566,7 +566,7 @@ class Sphere(Shape3D):
         return 4 * np.pi * self.radius**2
 
 class Cube(Shape3D):
-    def __init__(self, size: Union[float, np.ndarray] = 1.0, **kwargs):
+    def __init__(self, size: Union[float, np.ndarray] = 2.0, **kwargs):
         super().__init__(**kwargs)
         if isinstance(size, (int, float)):
             self.half_size = np.array([size, size, size]) / 2.0

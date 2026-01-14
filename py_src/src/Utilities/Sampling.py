@@ -214,6 +214,89 @@ class Sampler:
         Returns lambda for Spectral Rendering (for later).
         """
         return self.next_1d()
+    
+    def sample_unit_sphere(self) -> np.ndarray:
+        """
+        Returns a random normalized vector on the surface of a unit sphere.
+        Uses the standard Spherical Coordinate method.
+        """
+        # 1. Pick two random numbers
+        u1 = np.random.random()
+        u2 = np.random.random()
+
+        # 2. Calculate spherical coordinates
+        # z goes from -1 to 1
+        z = 1.0 - 2.0 * u1 
+        
+        # r is the radius of the slice at height z
+        r = math.sqrt(max(0.0, 1.0 - z * z))
+        
+        # phi is the angle around the Z axis
+        phi = 2.0 * math.pi * u2
+
+        # 3. Convert to Cartesian (x, y, z)
+        x = r * math.cos(phi)
+        y = r * math.sin(phi)
+
+        return np.array([x, y, z], dtype=np.float32)
+
+    def sample_cosine_hemisphere(self, normal: np.ndarray) -> np.ndarray:
+        """
+        Returns a random direction on the hemisphere oriented around 'normal'.
+        The probability of choosing a direction is proportional to the cosine 
+        of the angle with the normal (Cosine Importance Sampling).
+        
+        Crucial for efficient Diffuse/Lambertian rendering.
+        """
+        # 1. Generate a sample in Local Tangent Space (where Normal is 0,0,1)
+        # We use Malley's Method (Concentric Disk Sampling -> Project to Hemisphere)
+        # Or simpler Polar method:
+        
+        u1 = np.random.random()
+        u2 = np.random.random()
+        
+        # r = sqrt(u1) ensures area-preserving mapping on the disk
+        r = math.sqrt(u1)
+        theta = 2.0 * math.pi * u2
+        
+        # Local coordinates (on the disk)
+        local_x = r * math.cos(theta)
+        local_y = r * math.sin(theta)
+        
+        # Project up to the hemisphere surface
+        # z = sqrt(1 - x^2 - y^2) = sqrt(1 - r^2) = sqrt(1 - u1)
+        local_z = math.sqrt(max(0.0, 1.0 - u1))
+
+        local_vector = np.array([local_x, local_y, local_z], dtype=np.float32)
+
+        # 2. Transform Local Space -> World Space (Align with actual Normal)
+        return self._align_to_normal(local_vector, normal)
+
+    def _align_to_normal(self, sample_dir: np.ndarray, normal: np.ndarray) -> np.ndarray:
+        """
+        Helper: Builds an Orthonormal Basis (ONB) around the normal 
+        and transforms the sample direction to world space.
+        """
+        # Ensure normal is normalized
+        n = normal / np.linalg.norm(normal)
+        
+        # 1. Find a Tangent vector (T) not parallel to N
+        # If N is close to world-up (0,1,0), use world-X, else use world-Y
+        if abs(n[0]) > 0.9:
+            ref_axis = np.array([0.0, 1.0, 0.0])
+        else:
+            ref_axis = np.array([1.0, 0.0, 0.0])
+            
+        # T = normalize(cross(N, ref))
+        tangent = np.cross(n, ref_axis)
+        tangent = tangent / np.linalg.norm(tangent)
+        
+        # 2. Find Bitangent (B)
+        # B = cross(N, T)
+        bitangent = np.cross(n, tangent)
+        
+        # 3. Transform: sample.x * T + sample.y * B + sample.z * N
+        return (sample_dir[0] * tangent) + (sample_dir[1] * bitangent) + (sample_dir[2] * n)
 
     # ------------------------------------------------------------------
     # 4. Volumetrics
@@ -266,7 +349,7 @@ class StratifiedSampler(Sampler):
         self._grid_side = max(1, int(math.ceil(math.sqrt(self.settings.samples_per_pixel))))
 
     def set_samples_per_pixel(self, spp: int) -> None:
-        super().set_samples_per_pixel(spp)
+        self.settings.samples_per_pixel = spp
         self._rebuild_grid()
 
     def sample_pixel(self, x: int, y: int, sample_idx: int) -> Tuple[float, float]:
