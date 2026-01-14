@@ -85,11 +85,7 @@ class PBRMaterial:
         for light in scene_lights:
             # --- Light Setup (World Space) ---
             L, dist = light.get_direction_and_dist(hit_point)
-            incoming_radiance = light.get_radiance(hit_point)
-            
             if dist <= bias: continue
-            if incoming_radiance.r + incoming_radiance.g + incoming_radiance.b <= 0.0:
-                continue
             
             # --- Visibility Check (Shadows) ---
             # Note: If checking visibility through glass, this simple function 
@@ -102,7 +98,9 @@ class PBRMaterial:
             attenuation = attenuate_sqr_distance(dist)
 
             # Final radiance
-            incoming_radiance *= attenuation * visibility
+            incoming_radiance = light.get_radiance(hit_point) * attenuation * visibility
+            if incoming_radiance.r + incoming_radiance.g + incoming_radiance.b <= 0.0:
+                continue
 
             # --- Material Handling ---
             if self.type == MaterialType.DIFFUSE:
