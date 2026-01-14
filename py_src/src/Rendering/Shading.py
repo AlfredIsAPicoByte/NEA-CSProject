@@ -198,11 +198,12 @@ class DistanceShading(ShadingStrategy):
             self,
             min_distance: float = 0.0,
             max_distance: float = 20.0,
-            color_gradient: Optional[ColorGradient] = None
-        ):
+            color_gradient: ColorGradient = ColorGradient([Color(0, 0, 0), Color(1, 1, 1)], np.array([0.0, 1.0]))
+            ):
         super().__init__()
         self.min_dist = min_distance
         self.max_dist = max_distance
+        self.color_gradient = color_gradient
 
     def shade(self, hit_info: HitInfo, *args, **kwargs) -> Color:
         dist = hit_info.distance
@@ -219,7 +220,7 @@ class DistanceShading(ShadingStrategy):
         # Close = White (1.0), Far = Black (0.0)
         val = 1.0 - normalized
         
-        return Color(val, val, val)
+        return self.color_gradient.get_color(val)
 
 class FlatShading(ShadingStrategy):
     """

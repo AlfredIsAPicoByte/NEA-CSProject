@@ -39,8 +39,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    OUT_DIR = os.path.join(PROJECT_ROOT, "image", "benchmarking", "scenes")
-    os.makedirs(OUT_DIR, exist_ok=True)
+    IMG_OUT_DIR = os.path.join(PROJECT_ROOT, "images", "benchmarking", "scenes")
+    REP_OUT_DIR = os.path.join(PROJECT_ROOT, "reports", "benchmarking", "scenes")
+    os.makedirs(IMG_OUT_DIR, exist_ok=True)
+    os.makedirs(REP_OUT_DIR, exist_ok=True)
 
     img_width, img_height = 16 * 8, 9 * 8
 
@@ -66,12 +68,12 @@ if __name__ == "__main__":
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
-        intersection = BVHIntersection(max_distance=500, max_steps=128)
+        intersection = RayMarchingIntersection(max_distance=1000, max_steps=128)
         interactor = TerminalInteraction()
-        shading = LambertShading(
-            ambience_settings=AmbienceSettings(False, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.1)),
-            shadow_settings=ShadowSettings(False, 8, 2e-3),
-            background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
+        shading = NormalShading(
+            # ambience_settings=AmbienceSettings(False, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.1)),
+            # shadow_settings=ShadowSettings(False, 8, 2e-3),
+            background_settings=BackgroundSettings(False, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
         )
 
         raytracer = Raytracer(
@@ -85,37 +87,39 @@ if __name__ == "__main__":
         raytracer.stats = TracingStats()
 
         sanitized_name = scene.name.replace(" ", "_").lower()
-        out_path = os.path.join(OUT_DIR, f"{sanitized_name}_python")
+        raw_image_out_path = os.path.join(IMG_OUT_DIR, "raw", f"{sanitized_name}_python_raw.png")
+        processed_image_out_path = os.path.join(IMG_OUT_DIR, "processed", f"{sanitized_name}_python.png")
+        mem_report_out_path = os.path.join(REP_OUT_DIR, "memory", f"{sanitized_name}_python_mem.txt")
+        stats_report_out_path = os.path.join(REP_OUT_DIR, "statistics", f"{sanitized_name}_python_stats.txt")
+
         width = scene.camera.width if scene.camera is not None else img_width
         height = scene.camera.height if scene.camera is not None else img_height
-        print(f"Rendering '{scene.name}' -> {OUT_DIR} ({width}x{height})")
+        print(f"Rendering '{scene.name}' -> {raw_image_out_path} ({width}x{height})")
         
         try:
-            mem_report_path = out_path + "_mem.txt"
-            stats_report_path = out_path + "_stats.txt"
             with MemoryProfiler(enable_tracemalloc=True, top=6) as mp:
                 film_data = render_process(scene, raytracer)
             
             try:
-                with open(stats_report_path, "w", encoding="utf-8") as f:
+                with open(stats_report_out_path, "w", encoding="utf-8") as f:
                     f.write(raytracer.stats.format_report())
                     print(" + Wrote rendering statistics")
             except Exception as e:
-                print(f" / Failed to write rendering statistics: {e}")
+                print(f" / Failed to write rendering statistics:\n{e}\n")
                 import traceback
                 traceback.print_exc()
             try:
-                with open(mem_report_path, "w", encoding="utf-8") as f:
+                with open(mem_report_out_path, "w", encoding="utf-8") as f:
                     f.write(mp.format_report())
                     print(" + Wrote memory report")
             except Exception as e:
-                print(f" / Failed to write memory report: {e}")
+                print(f" / Failed to write memory report:\n{e}\n")
                 import traceback
                 traceback.print_exc()
 
             raw_img_data = film_data.get_image()
             raw_img_data = np.rot90(raw_img_data, k=-1)
-            Film.save(raw_img_data, out_path + "_raw.png")
+            Film.save(raw_img_data, raw_image_out_path)
 
             # 2. Post-Process (The Pipeline)
             processed_img = raw_img_data
@@ -142,16 +146,16 @@ if __name__ == "__main__":
                     processed_img = pipeline.execute(processed_img)
 
                 try:
-                    with open(mem_report_path, "a", encoding="utf-8") as f:
+                    with open(mem_report_out_path, "a", encoding="utf-8") as f:
                         f.write("\n\nPostprocessing:\n")
                         f.write(mp.format_report())
                         print(" + Appended to memory report")
                 except Exception as e:
-                    print(f" / Failed to append to memory report: {e}")
+                    print(f" / Failed to append to memory report:\n{e}\n")
                     import traceback
                     traceback.print_exc()
 
-                Film.save(processed_img, out_path + ".png")
+                Film.save(processed_img, processed_image_out_path)
             else:
                 print(" > Skipping post-processing (--no-post active)")
 
@@ -163,7 +167,7 @@ if __name__ == "__main__":
                 pass
             gc.collect()
 
-            print("|-" * 32 + "|")
+            print("|-" * 32 + "|\n")
             
         except Exception as e:
             print(f"Failed to render '{scene.name}': {e}")

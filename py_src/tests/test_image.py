@@ -20,7 +20,7 @@ def test_image_creation():
         for x in range(width):
             image[y, x] = [x % 256, y % 256, (x + y) % 256]
     
-    output_path = os.path.join(os.path.dirname(__file__), "image", "testing", "test_output.png")
+    output_path = os.path.join(os.path.dirname(__file__), "images", "testing", "test_output.png")
     Film.save(image, output_path)
     print(f"Test image saved to {output_path}")
 

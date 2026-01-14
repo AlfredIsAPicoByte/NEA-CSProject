@@ -66,7 +66,7 @@ class RayMarchingIntersection(IntersectionStrategy):
                 
                 if closest_object is not None:
                     shape = getattr(closest_object, "shape", None)
-                    transform = closest_object.world_transform
+                    transform = closest_object.transform
 
                     if shape is not None:
                         shape = cast(Shape, shape)
