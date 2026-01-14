@@ -179,10 +179,10 @@ class NormalShading(ShadingStrategy):
         normal = getattr(hit_info, "normal", np.array([0.0, 1.0, 0.0]))
         
         # 2. Map from range [-1, 1] to [0, 1] for color display
-        # Normal (0,0,0) becomes Black (0, 0, 0)
-        r = np.clip((normal[0]), 0.0, 1.0)
-        g = np.clip((normal[1]), 0.0, 1.0)
-        b = np.clip((normal[2]), 0.0, 1.0)
+        # Normal (0,0,0) becomes Grey (0.5, 0.5, 0.5)
+        r = np.clip((normal[0] * 0.5) + 0.5, 0.0, 1.0)
+        g = np.clip((normal[1] * 0.5) + 0.5, 0.0, 1.0)
+        b = np.clip((normal[2] * 0.5) + 0.5, 0.0, 1.0)
         
         return Color(r, g, b)
 

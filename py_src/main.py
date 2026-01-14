@@ -68,7 +68,7 @@ if __name__ == "__main__":
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
-        intersection = RayMarchingIntersection(max_distance=1000, max_steps=128)
+        intersection = BVHIntersection(max_distance=1000, max_steps=128)
         interactor = TerminalInteraction()
         shading = NormalShading(
             # ambience_settings=AmbienceSettings(False, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.1)),
@@ -87,10 +87,20 @@ if __name__ == "__main__":
         raytracer.stats = TracingStats()
 
         sanitized_name = scene.name.replace(" ", "_").lower()
-        raw_image_out_path = os.path.join(IMG_OUT_DIR, "raw", f"{sanitized_name}_python_raw.png")
-        processed_image_out_path = os.path.join(IMG_OUT_DIR, "processed", f"{sanitized_name}_python.png")
-        mem_report_out_path = os.path.join(REP_OUT_DIR, "memory", f"{sanitized_name}_python_mem.txt")
-        stats_report_out_path = os.path.join(REP_OUT_DIR, "statistics", f"{sanitized_name}_python_stats.txt")
+        raw_image_out_path = os.path.join(IMG_OUT_DIR, "raw")
+        processed_image_out_path = os.path.join(IMG_OUT_DIR, "processed")
+        mem_report_out_path = os.path.join(REP_OUT_DIR, "memory")
+        stats_report_out_path = os.path.join(REP_OUT_DIR, "statistics")
+            
+        os.makedirs(raw_image_out_path, exist_ok=True)
+        os.makedirs(processed_image_out_path, exist_ok=True)
+        os.makedirs(mem_report_out_path, exist_ok=True)
+        os.makedirs(stats_report_out_path, exist_ok=True)
+
+        raw_image_out_path = os.path.join(raw_image_out_path, f"{sanitized_name}_python.png")
+        processed_image_out_path = os.path.join(processed_image_out_path, f"{sanitized_name}_python.png")
+        mem_report_out_path = os.path.join(mem_report_out_path, f"{sanitized_name}_python.txt")
+        stats_report_out_path = os.path.join(stats_report_out_path, f"{sanitized_name}_python.txt")
 
         width = scene.camera.width if scene.camera is not None else img_width
         height = scene.camera.height if scene.camera is not None else img_height
@@ -118,7 +128,6 @@ if __name__ == "__main__":
                 traceback.print_exc()
 
             raw_img_data = film_data.get_image()
-            raw_img_data = np.rot90(raw_img_data, k=-1)
             Film.save(raw_img_data, raw_image_out_path)
 
             # 2. Post-Process (The Pipeline)
@@ -133,7 +142,7 @@ if __name__ == "__main__":
 
                     pipeline.add_pass(Exposure(1.0))
                     
-                    pipeline.add_pass(Bloom(0.8, 1, 0.5, 0.75))
+                    pipeline.add_pass(Bloom(1, 5, 0.67, 0.75))
 
                     # pipeline.add_pass(ChromaticAberration(1))
 

@@ -55,8 +55,8 @@ class Scene:
             shape = cast(Shape, shape)
 
             # 3. Calculate Distance
-            # The Shape is responsible for transforming the world 'point' to its local space.
-            transform = obj.transform
+            # Use the WORLD transform so hierarchical/parented objects are handled properly
+            transform = getattr(obj, 'world_transform', obj.transform)
             local_point = transform.inverse_transform_point(point)
 
             try:
@@ -102,7 +102,7 @@ class Scene:
             # and returns the points transformed back to World Space.
             transform = obj.transform
 
-            # 1. Transform Ray -> Local Space
+            # 1. Transform Ray -> Local Space using the WORLD transform
             # "Shoot the ray as if the camera moved relative to the object"
             local_ray = transform.inverse_transform_ray(ray)
 

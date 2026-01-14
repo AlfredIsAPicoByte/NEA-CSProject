@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import replace
 
 from src.Data.Ray import TracingRay
+from src.Data.Color import Color
 from src.Data.Hit import HitInfo
 from .Core import RenderStats
 from src.Material.Core import PBRMaterial, MaterialType
@@ -32,20 +33,8 @@ class TerminalInteraction(InteractionStrategy):
     - Matte/Black hole materials.
     - Light sources (if they don't reflect).
     """
-    def interact(
-        self, 
-        ray: TracingRay, 
-        hit_info: HitInfo,
-        bias: float = 1e-4,
-        stats: Optional["RenderStats"] = None,
-        *args, **kwargs
-    ) -> Optional[TracingRay]:
-        if not hit_info.hit:
-            return None
-        
-        next_origin = hit_info.point + (ray.orientation * bias)
-
-        return replace(ray, origin=next_origin)
+    def interact(self, *args, **kwargs) -> Optional[TracingRay]:
+        return None
 
 class PassthroughInteraction(InteractionStrategy):
     """
@@ -76,7 +65,9 @@ class PassthroughInteraction(InteractionStrategy):
             return None
 
         if sampler.next_1d() > np.clip(material.data.albedo.a, 0.0, 1.0):
-            return TerminalInteraction().interact(ray, hit_info, bias, stats)
+            next_origin = hit_info.point + (ray.orientation * bias)
+
+            return replace(ray, origin=next_origin)
         
         if stats: stats.rays_transparency += 1
         return None
@@ -174,14 +165,14 @@ class StandardInteraction(InteractionStrategy):
             if roughness > bias:
                 # Add a random vector in a sphere and normalize
                 fuzz = sampler.sample_unit_sphere() * roughness
-                reflect_dir = normalize(reflect_dir + fuzz)
+                reflect_dir = unit(reflect_dir + fuzz)
                 
                 # Check if we reflected back into the surface (absorb ray)
                 if np.dot(reflect_dir, N) <= 0:
                     return None
 
             # Throughput for metals is usually the Albedo (they tint reflection)
-            new_throughput = current_throughput * mat.data.albedo
+            new_throughput = current_throughput * material.data.albedo
 
             return TracingRay(
                 origin=P + (N * bias),
@@ -198,7 +189,7 @@ class StandardInteraction(InteractionStrategy):
         elif material.type == MaterialType.GLASS:
             if stats: stats.rays_refraction += 1
             
-            ior = getattr(mat.data, "ior", 1.5)
+            ior = getattr(material.data, "ior", 1.5)
             
             # Determine Entering vs Exiting
             dt = np.dot(I, N)
@@ -268,11 +259,11 @@ class StandardInteraction(InteractionStrategy):
                 
                 # Update Medium Tracking for Volumetrics
                 if entering:
-                    new_ray.medium_color = mat.data.color # or albedo
-                    new_ray.medium_density = getattr(mat.data, "density", 0.0)
+                    new_ray.medium_color = material.data.color # or albedo
+                    new_ray.medium_density = getattr(material.data, "density", 0.0)
                 else:
                     # Exiting to air (reset to defaults)
-                    new_ray.medium_color = Color(1,1,1) 
+                    new_ray.medium_color = Color(1, 1, 1) 
                     new_ray.medium_density = 0.0
                     
                 return new_ray

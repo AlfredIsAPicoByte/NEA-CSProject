@@ -73,6 +73,14 @@ class Primitive:
         
         return self._world_matrix
 
+    @property
+    def world_transform(self) -> Transform:
+        """Returns a `Transform` representing the object's world transform (position/rotation/scale).
+        Useful for APIs that expect a `Transform` object rather than raw matrices."""
+        # Ensure matrices are up-to-date
+        mat = self.get_world_matrix()
+        return Transform.from_matrix(mat)
+
     def flatten(self) -> List['Primitive']:
         """
         Returns a flat list of this object and all descendants.

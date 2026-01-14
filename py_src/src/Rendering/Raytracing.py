@@ -268,6 +268,14 @@ class Raytracer(Algorithm):
         if camera is None: raise ValueError("No camera provided in Scene")
         cam_width, cam_height = camera.width, camera.height
 
+        # Ensure object world transforms are up-to-date so BVH & intersections use correct positions
+        try:
+            for obj in scene.objects:
+                obj.update_world_matrices()
+        except Exception:
+            # If scene contains non-Primitive items, ignore and proceed
+            pass
+
         # Create a film for sample_color buffer
         film = Film(cam_width, cam_height)
 

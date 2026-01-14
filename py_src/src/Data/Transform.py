@@ -143,6 +143,11 @@ class Transform:
         
         return combined
 
+    # Backwards-compatible alias used by older code
+    def to_matrix(self) -> np.ndarray:
+        """Alias for `get_global_matrix`. Kept for compatibility with existing code paths."""
+        return self.get_global_matrix()
+
     def get_inverse_matrix(self) -> np.ndarray:
         """Returns the inverse of the global transform matrix (World -> Local)."""
         try:

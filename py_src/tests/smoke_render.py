@@ -12,7 +12,6 @@ from src.Rendering.Shading import LambertShading, AmbienceSettings, ShadowSettin
 from src.Image.Film import Film
 from src.Utilities.Sampling import SamplingManager, SampleSettings
 
-
 def main():
     width, height = 64, 32
     scene = get_minimal_scene(width, height)
@@ -38,7 +37,7 @@ def main():
     film = raytracer.render(scene, sampler=None, tile_size=8)
 
     img = film.get_image()
-    out = os.path.join(repo, 'images', 'benchmarking', 'smoke_test.png')
+    out = os.path.join(repo, 'images', 'testing', 'smoke_test.png')
     os.makedirs(os.path.dirname(out), exist_ok=True)
 
     Film.save(img, out)
