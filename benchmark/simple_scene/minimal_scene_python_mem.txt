@@ -1,22 +1,22 @@
-Time: 47.8917s | RSS Δ: 6.047 MB
-RSS start: 36.895 MB | RSS end: 42.941 MB
-tracemalloc current: 131.75 KB | peak: 2168.86 KB
+Time: 50.3312s | RSS Δ: 2.695 MB
+RSS start: 42.531 MB | RSS end: 45.227 MB
+tracemalloc current: 156.53 KB | peak: 463.95 KB
 Top allocations (most recent frame):
-  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\main.py:32 | 108.16 KB (4 allocs)
-  2. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Raytracing.py:336 | 13.18 KB (241 allocs)
-  3. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Raytracing.py:306 | 4.10 KB (75 allocs)
-  4. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Luminance.py:120 | 1.15 KB (49 allocs)
-  5. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Sampling.py:130 | 0.50 KB (1 allocs)
-  6. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\psutil\_pswindows.py:666 | 0.47 KB (4 allocs)
+  1. /workspaces/NEA-CSProject/py_src/src/Image/Film.py:14 | 108.16 KB (4 allocs)
+  2. /workspaces/NEA-CSProject/py_src/src/Image/Film.py:15 | 36.09 KB (2 allocs)
+  3. /workspaces/NEA-CSProject/py_src/src/Data/Ray.py:117 | 4.05 KB (74 allocs)
+  4. <frozen abc>:123 | 1.40 KB (20 allocs)
+  5. /home/codespace/.local/lib/python3.12/site-packages/psutil/_pslinux.py:1632 | 1.05 KB (9 allocs)
+  6. /workspaces/NEA-CSProject/py_src/src/Utilities/Sampling.py:335 | 1.03 KB (44 allocs)
 
 Postprocessing:
-Time: 0.8455s | RSS Δ: 29.164 MB
-RSS start: 42.602 MB | RSS end: 71.766 MB
-tracemalloc current: 14329.11 KB | peak: 15256.08 KB
+Time: 0.0042s | RSS Δ: 0.914 MB
+RSS start: 67.270 MB | RSS end: 68.184 MB
+tracemalloc current: 223.89 KB | peak: 1258.32 KB
 Top allocations (most recent frame):
-  1. <frozen importlib._bootstrap_external>:729 | 8275.11 KB (46368 allocs)
-  2. <frozen importlib._bootstrap>:241 | 1480.40 KB (16544 allocs)
-  3. <frozen abc>:106 | 220.12 KB (673 allocs)
-  4. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\PostProcessing.py:198 | 216.09 KB (2 allocs)
-  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\scipy\_lib\_util.py:1269 | 168.38 KB (68 allocs)
-  6. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\scipy\_lib\doccer.py:79 | 144.19 KB (33 allocs)
+  1. /workspaces/NEA-CSProject/py_src/src/Image/PostProcessing/Passes.py:41 | 216.09 KB (2 allocs)
+  2. /workspaces/NEA-CSProject/py_src/src/Image/PostProcessing/Passes.py:136 | 1.00 KB (1 allocs)
+  3. /home/codespace/.local/lib/python3.12/site-packages/numpy/lib/_index_tricks_impl.py:185 | 1.00 KB (1 allocs)
+  4. /home/codespace/.local/lib/python3.12/site-packages/numpy/_core/_methods.py:115 | 0.62 KB (1 allocs)
+  5. /workspaces/NEA-CSProject/py_src/src/Image/PostProcessing/Passes.py:123 | 0.50 KB (1 allocs)
+  6. /workspaces/NEA-CSProject/py_src/src/Image/PostProcessing/Passes.py:88 | 0.50 KB (1 allocs)

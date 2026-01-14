@@ -1,22 +1,22 @@
-Time: 51.0296s | RSS Δ: 0.285 MB
-RSS start: 70.195 MB | RSS end: 70.480 MB
-tracemalloc current: 140.27 KB | peak: 2149.79 KB
+Time: 23.6093s | RSS Δ: 0.125 MB
+RSS start: 68.758 MB | RSS end: 68.883 MB
+tracemalloc current: 159.14 KB | peak: 465.19 KB
 Top allocations (most recent frame):
-  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\main.py:32 | 108.09 KB (2 allocs)
-  2. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Raytracing.py:336 | 13.73 KB (251 allocs)
-  3. C:\Python311\Lib\dataclasses.py:1501 | 7.29 KB (62 allocs)
-  4. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Raytracing.py:306 | 4.27 KB (78 allocs)
-  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\psutil\_pswindows.py:666 | 1.52 KB (13 allocs)
-  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Sampling.py:201 | 1.05 KB (45 allocs)
+  1. /workspaces/NEA-CSProject/py_src/src/Image/Film.py:14 | 108.09 KB (2 allocs)
+  2. /workspaces/NEA-CSProject/py_src/src/Image/Film.py:15 | 36.09 KB (2 allocs)
+  3. /home/codespace/.local/lib/python3.12/site-packages/psutil/_pslinux.py:1632 | 4.80 KB (41 allocs)
+  4. /workspaces/NEA-CSProject/py_src/src/Data/Ray.py:117 | 4.21 KB (77 allocs)
+  5. /workspaces/NEA-CSProject/py_src/src/Utilities/Sampling.py:335 | 1.03 KB (44 allocs)
+  6. /workspaces/NEA-CSProject/py_src/src/Utilities/Sampling.py:334 | 1.03 KB (44 allocs)
 
 Postprocessing:
-Time: 0.0049s | RSS Δ: 1.047 MB
-RSS start: 68.738 MB | RSS end: 69.785 MB
-tracemalloc current: 216.78 KB | peak: 1145.86 KB
+Time: 0.0031s | RSS Δ: 0.730 MB
+RSS start: 68.883 MB | RSS end: 69.613 MB
+tracemalloc current: 218.43 KB | peak: 1255.67 KB
 Top allocations (most recent frame):
-  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\PostProcessing.py:198 | 216.09 KB (2 allocs)
-  2. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\psutil\_pswindows.py:791 | 0.12 KB (1 allocs)
-  3. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\psutil\_pswindows.py:666 | 0.12 KB (1 allocs)
-  4. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:57 | 0.12 KB (1 allocs)
-  5. C:\Python311\Lib\tracemalloc.py:560 | 0.09 KB (2 allocs)
-  6. C:\Python311\Lib\tracemalloc.py:423 | 0.08 KB (2 allocs)
+  1. /workspaces/NEA-CSProject/py_src/src/Image/PostProcessing/Passes.py:41 | 216.09 KB (2 allocs)
+  2. /home/codespace/.local/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:57 | 0.35 KB (3 allocs)
+  3. /workspaces/NEA-CSProject/py_src/main.py:140 | 0.20 KB (2 allocs)
+  4. /workspaces/NEA-CSProject/py_src/main.py:138 | 0.20 KB (2 allocs)
+  5. /workspaces/NEA-CSProject/py_src/main.py:136 | 0.20 KB (2 allocs)
+  6. /workspaces/NEA-CSProject/py_src/main.py:132 | 0.20 KB (2 allocs)
