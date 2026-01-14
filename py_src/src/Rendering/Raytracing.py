@@ -195,7 +195,11 @@ class Raytracer(Algorithm):
         hit_info = self.intersector.find_hit(scene, ray, self.stats)
 
         if not hit_info.hit:
-            return self.shader.background_settings.get_background_color(ray.orientation)
+            bg = self.shader.background_settings.get_background_color(ray.orientation)
+            if bg is None:
+                self._record_nan(reason='background returned None', ray=ray)
+                return Color(0.0, 0.0, 0.0)
+            return bg
 
         # Validate hit_info (point and normal must be finite and present)
         if getattr(hit_info, 'point', None) is None or getattr(hit_info, 'normal', None) is None:
@@ -311,7 +315,7 @@ class Raytracer(Algorithm):
 
                     # sample = Sample(ray.sample_u, ray.sample_v, 1.0) # weight 1.0
 
-                    film.add_pixle_batch(
+                    film.add_pixel_batch(
                         ray.pixel_x,
                         ray.pixel_y,
                         pixel_color.to_np_array(),

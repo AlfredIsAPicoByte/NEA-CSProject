@@ -40,7 +40,7 @@ def test_world_transform_applied_to_normals():
     assert hit.normal is not None
 
     # Recompute expected normal using world_transform pipeline
-    world_transform = child.world_transform
+    world_transform = child.transform
     local_pt = world_transform.inverse_transform_point(hit.point)
     local_normal = sphere.get_normal(local_pt)
     expected_world_normal = world_transform.transform_normal(local_normal)

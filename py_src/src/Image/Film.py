@@ -7,13 +7,16 @@ class Film:
         self.width = width
         self.height = height
 
-        self.accum_color = np.zeros((width, height, 3), dtype=np.float32)
-        self.accum_weight = np.zeros((width, height), dtype=np.float32)
+        # Store arrays with shape (height, width, channels) for row-major (y,x) indexing
+        self.accum_color = np.zeros((height, width, 3), dtype=np.float32)
+        self.accum_weight = np.zeros((height, width), dtype=np.float32)
 
-    def add_pixle_batch(self, x: int, y: int, color_sum: np.ndarray, weighted_sum: float):
-        if 0 <= x <= self.width and 0 <= y <= self.height:
-            self.accum_color[x, y] += color_sum[:3]
-            self.accum_weight[x, y] += weighted_sum
+    def add_pixel_batch(self, x: int, y: int, color_sum: np.ndarray, weighted_sum: float):
+        # Bounds check: valid pixel coordinates are 0 <= x < width and 0 <= y < height
+        if 0 <= x < self.width and 0 <= y < self.height:
+            # Use row-major indexing: [y, x]
+            self.accum_color[y, x] += color_sum[:3]
+            self.accum_weight[y, x] += weighted_sum
     
     def get_image(self) -> np.ndarray:
         natural_mask = self.accum_weight > 0

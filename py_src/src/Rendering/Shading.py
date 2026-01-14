@@ -40,7 +40,10 @@ class BackgroundSettings:
         Handles Solid Color, ColorGradient (Skybox), or Texture Map safely.
         """
         if not self.enabled:
-            return self.default
+            # Ensure we always return a Color even if default is None or an unexpected type
+            if isinstance(self.default, Color):
+                return self.default
+            return Color(0.0, 0.0, 0.0, 1.0)
         
         type_name = type(self.custom).__name__
 
@@ -65,7 +68,8 @@ class BackgroundSettings:
             dir = dir / (np.linalg.norm(dir) + 1e-12)
             return self._sample_equirectangular_map(self.custom, dir)
 
-        return self.default
+        # Ensure we always return a Color even if default is None or an unexpected type
+        return self.default if isinstance(self.default, Color) else Color(0.0, 0.0, 0.0, 1.0)
     
     def _sample_equirectangular_map(self, texture: np.ndarray, direction: np.ndarray) -> Color:
         """
