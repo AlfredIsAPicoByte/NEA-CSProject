@@ -347,9 +347,7 @@ class RecursiveLambertShading(LambertShading):
         if material is None:
             return Color(1.0, 0.0, 1.0) # Material Error
 
-        final_color = Color(0.0, 0.0, 0.0)
-        
-        # --- 1. Direct Lighing, reuse basic lambert shading
+        # --- 1. Direct Lighting, reuse basic lambert shading
         if material.type == MaterialType.EMISSIVE:
             return material.get_emissive_component()
         
@@ -357,10 +355,35 @@ class RecursiveLambertShading(LambertShading):
 
         # --- 2. Indirect Lighting (Recursion) ---
         indirect_light = Color(0.0, 0.0, 0.0)
-        indirect_light += trace_function(scene, ray, recursions_left, sampler)
+        
+        # Only recurse if we have bounces left
+        if recursions_left > 0:
+            # Import here to avoid circular imports
+            from .Interactions import StandardInteraction
+            
+            # Create a proper interaction to get the next bounce direction
+            # This handles diffuse/specular/refraction based on material type
+            interactor = StandardInteraction()
+            bounce_ray = interactor.interact(
+                ray=ray,
+                hit_info=hit_info,
+                sampler=sampler,
+                bias=bias,
+                stats=stats
+            )
+            
+            # If a ray was generated (not absorbed), trace it
+            if bounce_ray is not None:
+                # Recursively trace the bounced ray
+                bounce_color = trace_function(scene, bounce_ray, recursions_left - 1, sampler)
+                
+                # Weight the indirect light by the material's albedo
+                # This shows how much light the surface absorbs/reflects
+                albedo = material.data.albedo.to_np_array(include_alpha=False)
+                indirect_light = bounce_color * Color(albedo[0], albedo[1], albedo[2], 1.0)
 
-        # --- 3. Combine ---
-        final_color = direct_light
+        # --- 3. Combine Direct + Indirect ---
+        final_color = direct_light + indirect_light
 
         return final_color
 

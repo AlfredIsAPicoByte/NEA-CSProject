@@ -77,7 +77,7 @@ if __name__ == "__main__":
         )
 
         raytracer = Raytracer(
-            max_recursions=4,
+            max_recursions=2,
             sampling_manager=sampling_manager,
             intersection_strategy=intersection,
             interaction_strategy=interactor,

@@ -172,15 +172,15 @@ class StandardInteraction(InteractionStrategy):
                     return None
 
             # Throughput for metals is usually the Albedo (they tint reflection)
-            new_throughput = current_throughput * material.data.albedo
+            new_throughput = current_throughput[:3] * material.data.albedo.to_np_array(include_alpha=False)[:3]
 
             return TracingRay(
                 origin=P + (N * bias),
                 orientation=reflect_dir,
                 throughput=new_throughput,
                 current_depth=ray.current_depth + 1,
-                medium_density=ray.medium_density,
-                medium_color=ray.medium_color
+                # medium_density=ray.medium_density,
+                # medium_color=ray.medium_color
             )
             
         # ==========================================================
@@ -223,8 +223,8 @@ class StandardInteraction(InteractionStrategy):
                     throughput=current_throughput, # Glass reflection is white (usually)
                     current_depth=ray.current_depth + 1,
                     # Medium properties don't change on reflection
-                    medium_density=ray.medium_density,
-                    medium_color=ray.medium_color,
+                    # medium_density=ray.medium_density,
+                    # medium_color=ray.medium_color,
                     is_inside=ray.is_inside
                 )
             else:
@@ -239,8 +239,8 @@ class StandardInteraction(InteractionStrategy):
                         orientation=reflected,
                         throughput=current_throughput,
                         current_depth=ray.current_depth + 1,
-                        medium_density=ray.medium_density,
-                        medium_color=ray.medium_color,
+                        # medium_density=ray.medium_density,
+                        # medium_color=ray.medium_color,
                         is_inside=ray.is_inside
                     )
                 
@@ -258,13 +258,13 @@ class StandardInteraction(InteractionStrategy):
                 )
                 
                 # Update Medium Tracking for Volumetrics
-                if entering:
-                    new_ray.medium_color = material.data.color # or albedo
-                    new_ray.medium_density = getattr(material.data, "density", 0.0)
-                else:
-                    # Exiting to air (reset to defaults)
-                    new_ray.medium_color = Color(1, 1, 1) 
-                    new_ray.medium_density = 0.0
+                # if entering:
+                #     new_ray.medium_color = material.data.color # or albedo
+                #     new_ray.medium_density = getattr(material.data, "density", 0.0)
+                # else:
+                #     # Exiting to air (reset to defaults)
+                #     new_ray.medium_color = Color(1, 1, 1) 
+                #     new_ray.medium_density = 0.0
                     
                 return new_ray
 
