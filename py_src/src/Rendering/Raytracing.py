@@ -1,6 +1,5 @@
 import numpy as np
 from typing import Optional, Tuple, Any
-from dataclasses import dataclass
 
 from src.Data.Ray import TracingRay
 from src.Data.Color import Color
@@ -13,9 +12,6 @@ from src.Utilities.Sampling import SamplingManager, SampleSettings, Sampler, Ran
 from src.Utilities.Scene import Scene
 
 # TODO: Pool tracing rays and hit info to reduce memory useage at runtime
-# TODO: Localise stat updates, dont use global referenced up until the end of the logic
-# TODO: Freeup large object that aren't in use
-# TODO: Figure out how to simplify memory intensive logic into chunks
 
 # Raytracer using strategies
 @register_algorithm("raytracer")
@@ -95,11 +91,11 @@ class Raytracer(Algorithm):
         # Validate hit_info (point and normal must be finite and present)
         if getattr(hit_info, 'point', None) is None or getattr(hit_info, 'normal', None) is None:
             self._record_nan(reason='hit_info missing point/normal', ray=ray)
-            return self.shader.background_settings.get_background_color(ray.orientation)
+            return Color(0.0, 0.0, 0.0)
 
         if not (np.all(np.isfinite(np.asarray(hit_info.point))) and np.all(np.isfinite(np.asarray(hit_info.normal)))):
             self._record_nan(reason='hit_info point/normal not finite', ray=ray)
-            return self.shader.background_settings.get_background_color(ray.orientation)
+            return Color(0.0, 0.0, 0.0)
 
         # 3. Direct Lighting / Local Shading
         # (Assuming this calculates direct light or calls recursion for mirror reflections)

@@ -1,9 +1,8 @@
-import sys, os
+import os
 import argparse
 import gc
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
-
+from src.Data.Ratio import Ratio
 from src.Rendering.Core import Algorithm
 from src.Rendering.Raytracing import *
 from src.Rendering.Intersections import *
@@ -44,40 +43,40 @@ if __name__ == "__main__":
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
-    img_width, img_height = 16 * 8, 9 * 8
+    img_width, img_height = 16 * 3, 9 * 3
 
     all_scenes = [
         get_minimal_scene(img_width, img_height),
-        # get_gradient_scene(img_width, img_height),
-        # get_emissive_scene(img_width, img_height),
-        # get_lit_studio_scene(img_width, img_height),
-        # get_rgb_room_with_objects_scene(img_width, img_height),
-        # get_cyberpunk_scene(img_width, img_height),
-        # get_material_deck_scene(img_width, img_height),
-        # get_refraction_lab_scene(img_width, img_height),
-        # get_scifi_corridor_scene(img_width, img_height),
-        # get_sunset_monolith_scene(img_width, img_height),
-        # get_pastel_blocks_scene(img_width, img_height),
-        # get_glass_prism_scene(img_width, img_height),
-        # get_glass_sculpture_scene(img_width, img_height),
-        # get_100_spheres_grid_scene(img_width, img_height),
-        # get_low_ior_scene(img_width, img_height),
+        get_gradient_scene(img_width, img_height),
+        get_emissive_scene(img_width, img_height),
+        get_lit_studio_scene(img_width, img_height),
+        get_rgb_room_with_objects_scene(img_width, img_height),
+        get_cyberpunk_scene(img_width, img_height),
+        get_material_deck_scene(img_width, img_height),
+        get_refraction_lab_scene(img_width, img_height),
+        get_scifi_corridor_scene(img_width, img_height),
+        get_sunset_monolith_scene(img_width, img_height),
+        get_pastel_blocks_scene(img_width, img_height),
+        get_glass_prism_scene(img_width, img_height),
+        get_glass_sculpture_scene(img_width, img_height),
+        get_100_spheres_grid_scene(img_width, img_height),
+        get_low_ior_scene(img_width, img_height),
     ]
 
-    sample_settings = SampleSettings(samples_per_pixel=1, filter_type=PixelFilter.BOX, filter_width=2)
-    sampling_manager = SamplingManager(sample_settings, "random")
+    sample_settings = SampleSettings(samples_per_pixel=8, filter_type=PixelFilter.GAUSSIAN, filter_width=4)
+    sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
         intersection = BVHIntersection(max_distance=50, max_steps=128)
         interactor = TerminalInteraction()
         shading = LambertShading(
-            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.67)),
-            shadow_settings=ShadowSettings(True, 8, 2e-3),
+            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
+            shadow_settings=ShadowSettings(True, 16, 1e-3),
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
         )
 
         raytracer = Raytracer(
-            max_recursions=1,
+            max_recursions=0,
             sampling_manager=sampling_manager,
             intersection_strategy=intersection,
             interaction_strategy=interactor,

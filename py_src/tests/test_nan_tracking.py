@@ -1,6 +1,5 @@
 import sys
 import os
-import pytest
 import numpy as np
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -13,9 +12,9 @@ from src.Data.Ray import Ray
 from src.Data.Color import Color
 from src.Geometry.Core import  Sphere
 from src.Geometry.Primitive import Primitive
-from src.Rendering.Raytracing import Raytracer, TracingStats
+from src.Rendering.Raytracing import Raytracer
 from src.Rendering.Intersections import BVHIntersection
-from src.Rendering.Shading import LambertShading, ShadingStrategy, AmbienceSettings, ShadowSettings, BackgroundSettings
+from src.Rendering.Shading import ShadingStrategy, AmbienceSettings, ShadowSettings, BackgroundSettings
 from src.Utilities.Sampling import RandomSampler
 from src.Utilities.Scene import Scene
 
@@ -25,7 +24,6 @@ class NaNShading(ShadingStrategy):
     
     def shade(self, *args, **kwargs) -> Color:
         return Color(np.nan, np.nan, np.nan)
-
 
 def test_nan_tracking():
     scene = Scene()
@@ -38,12 +36,8 @@ def test_nan_tracking():
     tracer = Raytracer(
         max_recursions=1,
         intersection_strategy=BVHIntersection(max_distance=100, max_steps=10),
-        shading_strategy=LambertShading(AmbienceSettings(), ShadowSettings(), BackgroundSettings())
+        shading_strategy=NaNShading()
     )
-
-    tracer.shader = NaNShading()
-    tracer.stats = TracingStats()
-
     sampler = RandomSampler()
 
     c = tracer._trace_ray(scene, ray, recursions_left=1, sampler=sampler)
@@ -62,4 +56,4 @@ def test_nan_tracking():
     assert tracer._last_nan_logged >= tracer.stats.nan_errors - 0, "Expected last-nan-logged to be updated after threshold crossing"
 
 if __name__ == '__main__':
-    sys.exit(pytest.main(["-v", __file__]))
+    test_nan_tracking()

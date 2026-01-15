@@ -82,7 +82,7 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
 
     # Ground
     matg = MaterialFactory.create_diffuse(Color.from_hex("#3F3F3F"), 0.9)
-    v_ground = Primitive("GroundMin", Transform(np.array([0.0, -100.5, 0.0]), scale=np.full(3, 200.0, dtype=np.float32)), Sphere(), matg)
+    v_ground = Primitive("GroundMin", Transform(np.array([0.0, -100.5, 0.0])), Sphere(radius=100), matg)
     scene.add_object(v_ground)
 
     # Single light
@@ -103,17 +103,17 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
 
     # Emissive sphere
     mat_glow = MaterialFactory.create_emissive(Color.from_hex("#FFEA62"), 1.2)
-    v_emissive = Primitive("GlowingSphere", Transform(np.array([0.8, 1.0, 0.0]), scale=np.full(3, 0.3, dtype=np.float32)), Sphere(), mat_glow)
+    v_emissive = Primitive("GlowingSphere", Transform(np.array([0.8, 1.0, 0.0])), Sphere(radius=0.3), mat_glow)
     scene.add_object(v_emissive)
 
     # Reflective sphere
     mat_reflect = MaterialFactory.create_specular(Color.from_hex("#6B6666"), roughness=0.1, metallicness=0.5, specular_intensity=1.0, specular_tint_amount=1.0)
-    v_mirror = Primitive("MirrorSphere", Transform(np.array([-0.5, 0.5, 0.0]), scale=np.full(3, 0.5, dtype=np.float32)), Sphere(), mat_reflect)
+    v_mirror = Primitive("MirrorSphere", Transform(np.array([-0.5, 0.5, 0.0])), Sphere(radius=0.5), mat_reflect)
     scene.add_object(v_mirror)
 
     # Ground
     matg = MaterialFactory.create_diffuse(Color.from_hex("#202020"), roughness=0.8)
-    v_ground = Primitive("Ground", Transform(np.array([0.0, -100.5, 0.0]), scale=np.full(3, 0.100, dtype=np.float32)), Sphere(), matg)
+    v_ground = Primitive("Ground", Transform(np.array([0.0, -100.5, 0.0])), Sphere(radius=100), matg)
     scene.add_object(v_ground)
 
     # Small ambient fill light
@@ -247,7 +247,7 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
         position=np.array([0.0, 5.8, 0.0]), 
         color=Color.from_hex("#FFECDE"), 
         intensity=25.0, 
-        radius=1.5, 
+        radius=5, 
         name="CeilingLight"
     )
     scene.add_light(ceiling_light)

@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
-from src.Data.Ratio import Ratio
 from .Pipeline import PostProcessPass
 
 class ACESFilmicToneMapping(PostProcessPass):
