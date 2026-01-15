@@ -186,42 +186,40 @@ class InverseSDFIntersection(IntersectionStrategy):
         if obj_shape is None:
             return HitInfo.miss()
 
-        # --- 2. Raymarch Loop ---
-        t = 0.0
+        # Get object transform
+        obj_transform = getattr(obj, 'world_transform', Transform.identity())
+        
+        # Transform the ray to local space for marching
+        local_ray = obj_transform.inverse_transform_ray(ray)
 
         # Check for "Inside-Out" logic (for X-ray/Dielectrics)
         # If we are inside, we treat negative distance as empty space (flip sign)
         sign_modifier = -1.0 if ray.is_inside else 1.0
         
+        # --- Raymarch Loop in Local Space ---
+        t = 0.0
+        
         for _ in range(self.max_steps):
-            # 1. Calculate World Point
-            p = ray.point_at(t)
+            # 1. Calculate point in local space
+            local_p = local_ray.point_at(t)
 
-            # Convert to local object space for SDF queries
-            obj_transform = getattr(obj, 'world_transform', Transform.identity())
-            local_p = obj_transform.inverse_transform_point(p)
-
-            # 2. Sample the Object's SDF in LOCAL space
-            raw_dist_local = obj_shape.signed_distance(local_p)
+            # 2. Sample the Object's SDF in LOCAL space (unscaled)
+            dist_local = obj_shape.signed_distance(local_p)
 
             if stats is not None:
                 stats.triangle_tests += 1
 
-            # 3. Scale local distance back to world units
-            # Find minimum absolute scale to conservatively convert distance
-            scale = getattr(obj_transform, 'scale', np.array([1.0, 1.0, 1.0]))
-            min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
+            # Apply sign modifier for inside-out logic
+            dist = dist_local * sign_modifier
 
-            dist = raw_dist_local * sign_modifier * min_scale
-
-            # 4. Hit Check (in world units)
+            # 3. Hit Check (using pure local distance)
             if dist < self.epsilon:
                 # Compute local normal using the local point
                 local_normal = self._calc_local_gradient(obj_shape, local_p)
                 if ray.is_inside:
                     local_normal = -local_normal
 
-                # Transform normal to world space properly
+                # Transform normal to world space (inverse transpose handles non-uniform scale)
                 world_normal = obj_transform.transform_normal(local_normal)
 
                 # Compute accurate world-space hit point and distance
@@ -236,11 +234,11 @@ class InverseSDFIntersection(IntersectionStrategy):
                     obj=obj
                 )
             
-            # 4. Step
+            # 4. Step in local space (unscaled)
             t += (dist * self.step_relaxation)
             
             # Frustum/Far Plane checks
-            obj_pos = getattr(obj, 'world_transform', Transform.identity()).position
+            obj_pos = obj_transform.position
             far_plane_dist = np.linalg.norm(cam_pos - obj_pos)
             if t >= self.max_distance or far_plane_dist >= far_plane:
                 break
@@ -450,9 +448,10 @@ class BVHIntersection(IntersectionStrategy):
             
             if stats: stats.triangle_tests += 1
 
-            dist_local = obj_shape.unit_signed_distance(p) * sign_modifier * min_scale
+            # Sample the unit SDF (unscaled)
+            dist_local = obj_shape.unit_signed_distance(p) * sign_modifier
             
-            # Check convergence
+            # Check convergence (using pure local distance)
             if dist_local < self.epsilon:
                 # --- Hit Found ---
                 
@@ -476,6 +475,7 @@ class BVHIntersection(IntersectionStrategy):
                     obj=obj
                 )
             
+            # Step in local space (unscaled)
             t += dist_local * self.step_relaxation
             
             # Frustum/Far Plane checks

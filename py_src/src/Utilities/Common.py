@@ -71,7 +71,7 @@ def attenuate_distance_max(distance: float, max_distance: float) -> float:
     factor = max(0.0, 1.0 - (distance / max_distance))
     return factor
 
-def attenuate_sqr_distance(distance: float, bias: float = 1e-6) -> float:
+def attenuate_inv_sqr_distance(distance: float, bias: float = 1e-6) -> float:
     """
     Calculates physically accurate light falloff (Inverse Square Law).
     Light energy drops off with the square of the distance.

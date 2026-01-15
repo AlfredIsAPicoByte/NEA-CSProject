@@ -4,7 +4,7 @@ from enum import Enum
 from dataclasses import dataclass, field
 
 from src.Data.Color import Color
-from src.Utilities.Common import unit
+from src.Utilities.Common import unit, attenuate_inv_sqr_distance
 
 class LightType(Enum):
     POINT = 1        # Light bulb: Radiates in all directions from a position
@@ -80,7 +80,7 @@ class LightSource:
         # Calculate distance
         dist = np.linalg.norm(self.position - hit_point)
         
-        # Apply Inverse Square Law (1 / distance^2)
+        # Apply Inverse Square Law (1 / distance ^ 2 + radius ^ 2)
         radiance *= 1.0 / (dist ** 2 + self.radius  ** 2)
 
         # 3. Spot Cone Attenuation

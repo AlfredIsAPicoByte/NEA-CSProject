@@ -141,7 +141,7 @@ class RayPool:
             ray.pixel_y = y
             ray.current_depth = 0
             ray.is_inside = False
-            ray.throughput = np.array([1.0, 1.0, 1.0, 1.0])
+            ray.throughput = np.array([1.0, 1.0, 1.0])
             return ray
         else:
             # Create new if pool is empty

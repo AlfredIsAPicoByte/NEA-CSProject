@@ -144,7 +144,7 @@ class StandardInteraction(InteractionStrategy):
             # (Prefers directions close to the normal)
             new_dir = sampler.sample_cosine_hemisphere(N)
 
-            new_throughput = current_throughput * material.data.albedo.to_np_array(False)
+            new_throughput = current_throughput[:3] * material.data.albedo.to_np_array(False)[:3]
             
             return TracingRay(
                 origin=P + (N * bias),
@@ -159,7 +159,7 @@ class StandardInteraction(InteractionStrategy):
         elif material.type == MaterialType.SPECULAR:
             if stats: stats.rays_reflection += 1
 
-            relect_dir = reflect(I, N)
+            reflect_dir = reflect(I, N)
 
             roughness = material.data.roughness
             if roughness > bias:

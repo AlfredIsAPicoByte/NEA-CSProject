@@ -9,7 +9,7 @@ from src.Data.Color import Color
 from .BSDF import *
 from src.Lighting.Core import LightSource
 from src.Lighting.Optics import schlick_fresnel_metalic
-from src.Utilities.Common import lerp, unit, attenuate_sqr_distance, attenuate_distance_exponential
+from src.Utilities.Common import lerp, unit, attenuate_inv_sqr_distance, attenuate_distance_exponential
 
 class MaterialType(Enum):
     DIFFUSE = 1 # Only diffuse reflections
@@ -95,7 +95,7 @@ class PBRMaterial:
                 continue
             
             # Pre-calculate attenuation (distance-based).
-            attenuation = attenuate_sqr_distance(dist)
+            attenuation = attenuate_inv_sqr_distance(dist)
 
             # Final radiance
             incoming_radiance = light.get_radiance(hit_point) * attenuation * visibility

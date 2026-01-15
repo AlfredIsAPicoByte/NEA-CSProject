@@ -68,16 +68,16 @@ if __name__ == "__main__":
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
-        intersection = BVHIntersection(max_distance=1000, max_steps=128)
-        interactor = TerminalInteraction()
-        shading = NormalShading(
-            # ambience_settings=AmbienceSettings(False, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.1)),
-            # shadow_settings=ShadowSettings(False, 8, 2e-3),
-            background_settings=BackgroundSettings(False, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
+        intersection = BVHIntersection(max_distance=50, max_steps=128)
+        interactor = StandardInteraction()
+        shading = RecursiveLambertShading(
+            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.1)),
+            shadow_settings=ShadowSettings(True, 8, 2e-3),
+            background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
         )
 
         raytracer = Raytracer(
-            max_recursions=1,
+            max_recursions=4,
             sampling_manager=sampling_manager,
             intersection_strategy=intersection,
             interaction_strategy=interactor,

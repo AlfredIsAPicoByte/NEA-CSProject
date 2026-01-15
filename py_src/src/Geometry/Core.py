@@ -507,7 +507,7 @@ class Polygon(Shape3D):
 class Sphere(Shape3D):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.radius = 0.5
+        self.radius = 1
 
     def signed_distance(self, local_point: np.ndarray) -> float:
         return float(np.linalg.norm(local_point) - self.radius)
