@@ -5,9 +5,8 @@ from abc import ABC, abstractmethod
 from dataclasses import replace
 
 from src.Data.Ray import TracingRay
-from src.Data.Color import Color
 from src.Data.Hit import HitInfo
-from .Core import RenderStats
+from .Core import TracingStats
 from src.Material.Core import PBRMaterial, MaterialType
 from src.Material.BSDF import * 
 from src.Lighting.Optics import REFRACTIVE_INDICES
@@ -21,7 +20,7 @@ class InteractionStrategy(ABC):
         hit_info: HitInfo,
         sampler: Sampler,
         bias: float = 1e-4,
-        stats: Optional["RenderStats"] = None
+        stats: Optional["TracingStats"] = None
     ) -> Optional[TracingRay]:
         ...
 
@@ -51,21 +50,24 @@ class PassthroughInteraction(InteractionStrategy):
         hit_info: HitInfo, 
         sampler: Sampler,
         bias: float = 1e-4,
-        stats: Optional["RenderStats"] = None
+        stats: Optional["TracingStats"] = None
     ) -> Optional[TracingRay]:
         if not hit_info.hit:
-            if stats: stats.roulette_kills += 1
+            return None
+        
+        P = getattr(hit_info, "point", None)
+        if P is None:
             return None
         
         # Alpha Clipping
         material: Optional[PBRMaterial] = getattr(hit_info.obj, "material", None)
 
         if material is None:
-            if stats: stats.roulette_kills += 1
             return None
+        
 
         if sampler.next_1d() > np.clip(material.data.albedo.a, 0.0, 1.0):
-            next_origin = hit_info.point + (ray.orientation * bias)
+            next_origin = P + (ray.orientation * bias)
 
             return replace(ray, origin=next_origin)
         
@@ -89,7 +91,7 @@ class StandardInteraction(InteractionStrategy):
         hit_info: HitInfo, 
         sampler: Sampler,
         bias: float = 1e-4,
-        stats: Optional["RenderStats"] = None
+        stats: Optional["TracingStats"] = None
     ) -> Optional[TracingRay]:
         if not hit_info.hit:
             if stats: stats.roulette_kills += 1
@@ -103,12 +105,12 @@ class StandardInteraction(InteractionStrategy):
         # 1. Russian Roulette (Path Termination)
         # If the ray is very dim (low throughput), randomly kill it to save time.
         # ray.throughput is carried over from previous bounces
-        current_throughput = ray.throughput
+        current_throughput = np.array(ray.throughput)  
         max_component = max(current_throughput[0], current_throughput[1], current_throughput[2])
         
         # Only start killing after a few bounces (e.g. depth > 3) to reduce noise
         if ray.current_depth > 3:
-            probability = min(max_component, 0.95) # Keep at least 5% chance
+            probability = float(min(max_component, 0.95)) # Keep at least 5% chance
             if sampler.sample_roulette() > probability:
                 if stats: stats.roulette_kills += 1
                 return None
@@ -121,18 +123,19 @@ class StandardInteraction(InteractionStrategy):
         material: Optional[PBRMaterial] = getattr(hit_info.obj, "material", None)
 
         if material is None:
-            if stats: stats.roulette_kills += 1
             return None
         
         # Emissive sources terminate ray, becuase they are also considered light sources.
         if material.type == MaterialType.EMISSIVE:
-            if stats: stats.roulette_kills += 1
             return None
         
         # Prepare Geometry
-        N = unit(hit_info.normal)
+        N = unit(getattr(hit_info, "normal", np.array([0.0, 1.0, 0.0])))
         I = unit(ray.orientation) # Incident vector
-        P = hit_info.point
+
+        P = getattr(hit_info, "point", None)
+        if P is None:
+            return None
 
         # ==========================================================
         # CASE 1: DIFFUSE (Matte / Plastic / Wood)
@@ -258,6 +261,8 @@ class StandardInteraction(InteractionStrategy):
                 )
                 
                 # Update Medium Tracking for Volumetrics
+                if not entering:
+                    new_ray.throughput += material.get_volumetric_component(hit_info.distance).to_np_array(include_alpha=False)[:3]
                 # if entering:
                 #     new_ray.medium_color = material.data.color # or albedo
                 #     new_ray.medium_density = getattr(material.data, "density", 0.0)

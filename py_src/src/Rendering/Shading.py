@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, replace
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
 from src.Data.Color import Color, ColorGradient
-from .Core import RenderStats
+from .Core import TracingStats
 from src.Material.Core import PBRMaterial, MaterialType
 from src.Lighting.Core import LightSource
 from src.Utilities.Sampling import Sampler
@@ -138,7 +138,7 @@ class ShadingStrategy(ABC):
         trace_function: Callable[[Scene, TracingRay, int, Sampler], Color],
         sampler: Sampler,
         bias: float = 1e-4,
-        stats: Optional["RenderStats"] = None
+        stats: Optional["TracingStats"] = None
     ) -> Color:
         ...
     
@@ -251,7 +251,7 @@ class LambertShading(ShadingStrategy):
             trace_function: Callable[[Scene, TracingRay, int, Sampler], Color],
             sampler: Sampler,
             bias: float = 1e-4,
-            stats: Optional["RenderStats"] = None
+            stats: Optional["TracingStats"] = None
         ) -> Color:
 
         # Material validation
@@ -292,7 +292,7 @@ class LambertShading(ShadingStrategy):
         
         final_color += direct_light
 
-        # 6. Ambient Light (Optional)
+        # 5. Ambient Light (Optional)
         # Adds a flat base color so shadowed areas aren't pitch black
         if self.ambience_settings.enabled:
             final_color += material.get_ambient_color(self.ambience_settings.color, self.ambience_settings.intensity)
@@ -339,7 +339,7 @@ class RecursiveLambertShading(LambertShading):
             trace_function: Callable[[Scene, TracingRay, int, Sampler], Color],
             sampler: Sampler,
             bias: float = 1e-4,
-            stats: Optional["RenderStats"] = None
+            stats: Optional["TracingStats"] = None
         ) -> Color:
 
         # Material validation
@@ -418,7 +418,7 @@ class VolumetricShading(ShadingStrategy):
         ray: TracingRay,
         hit_info: "HitInfo",
         bias: float = 1e-4,
-        stats: Optional["RenderStats"] = None,
+        stats: Optional["TracingStats"] = None,
         *args, **kwargs
     ) -> Color:
         # 1. Setup Vectors

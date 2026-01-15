@@ -7,7 +7,7 @@ from src.Data.Transform import Transform
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
 from src.Data.AABB import AABB
-from .Core import RenderStats
+from .Core import TracingStats
 from src.Geometry.Core import Shape
 from src.Geometry.BVH import BVHNode
 from src.Geometry.Primitive import Primitive
@@ -32,7 +32,7 @@ class IntersectionStrategy(ABC):
         self,
         scene: Scene,
         ray: TracingRay,
-        stats: Optional["RenderStats"] = None,
+        stats: Optional["TracingStats"] = None,
     ) -> HitInfo:
         ...
 
@@ -44,7 +44,7 @@ class RayMarchingIntersection(IntersectionStrategy):
             self,
             scene: Scene,
             ray: TracingRay,
-            stats: Optional["RenderStats"] = None
+            stats: Optional["TracingStats"] = None
         ) -> HitInfo:
         distance_traveled = 0.0
 
@@ -129,7 +129,7 @@ class InverseSDFIntersection(IntersectionStrategy):
             self,
             scene: Scene,
             ray: TracingRay,
-            stats: Optional["RenderStats"] = None
+            stats: Optional["TracingStats"] = None
         ) -> "HitInfo":
         closest_hit = HitInfo.miss()
         
@@ -174,7 +174,7 @@ class InverseSDFIntersection(IntersectionStrategy):
             ray: TracingRay,
             far_plane: float,
             cam_pos: np.ndarray,
-            stats: Optional["RenderStats"] = None
+            stats: Optional["TracingStats"] = None
         ) -> "HitInfo":
         """
         Performs the 'Inverse SDF' logic:
@@ -277,7 +277,7 @@ class BVHIntersection(IntersectionStrategy):
         self._cached_bvh_root: Optional[BVHNode] = None
         self._cached_scene_id: Optional[int] = None
 
-    def find_hit(self, scene: Scene, ray: TracingRay, stats: Optional["RenderStats"] = None) -> HitInfo:
+    def find_hit(self, scene: Scene, ray: TracingRay, stats: Optional["TracingStats"] = None) -> HitInfo:
         # 1. Check if we need to build/rebuild the BVH
         # (We use id(scene.objects) as a cheap way to detect if the list changed)
         current_scene_id = id(scene.objects)
@@ -370,7 +370,6 @@ class BVHIntersection(IntersectionStrategy):
         
         # 1. Calculate Bounds for all objects in this list
         # We cache AABBs for performance
-        # Use WORLD transform so hierarchical/parented objects are placed correctly in space
         object_bounds = [(obj, AABB.from_transform_shape(getattr(obj, 'world_transform', obj.transform), obj.shape)) for obj in objects]
         
         # Calculate Union of all bounds for this node
@@ -417,7 +416,7 @@ class BVHIntersection(IntersectionStrategy):
             ray: TracingRay,
             far_plane: float,
             cam_pos: np.ndarray,
-            stats: Optional["RenderStats"]) -> HitInfo:
+            stats: Optional["TracingStats"]) -> HitInfo:
         """
         Hybrid Intersection:
         1. Transforms the World Ray into Object Local Space.

@@ -14,9 +14,8 @@ from src.Geometry.Primitive import *
 from src.Geometry.Mesh import *
 from src.Utilities.Scene import Scene
 from src.Utilities.Camera import Camera, CameraType
-from src.Lighting.Core import LightSource
+from src.Lighting.Core import LightSource, LightType
 from src.Lighting.Optics import REFRACTIVE_INDICES
-from src.Material.Core import PBRMaterial
 from src.Material.Factory import MaterialFactory
 
 def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
@@ -83,11 +82,11 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
 
     # Ground
     matg = MaterialFactory.create_diffuse(Color.from_hex("#3F3F3F"), 0.9)
-    v_ground = Primitive("GroundMin", Transform(np.array([0.0, -100.5, 0.0]), scale=np.full(3, 100.0, dtype=np.float32)), Sphere(), matg)
+    v_ground = Primitive("GroundMin", Transform(np.array([0.0, -100.5, 0.0]), scale=np.full(3, 200.0, dtype=np.float32)), Sphere(), matg)
     scene.add_object(v_ground)
 
     # Single light
-    light = LightSource(position=np.array([2.0, 3.0, -1.0]), color=Color.from_hex("#FFFFFF"), intensity=15.0, radius=2, name="SunMin")
+    light = LightSource(position=np.array([2.0, 3.0, -1.0]), color=Color.from_hex("#FFFFFF"), intensity=300.0, radius=2, name="SunMin")
     scene.add_light(light)
 
     return scene

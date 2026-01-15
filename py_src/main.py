@@ -48,36 +48,36 @@ if __name__ == "__main__":
 
     all_scenes = [
         get_minimal_scene(img_width, img_height),
-        get_gradient_scene(img_width, img_height),
-        get_emissive_scene(img_width, img_height),
-        get_lit_studio_scene(img_width, img_height),
-        get_rgb_room_with_objects_scene(img_width, img_height),
-        get_cyberpunk_scene(img_width, img_height),
-        get_material_deck_scene(img_width, img_height),
-        get_refraction_lab_scene(img_width, img_height),
-        get_scifi_corridor_scene(img_width, img_height),
-        get_sunset_monolith_scene(img_width, img_height),
-        get_pastel_blocks_scene(img_width, img_height),
-        get_glass_prism_scene(img_width, img_height),
-        get_glass_sculpture_scene(img_width, img_height),
-        get_100_spheres_grid_scene(img_width, img_height),
-        get_low_ior_scene(img_width, img_height),
+        # get_gradient_scene(img_width, img_height),
+        # get_emissive_scene(img_width, img_height),
+        # get_lit_studio_scene(img_width, img_height),
+        # get_rgb_room_with_objects_scene(img_width, img_height),
+        # get_cyberpunk_scene(img_width, img_height),
+        # get_material_deck_scene(img_width, img_height),
+        # get_refraction_lab_scene(img_width, img_height),
+        # get_scifi_corridor_scene(img_width, img_height),
+        # get_sunset_monolith_scene(img_width, img_height),
+        # get_pastel_blocks_scene(img_width, img_height),
+        # get_glass_prism_scene(img_width, img_height),
+        # get_glass_sculpture_scene(img_width, img_height),
+        # get_100_spheres_grid_scene(img_width, img_height),
+        # get_low_ior_scene(img_width, img_height),
     ]
 
     sample_settings = SampleSettings(samples_per_pixel=1, filter_type=PixelFilter.BOX, filter_width=2)
-    sampling_manager = SamplingManager(sample_settings, "halton")
+    sampling_manager = SamplingManager(sample_settings, "random")
 
     for scene in all_scenes:
         intersection = BVHIntersection(max_distance=50, max_steps=128)
-        interactor = StandardInteraction()
-        shading = RecursiveLambertShading(
-            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.1)),
+        interactor = TerminalInteraction()
+        shading = LambertShading(
+            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.67)),
             shadow_settings=ShadowSettings(True, 8, 2e-3),
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
         )
 
         raytracer = Raytracer(
-            max_recursions=2,
+            max_recursions=1,
             sampling_manager=sampling_manager,
             intersection_strategy=intersection,
             interaction_strategy=interactor,
@@ -140,11 +140,11 @@ if __name__ == "__main__":
                 with MemoryProfiler(enable_tracemalloc=True, top=6) as mp:
                     pipeline =  ImagePipeline()
 
-                    pipeline.add_pass(Exposure(1.0))
+                    pipeline.add_pass(AutoExposure())
                     
                     pipeline.add_pass(Bloom(1, 5, 0.67, 0.75))
 
-                    # pipeline.add_pass(ChromaticAberration(1))
+                    pipeline.add_pass(ChromaticAberration())
 
                     pipeline.add_pass(Vignette(0.15, 0.6))
 

@@ -42,7 +42,7 @@ class Primitive:
             self.children.remove(child)
             child.parent = None
 
-    def update_world_matrices(self, parent_matrix: np.ndarray = None):
+    def update_world_matrices(self, parent_matrix: Optional[np.ndarray] = None):
         """
         Recursive pass to update the world matrix of this node and all children.
         Call this ONCE before rendering starts.
