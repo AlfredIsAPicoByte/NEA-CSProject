@@ -2,7 +2,6 @@ import os
 import argparse
 import gc
 
-from src.Data.Ratio import Ratio
 from src.Rendering.Core import Algorithm
 from src.Rendering.Raytracing import *
 from src.Rendering.Intersections import *
@@ -46,7 +45,7 @@ if __name__ == "__main__":
     img_width, img_height = 16 * 3, 9 * 3
 
     all_scenes = [
-        get_minimal_scene(img_width, img_height),
+        # get_minimal_scene(img_width, img_height),
         get_gradient_scene(img_width, img_height),
         get_emissive_scene(img_width, img_height),
         get_lit_studio_scene(img_width, img_height),
@@ -67,7 +66,7 @@ if __name__ == "__main__":
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
-        intersection = BVHIntersection(max_distance=50, max_steps=128)
+        intersection = BVHIntersection(max_distance=1000, max_steps=512)
         interactor = TerminalInteraction()
         shading = LambertShading(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),

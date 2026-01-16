@@ -9,7 +9,7 @@ from src.Data.Hit import HitInfo
 from src.Data.AABB import AABB
 from .Core import TracingStats
 from src.Geometry.Core import Shape
-from src.Geometry.BVH import BVHNode
+from src.Geometry.BVH import BVHNode, BVHSplitMode
 from src.Geometry.Primitive import Primitive
 from src.Utilities.Common import unit
 from src.Utilities.Scene import Scene
@@ -38,7 +38,7 @@ class IntersectionStrategy(ABC):
 
 class RayMarchingIntersection(IntersectionStrategy):
     """
-    Find hits between rays and objects using the Ray Marching method.
+    Find hits between rays and objects using a simple ray marching method involving distance estimation.
     """
     def find_hit(
             self,
@@ -113,6 +113,8 @@ class RayMarchingIntersection(IntersectionStrategy):
 class InverseSDFIntersection(IntersectionStrategy):
     """
     Find hits between rays and objects using the Inverse SDF method.
+    the SDF defines a mathematical function that erturns a vector/point based on a distance.
+    Inverting the SDF allows for the point to calculate the distance
     """
     def __init__(
             self,
@@ -176,12 +178,6 @@ class InverseSDFIntersection(IntersectionStrategy):
             cam_pos: np.ndarray,
             stats: Optional["TracingStats"] = None
         ) -> "HitInfo":
-        """
-        Performs the 'Inverse SDF' logic:
-        1. Transform Ray -> Local Space
-        2. March in Local Space (Unscaled)
-        3. Transform Hit -> World Space
-        """
         obj_shape = getattr(obj, "shape", None)
         if obj_shape is None:
             return HitInfo.miss()
@@ -191,6 +187,16 @@ class InverseSDFIntersection(IntersectionStrategy):
         
         # Transform the ray to local space for marching
         local_ray = obj_transform.inverse_transform_ray(ray)
+
+        # Calculate the scale factor for converting world distances to local distances
+        # This is needed because we're stepping in local space but max_distance is in world space
+        scale = obj_transform.scale
+        min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
+        
+        # Handle near-zero scales: clamp to prevent infinite marching distances
+        # If min_scale is very small (< 1e-6), use a reasonable minimum instead of dividing
+        safe_min_scale = max(min_scale, 1e-6)
+        max_distance_local = min(self.max_distance / safe_min_scale, self.max_distance * 1e4)
 
         # Check for "Inside-Out" logic (for X-ray/Dielectrics)
         # If we are inside, we treat negative distance as empty space (flip sign)
@@ -237,10 +243,10 @@ class InverseSDFIntersection(IntersectionStrategy):
             # 4. Step in local space (unscaled)
             t += (dist * self.step_relaxation)
             
-            # Frustum/Far Plane checks
+            # Frustum/Far Plane checks (convert max_distance to local space)
             obj_pos = obj_transform.position
             far_plane_dist = np.linalg.norm(cam_pos - obj_pos)
-            if t >= self.max_distance or far_plane_dist >= far_plane:
+            if t >= max_distance_local or far_plane_dist >= far_plane:
                 break
                 
         return HitInfo.miss()
@@ -264,16 +270,25 @@ class InverseSDFIntersection(IntersectionStrategy):
         if norm > 0:
             return grad / norm
         return np.array([0.0, 0.0, 1.0]) # Fallback
-    
+
 class BVHIntersection(IntersectionStrategy):
+    """
+    Find hits between rays and objects using a BVH data structure.
+
+    """
     def __init__(
             self,
             epsilon: float = 1e-4,
             max_steps: int = 64,
             max_distance: float = 50,
-            step_relaxation: float = 0.9
+            step_relaxation: float = 0.9,
+            max_depth: int = 512,
+            split_mode: BVHSplitMode = BVHSplitMode.LONGEST_AXIS
         ):
         super().__init__(epsilon, max_steps, max_distance, step_relaxation)
+
+        self.max_depth = max_depth
+        self.split_mode = split_mode
         self._cached_bvh_root: Optional[BVHNode] = None
         self._cached_scene_id: Optional[int] = None
 
@@ -285,6 +300,7 @@ class BVHIntersection(IntersectionStrategy):
             print(f"[BVH] Building Hierarchy for {len(scene.objects)} objects...")
             self._cached_bvh_root = self._build_bvh(scene.objects)
             self._cached_scene_id = current_scene_id
+            print(f"[BVH] Built Hiearchy for {len(scene.objects)} objects.")
 
         # 2. Traverse
         closest_hit = HitInfo.miss()
@@ -325,23 +341,17 @@ class BVHIntersection(IntersectionStrategy):
             if node.left:
                 if stats: stats.aabb_tests += 1
                 l_box = getattr(node.left, "box", None)
-                if l_box is None:
-                    continue
-                d_left = l_box.intersect(ray)
+                if l_box is not None:
+                    d_left = l_box.intersect(ray)
                 
             if node.right:
                 if stats: stats.aabb_tests += 1
                 r_box = getattr(node.right, "box", None)
-                if r_box is None:
-                    continue
-                d_right = r_box.intersect(ray)
-
+                if r_box is not None:
+                    d_right = r_box.intersect(ray)
 
             l_node = getattr(node, "left", None)
             r_node = getattr(node, "right", None)
-
-            if l_node is None or r_node is None:
-                continue
 
             # Push valid children to stack
             # Push the furthest one first, so the closest is at top of stack
@@ -352,9 +362,9 @@ class BVHIntersection(IntersectionStrategy):
                 else:
                     stack.append((l_node, d_left))
                     stack.append((r_node, d_right))
-            elif d_left != float('inf'):
+            elif d_left != float('inf') and l_node is not None:
                 stack.append((l_node, d_left))
-            elif d_right != float('inf'):
+            elif d_right != float('inf') and r_node is not None:
                 stack.append((r_node, d_right))
 
         if not closest_hit.hit and stats:
@@ -362,10 +372,16 @@ class BVHIntersection(IntersectionStrategy):
             
         return closest_hit
 
-    def _build_bvh(self, objects: list[Primitive]) -> BVHNode:
+    def _build_bvh(self, objects: list[Primitive], build_depth: int) -> BVHNode:
         """
         Recursively splits the object list to build the tree.
         """
+        # 0. Base Case
+        if build_depth >= self.max_depth or not objects:
+            leaf_node = BVHNode(objects)
+            return leaf_node
+
+        # Create Node
         node = BVHNode([])
         
         # 1. Calculate Bounds for all objects in this list
@@ -392,22 +408,35 @@ class BVHIntersection(IntersectionStrategy):
         if len(objects) <= 2:
             node.objects = objects
             return node
+        
+        print(node)
 
         # 3. Split Strategy: Longest Axis
-        # Find the widest dimension of the node's box
-        extent = node_max - node_min
-        axis = np.argmax(extent) # 0=x, 1=y, 2=z
-        
-        # Sort objects by their center along that axis
-        object_bounds.sort(key=lambda item: (item[1].min_point[axis] + item[1].max_point[axis]) * 0.5)
-        
-        mid = len(objects) // 2
-        
-        sorted_objs = [item[0] for item in object_bounds]
-        
-        node.left = self._build_bvh(sorted_objs[:mid])
-        node.right = self._build_bvh(sorted_objs[mid:])
-        
+        if self.split_mode == BVHSplitMode.LONGEST_AXIS:
+            # Find longest axis
+            extent = node_max - node_min
+            axis = np.argmax(extent) # 0=x, 1=y, 2=z
+
+            # Sort objects by their center along the chosen axis
+            object_bounds = [(obj, obj.get_aabb()) for obj in node.objects]
+            sorted_objs = sorted(object_bounds, key=lambda item: (item[1].min_point[axis] + item[1].max_point[axis]) / 2)
+            mid = len(sorted_objs) // 2
+
+            # Create child nodes
+            node.left = self._build_bvh(sorted_objs[:mid], build_depth + 1)
+            node.right = self._build_bvh(sorted_objs[mid:], build_depth + 1)
+
+        elif self.split_mode == BVHSplitMode.BALANCED:
+            # Sort objects by their center along all axes (average)
+            object_bounds = [(obj, obj.get_aabb()) for obj in node.objects]
+            object_bounds.sort(key=lambda item: np.mean([item[1].min_point, item[1].max_point]))
+
+            mid = len(object_bounds) // 2
+
+            # Create child nodes
+            node.left = self._build_bvh(sorted_objs[:mid], build_depth + 1)
+            node.right = self._build_bvh(sorted_objs[mid:], build_depth + 1)
+            
         return node
 
     def _test_single_object(
@@ -438,6 +467,11 @@ class BVHIntersection(IntersectionStrategy):
         # 2. Get an minimum Scale Factor for safe stepping. Imagine the object is uniform in size
         scale = obj_transform.scale
         min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
+        
+        # Handle near-zero scales: clamp to prevent infinite marching distances
+        # If min_scale is very small (< 1e-6), use a reasonable minimum instead of dividing
+        safe_min_scale = max(min_scale, 1e-6)
+        max_distance_local = min(self.max_distance / safe_min_scale, self.max_distance * 1e4)
 
         t = 0.0
         sign_modifier = -1.0 if getattr(ray, "is_inside", False) else 1.0
@@ -477,10 +511,10 @@ class BVHIntersection(IntersectionStrategy):
             # Step in local space (unscaled)
             t += dist_local * self.step_relaxation
             
-            # Frustum/Far Plane checks
+            # Frustum/Far Plane checks (convert max_distance to local space)
             obj_pos = getattr(obj, 'world_transform', Transform.identity()).position
             far_plane_dist = np.linalg.norm(cam_pos - obj_pos)
-            if t >= self.max_distance or far_plane_dist >= far_plane:
+            if t >= max_distance_local or far_plane_dist >= far_plane:
                 break
                 
         return HitInfo.miss()
