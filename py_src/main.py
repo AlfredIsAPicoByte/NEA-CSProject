@@ -31,6 +31,36 @@ def render_process(scene: Scene, algorithm: Algorithm):
 
     return film
 
+def apply_post_processing(raw_img):
+    """
+    Apply post-processing pipeline to the raw image.
+    
+    Args:
+        raw_img: Raw image data from the renderer
+        
+    Returns:
+        Processed image data
+    """
+    from src.Image.PostProcessing.Pipeline import ImagePipeline
+    from src.Image.PostProcessing.Passes import (
+        AutoExposure,
+        Bloom,
+        ChromaticAberration,
+        Vignette,
+        ACESFilmicToneMapping,
+        GammaCorrection
+    )
+    
+    pipeline = ImagePipeline()
+    pipeline.add_pass(AutoExposure())
+    pipeline.add_pass(Bloom(1, 5, 0.67, 0.75))
+    pipeline.add_pass(ChromaticAberration())
+    pipeline.add_pass(Vignette(0.15, 0.6))
+    pipeline.add_pass(ACESFilmicToneMapping())
+    pipeline.add_pass(GammaCorrection(2.2))
+    
+    return pipeline.execute(raw_img)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Raytracer CLI")
     parser.add_argument("--no-post", dest="disable_post", action="store_true", help="Disable post-processing to reduce memory and runtime")
@@ -132,25 +162,8 @@ if __name__ == "__main__":
             processed_img = raw_img_data
 
             if not args.disable_post:
-                from src.Image.PostProcessing.Pipeline import ImagePipeline
-                from src.Image.PostProcessing.Passes import *
-
                 with MemoryProfiler(enable_tracemalloc=True, top=6) as mp:
-                    pipeline =  ImagePipeline()
-
-                    pipeline.add_pass(AutoExposure())
-                    
-                    pipeline.add_pass(Bloom(1, 5, 0.67, 0.75))
-
-                    pipeline.add_pass(ChromaticAberration())
-
-                    pipeline.add_pass(Vignette(0.15, 0.6))
-
-                    pipeline.add_pass(ACESFilmicToneMapping())
-
-                    pipeline.add_pass(GammaCorrection(2.2))
-
-                    processed_img = pipeline.execute(processed_img)
+                    processed_img = apply_post_processing(raw_img_data)
 
                 try:
                     with open(mem_report_out_path, "a", encoding="utf-8") as f:

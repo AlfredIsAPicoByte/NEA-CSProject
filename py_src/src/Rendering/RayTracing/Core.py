@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Optional, Tuple, Any
 
-from src.Data.Ray import TracingRay
+from src.Data.Ray import TracingRay, RayPool
 from src.Data.Color import Color
 from ..Core import Algorithm, TracingStats, register_algorithm, update_memory_stats
 from . import Intersections
@@ -14,8 +14,8 @@ from src.Data.Scene import Scene
 # TODO: Pool tracing rays and hit info to reduce memory useage at runtime
 
 # Raytracer using strategies
-@register_algorithm("raytracer")
-class Raytracer(Algorithm):
+@register_algorithm("ray-tracer")
+class RayTracer(Algorithm):
     def __init__(
         self,
         max_recursions: int = 4,
