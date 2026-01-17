@@ -179,7 +179,7 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     scene = Scene(name="rgb_cornell_box", camera=cam, background_color=Color(0.0, 0.0, 0.0))
 
     # Floor
-    floor_shape = Cube(side_length=10.0, name="Floor")
+    floor_shape = Cube(size=10.0, name="Floor")
     v_floor = Primitive(shape=floor_shape, name="Floor")
     v_floor.material = mat_white
     v_floor.transform.translate(np.array([0.0, -0.5, 0.0]))
@@ -187,7 +187,7 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     scene.add_object(v_floor)
     
     # Ceiling
-    ceiling_shape = Cube(side_length=10.0, name="Ceiling")
+    ceiling_shape = Cube(size=10.0, name="Ceiling")
     v_ceiling = Primitive(shape=ceiling_shape, name="Ceiling")
     v_ceiling.material = mat_white
     v_ceiling.transform.translate(np.array([0.0, 6.5, 0.0]))
@@ -195,7 +195,7 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     scene.add_object(v_ceiling)
 
     # Back Wall
-    back_shape = Cube(side_length=10.0, name="BackWall")
+    back_shape = Cube(size=10.0, name="BackWall")
     v_back = Primitive(shape=back_shape, name="BackWall")
     v_back.material = mat_blue
     v_back.transform.translate(np.array([0.0, 3.0, 5.5]))
@@ -203,7 +203,7 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     scene.add_object(v_back)
     
     # Left Wall (Red)
-    left_shape = Cube(side_length=10.0, name="LeftWall")
+    left_shape = Cube(size=10.0, name="LeftWall")
     v_left = Primitive(shape=left_shape, name="LeftWall")
     v_left.material = mat_red
     v_left.transform.translate(np.array([-5.5, 3.0, 0.0]))
@@ -211,7 +211,7 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     scene.add_object(v_left)
 
     # Right Wall (Green)
-    right_shape = Cube(side_length=10.0, name="RightWall")
+    right_shape = Cube(size=10.0, name="RightWall")
     v_right = Primitive(shape=right_shape, name="RightWall")
     v_right.material = mat_green
     v_right.transform.translate(np.array([5.5, 3.0, 0.0]))
@@ -219,7 +219,7 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     scene.add_object(v_right)
     
     # Tall Box (Rotated)
-    tall_box_shape = Cube(side_length=3.0, name="TallBox")
+    tall_box_shape = Cube(size=3.0, name="TallBox")
     v_tall_box = Primitive(shape=tall_box_shape, name="TallBox")
     v_tall_box.material = mat_white
     v_tall_box.transform.translate(np.array([-2.0, 1.5, 2.0]))
@@ -235,7 +235,7 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     scene.add_object(v_mirror_sphere)
     
     # Small Cube (Glass/Crystal in front)
-    glass_cube_shape = Cube(side_length=1.5, name="GlassCube")
+    glass_cube_shape = Cube(size=1.5, name="GlassCube")
     v_glass_cube = Primitive(shape=glass_cube_shape, name="GlassCube")
     v_glass_cube.material = mat_glass
     v_glass_cube.transform.translate(np.array([0.0, 0.75, -2.0]))
@@ -273,7 +273,7 @@ def get_cyberpunk_scene(width: int = 120, height: int = 120) -> Scene:
     scene = Scene(name="cyberpunk_street", camera=cam, background_color=ColorGradient(sky_colors, sky_positions))
 
     # Road
-    road_shape = Cube(side_length=20.0, name="WetRoad")
+    road_shape = Cube(size=20.0, name="WetRoad")
     mat_wet = MaterialFactory.create_diffuse(Color.from_hex("#151515"), roughness=0.2)
     v_road = Primitive(shape=road_shape, name="Road")
     v_road.material = mat_wet
@@ -290,14 +290,14 @@ def get_cyberpunk_scene(width: int = 120, height: int = 120) -> Scene:
     scene.add_object(v_hero)
 
     # Background Buildings
-    bldg_left_shape = Cube(side_length=4.0, name="BuildingLeft")
+    bldg_left_shape = Cube(size=4.0, name="BuildingLeft")
     v_bldg_left = Primitive(shape=bldg_left_shape, name="BldgLeft")
     v_bldg_left.material = MaterialFactory.create_diffuse(Color.from_hex("#4DBC3E"), roughness=0.9)
     v_bldg_left.transform.translate(np.array([-2.5, 2.0, 2.0]))
     v_bldg_left.transform.enlarge(np.array([0.5, 2.0, 0.5]))
     scene.add_object(v_bldg_left)
 
-    bldg_right_shape = Cube(side_length=4.0, name="BuildingRight")
+    bldg_right_shape = Cube(size=4.0, name="BuildingRight")
     v_bldg_right = Primitive(shape=bldg_right_shape, name="BldgRight")
     v_bldg_right.material = MaterialFactory.create_diffuse(Color.from_hex("#E28335"), roughness=0.9)
     v_bldg_right.transform.translate(np.array([2.5, 1.3, 2.2]))
@@ -355,7 +355,7 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
     scene = Scene(name="material_deck", camera=cam, background_color=Color.from_hex("#000000"))
 
     # Floor
-    floor_shape = Cube(side_length=15.0, name="Floor")
+    floor_shape = Cube(size=15.0, name="Floor")
     v_floor = Primitive(shape=floor_shape, name="Floor")
     v_floor.material = MaterialFactory.create_diffuse(Color.from_hex("#CCCCCC"), roughness=1.0)
     v_floor.transform.translate(np.array([0.0, -1.0, 0.0]))
@@ -414,7 +414,7 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
     scene = Scene(name="refraction_lab", camera=cam, background_color=Color(0.05, 0.05, 0.05))
 
     # Striped Background Wall
-    wall_shape = Cube(side_length=8.0, name="StripedWall")
+    wall_shape = Cube(size=8.0, name="StripedWall")
     v_wall = Primitive(shape=wall_shape, name="BackWall")
     v_wall.material = MaterialFactory.create_emissive(Color(1.0, 1.0, 1.0), 1.0)
     v_wall.transform.translate(np.array([0.0, 2.0, 4.0]))
@@ -423,7 +423,7 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
 
     # Blocker bars
     for i in range(-6, 7):
-        bar_shape = Cube(side_length=5.0, name=f"Bar_{i}")
+        bar_shape = Cube(size=5.0, name=f"Bar_{i}")
         v_bar = Primitive(shape=bar_shape, name=f"Bar_{6 + i}")
         v_bar.material = MaterialFactory.create_diffuse(Color(0.0, 0.0, 0.0), 1.0)
         v_bar.transform.translate(np.array([i, 2.0, 3.5]))
@@ -477,7 +477,7 @@ def get_scifi_corridor_scene(width: int = 120, height: int = 120) -> Scene:
     mat_light_strip = MaterialFactory.create_emissive(Color.from_hex("#00FFFF"), 5.0)
 
     # Floor
-    floor_shape = Cube(side_length=20.0, name="CorridorFloor")
+    floor_shape = Cube(size=20.0, name="CorridorFloor")
     v_floor = Primitive(shape=floor_shape, name="Floor")
     v_floor.material = mat_floor
     v_floor.transform.translate(np.array([0.0, -1.0, -10.0]))
@@ -485,7 +485,7 @@ def get_scifi_corridor_scene(width: int = 120, height: int = 120) -> Scene:
     scene.add_object(v_floor)
 
     # Ceiling
-    ceiling_shape = Cube(side_length=20.0, name="CorridorCeiling")
+    ceiling_shape = Cube(size=20.0, name="CorridorCeiling")
     v_ceiling = Primitive(shape=ceiling_shape, name="Ceiling")
     v_ceiling.material = mat_floor
     v_ceiling.transform.translate(np.array([0.0, 3.0, -10.0]))
@@ -495,7 +495,7 @@ def get_scifi_corridor_scene(width: int = 120, height: int = 120) -> Scene:
     # Repetitive Pillars and Lights
     for z in range(0, -20, -4):
         # Left Pillar
-        p_left_shape = Cube(side_length=2.0, name=f"PillarL_{z}")
+        p_left_shape = Cube(size=2.0, name=f"PillarL_{z}")
         v_p_left = Primitive(shape=p_left_shape, name=f"PillarLeft_{z}")
         v_p_left.material = mat_pillar
         v_p_left.transform.translate(np.array([-2.5, 1.0, z]))
@@ -503,7 +503,7 @@ def get_scifi_corridor_scene(width: int = 120, height: int = 120) -> Scene:
         scene.add_object(v_p_left)
 
         # Right Pillar
-        p_right_shape = Cube(side_length=2.0, name=f"PillarR_{z}")
+        p_right_shape = Cube(size=2.0, name=f"PillarR_{z}")
         v_p_right = Primitive(shape=p_right_shape, name=f"PillarRight_{z}")
         v_p_right.material = mat_pillar
         v_p_right.transform.translate(np.array([2.5, 1.0, z]))
@@ -511,7 +511,7 @@ def get_scifi_corridor_scene(width: int = 120, height: int = 120) -> Scene:
         scene.add_object(v_p_right)
 
         # Emissive Light Strips on floor edges
-        l_strip_shape = Cube(side_length=0.2, name=f"Light_{z}")
+        l_strip_shape = Cube(size=0.2, name=f"Light_{z}")
         v_l_strip = Primitive(shape=l_strip_shape, name=f"Strip_{z}")
         v_l_strip.material = mat_light_strip
         v_l_strip.transform.translate(np.array([0.0, -0.9, z]))
@@ -556,7 +556,7 @@ def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
     scene = Scene(name="sunset_monolith", camera=cam, background_color=ColorGradient(sky_colors, sky_positions))
 
     # The Monolith (Highly Specular Black Metal)
-    monolith_shape = Cube(side_length=4.0, name="Monolith")
+    monolith_shape = Cube(size=4.0, name="Monolith")
     mat_mono = MaterialFactory.create_specular(Color.from_hex("#050505"), roughness=0.05, metallicness=1.0)
     v_monolith = Primitive(shape=monolith_shape, name="MonolithObj")
     v_monolith.material = mat_mono
@@ -614,7 +614,7 @@ def get_pastel_blocks_scene(width: int = 120, height: int = 120) -> Scene:
     mat_white = MaterialFactory.create_diffuse(Color.from_hex("#FFFFFF"), roughness=0.9)
 
     # Floor
-    floor_shape = Cube(side_length=10.0, name="WhiteFloor")
+    floor_shape = Cube(size=10.0, name="WhiteFloor")
     v_floor = Primitive(shape=floor_shape, name="Floor")
     v_floor.material = mat_white
     v_floor.transform.translate(np.array([0.0, -1.0, 0.0]))
@@ -623,7 +623,7 @@ def get_pastel_blocks_scene(width: int = 120, height: int = 120) -> Scene:
 
     # Stacked Objects
     # Base Cube
-    base_shape = Cube(side_length=2.0, name="BaseCube")
+    base_shape = Cube(size=2.0, name="BaseCube")
     v_base = Primitive(shape=base_shape, name="BaseObj")
     v_base.material = mat_mint
     v_base.transform.translate(np.array([0.0, 0.0, 0.0]))
@@ -638,7 +638,7 @@ def get_pastel_blocks_scene(width: int = 120, height: int = 120) -> Scene:
     scene.add_object(v_mid)
 
     # Top floating cube
-    top_shape = Cube(side_length=1.0, name="TopCube")
+    top_shape = Cube(size=1.0, name="TopCube")
     v_top = Primitive(shape=top_shape, name="TopObj")
     v_top.material = mat_purple
     v_top.transform.translate(np.array([0.2, 2.8, 0.2]))
@@ -700,7 +700,7 @@ def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
     scene.add_object(v_sphere_water)
 
     # 3. Heavy Flint Glass Cube (Medium-High IOR: 1.65) - Right
-    cube_glass_shape = Cube(side_length=1.2, name="FlintGlass")
+    cube_glass_shape = Cube(size=1.2, name="FlintGlass")
     mat_flint = MaterialFactory.create_glass(
         Color(1.0, 0.9, 0.9), 
         Color(1.0, 1.0, 1.0), 
@@ -718,7 +718,7 @@ def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
     scene.add_object(v_cube_glass)
 
     # Checkerboard Floor (to make refraction obvious)
-    floor_shape = Cube(side_length=20.0, name="Floor")
+    floor_shape = Cube(size=20.0, name="Floor")
     # Using a striped emissive material to create lines visible THROUGH the glass
     mat_floor = MaterialFactory.create_diffuse(Color.from_hex("#888888"), roughness=0.8)
     v_floor = Primitive(shape=floor_shape, name="FloorBase")
@@ -729,7 +729,7 @@ def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
 
     # Striped Wall behind objects
     for i in range(-5, 6):
-        bar_shape = Cube(side_length=0.5, name=f"Strip_{i}")
+        bar_shape = Cube(size=0.5, name=f"Strip_{i}")
         # Alternating colors
         col = Color.from_hex("#FF0000") if i % 2 == 0 else Color.from_hex("#FFFFFF")
         v_bar = Primitive(shape=bar_shape, name=f"Bar_{i}")
@@ -771,7 +771,7 @@ def get_glass_sculpture_scene(width: int = 120, height: int = 120) -> Scene:
     scene.add_object(v_center_sphere)
 
     # Encasing Glass Cube (Clear)
-    outer_box_shape = Cube(side_length=2.0, name="ClearBox")
+    outer_box_shape = Cube(size=2.0, name="ClearBox")
     mat_clear = MaterialFactory.create_glass(
         Color(1.0, 1.0, 1.0), 
         Color(1.0, 1.0, 1.0), 
@@ -786,7 +786,7 @@ def get_glass_sculpture_scene(width: int = 120, height: int = 120) -> Scene:
     scene.add_object(v_outer_box)
 
     # Back Mirror to reflect the back of the glass objects
-    mirror_shape = Cube(side_length=6.0, name="MirrorBack")
+    mirror_shape = Cube(size=6.0, name="MirrorBack")
     v_mirror = Primitive(shape=mirror_shape, name="MirrorBack")
     v_mirror.material = MaterialFactory.create_specular(Color(1.0, 1.0, 1.0), roughness=0.0, metallicness=1.0)
     v_mirror.transform.translate(np.array([0.0, 2.0, 3.0]))

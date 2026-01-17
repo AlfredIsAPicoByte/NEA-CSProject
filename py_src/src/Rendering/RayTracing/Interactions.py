@@ -61,16 +61,21 @@ class PassthroughInteraction(InteractionStrategy):
         
         # Alpha Clipping
         material: Optional[PBRMaterial] = getattr(hit_info.obj, "material", None)
-
         if material is None:
             return None
         
-
+        # Get alpha value (0.0 = fully transparent, 1.0 = fully opaque)
         alpha = np.clip(material.data.albedo.a, 0.0, 1.0)
-
-        if sampler.next_1d() < alpha:
-            # Opaque - ray is blocked
-            if stats: stats.rays_transparency += 1
+        
+        # Random value in [0, 1)
+        random_value = sampler.next_1d()
+        
+        # If random value < alpha, the surface is opaque (block the ray)
+        # If random value >= alpha, the surface is transparent (pass through)
+        if random_value < alpha:
+            # Opaque - ray is blocked, terminate it
+            if stats: 
+                stats.rays_transparency += 1
             return None
         else:
             # Transparent - pass through
@@ -211,7 +216,7 @@ class StandardInteraction(InteractionStrategy):
             else:
                 # Outside going in
                 outward_normal = N
-                n1, n2 = self.scene_ior, ior  # ← Fixed order
+                n1, n2 = self.scene_ior, ior
                 cosine = abs(dt)
                 entering = True
 
@@ -229,9 +234,6 @@ class StandardInteraction(InteractionStrategy):
                     orientation=reflected,
                     throughput=current_throughput, # Glass reflection is white (usually)
                     current_depth=ray.current_depth + 1,
-                    # Medium properties don't change on reflection
-                    # medium_density=ray.medium_density,
-                    # medium_color=ray.medium_color,
                     is_inside=ray.is_inside
                 )
             else:
@@ -246,36 +248,27 @@ class StandardInteraction(InteractionStrategy):
                         orientation=reflected,
                         throughput=current_throughput,
                         current_depth=ray.current_depth + 1,
-                        # medium_density=ray.medium_density,
-                        # medium_color=ray.medium_color,
                         is_inside=ray.is_inside
                     )
                 
                 # Successful Refraction
-                # Color tint is usually White (1.0) for the surface event itself.
-                # The COLOR of glass comes from absorption (Beer's Law) inside the volume,
-                # which is handled by the Ray properties below.
-                
                 new_ray = TracingRay(
                     origin=P - (outward_normal * bias), # Push THROUGH surface
                     orientation=refracted,
-                    throughput=current_throughput, # Transmission is 1.0 at interface
+                    throughput=current_throughput, # Start with current throughput
                     current_depth=ray.current_depth + 1,
                     is_inside=not ray.is_inside
                 )
                 
-                # Update Medium Tracking for Volumetrics
+                # Apply Beer's Law absorption when EXITING the material
                 if not entering:
-                    absorption = material.get_volumetric_component(hit_info.distance).to_np_array(include_alpha=False)[:3]
-                    new_ray.throughput = new_ray.throughput * absorption
-                # if entering:
-                #     new_ray.medium_color = material.data.color # or albedo
-                #     new_ray.medium_density = getattr(material.data, "density", 0.0)
-                # else:
-                #     # Exiting to air (reset to defaults)
-                #     new_ray.medium_color = Color(1, 1, 1) 
-                #     new_ray.medium_density = 0.0
+                    # Get volumetric absorption as Color
+                    absorption = material.get_volumetric_component(hit_info.distance)
+                    
+                    # Multiply throughput by absorption (Beer's Law filtering)
+                    absorption_rgb = absorption.to_np_array(include_alpha=False)[:3]
+                    new_ray.throughput = new_ray.throughput * absorption_rgb  # ← FIXED: multiply instead of add
                     
                 return new_ray
-
+            
         return None

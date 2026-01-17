@@ -4,6 +4,7 @@ from typing import Optional, Union, List, Tuple, cast
 from dataclasses import dataclass, field
 
 from src.Data.Transform import Transform
+from src.Data.AABB import AABB
 from .Core import Shape
 from src.Material.Core import PBRMaterial
 
@@ -71,6 +72,12 @@ class Primitive:
             self.update_world_matrices()
         
         return self._world_matrix
+    
+    def get_aabb(self) -> AABB:
+        """Calculate world-space AABB for this primitive."""
+        if self.shape is None:
+            return AABB(np.zeros(3), np.zeros(3))
+        return AABB.from_transform_shape(self.world_transform, self.shape)
 
     @property
     def world_transform(self) -> Transform:

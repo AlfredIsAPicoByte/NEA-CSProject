@@ -97,13 +97,14 @@ class RayTracer(Algorithm):
             self._record_nan(reason='hit_info point/normal not finite', ray=ray)
             return Color(0.0, 0.0, 0.0)
 
-        # 3. Direct Lighting / Local Shading
-        # (Assuming this calculates direct light or calls recursion for mirror reflections)
+        # 3. Shading (Direct + Indirect handled by shader)
+        # The shader is responsible for ALL recursion.
+        # We do NOT call interact() here - that would double-count indirect lighting.
         shaded_color = self.shader.shade(
             scene=scene, 
             ray=ray, 
             hit_info=hit_info,
-            recursions_left=recursions_left - 1,
+            recursions_left=recursions_left,  # Pass full recursion budget to shader
             trace_function=self._trace_ray,
             sampler=sampler,
             stats=self.stats
@@ -115,6 +116,7 @@ class RayTracer(Algorithm):
             shaded_color = Color(0.0, 0.0, 0.0)
         shaded_color = self._sanitize_color(shaded_color, ray=ray, reason='shaded output')
 
+        # Return the shaded color directly
         return shaded_color
 
     def render(

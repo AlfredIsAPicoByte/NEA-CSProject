@@ -175,16 +175,17 @@ class PBRMaterial:
             # Determine Entering vs Exiting
             I_normalized = unit(I)
             dt = np.dot(I_normalized, N)
-
+            
+            scene_ior = 1.0
             if dt > 0:
                 # Inside going out
                 outward_normal = -N
-                n1, n2 = ior, self.scene_ior
+                n1, n2 = ior, scene_ior
                 cosine = abs(dt)
             else:
                 # Outside going in
                 outward_normal = N
-                n1, n2 = self.scene_ior, ior  # ← Fixed order
+                n1, n2 = scene_ior, ior  # ← Fixed order
                 cosine = abs(dt)
 
             ni_over_nt = n1 / n2

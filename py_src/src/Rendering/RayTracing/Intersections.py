@@ -423,8 +423,11 @@ class BVHIntersection(IntersectionStrategy):
             mid = len(sorted_objs) // 2
 
             # Create child nodes
-            node.left = self._build_bvh(sorted_objs[:mid], build_depth + 1)
-            node.right = self._build_bvh(sorted_objs[mid:], build_depth + 1)
+            left_objs = [item[0] for item in sorted_objs[:mid]]
+            right_objs = [item[0] for item in sorted_objs[mid:]]
+
+            node.left = self._build_bvh(left_objs, build_depth + 1)
+            node.right = self._build_bvh(right_objs, build_depth + 1)
 
         elif self.split_mode == BVHSplitMode.BALANCED:
             # Sort objects by their center along all axes (average)
@@ -434,9 +437,12 @@ class BVHIntersection(IntersectionStrategy):
             mid = len(object_bounds) // 2
 
             # Create child nodes
-            node.left = self._build_bvh(sorted_objs[:mid], build_depth + 1)
-            node.right = self._build_bvh(sorted_objs[mid:], build_depth + 1)
-            
+            left_objs = [item[0] for item in sorted_objs[:mid]]
+            right_objs = [item[0] for item in sorted_objs[mid:]]
+
+            node.left = self._build_bvh(left_objs, build_depth + 1)
+            node.right = self._build_bvh(right_objs, build_depth + 1)
+
         return node
 
     def _test_single_object(
@@ -496,6 +502,7 @@ class BVHIntersection(IntersectionStrategy):
                 if ray.is_inside: 
                     local_normal = -local_normal
                 normal_world = obj_transform.transform_normal(local_normal)
+                surface_normal = unit(normal_world)
                 
                 # C. True World Distance
                 distance_world = np.linalg.norm(p_world - ray.origin)
@@ -504,7 +511,7 @@ class BVHIntersection(IntersectionStrategy):
                     did_hit=True,
                     distance=float(distance_world),
                     point=p_world,
-                    normal=normal_world,
+                    normal=surface_normal,
                     obj=obj
                 )
             
