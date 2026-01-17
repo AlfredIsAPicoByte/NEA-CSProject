@@ -15,8 +15,8 @@ from src.Geometry.Primitive import Primitive
 from src.Rendering.Raytracing import Raytracer
 from src.Rendering.Intersections import BVHIntersection
 from src.Rendering.Shading import ShadingStrategy, AmbienceSettings, ShadowSettings, BackgroundSettings
-from src.Utilities.Sampling import RandomSampler
-from src.Utilities.Scene import Scene
+from src.Data.Sampling import RandomSampler
+from src.Data.Scene import Scene
 
 class NaNShading(ShadingStrategy):
     def __init__(self):

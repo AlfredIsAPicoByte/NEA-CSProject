@@ -12,8 +12,8 @@ from src.Data.Color import Color, ColorGradient
 from src.Geometry.Core import *
 from src.Geometry.Primitive import *
 from src.Geometry.Mesh import *
-from src.Utilities.Scene import Scene
-from src.Utilities.Camera import Camera, CameraType
+from src.Data.Scene import Scene
+from src.Data.Camera import Camera, CameraType
 from src.Lighting.Core import LightSource, LightType
 from src.Lighting.Optics import REFRACTIVE_INDICES
 from src.Material.Factory import MaterialFactory

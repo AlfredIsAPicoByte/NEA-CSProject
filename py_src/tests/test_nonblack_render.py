@@ -9,8 +9,8 @@ sys.path.insert(0, current_dir)
 
 from test_scenes import get_minimal_scene
 from src.Rendering.Raytracing import Raytracer, RayMarchingIntersection, StandardInteraction, RecursiveLambertShading
-from src.Utilities.Sampling import SamplingManager, SampleSettings, PixelFilter
-from src.Utilities.Camera import Camera
+from src.Data.Sampling import SamplingManager, SampleSettings, PixelFilter
+from src.Data.Camera import Camera
 
 def test_minimal_scene_not_all_background():
     scene = get_minimal_scene(16, 9)

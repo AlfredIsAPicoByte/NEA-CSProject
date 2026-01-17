@@ -1,9 +1,10 @@
 import math
 import numpy as np
 
+from src.Data.Color import Color
 from src.Data.Ray import TracingRay
-from src.Utilities.Sampling import Sampler
-from src.Lighting.Optics import reflect, refract, schlick_fresnel_refactive
+from src.Data.Sampling import Sampler
+from src.Lighting.Optics import reflect, refract, schlick_fresnel_refactive, schlick_fresnel_metalic
 from src.Utilities.Common import unit, orthonormal_basis
 
 def ggx_distribution(normal: np.ndarray, half_vector: np.ndarray, roughness: float) -> float:
@@ -236,3 +237,84 @@ def calculate_throughput_weight(
     weight = (bsdf_value * cos_theta) / pdf
 
     return weight
+
+def calculate_microfacet_brdf(roughness: float, intensity: float, L: np.ndarray, V: np.ndarray, N: np.ndarray, F0: np.ndarray) -> Color:
+    """
+    Pure BRDF evaluation - returns f_r WITHOUT the cosine term or light color.
+    """
+    safe_roughness = max(roughness, 1e-2)
+    alpha = safe_roughness ** 2
+    alpha_sq = alpha ** 2
+    
+    H = unit(L + V)
+    
+    NdotH = max(0.0, np.dot(N, H))
+    NdotL = max(0.0, np.dot(N, L))
+    NdotV = max(0.0, np.dot(N, V))
+    VdotH = max(0.0, np.dot(V, H))
+    
+    # NDF (GGX)
+    denom_ndf = (NdotH * NdotH * (alpha_sq - 1.0) + 1.0)
+    NDF = alpha_sq / (np.pi * denom_ndf * denom_ndf)
+    
+    # GSF (Schlick-GGX)
+    k = ((alpha + 1.0) ** 2) / 8.0
+    GS_Schlick: float = lambda n_dot_k: n_dot_k / (n_dot_k * (1.0 - k) + k)
+    GSF: float = GS_Schlick(NdotL) * GS_Schlick(NdotV)
+    
+    # Fresnel (Schlick's Approximation)
+    FF = schlick_fresnel_metalic(VdotH, F0)
+    
+    # BRDF (without cosine term)
+    denom_fs = 4.0 * NdotL * NdotV
+    
+    if denom_fs > 1e-6:
+        brdf = Color(*((NDF * GSF * FF) / denom_fs * intensity))
+    else:
+        brdf = Color(0.0, 0.0, 0.0)
+    
+    return brdf
+
+def evaluate_glass_bsdf(self, L: np.ndarray, V: np.ndarray, N: np.ndarray) -> Color:
+    """
+    Evaluate glass BSDF (both reflection and refraction lobes).
+    This is tricky because we need to know which lobe the light direction is in.
+    """
+    # Determine if L is a reflection or refraction of V
+    is_reflection = np.dot(L, N) * np.dot(V, N) > 0  # Same hemisphere
+    
+    if is_reflection:
+        # Evaluate reflection lobe using microfacet BRDF
+        H = unit(L + V)
+        D = ggx_distribution(N, H, self.data.roughness)
+        G = smith_geometry(N, V, L, self.data.roughness)
+        
+        VdotH = max(0.0, np.dot(V, H))
+        F = schlick_fresnel_refactive(VdotH, 1.0, self.data.ior)
+        
+        denom = 4.0 * abs(np.dot(N, V)) * abs(np.dot(N, L))
+        if denom > 1e-6:
+            return Color(1,1,1) * (D * G * F) / denom
+        return Color(0,0,0)
+    
+    else:
+        # Evaluate refraction lobe (BTDF)
+        # This requires calculating the half-vector for refraction
+        eta = 1.0 / self.data.ior  # Assuming air->glass
+        H = -unit(eta * V + L)  # Refraction half-vector
+        
+        D = ggx_distribution(N, H, self.data.roughness)
+        G = smith_geometry(N, V, L, self.data.roughness)
+        
+        VdotH = np.dot(V, H)
+        F = schlick_fresnel_refactive(abs(VdotH), 1.0, self.data.ior)
+        
+        # BTDF formula (see Walter et al. 2007)
+        LdotH = np.dot(L, H)
+        denom = (eta * VdotH + LdotH) ** 2
+        
+        if abs(denom) > 1e-6:
+            btdf = (1 - F) * D * G * abs(VdotH * LdotH) / (abs(np.dot(N,V)) * abs(np.dot(N,L)) * denom)
+            # Glass is typically uncolored, but absorption can tint it
+            return Color(1,1,1) * btdf
+        return Color(0,0,0)

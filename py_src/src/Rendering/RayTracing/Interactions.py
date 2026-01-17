@@ -6,11 +6,11 @@ from dataclasses import replace
 
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
-from .Core import TracingStats
+from ..Core import TracingStats
 from src.Material.Core import PBRMaterial, MaterialType
 from src.Material.BSDF import * 
 from src.Lighting.Optics import REFRACTIVE_INDICES
-from src.Utilities.Sampling import Sampler
+from src.Data.Sampling import Sampler
 
 class InteractionStrategy(ABC):
     @abstractmethod
@@ -66,13 +66,16 @@ class PassthroughInteraction(InteractionStrategy):
             return None
         
 
-        if sampler.next_1d() > np.clip(material.data.albedo.a, 0.0, 1.0):
-            next_origin = P + (ray.orientation * bias)
+        alpha = np.clip(material.data.albedo.a, 0.0, 1.0)
 
+        if sampler.next_1d() < alpha:
+            # Opaque - ray is blocked
+            if stats: stats.rays_transparency += 1
+            return None
+        else:
+            # Transparent - pass through
+            next_origin = P + (ray.orientation * bias)
             return replace(ray, origin=next_origin)
-        
-        if stats: stats.rays_transparency += 1
-        return None
 
 class StandardInteraction(InteractionStrategy):
     """
@@ -110,13 +113,14 @@ class StandardInteraction(InteractionStrategy):
         
         # Only start killing after a few bounces (e.g. depth > 3) to reduce noise
         if ray.current_depth > 3:
-            probability = float(min(max_component, 0.95)) # Keep at least 5% chance
+            probability = float(max(min(max_component, 0.95), 0.05))  # Clamp to [0.05, 0.95]
+            
             if sampler.sample_roulette() > probability:
                 if stats: stats.roulette_kills += 1
                 return None
             
-            # If we survive, boost the energy to compensate for the killed rays
-            current_throughput /= probability
+            # Boost throughput to remain unbiased
+            current_throughput = current_throughput / probability
 
         # 2. Material Sampling
         # Ask material: "Give me a random direction based on your roughness"
@@ -193,24 +197,24 @@ class StandardInteraction(InteractionStrategy):
             if stats: stats.rays_refraction += 1
             
             ior = getattr(material.data, "ior", 1.5)
-            
+
             # Determine Entering vs Exiting
-            dt = np.dot(I, N)
-            n1, n2 = 0, 0
+            I_normalized = unit(I)
+            dt = np.dot(I_normalized, N)
+
             if dt > 0:
-                # Ray is inside object, going out
+                # Inside going out
                 outward_normal = -N
                 n1, n2 = ior, self.scene_ior
-                cosine = n1 * dt / len(I) # Correct cosine for Snell
+                cosine = abs(dt)
                 entering = False
             else:
-                # Ray is outside, going in
+                # Outside going in
                 outward_normal = N
-                n1, n2 = ior, self.scene_ior
-                ni_over_nt = self.scene_ior / ior
-                cosine = -dt / len(I)
+                n1, n2 = self.scene_ior, ior  # ← Fixed order
+                cosine = abs(dt)
                 entering = True
-            
+
             ni_over_nt = n1 / n2
 
             # 1. Calculate Fresnel (Reflection Probability)
@@ -262,7 +266,8 @@ class StandardInteraction(InteractionStrategy):
                 
                 # Update Medium Tracking for Volumetrics
                 if not entering:
-                    new_ray.throughput += material.get_volumetric_component(hit_info.distance).to_np_array(include_alpha=False)[:3]
+                    absorption = material.get_volumetric_component(hit_info.distance).to_np_array(include_alpha=False)[:3]
+                    new_ray.throughput = new_ray.throughput * absorption
                 # if entering:
                 #     new_ray.medium_color = material.data.color # or albedo
                 #     new_ray.medium_density = getattr(material.data, "density", 0.0)

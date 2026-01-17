@@ -7,12 +7,12 @@ from src.Data.Transform import Transform
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
 from src.Data.AABB import AABB
-from .Core import TracingStats
+from ..Core import TracingStats
 from src.Geometry.Core import Shape
 from src.Geometry.BVH import BVHNode, BVHSplitMode
 from src.Geometry.Primitive import Primitive
 from src.Utilities.Common import unit
-from src.Utilities.Scene import Scene
+from src.Data.Scene import Scene
 
 class IntersectionStrategy(ABC):
     def __init__(
@@ -227,6 +227,7 @@ class InverseSDFIntersection(IntersectionStrategy):
 
                 # Transform normal to world space (inverse transpose handles non-uniform scale)
                 world_normal = obj_transform.transform_normal(local_normal)
+                surface_normal = unit(world_normal)
 
                 # Compute accurate world-space hit point and distance
                 p_world = obj_transform.transform_point(local_p)
@@ -236,7 +237,7 @@ class InverseSDFIntersection(IntersectionStrategy):
                     did_hit=True,
                     distance=float(distance_world),
                     point=p_world,
-                    normal=world_normal,
+                    normal=surface_normal,
                     obj=obj
                 )
             
@@ -274,7 +275,6 @@ class InverseSDFIntersection(IntersectionStrategy):
 class BVHIntersection(IntersectionStrategy):
     """
     Find hits between rays and objects using a BVH data structure.
-
     """
     def __init__(
             self,
@@ -534,4 +534,4 @@ class BVHIntersection(IntersectionStrategy):
         ])
         
         norm = np.linalg.norm(grad)
-        return grad / norm if norm > 0 else np.array([0.0, 0.0, 1.0])
+        return grad / norm if norm > 0 else np.array([0.0, 1.0, 0.0])

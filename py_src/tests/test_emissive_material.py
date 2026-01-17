@@ -8,8 +8,8 @@ from src.Rendering.Intersections import RayMarchingIntersection
 from src.Rendering.Interactions import StandardInteraction
 from src.Rendering.Shading import LambertShading
 from src.Data.Ray import TracingRay
-from src.Utilities.Scene import Scene
-from src.Utilities.Sampling import RandomSampler, SampleSettings
+from src.Data.Scene import Scene
+from src.Data.Sampling import RandomSampler, SampleSettings
 from src.Data.Color import Color
 
 

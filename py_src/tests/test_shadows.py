@@ -14,7 +14,7 @@ from src.Geometry.Core import Plane
 from src.Geometry.Primitive import Primitive
 from src.Lighting import LightSource
 from src.Rendering.Shading import LambertShading, ShadowSettings, AmbienceSettings, BackgroundSettings
-from src.Utilities.Scene import Scene
+from src.Data.Scene import Scene
 
 def test_self_shadow_ignored():
     scene = Scene()

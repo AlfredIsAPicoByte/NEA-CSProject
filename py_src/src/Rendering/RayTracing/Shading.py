@@ -7,11 +7,11 @@ from dataclasses import dataclass, field, replace
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
 from src.Data.Color import Color, ColorGradient
-from .Core import TracingStats
+from ..Core import TracingStats
 from src.Material.Core import PBRMaterial, MaterialType
 from src.Lighting.Core import LightSource
-from src.Utilities.Sampling import Sampler
-from src.Utilities.Scene import Scene
+from src.Data.Sampling import Sampler
+from src.Data.Scene import Scene
 from src.Utilities.Common import unit, attenuate_distance_exponential
 
 @dataclass

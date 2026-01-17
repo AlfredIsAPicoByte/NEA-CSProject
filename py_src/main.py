@@ -3,13 +3,13 @@ import argparse
 import gc
 
 from src.Rendering.Core import Algorithm
-from src.Rendering.Raytracing import *
-from src.Rendering.Intersections import *
-from src.Rendering.Shading import *
-from src.Rendering.Interactions import *
+from src.Rendering.RayTracing.Core import *
+from src.Rendering.RayTracing.Intersections import *
+from src.Rendering.RayTracing.Shading import *
+from src.Rendering.RayTracing.Interactions import *
 from src.Image.Film import Film
-from src.Utilities.Scene import Scene
-from src.Utilities.Sampling import SamplingManager, SampleSettings, PixelFilter
+from src.Data.Scene import Scene
+from src.Data.Sampling import SamplingManager, SampleSettings, PixelFilter
 from src.Utilities.Memory.Profiler import MemoryProfiler
 from tests.test_scenes import *
 PostProcessingPipeline = None

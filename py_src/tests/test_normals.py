@@ -12,7 +12,7 @@ from src.Data.Transform import Transform
 from src.Data.Ray import Ray
 from src.Geometry.Core import Sphere
 from src.Geometry.Primitive import Primitive
-from src.Utilities.Scene import Scene
+from src.Data.Scene import Scene
 
 
 def test_world_transform_applied_to_normals():

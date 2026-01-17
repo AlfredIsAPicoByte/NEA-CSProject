@@ -18,8 +18,8 @@ from src.Lighting.Core import LightSource
 from src.Material.Core import PBRMaterial
 from src.Rendering.Raytracing import Raytracer
 from src.Rendering.Shading import LambertShading
-from src.Utilities.Camera import Camera, CameraType
-from src.Utilities.Scene import Scene
+from src.Data.Camera import Camera, CameraType
+from src.Data.Scene import Scene
 
 def test_ray_structure():
     """Test basic Ray structure functionality."""
