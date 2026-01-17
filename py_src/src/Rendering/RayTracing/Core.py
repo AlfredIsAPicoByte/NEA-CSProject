@@ -13,7 +13,7 @@ from src.Data.Scene import Scene
 
 # TODO: Pool tracing rays and hit info to reduce memory useage at runtime
 
-# Raytracer using strategies
+# RayTracer using strategies
 @register_algorithm("ray-tracer")
 class RayTracer(Algorithm):
     def __init__(

@@ -298,7 +298,7 @@ class BVHIntersection(IntersectionStrategy):
         current_scene_id = id(scene.objects)
         if self._cached_bvh_root is None or current_scene_id != self._cached_scene_id:
             print(f"[BVH] Building Hierarchy for {len(scene.objects)} objects...")
-            self._cached_bvh_root = self._build_bvh(scene.objects)
+            self._cached_bvh_root = self._build_bvh(scene.objects, 0)
             self._cached_scene_id = current_scene_id
             print(f"[BVH] Built Hiearchy for {len(scene.objects)} objects.")
 
@@ -409,7 +409,7 @@ class BVHIntersection(IntersectionStrategy):
             node.objects = objects
             return node
         
-        print(node)
+        print(node.objects)
 
         # 3. Split Strategy: Longest Axis
         if self.split_mode == BVHSplitMode.LONGEST_AXIS:

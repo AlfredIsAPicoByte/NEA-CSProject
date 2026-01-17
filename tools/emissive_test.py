@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.join(repo, 'py_src'))
 
 import numpy as np
 from tests.test_scenes import get_emissive_scene
-from src.Rendering.Raytracing import Raytracer, TracingStats
+from src.Rendering.Raytracing import RayTracer, TracingStats
 from src.Rendering.Intersections import BVHIntersection
 from src.Rendering.Interactions import TerminalInteraction
 from src.Rendering.Shading import LambertShading, AmbienceSettings, ShadowSettings, BackgroundSettings
@@ -22,7 +22,7 @@ intersection = BVHIntersection()
 interactor = TerminalInteraction()
 shading = LambertShading(ambience_settings=AmbienceSettings(False), shadow_settings=ShadowSettings(False))
 
-raytracer = Raytracer(max_recursions=1, intersection_strategy=intersection, interaction_strategy=interactor, shading_strategy=shading)
+raytracer = RayTracer(max_recursions=1, intersection_strategy=intersection, interaction_strategy=interactor, shading_strategy=shading)
 
 # Directly test shading on center ray
 from src.Utilities.Sampling import RandomSampler, SampleSettings

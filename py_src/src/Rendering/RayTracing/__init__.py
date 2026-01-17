@@ -1,9 +1,9 @@
 from ..Core import TracingStats, update_memory_stats
 from .Core import RayTracer
 
-import Intersections
-import Shading
-import Interactions
+from . import Intersections
+from . import Shading
+from . import Interactions
 
 __all__ = [
     'RayTracer',

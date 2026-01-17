@@ -5,7 +5,7 @@ repo = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.join(repo, 'py_src'))
 
 from tests.test_scenes import get_minimal_scene
-from src.Rendering.Raytracing import Raytracer, TracingStats
+from src.Rendering.Raytracing import RayTracer, TracingStats
 from src.Rendering.Intersections import BVHIntersection
 from src.Rendering.Interactions import TerminalInteraction
 from src.Rendering.Shading import LambertShading, AmbienceSettings, ShadowSettings, BackgroundSettings
@@ -26,7 +26,7 @@ def main():
 
     sampling_manager = SamplingManager(SampleSettings(samples_per_pixel=1), "random")
 
-    raytracer = Raytracer(
+    raytracer = RayTracer(
         max_recursions=1,
         sampling_manager=sampling_manager,
         intersection_strategy=intersection,

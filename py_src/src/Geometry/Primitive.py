@@ -4,7 +4,6 @@ from typing import Optional, Union, List, Tuple, cast
 from dataclasses import dataclass, field
 
 from src.Data.Transform import Transform
-from src.Data.AABB import AABB
 from .Core import Shape
 from src.Material.Core import PBRMaterial
 

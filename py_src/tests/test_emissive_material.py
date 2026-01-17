@@ -3,7 +3,7 @@ from src.Data.Transform import Transform
 from src.Geometry.Primitive import Primitive
 from src.Geometry.Core import Sphere
 from src.Material.Factory import MaterialFactory
-from src.Rendering.Raytracing import Raytracer
+from src.Rendering.Raytracing import RayTracer
 from src.Rendering.Intersections import RayMarchingIntersection
 from src.Rendering.Interactions import StandardInteraction
 from src.Rendering.Shading import LambertShading
@@ -20,7 +20,7 @@ def test_emissive_render_direct():
     scene = Scene(camera=None)
     scene.add_object(sphere)
 
-    tracer = Raytracer(max_recursions=1, intersection_strategy=RayMarchingIntersection(), interaction_strategy=StandardInteraction(), shading_strategy=LambertShading())
+    tracer = RayTracer(max_recursions=1, intersection_strategy=RayMarchingIntersection(), interaction_strategy=StandardInteraction(), shading_strategy=LambertShading())
 
     # Ray from z=-5 to +Z
     ray = TracingRay(origin=np.array([0.0, 0.0, -5.0]), orientation=np.array([0.0, 0.0, 1.0]))

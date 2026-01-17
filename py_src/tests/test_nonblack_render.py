@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(current_dir, 'src'))
 sys.path.insert(0, current_dir)
 
 from test_scenes import get_minimal_scene
-from src.Rendering.Raytracing import Raytracer, RayMarchingIntersection, StandardInteraction, RecursiveLambertShading
+from src.Rendering.Raytracing import RayTracer, RayMarchingIntersection, StandardInteraction, RecursiveLambertShading
 from src.Data.Sampling import SamplingManager, SampleSettings, PixelFilter
 from src.Data.Camera import Camera
 
@@ -17,7 +17,7 @@ def test_minimal_scene_not_all_background():
     sample_settings = SampleSettings(16, 9, 1, PixelFilter.BOX, 2)
     sampling_manager = SamplingManager(sample_settings, 'halton')
 
-    raytracer = Raytracer(
+    raytracer = RayTracer(
         max_depth=4,
         sampling_manager=sampling_manager,
         camera=Camera(),

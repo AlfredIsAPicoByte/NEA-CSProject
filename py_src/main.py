@@ -62,7 +62,7 @@ def apply_post_processing(raw_img):
     return pipeline.execute(raw_img)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Raytracer CLI")
+    parser = argparse.ArgumentParser(description="RayTracer CLI")
     parser.add_argument("--no-post", dest="disable_post", action="store_true", help="Disable post-processing to reduce memory and runtime")
     args = parser.parse_args()
 
@@ -75,7 +75,7 @@ if __name__ == "__main__":
     img_width, img_height = 16 * 3, 9 * 3
 
     all_scenes = [
-        # get_minimal_scene(img_width, img_height),
+        get_minimal_scene(img_width, img_height),
         get_gradient_scene(img_width, img_height),
         get_emissive_scene(img_width, img_height),
         get_lit_studio_scene(img_width, img_height),
@@ -104,7 +104,7 @@ if __name__ == "__main__":
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
         )
 
-        raytracer = Raytracer(
+        raytracer = RayTracer(
             max_recursions=0,
             sampling_manager=sampling_manager,
             intersection_strategy=intersection,
