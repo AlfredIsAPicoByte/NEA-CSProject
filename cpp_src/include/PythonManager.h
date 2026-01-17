@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include <unordered_set>
 
 #include "Debugger.h"
 
@@ -27,12 +28,34 @@ namespace py {
 }
 #endif
 
+namespace {
+    std::vector<std::string> LoadRequiredPackages() {
+        std::vector<std::string> packages = {
+            "numpy",
+            "pybind11",
+            "Pillow",
+            "scipy",
+        };
+        
+        // Load additional requirements from requirements.txt if it exists
+        std::filesystem::path reqFile = std::filesystem::current_path() / "requirements.txt";
+        if (std::filesystem::exists(reqFile)) {
+            std::ifstream file(reqFile);
+            std::string line;
+            while (std::getline(file, line)) {
+                // Remove whitespace and skip comments/empty lines
+                line.erase(0, line.find_first_not_of(" \t\r\n"));
+                line.erase(line.find_last_not_of(" \t\r\n") + 1);
+                if (!line.empty() && line[0] != '#') {
+                    packages.push_back(line);
+                }
+            }
+        }
+        return packages;
+    }
+}
 
-
-const std::vector<std::string> requiredPythonPackages = {
-    "numpy",
-    "pybind11",
-};
+const std::vector<std::string> requiredPythonPackages = LoadRequiredPackages();
 
 class PythonManager {
 public:
@@ -62,4 +85,14 @@ public:
     PythonManager& operator=(const PythonManager&) = delete;
     PythonManager(PythonManager&&) = delete;
     PythonManager& operator=(PythonManager&&) = delete;
+
+private:
+    // Track packages we've attempted to install in this process to avoid repeated install attempts
+    std::unordered_set<std::string> attemptedInstalls;
+
+    // Indicates whether the Python interpreter was successfully initialized
+    bool pythonInitialized = false;
+
+    // If we decode and set PYTHONHOME we keep the wide string here so it can be freed on finalize
+    wchar_t* pythonHome = nullptr;
 };

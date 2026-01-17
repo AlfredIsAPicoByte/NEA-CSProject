@@ -20,47 +20,57 @@ void Engine::PausePlay()
     }
 }
 
-void Engine::Update(GLFWwindow* window, std::function<void()> processing, std::function<void()> render, std::function<void()> gui)
+void Engine::Update(GLFWwindow* window, std::function<void()> preProcessing, std::function<void()> input, std::function<void()> renderStep,  std::function<void()> postProcessing, std::function<void()> gui, std::function<void()> fallBack)
 {
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
 
-    state = State::RUNNING;
+    if (state == State::STOPPED) {
+        AppendGraphicsError("Engine is not running. Call Start() before Update().");
+        return;
+    }
 
     while (!glfwWindowShouldClose(window))
     {
-        // Process user input
-        if (!io.WantCaptureKeyboard && !io.WantCaptureMouse){
-            processing();
-            
-            InputManager::Instance(window).doWhenKey(GLFW_KEY_ESCAPE, false, true, [&]()
-            {
-                glfwSetWindowShouldClose(window, true);
-            });
+        try {
+            if (preProcessing) preProcessing();
+            // Process user input
+            if (!io.WantCaptureKeyboard && !io.WantCaptureMouse){
+                if (input) input();
+                
+                InputManager::Instance(window).doWhenKey(GLFW_KEY_ESCAPE, true, [&]()
+                {
+                    glfwSetWindowShouldClose(window, true);
+                });
+            }
+
+            if (state == State::PAUSED) {
+                continue;
+            }
+            else {
+                // Render the objects
+                clearScreen();
+                if (renderStep) renderStep();
+            }
+
+            if (gui) {
+                // Start the ImGui frame
+                ImGui_ImplOpenGL3_NewFrame();
+                ImGui_ImplGlfw_NewFrame();
+                ImGui::NewFrame();
+                gui();
+                ImGui::Render();
+                ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            }
+
+            // Swap buffers and poll events
+            glfwSwapBuffers(window);
+            glfwPollEvents();
+        } catch (const std::exception& e) {
+            AppendGraphicsError(std::string("Rendering error: ") + e.what());
+            if (fallBack) fallBack();
         }
-
-        if (state == State::PAUSED) {
-            continue;
-        }
-
-        clearScreen();
-
-        // Render the scene
-        render();
-        
-
-        // Start the ImGui frame
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-        gui();
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        // Swap buffers and poll events
-        glfwSwapBuffers(window);
-        glfwPollEvents();
     }
 }
 

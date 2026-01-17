@@ -1,4 +1,34 @@
-#include "Material.h"
+#include "Material.hpp"
+
+void Material::SerializeFields(json& j) const
+{
+    j["albedo"] = { albedo.x, albedo.y, albedo.z };
+    j["metallic"] = metallic;
+    j["roughness"] = roughness;
+    j["useAlbedoMap"] = useAlbedoMap;
+    j["useNormalMap"] = useNormalMap;
+    j["useMRMap"] = useMRMap;
+    j["emissive"] = { emissive.x, emissive.y, emissive.z };
+    j["constructor"] = "Material";
+}
+
+void Material::DeserializeFields(const json& j)
+{
+    if (j.contains("albedo"))
+        albedo = glm::vec3(j["albedo"][0], j["albedo"][1], j["albedo"][2]);
+    if (j.contains("metallic"))
+        metallic = j["metallic"];
+    if (j.contains("roughness"))
+        roughness = j["roughness"];
+    if (j.contains("useAlbedoMap"))
+        useAlbedoMap = j["useAlbedoMap"];
+    if (j.contains("useNormalMap"))
+        useNormalMap = j["useNormalMap"];
+    if (j.contains("useMRMap"))
+        useMRMap = j["useMRMap"];
+    if (j.contains("emissive"))
+        emissive = glm::vec3(j["emissive"][0], j["emissive"][1], j["emissive"][2]);
+}
 
 void CreateMaterialUBO()
 {
@@ -11,7 +41,6 @@ void CreateMaterialUBO()
     }
 }
 
-// Call before drawing an object with its material
 void UpdateMaterialUBO(const Material& mat)
 {
     GPUMaterial data;
@@ -23,4 +52,10 @@ void UpdateMaterialUBO(const Material& mat)
     // update entire buffer (fast enough for demo); for many materials consider persistent mapping or glBufferSubData ranges
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(GPUMaterial), &data);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
+}
+
+// Nothing to free per-Material right now; satisfies the linker
+void Material::CleanUp()
+{
+    // No per-instance GL resources allocated here
 }

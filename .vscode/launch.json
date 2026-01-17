@@ -25,15 +25,5 @@
       "request": "launch",
       "console": "integratedTerminal"
     },
-    {
-      "name": "C++ Debug (active preset)",
-      "type": "cppvsdbg",
-      "request": "launch",
-      "program": "${command:cmake.launchTargetPath}",
-      "args": [],
-      "stopAtEntry": false,
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal"
-    }
   ]
 }

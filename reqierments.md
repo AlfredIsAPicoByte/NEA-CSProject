@@ -43,7 +43,7 @@ PowerShell (recommended):
 cmake -S . -B build\debug `
   -DCMAKE_BUILD_TYPE=Debug `
   -DCMAKE_TOOLCHAIN_FILE="C:/Libraries/vcpkg/scripts/buildsystems/vcpkg.cmake" `
-  -DUSE_EMBEDDED_PYTHON=OFF
+  -DUSE_EMBEDDED_PYTHON=ON
 
 # build main
 cmake --build build\debug --config Debug --target main

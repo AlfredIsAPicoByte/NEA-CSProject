@@ -9,7 +9,10 @@
             "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_TOOLCHAIN_FILE": "C:/Libraries/vcpkg/scripts/buildsystems/vcpkg.cmake"
+                "CMAKE_TOOLCHAIN_FILE": "C:/Libraries/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "Python3_ROOT": "C:/Python312",
+                "Python3_LIBRARY_DEBUG": "C:/Libraries/vcpkg/installed/x64-windows/debug/lib/python312_d.lib",
+                "Python3_LIBRARY_RELEASE": "C:/Libraries/vcpkg/installed/x64-windows/lib/python312.lib"
             }
         },
         {
@@ -20,7 +23,10 @@
             "binaryDir": "${sourceDir}/build/release",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_TOOLCHAIN_FILE": "C:/Libraries/vcpkg/scripts/buildsystems/vcpkg.cmake"
+                "CMAKE_TOOLCHAIN_FILE": "C:/Libraries/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "Python3_ROOT": "C:/Python312",
+                "Python3_LIBRARY_RELEASE": "C:/Libraries/vcpkg/installed/x64-windows/lib/python312.lib",
+                "Python3_LIBRARY_DEBUG": "C:/Libraries/vcpkg/installed/x64-windows/debug/lib/python312_d.lib"
             }
         }
     ]

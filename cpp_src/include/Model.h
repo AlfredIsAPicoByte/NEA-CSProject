@@ -6,37 +6,49 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <json.hpp>
 
 #include "Mesh.h"
-#include "Debugger.h"
+#include "textureClass.h"
+#include "IVirtualObject.hpp"
 
-using json = nlohmann::json;
-
-class Model {
+class Model : public IVirtualObject {
 public:
-	// Loads in a model from a file and stores tha information in 'data', 'JSON', and 'file'
+	// Default Constructor
+	Model() = default;
+
+	// Standard Constructor. Loads in a model from a file and stores tha information in 'data', 'modelJSON', and 'file'
 	Model(const char* file);
 
-	void Draw(Shader& shader, Camera& camera);
+	// Move constructor
+	Model(Model&& other) noexcept:
+		file(other.file),
+		data(std::move(other.data)),
+		modelJSON(std::move(other.modelJSON)),
+		modelPath(std::move(other.modelPath)),
+		meshes(std::move(other.meshes)),
+		matricesMeshes(std::move(other.matricesMeshes)),
+		loadedTexName(std::move(other.loadedTexName)),
+		loadedTex(std::move(other.loadedTex)) {}
 
-	void CleanUp();
-
+	void LoadModel(const std::string& filePath);
+	
 	std::vector<Mesh>& GetMeshes();
-	void SetName(const std::string& modelName);
-	const std::string& GetName() const;
 	glm::mat4 GetModelMatrixForMesh(unsigned int meshIndex) const;
 	std::vector<glm::mat4> GetModelMatricesForAllMeshes() const;
 	void SetModelMatrixForMesh(unsigned int meshIndex, const glm::mat4& modelMatrix);
 	void SetModelMatricesForAllMeshes(const std::vector<glm::mat4>& modelMatrices);
+
+	void CleanUp() override;
+protected:
+	void SerializeFields(json& j) const override;
+    void DeserializeFields(const json& j) override;
 private:
-	std::string name;
-	int id;
-	
 	// Variables for easy access
 	const char* file;
 	std::vector<unsigned char> data;
-	json JSON;
+	json modelJSON;
 	std::filesystem::path modelPath;
 
 	// All the meshes and model matrices in the model

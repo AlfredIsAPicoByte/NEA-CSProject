@@ -2,98 +2,164 @@
 
 Mesh::Mesh(std::vector <Vertex>& vertices, std::vector <GLuint>& indices, std::vector <Texture>& textures)
 {
-	Mesh::vertices = vertices;
-	Mesh::indices = indices;
-	Mesh::textures = textures;
+    this->vertices = vertices;
+    this->indices = indices;
+    this->textures = textures;
 
-	VAO.Bind();
-	// Generates Vertex Buffer Object and links it to vertices
-	VBO VBO(vertices);
-	// Generates Element Buffer Object and links it to indices
-	EBO EBO(indices);
-	// Links VBO attributes such as coordinates and colors to VAO
-	VAO.LinkAttrib(VBO, 0, 3, GL_FLOAT, sizeof(Vertex), (void*)0); // position
-	VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float))); // normal
-	VAO.LinkAttrib(VBO, 2, 3, GL_FLOAT, sizeof(Vertex), (void*)(6 * sizeof(float))); // color
-	VAO.LinkAttrib(VBO, 3, 2, GL_FLOAT, sizeof(Vertex), (void*)(9 * sizeof(float))); // texUV
-	VAO.LinkAttrib(VBO, 4, 4, GL_FLOAT, sizeof(Vertex), (void*)(11 * sizeof(float))); // tangent
-	
-	// Unbind all to prevent accidentally modifying them
-	VAO.Unbind();
+    setupMesh();
 }
 
-void Mesh::Draw (Shader& shader, Camera& camera)
+void Mesh::setupMesh()
 {
-	// Bind shader to be able to access uniforms
-	shader.Activate();
-	VAO.Bind();
+    // This logic is moved here so it can be called after loading from JSON too
+    VAO.Bind();
+    
+    // Generates Vertex Buffer Object and links it to vertices
+    VBO VBO(vertices);
+    // Generates Element Buffer Object and links it to indices
+    EBO EBO(indices);
+    
+    // Links VBO attributes such as coordinates and colors to VAO
+    VAO.LinkAttrib(VBO, 0, 3, GL_FLOAT, sizeof(Vertex), (void*)0); // position
+    VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float))); // normal
+    VAO.LinkAttrib(VBO, 2, 3, GL_FLOAT, sizeof(Vertex), (void*)(6 * sizeof(float))); // color
+    VAO.LinkAttrib(VBO, 3, 2, GL_FLOAT, sizeof(Vertex), (void*)(9 * sizeof(float))); // texUV
+    VAO.LinkAttrib(VBO, 4, 4, GL_FLOAT, sizeof(Vertex), (void*)(11 * sizeof(float))); // tangent
 
-	// Keep track of how many of each type of textures we have
-	unsigned int numDiffuse = 0;
-	unsigned int numSpecular = 0;
-	unsigned int numNormal = 0;
-
-	for (unsigned int i = 0; i < textures.size(); i++)
-	{
-		std::string num;
-		std::string type = textures[i].type;
-		switch (type)
-		{
-			case "diffuse":
-				num = std::to_string(numDiffuse++);
-				break;
-			case "specular":
-				num = std::to_string(numSpecular++);
-				break;
-			case "normal":
-				num = std::to_string(numNormal++);
-				break;
-			default:
-				num = "0";
-				break;
-		}
-		textures[i].texUnit(shader, (type + num).c_str(), i);
-		textures[i].Bind();
-	}
-	// Take care of the camera Matrix
-	glUniform3f(glGetUniformLocation(shader.ID, "camPos"), camera.Position.x, camera.Position.y, camera.Position.z);
-	camera.Matrix(shader, "camMatrix");
-
-	// Initialize matrices
-	glm::mat4 trans = glm::mat4(1.0f);
-	glm::mat4 rot = glm::mat4(1.0f);
-	glm::mat4 sca = glm::mat4(1.0f);
-
-	// Transform the matrices to their correct form
-	trans = glm::translate(trans, translation);
-	rot = glm::mat4_cast(rotation);
-	sca = glm::scale(sca, scale);
-
-	// Push the matrices to the vertex shader
-	glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(modelMatrix));
-
-	// Draw the actual mesh
-	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+    // Unbind all to prevent accidentally modifying them
+    VAO.Unbind();
 }
 
-void Mesh::SetName(const std::string& meshName)
+void Mesh::Draw(Shader& shader, Camera& camera)
 {
-	name = meshName;
-}
-const std::string& Mesh::GetName() const
-{
-	return name;
-}
-void Mesh::SetModelMatrix(const glm::mat4& matrix)
-{
-	modelMatrix = matrix;
-}
-glm::mat4 Mesh::GetModelMatrix() const
-{
-	return modelMatrix;
+    // Bind shader to be able to access uniforms
+    shader.Activate();
+    VAO.Bind();
+
+    // Keep track of how many of each type of textures we have
+    unsigned int numDiffuse = 0;
+    unsigned int numSpecular = 0;
+    unsigned int numNormal = 0;
+
+    // Remember the texture unit of the first diffuse texture (if any)
+    int firstDiffuseUnit = -1;
+
+    for (unsigned int i = 0; i < textures.size(); i++)
+    {
+        std::string num;
+        std::string type = textures[i].type;
+        if (type == "diffuse") {
+            num = std::to_string(numDiffuse++);
+            // record the first diffuse unit
+            if (firstDiffuseUnit == -1) firstDiffuseUnit = static_cast<int>(textures[i].unit);
+        }
+        else if (type == "specular")
+            num = std::to_string(numSpecular++);
+        else if (type == "normal")
+            num = std::to_string(numNormal++);
+        else
+            num = std::to_string(i);
+
+        // Ensure the shader sampler uniform is set to the actual unit used by this Texture object.
+        textures[i].texUnit(shader, (type + num).c_str(), textures[i].unit);
+        textures[i].Bind();
+    }
+
+    // If we found at least one diffuse texture, tell the shader which sampler to use.
+    if (firstDiffuseUnit >= 0) {
+        shader.setInt("u_albedoMap", firstDiffuseUnit);
+        shader.setBool("u_hasAlbedo", true);
+    } else {
+        shader.setBool("u_hasAlbedo", false);
+    }
+
+    // Take care of the camera Matrix: upload camera position (if needed) and cam/model matrices
+    // Some shaders expect u_viewPos (fragment shader) while others might use camPos; we set u_viewPos from main as well.
+	shader.setVec3("u_viewPos", camera.Position);
+	shader.setVec3("u_viewDir", camera.Forward);
+    camera.SetModelMatrixUniform(shader, "u_camMatrix");
+
+    // Push the model matrix to the vertex shader (must match the vertex shader's uniform name)
+	shader.setMat4("u_model", GetModelMatrix());
+
+    // Draw the actual mesh
+    glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(indices.size()), GL_UNSIGNED_INT, 0);
 }
 
 void Mesh::CleanUp()
 {
-	VAO.Delete();
+    VAO.Delete();
+}
+
+void Mesh::SerializeFields(json& j) const
+{
+    // 1. Call Parent to save Name and Model Matrix
+    IRenderable::SerializeFields(j);
+
+    // 2. Save Mesh Data
+    j["vertices"] = json::array();
+    for (const auto& v : vertices) {
+        json jv;
+        jv["position"] = { v.Position.x, v.Position.y, v.Position.z };
+        jv["normal"] = { v.Normal.x, v.Normal.y, v.Normal.z };
+        jv["color"] = { v.Color.x, v.Color.y, v.Color.z };
+        jv["uv"] = { v.TexCoords.x, v.TexCoords.y };
+        jv["tangent"] = { v.Tangent.x, v.Tangent.y, v.Tangent.z, v.Tangent.w };
+        j["vertices"].push_back(jv);
+    }
+    j["indices"] = indices;
+    
+    // Note: Saving Texture IDs (OpenGL Handles) is usually not safe for reloading,
+    // but preserving your logic here. Ideally, you save the texture file paths.
+    j["textures"] = json::array();
+    for (const auto& t : textures) {
+        json jt;
+        jt["ID"] = t.ID;
+        jt["type"] = t.type;
+        jt["unit"] = t.unit;
+        j["textures"].push_back(jt);
+    }
+
+    j["constructor"] = "Mesh";
+}
+
+void Mesh::DeserializeFields(const json& j)
+{
+    // 1. Call Parent to load Name and Model Matrix
+    IRenderable::DeserializeFields(j);
+
+    // 2. Load Mesh Data
+    if (j.contains("vertices")) {
+        vertices.clear();
+        for (const auto& jv : j["vertices"]) {
+            Vertex v;
+            v.Position = glm::vec3(jv["position"][0], jv["position"][1], jv["position"][2]);
+            v.Normal = glm::vec3(jv["normal"][0], jv["normal"][1], jv["normal"][2]);
+            v.Color = glm::vec3(jv["color"][0], jv["color"][1], jv["color"][2]);
+            v.TexCoords = glm::vec2(jv["uv"][0], jv["uv"][1]);
+            v.Tangent = glm::vec4(jv["tangent"][0], jv["tangent"][1], jv["tangent"][2], jv["tangent"][3]);
+            vertices.push_back(v);
+        }
+    }
+
+    if (j.contains("indices")) {
+        indices = j["indices"].get<std::vector<GLuint>>();
+    }
+
+    if (j.contains("textures")) {
+        textures.clear();
+        for (const auto& jt : j["textures"]) {
+            // Note: This creates dummy textures. 
+            // Real textures usually need to be re-loaded from files unless
+            // the ID is being used as a reference to a Texture Manager.
+            Texture t("", "", 0); 
+            t.ID = jt["ID"];
+            t.type = jt["type"].get<std::string>().c_str();
+            t.unit = jt["unit"];
+            textures.push_back(t);
+        }
+    }
+
+    // 3. IMPORTANT: Re-build the OpenGL buffers now that data is loaded
+    setupMesh();
 }
