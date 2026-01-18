@@ -14,15 +14,21 @@ Scene::~Scene()
 
 void Scene::Initialize()
 {
-    PythonManager::Instance().AddModulePath("py_src/src");
+    PythonManager& pm = PythonManager::Instance();
 
-    pyAlgorithmModule = PythonManager::Instance().LoadModule("RenderingAlgorithms");
-    pyRaytracingModule = PythonManager::Instance().LoadModule("Raytracing");
-    pySamplerModule = PythonManager::Instance().LoadModule("Sampling");
-    pySceneModule = PythonManager::Instance().LoadModule("Scene");
-    pyCameraModule = PythonManager::Instance().LoadModule("Camera");
-    pyLuminanceModule = PythonManager::Instance().LoadModule("Luminance");
-    pyGeometryModule = PythonManager::Instance().LoadModule("Geometry");
+    pm.EnsureRequiredPackagesInstalled();
+
+    pm.AddModulePath("py_src/src");
+    
+    pyAlgorithmModule = pm.LoadModule("Rendering.Core");
+    pyRaytracingModule = pm.LoadModule("Rendering.RayTracing.Core");
+    pySamplerModule = pm.LoadModule("Data.Sampling");
+    pySceneModule = pm.LoadModule("Data.Scene");
+    pyCameraModule = pm.LoadModule("Data.Camera");
+    pyLuminanceModule = pm.LoadModule("Data.Luminance");
+    pyGeometryModule = pm.LoadModule("Data.Geometry");
+
+    AppendMessage("Scene initialized.");
 }
 
 

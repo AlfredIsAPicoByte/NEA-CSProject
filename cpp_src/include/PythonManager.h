@@ -81,12 +81,15 @@ public:
     py::object LoadModule(const std::string& moduleName);
     py::object CallFunction(const py::object& module, const std::string& funcName, const std::vector<py::object>& args = {});
 
+    py::object GetNumPy() const { return numpyModule; }
+
     PythonManager(const PythonManager&) = delete;
     PythonManager& operator=(const PythonManager&) = delete;
     PythonManager(PythonManager&&) = delete;
     PythonManager& operator=(PythonManager&&) = delete;
 
 private:
+    py::object numpyModule;
     // Track packages we've attempted to install in this process to avoid repeated install attempts
     std::unordered_set<std::string> attemptedInstalls;
 
