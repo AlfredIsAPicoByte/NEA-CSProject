@@ -15,109 +15,98 @@ PythonManager::~PythonManager() { Finalize(); }
 void PythonManager::Initialize() {
     if (!Py_IsInitialized()) {
         try {
-            // If a virtual environment is active (VIRTUAL_ENV), set it as PYTHONHOME so
-            // the embedded interpreter can find the platform independent libraries.
-            char *venvBuf = nullptr;
-            size_t len = 0;
-            if (_dupenv_s(&venvBuf, &len, "VIRTUAL_ENV") == 0 && venvBuf) {
-                wchar_t* decoded = Py_DecodeLocale(venvBuf, nullptr);
-                if (decoded) {
-                    pythonHome = decoded; // keep pointer to free later
-                    Py_SetPythonHome(pythonHome);
-                    AppendPythonWarning("Py_SetPythonHome is deprecated");
-                    AppendPythonMessage(std::string("Set PYTHONHOME to VIRTUAL_ENV: ") + venvBuf);
-                }
-                free(venvBuf);
-            } else if (std::filesystem::exists("venv")) {
-                std::filesystem::path venvPath = std::filesystem::absolute("venv");
-                 AppendPythonMessage("Found local 'venv' folder, setting PYTHONHOME: " + venvPath.string());
-                 pythonHome = Py_DecodeLocale(venvPath.string().c_str(), nullptr);
-                 Py_SetPythonHome(pythonHome);
-            } else {
-                AppendPythonMessage("VIRTUAL_ENV not set; embedded interpreter will use system Python unless configured otherwise.");
-            }
-
             py::initialize_interpreter();
             pythonInitialized = true;
 
-            // Embedded interpreters often skip the 'site' initialization which adds pip packages.
-            try {
+            py::module_ sys = py::module_::import("sys");
+            
+            // Check for local venv in project directory
+            std::filesystem::path venvPath = std::filesystem::current_path() / "venv";
+            
+            if (std::filesystem::exists(venvPath)) {
+                #ifdef _WIN32
+                std::filesystem::path venvSitePackages = venvPath / "Lib" / "site-packages";
+                #else
+                std::filesystem::path libPath = venvPath / "lib";
+                std::filesystem::path venvSitePackages;
+                for (const auto& entry : std::filesystem::directory_iterator(libPath)) {
+                    if (entry.is_directory() && 
+                        entry.path().filename().string().find("python3.") == 0) {
+                        venvSitePackages = entry.path() / "site-packages";
+                        break;
+                    }
+                }
+                #endif
+                
+                if (std::filesystem::exists(venvSitePackages)) {
+                    // Add venv site-packages FIRST (highest priority)
+                    sys.attr("path").attr("insert")(0, venvSitePackages.string());
+                    AppendPythonMessage("✓ Using local venv: " + venvSitePackages.string());
+                }
+            } else { // Fall back to system site-packages
+                AppendPythonWarning("No local venv found, using system Python");
+                
                 py::module_ site = py::module_::import("site");
+                py::object site_packages = site.attr("getsitepackages")();
                 
-                // Method A: Force 'site' to re-scan for packages
-                if (py::hasattr(site, "main")) {
-                    site.attr("main")(); 
+                if (py::isinstance<py::list>(site_packages)) {
+                    for (auto path : site_packages) {
+                        std::string pathStr = py::str(path);
+                        sys.attr("path").attr("insert")(0, pathStr);
+                        AppendPythonMessage("Added site-packages: " + pathStr);
+                    }
                 }
-                
-                // Method B: Explicitly add the user site-packages if Method A failed to grab them
-                // This gets the standard location for pip packages on the current OS
-                py::object getUserSite = site.attr("getusersitepackages");
-                py::module_ sys = py::module_::import("sys");
-                sys.attr("path").attr("append")(getUserSite());
-
-                // Debug: Verify numpy is now findable
-                try {
-                    py::module_::import("numpy");
-                    AppendPythonMessage("Verified: 'numpy' is accessible.");
-                } catch(...) {
-                    AppendPythonWarning("Warning: 'numpy' could not be imported immediately after init.");
-                }
-
-            } catch (const std::exception& e) {
-                AppendPythonWarning(std::string("Failed to auto-configure site-packages: ") + e.what());
             }
             
-            // Log prefix/executable info for easier diagnostics when embedding fails
+            // Log diagnostic info
             try {
                 py::module_ sys = py::module_::import("sys");
-                AppendPythonMessage(std::string("sys.prefix: ") + std::string(py::str(sys.attr("prefix")))); 
-                AppendPythonMessage(std::string("sys.exec_prefix: ") + std::string(py::str(sys.attr("exec_prefix"))));
-                try {
-                    std::string pyExe = py::str(sys.attr("executable"));
-                    AppendPythonMessage(std::string("Python executable: ") + pyExe);
-
-                    // If VIRTUAL_ENV is set, warn if the embedded interpreter's executable
-                    // doesn't appear to be inside that venv (common cause for install/import mismatch).
-                    char *venvBuf = nullptr;
-                    size_t len = 0;
-                    if (_dupenv_s(&venvBuf, &len, "VIRTUAL_ENV") == 0 && venvBuf) {
-                        std::string venvStr(venvBuf);
-                        free(venvBuf);
-                        if (pyExe.find(venvStr) == std::string::npos) {
-                            AppendPythonWarning("Python executable does not appear to be inside VIRTUAL_ENV; pip installs may go to a different environment.");
-                        }
-                    }
-                } catch (...) {
-                    AppendPythonMessage("Python executable: (unknown)");
+                AppendPythonMessage("sys.prefix: " + std::string(py::str(sys.attr("prefix"))));
+                AppendPythonMessage("sys.executable: " + std::string(py::str(sys.attr("executable"))));
+                
+                py::list paths = sys.attr("path");
+                AppendPythonMessage("Python sys.path entries:");
+                for (size_t i = 0; i < py::len(paths); ++i) {
+                    AppendPythonMessage("  [" + std::to_string(i) + "] " + std::string(py::str(paths[i])));
                 }
             } catch (...) {
-                AppendPythonWarning("Unable to query sys.* after interpreter initialization");
+                AppendPythonWarning("Could not query sys info");
             }
 
+            // Add custom module paths
             try {
-                // Resolve an absolute path to the project's Python sources (py_src/src)
-                std::filesystem::path scriptPath = std::filesystem::absolute(std::filesystem::current_path() / "py_src" / "src");
+                std::filesystem::path scriptPath = std::filesystem::absolute(
+                    std::filesystem::current_path() / "py_src" / "src"
+                );
                 if (!std::filesystem::exists(scriptPath)) {
-                    // Try a fallback relative to parent directory (useful when running from build folders)
-                    scriptPath = std::filesystem::absolute(std::filesystem::current_path().parent_path() / "py_src" / "src");
+                    scriptPath = std::filesystem::absolute(
+                        std::filesystem::current_path().parent_path() / "py_src" / "src"
+                    );
                 }
                 if (std::filesystem::exists(scriptPath)) {
                     py::module_ sys = py::module_::import("sys");
-                    sys.attr("path").attr("append")(scriptPath.string());
-                    AppendPythonMessage(std::string("Added Python path: ") + scriptPath.string());
-
-                    // Ensure required packages (e.g. numpy) are installed for the embedded interpreter
-                    EnsureRequiredPackagesInstalled();
+                    sys.attr("path").attr("insert")(0, scriptPath.string());
+                    AppendPythonMessage("Added custom Python path: " + scriptPath.string());
                 } else {
-                    AppendPythonError(std::string("Python script path not found: ") + scriptPath.string());
+                    AppendPythonError("Python script path not found: " + scriptPath.string());
                 }
             } catch (const std::exception& e) {
-                AppendPythonError(std::string("Failed to add Python path: ") + e.what());
+                AppendPythonError("Failed to add custom Python path: " + std::string(e.what()));
+            }
+
+            AppendPythonMessage("Checking for required Python packages...");
+            for (const auto& package : requiredPythonPackages) {
+                std::string importName = GetImportNameForPackage(package);
+                try {
+                    py::module_::import(importName.c_str());
+                    AppendPythonMessage("✓ " + package + " found");
+                } catch (const py::error_already_set&) {
+                    AppendPythonError("✗ " + package + " NOT FOUND. Please install manually.");
+                }
             }
 
         } catch (const py::error_already_set& e) {
-            AppendPythonError(std::string("Failed to initialize Python interpreter: ") + e.what());
-            AppendPythonError("Check your Python installation, PYTHONHOME/VIRTUAL_ENV, and CMake Python settings (Python3_ROOT etc).");
+            AppendPythonError("Failed to initialize Python interpreter: " + std::string(e.what()));
             pythonInitialized = false;
             return;
         } catch (const std::exception& e) {
@@ -156,82 +145,68 @@ void PythonManager::InstallPackage(const std::string& packageName) {
     py::module_ sys = py::module_::import("sys");
     py::module_ subprocess = py::module_::import("subprocess");
 
-    // 2. Determine the correct executable
-    std::string cmdExecutable;
+    std::string pythonExe;
     try {
-        std::string currentExe = sys.attr("executable").cast<std::string>();
-        // If sys.executable contains "python" (e.g. "python.exe"), use it.
-        if (currentExe.find("python") != std::string::npos) {
-            cmdExecutable = currentExe;
-        } else {
-            // Otherwise, we are likely running inside the C++ host app.
-            // Fallback to system command.
-            #ifdef _WIN32
-            cmdExecutable = "python"; 
-            #else
-            cmdExecutable = "python3";
-            #endif
-            AppendPythonWarning("sys.executable points to host app. Falling back to system '" + cmdExecutable + "' for pip calls.");
-        }
+        pythonExe = sys.attr("executable").cast<std::string>();
     } catch(...) {
-        cmdExecutable = "python";
+        pythonExe = "python";
     }
 
-    // 3. Prepare the command: [python, -m, pip, install, package]
-    auto commandArgs = py::make_tuple(cmdExecutable, "-m", "pip", "install", packageName);
+    if (pythonExe.find("python") == std::string::npos) {
+        // Try to find Python in the same directory as sys.executable
+        std::filesystem::path exePath(pythonExe);
+        std::filesystem::path exeDir = exePath.parent_path();
+        
+        #ifdef _WIN32
+        std::filesystem::path venvPython = exeDir / "Scripts" / "python.exe";
+        if (!std::filesystem::exists(venvPython)) {
+            venvPython = exeDir / "python.exe";
+        }
+        #else
+        std::filesystem::path venvPython = exeDir / "bin" / "python";
+        if (!std::filesystem::exists(venvPython)) {
+            venvPython = exeDir / "python3";
+        }
+        #endif
+        
+        if (std::filesystem::exists(venvPython)) {
+            pythonExe = venvPython.string();
+            AppendPythonMessage("Found venv Python: " + pythonExe);
+        } else {
+            AppendPythonWarning("Could not locate Python executable, using 'python'");
+            pythonExe = "python";
+        }
+    }
+    
+    AppendPythonMessage("Installing " + packageName + " using: " + pythonExe);
+
+    auto commandArgs = py::make_tuple(pythonExe, "-m", "pip", "install", packageName);
 
     try {
-#ifdef _WIN32
-        // Windows: Try to hide the console window
-        int creationFlags = 0;
-        try {
-            // Try newer CREATE_NO_WINDOW flag
-            if (py::hasattr(subprocess, "CREATE_NO_WINDOW")) {
-                 creationFlags = subprocess.attr("CREATE_NO_WINDOW").cast<int>();
-            }
-        } catch (...) { creationFlags = 0; }
-
-        if (creationFlags != 0) {
-            subprocess.attr("check_call")(commandArgs, py::arg("creationflags") = creationFlags);
-        } else {
-            // Fallback to STARTUPINFO for older methods
-            try {
-                py::object STARTUPINFO = subprocess.attr("STARTUPINFO");
-                py::object si = STARTUPINFO();
-                si.attr("dwFlags") = si.attr("dwFlags").cast<int>() | subprocess.attr("STARTF_USESHOWWINDOW").cast<int>();
-                si.attr("wShowWindow") = subprocess.attr("SW_HIDE");
-                subprocess.attr("check_call")(commandArgs, py::arg("startupinfo") = si);
-            } catch (...) {
-                // Last resort: show the window
-                subprocess.attr("check_call")(commandArgs);
-            }
-        }
-#else
-        // Linux/Mac: No special flags needed
         subprocess.attr("check_call")(commandArgs);
-#endif
+        AppendPythonMessage("Successfully installed: " + packageName);
         
-        AppendPythonMessage("Successfully installed Python package: " + packageName);
-
-        // 4. Invalidate import caches
-        // Important: Python might not "see" the new package immediately unless we clear caches.
         try {
+            // Invalidate import caches
             py::module_::import("importlib").attr("invalidate_caches")();
+            
+            // Reload site module using importlib.reload()
+            py::module_ importlib = py::module_::import("importlib");
+            py::module_ site = py::module_::import("site");
+            importlib.attr("reload")(site);
         } catch(...) {}
-
-        // 5. Verify Import
+        
+        // Verify import
         try {
             std::string importName = GetImportNameForPackage(packageName);
             py::module_::import(importName.c_str());
-            AppendPythonMessage(std::string("Verified import for package: ") + packageName + " (imported as: " + importName + ")");
+            AppendPythonMessage("✓ Verified import: " + importName);
         } catch (const py::error_already_set& e) {
-            AppendPythonError(std::string("Package installed but import failed for '") + packageName + "': " + e.what());
+            AppendPythonError("✗ Package installed but import failed: " + std::string(e.what()));
         }
-
+        
     } catch (const py::error_already_set& error) {
-        AppendPythonError(std::string("Failed to install Python package '") + packageName + "': " + error.what());
-    } catch (const std::exception& e) {
-        AppendPythonError(std::string("Exception during installation of package '") + packageName + "': " + e.what());
+        AppendPythonError("Failed to install " + packageName + ": " + std::string(error.what()));
     }
 }
 
@@ -265,7 +240,38 @@ void PythonManager::EnsurePythonPackagesInstalled(const std::vector<std::string>
         AppendPythonWarning("Python interpreter not initialized; skipping package installation checks");
         return;
     }
-    for (const auto& package : packages) ValidatePackageInstallation(package);
+    
+    bool isAnaconda = false;
+    try {
+        py::module_ sys = py::module_::import("sys");
+        std::string prefix = py::str(sys.attr("prefix"));
+        std::string executable = py::str(sys.attr("executable"));
+        
+        if (prefix.find("anaconda") != std::string::npos || 
+            prefix.find("miniconda") != std::string::npos ||
+            executable.find("anaconda") != std::string::npos ||
+            executable.find("miniconda") != std::string::npos) {
+            isAnaconda = true;
+            AppendPythonMessage("Detected Anaconda/Miniconda environment");
+        }
+    } catch(...) {}
+    
+    for (const auto& package : packages) {
+        std::string importName = GetImportNameForPackage(package);
+        
+        try {
+            py::module_::import(importName.c_str());
+            AppendPythonMessage("✓ Package '" + package + "' is already available");
+        } catch (const py::error_already_set&) {
+            if (isAnaconda) {
+                // Don't try to install with pip in Anaconda - user should use conda
+                AppendPythonWarning("Package '" + package + "' not found. Please install with: conda install " + package);
+            } else {
+                AppendPythonMessage("Package '" + package + "' not found. Installing...");
+                InstallPackage(package);
+            }
+        }
+    }
 }
 
 void PythonManager::GetPackagesInstalledStatus(const std::vector<std::string>& packages) {

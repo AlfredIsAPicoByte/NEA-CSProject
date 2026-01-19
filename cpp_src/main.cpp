@@ -581,7 +581,7 @@ int main()
 					case DebugMessage::HIGH:
 						col = ImVec4(1.0f, 0.0f, 0.0f, 1.0f); sevLabel = "HIGH"; break;
 					default:
-						col = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); sevLabel = "UNK"; break;
+						col = ImVec4(0.85f, 0.85f, 0.85f, 1.0f); sevLabel = "UNK"; break;
 					}
 
 					// Compose a short line: index message

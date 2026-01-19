@@ -1,22 +1,22 @@
-Time: 82.0608s | RSS Δ: 0.145 MB
-RSS start: 61.285 MB | RSS end: 61.430 MB
-tracemalloc current: 182.52 KB | peak: 496.04 KB
+Time: 0.2685s | RSS Δ: 0.000 MB
+RSS start: 59.863 MB | RSS end: 59.863 MB
+tracemalloc current: 39.15 KB | peak: 353.04 KB
 Top allocations (most recent frame):
-  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:11 | 108.09 KB (2 allocs)
-  2. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:12 | 36.09 KB (2 allocs)
-  3. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:57 | 6.96 KB (65 allocs)
-  4. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\linalg\_linalg.py:2432 | 4.62 KB (86 allocs)
-  5. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Data\Ray.py:117 | 4.27 KB (78 allocs)
-  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Data\Transform.py:142 | 3.28 KB (30 allocs)
+  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:11 | 15.28 KB (2 allocs)
+  2. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:12 | 5.16 KB (2 allocs)
+  3. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Data\Ray.py:117 | 4.27 KB (78 allocs)
+  4. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Data\Transform.py:142 | 3.28 KB (30 allocs)
+  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\linalg\_linalg.py:669 | 3.28 KB (30 allocs)
+  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Utilities\Sampling.py:335 | 1.03 KB (44 allocs)
 
 Postprocessing:
-Time: 0.0033s | RSS Δ: 0.730 MB
-RSS start: 61.586 MB | RSS end: 62.316 MB
-tracemalloc current: 218.25 KB | peak: 1255.75 KB
+Time: 0.0016s | RSS Δ: 0.000 MB
+RSS start: 59.863 MB | RSS end: 59.863 MB
+tracemalloc current: 33.19 KB | peak: 185.23 KB
 Top allocations (most recent frame):
-  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\PostProcessing\Passes.py:41 | 216.09 KB (2 allocs)
-  2. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\main.py:153 | 0.22 KB (2 allocs)
-  3. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\main.py:151 | 0.22 KB (2 allocs)
-  4. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\main.py:149 | 0.22 KB (2 allocs)
-  5. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\main.py:145 | 0.22 KB (2 allocs)
-  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\main.py:143 | 0.22 KB (2 allocs)
+  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\PostProcessing\Passes.py:40 | 30.47 KB (2 allocs)
+  2. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:57 | 0.35 KB (3 allocs)
+  3. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\main.py:151 | 0.23 KB (2 allocs)
+  4. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\main.py:149 | 0.23 KB (2 allocs)
+  5. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\main.py:147 | 0.23 KB (2 allocs)
+  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\main.py:145 | 0.23 KB (2 allocs)

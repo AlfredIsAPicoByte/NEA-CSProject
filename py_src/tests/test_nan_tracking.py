@@ -12,11 +12,11 @@ from src.Data.Ray import Ray
 from src.Data.Color import Color
 from src.Geometry.Core import  Sphere
 from src.Geometry.Primitive import Primitive
-from src.Rendering.Raytracing import Raytracer
+from src.Rendering.Raytracing import RayTracer
 from src.Rendering.Intersections import BVHIntersection
 from src.Rendering.Shading import ShadingStrategy, AmbienceSettings, ShadowSettings, BackgroundSettings
-from src.Utilities.Sampling import RandomSampler
-from src.Utilities.Scene import Scene
+from src.Data.Sampling import RandomSampler
+from src.Data.Scene import Scene
 
 class NaNShading(ShadingStrategy):
     def __init__(self):
@@ -33,7 +33,7 @@ def test_nan_tracking():
 
     ray = Ray(origin=np.array([0.0, 0.0, -5.0]), orientation=np.array([0.0, 0.0, 1.0]))
 
-    tracer = Raytracer(
+    tracer = RayTracer(
         max_recursions=1,
         intersection_strategy=BVHIntersection(max_distance=100, max_steps=10),
         shading_strategy=NaNShading()

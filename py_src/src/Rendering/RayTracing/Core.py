@@ -1,21 +1,21 @@
 import numpy as np
 from typing import Optional, Tuple, Any
 
-from src.Data.Ray import TracingRay
+from src.Data.Ray import TracingRay, RayPool
 from src.Data.Color import Color
-from .Core import Algorithm, TracingStats, register_algorithm, update_memory_stats
+from ..Core import Algorithm, TracingStats, register_algorithm, update_memory_stats
 from . import Intersections
 from . import Shading
 from . import Interactions
 from src.Image.Film import Film
-from src.Utilities.Sampling import SamplingManager, SampleSettings, Sampler, RandomSampler
-from src.Utilities.Scene import Scene
+from src.Data.Sampling import SamplingManager, SampleSettings, Sampler, RandomSampler
+from src.Data.Scene import Scene
 
 # TODO: Pool tracing rays and hit info to reduce memory useage at runtime
 
-# Raytracer using strategies
-@register_algorithm("raytracer")
-class Raytracer(Algorithm):
+# RayTracer using strategies
+@register_algorithm("ray-tracer")
+class RayTracer(Algorithm):
     def __init__(
         self,
         max_recursions: int = 4,
@@ -97,13 +97,14 @@ class Raytracer(Algorithm):
             self._record_nan(reason='hit_info point/normal not finite', ray=ray)
             return Color(0.0, 0.0, 0.0)
 
-        # 3. Direct Lighting / Local Shading
-        # (Assuming this calculates direct light or calls recursion for mirror reflections)
+        # 3. Shading (Direct + Indirect handled by shader)
+        # The shader is responsible for ALL recursion.
+        # We do NOT call interact() here - that would double-count indirect lighting.
         shaded_color = self.shader.shade(
             scene=scene, 
             ray=ray, 
             hit_info=hit_info,
-            recursions_left=recursions_left - 1,
+            recursions_left=recursions_left,  # Pass full recursion budget to shader
             trace_function=self._trace_ray,
             sampler=sampler,
             stats=self.stats
@@ -115,27 +116,7 @@ class Raytracer(Algorithm):
             shaded_color = Color(0.0, 0.0, 0.0)
         shaded_color = self._sanitize_color(shaded_color, ray=ray, reason='shaded output')
 
-        # 4. Generate the next ray
-        interaction_result = self.interactor.interact(ray=ray, hit_info=hit_info, sampler=sampler, bias=1e-4, stats=self.stats)
-        
-        # Check if a ray was actually generated (it might be absorbed or killed)
-        if interaction_result is not None:
-            incoming_light = self._trace_ray(
-                scene=scene,
-                ray=interaction_result,
-                recursions_left=recursions_left - 1,
-                sampler=sampler
-            )
-
-            # Sanitize incoming light
-            if incoming_light is None:
-                self._record_nan(reason='incoming light None', ray=interaction_result)
-                incoming_light = Color(0.0, 0.0, 0.0)
-            incoming_light = self._sanitize_color(incoming_light, ray=interaction_result, reason='incoming light')
-
-            # 5. Combine Direct and Indirect Light
-            return shaded_color + incoming_light
-
+        # Return the shaded color directly
         return shaded_color
 
     def render(

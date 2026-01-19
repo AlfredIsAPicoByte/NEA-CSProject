@@ -6,11 +6,11 @@ from dataclasses import replace
 
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
-from .Core import TracingStats
+from ..Core import TracingStats
 from src.Material.Core import PBRMaterial, MaterialType
 from src.Material.BSDF import * 
 from src.Lighting.Optics import REFRACTIVE_INDICES
-from src.Utilities.Sampling import Sampler
+from src.Data.Sampling import Sampler
 
 class InteractionStrategy(ABC):
     @abstractmethod
@@ -61,18 +61,26 @@ class PassthroughInteraction(InteractionStrategy):
         
         # Alpha Clipping
         material: Optional[PBRMaterial] = getattr(hit_info.obj, "material", None)
-
         if material is None:
             return None
         
-
-        if sampler.next_1d() > np.clip(material.data.albedo.a, 0.0, 1.0):
-            next_origin = P + (ray.orientation * bias)
-
-            return replace(ray, origin=next_origin)
+        # Get alpha value (0.0 = fully transparent, 1.0 = fully opaque)
+        alpha = np.clip(material.data.albedo.a, 0.0, 1.0)
         
-        if stats: stats.rays_transparency += 1
-        return None
+        # Random value in [0, 1)
+        random_value = sampler.next_1d()
+        
+        # If random value < alpha, the surface is opaque (block the ray)
+        # If random value >= alpha, the surface is transparent (pass through)
+        if random_value < alpha:
+            # Opaque - ray is blocked, terminate it
+            if stats: 
+                stats.rays_transparency += 1
+            return None
+        else:
+            # Transparent - pass through
+            next_origin = P + (ray.orientation * bias)
+            return replace(ray, origin=next_origin)
 
 class StandardInteraction(InteractionStrategy):
     """
@@ -110,13 +118,14 @@ class StandardInteraction(InteractionStrategy):
         
         # Only start killing after a few bounces (e.g. depth > 3) to reduce noise
         if ray.current_depth > 3:
-            probability = float(min(max_component, 0.95)) # Keep at least 5% chance
+            probability = float(max(min(max_component, 0.95), 0.05))  # Clamp to [0.05, 0.95]
+            
             if sampler.sample_roulette() > probability:
                 if stats: stats.roulette_kills += 1
                 return None
             
-            # If we survive, boost the energy to compensate for the killed rays
-            current_throughput /= probability
+            # Boost throughput to remain unbiased
+            current_throughput = current_throughput / probability
 
         # 2. Material Sampling
         # Ask material: "Give me a random direction based on your roughness"
@@ -193,24 +202,24 @@ class StandardInteraction(InteractionStrategy):
             if stats: stats.rays_refraction += 1
             
             ior = getattr(material.data, "ior", 1.5)
-            
+
             # Determine Entering vs Exiting
-            dt = np.dot(I, N)
-            n1, n2 = 0, 0
+            I_normalized = unit(I)
+            dt = np.dot(I_normalized, N)
+
             if dt > 0:
-                # Ray is inside object, going out
+                # Inside going out
                 outward_normal = -N
                 n1, n2 = ior, self.scene_ior
-                cosine = n1 * dt / len(I) # Correct cosine for Snell
+                cosine = abs(dt)
                 entering = False
             else:
-                # Ray is outside, going in
+                # Outside going in
                 outward_normal = N
-                n1, n2 = ior, self.scene_ior
-                ni_over_nt = self.scene_ior / ior
-                cosine = -dt / len(I)
+                n1, n2 = self.scene_ior, ior
+                cosine = abs(dt)
                 entering = True
-            
+
             ni_over_nt = n1 / n2
 
             # 1. Calculate Fresnel (Reflection Probability)
@@ -225,9 +234,6 @@ class StandardInteraction(InteractionStrategy):
                     orientation=reflected,
                     throughput=current_throughput, # Glass reflection is white (usually)
                     current_depth=ray.current_depth + 1,
-                    # Medium properties don't change on reflection
-                    # medium_density=ray.medium_density,
-                    # medium_color=ray.medium_color,
                     is_inside=ray.is_inside
                 )
             else:
@@ -242,35 +248,27 @@ class StandardInteraction(InteractionStrategy):
                         orientation=reflected,
                         throughput=current_throughput,
                         current_depth=ray.current_depth + 1,
-                        # medium_density=ray.medium_density,
-                        # medium_color=ray.medium_color,
                         is_inside=ray.is_inside
                     )
                 
                 # Successful Refraction
-                # Color tint is usually White (1.0) for the surface event itself.
-                # The COLOR of glass comes from absorption (Beer's Law) inside the volume,
-                # which is handled by the Ray properties below.
-                
                 new_ray = TracingRay(
                     origin=P - (outward_normal * bias), # Push THROUGH surface
                     orientation=refracted,
-                    throughput=current_throughput, # Transmission is 1.0 at interface
+                    throughput=current_throughput, # Start with current throughput
                     current_depth=ray.current_depth + 1,
                     is_inside=not ray.is_inside
                 )
                 
-                # Update Medium Tracking for Volumetrics
+                # Apply Beer's Law absorption when EXITING the material
                 if not entering:
-                    new_ray.throughput += material.get_volumetric_component(hit_info.distance).to_np_array(include_alpha=False)[:3]
-                # if entering:
-                #     new_ray.medium_color = material.data.color # or albedo
-                #     new_ray.medium_density = getattr(material.data, "density", 0.0)
-                # else:
-                #     # Exiting to air (reset to defaults)
-                #     new_ray.medium_color = Color(1, 1, 1) 
-                #     new_ray.medium_density = 0.0
+                    # Get volumetric absorption as Color
+                    absorption = material.get_volumetric_component(hit_info.distance)
+                    
+                    # Multiply throughput by absorption (Beer's Law filtering)
+                    absorption_rgb = absorption.to_np_array(include_alpha=False)[:3]
+                    new_ray.throughput = new_ray.throughput * absorption_rgb  # ← FIXED: multiply instead of add
                     
                 return new_ray
-
+            
         return None

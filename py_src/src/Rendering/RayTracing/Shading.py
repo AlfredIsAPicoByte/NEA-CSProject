@@ -7,11 +7,11 @@ from dataclasses import dataclass, field, replace
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
 from src.Data.Color import Color, ColorGradient
-from .Core import TracingStats
+from ..Core import TracingStats
 from src.Material.Core import PBRMaterial, MaterialType
 from src.Lighting.Core import LightSource
-from src.Utilities.Sampling import Sampler
-from src.Utilities.Scene import Scene
+from src.Data.Sampling import Sampler
+from src.Data.Scene import Scene
 from src.Utilities.Common import unit, attenuate_distance_exponential
 
 @dataclass
@@ -375,12 +375,9 @@ class RecursiveLambertShading(LambertShading):
             # If a ray was generated (not absorbed), trace it
             if bounce_ray is not None:
                 # Recursively trace the bounced ray
-                bounce_color = trace_function(scene, bounce_ray, recursions_left - 1, sampler)
-                
-                # Weight the indirect light by the material's albedo
-                # This shows how much light the surface absorbs/reflects
-                albedo = material.data.albedo.to_np_array(include_alpha=False)
-                indirect_light = bounce_color * Color(albedo[0], albedo[1], albedo[2], 1.0)
+                # NOTE: The bounce_ray's throughput is already modulated by material.albedo
+                # by the interact() method, so we just need to trace and use the result directly
+                indirect_light = trace_function(scene, bounce_ray, recursions_left - 1, sampler)
 
         # --- 3. Combine Direct + Indirect ---
         final_color = direct_light + indirect_light

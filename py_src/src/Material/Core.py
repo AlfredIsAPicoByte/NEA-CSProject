@@ -112,13 +112,6 @@ class PBRMaterial:
                 specular = self.get_specular_component(L, N, V)
                 accumulated_light += (diffuse + specular) * incoming_radiance
 
-            # Material Response (BSDF * CosTheta)
-            # Note: evaluate_bsdf returns f_r. We must multiply by cos(theta) for the rendering equation.
-            bsdf_val = self.evaluate_bsdf(L, V, N)
-            cos_theta = max(0.0, np.dot(N, L))
-            
-            accumulated_light += (light.color * incoming_radiance) * bsdf_val * cos_theta
-
         return accumulated_light
     
     def sample(self, incident_dir: np.ndarray, hit_info: HitInfo, sampler: Sampler) -> Tuple[np.ndarray, Color, float]:
@@ -178,19 +171,24 @@ class PBRMaterial:
         # --- E. GLASS (Dielectric) ---
         if self.type == MaterialType.GLASS:
             ior = self.data.ior
-            dt = np.dot(I, N)
             
             # Determine Entering vs Exiting
+            I_normalized = unit(I)
+            dt = np.dot(I_normalized, N)
+            
+            scene_ior = 1.0
             if dt > 0:
                 # Inside going out
                 outward_normal = -N
-                ni_over_nt = ior # Assuming air ior = 1.0
-                cosine = ior * dt 
+                n1, n2 = ior, scene_ior
+                cosine = abs(dt)
             else:
                 # Outside going in
                 outward_normal = N
-                ni_over_nt = 1.0 / ior
-                cosine = -dt
+                n1, n2 = scene_ior, ior  # ← Fixed order
+                cosine = abs(dt)
+
+            ni_over_nt = n1 / n2
 
             # 1. Calculate Fresnel (Reflection Probability)
             # Schlick's approximation
@@ -233,14 +231,38 @@ class PBRMaterial:
         incident_dir: Direction TO the light
         view_dir: Direction TO the camera
         """
-        # Glass and Specular are "Delta Distributions" (singularities).
-        # The probability of hitting the exact perfect reflection angle 
-        # when sampling a random point on a light is 0.
-        # Therefore, we return Black. Caustics must be handled by the 'sample' method (indirect rays).
-
-        # Lambertian BRDF = Albedo / PI
         if self.type == MaterialType.DIFFUSE:
             return self.data.albedo / np.pi
+        
+        # Microfacet BRDF (GGX with roughness)
+        elif self.type == MaterialType.SPECULAR:
+            # Only evaluate if roughness > 0 (otherwise it's a delta distribution)
+            if self.data.roughness > 0.01:
+                # Use your existing get_specular_component logic
+                L = unit(incident_dir)
+                V = unit(view_dir)
+                N = unit(normal)
+                
+                # Calculate the microfacet BRDF
+                specular_brdf = calculate_microfacet_brdf(L, V, N)
+                
+                # Add diffuse component (scaled by metallic)
+                diffuse_brdf = (self.data.albedo / np.pi) * (1.0 - self.data.metallic)
+                
+                return diffuse_brdf + specular_brdf
+            else:
+                # Perfect mirror - delta distribution
+                return Color(0.0, 0.0, 0.0)
+        
+        # Glass/Dielectric with microfacets
+        elif self.type == MaterialType.GLASS:
+            if self.data.roughness > 0.01:
+                # Evaluate both reflection and refraction lobes
+                # This is complex - see below
+                return evaluate_glass_bsdf(incident_dir, view_dir, normal)
+            else:
+                # Perfect glass - delta distribution
+                return Color(0.0, 0.0, 0.0)
 
         return Color(0.0, 0.0, 0.0)
 
@@ -260,55 +282,11 @@ class PBRMaterial:
         
         return diffuse
 
-    def get_specular_component(self, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray, bias: float = 1e-4) -> Color:
-        """Get the specular component of the material response using the Micro-Facet BRDF."""
-        
-        # --- 0. Pre-Calculations and Constants ---
-        safe_roughness = max(self.data.roughness, 1e-2)
-        alpha = safe_roughness ** 2
-        alpha_sq = alpha ** 2
-        
-        # Halfway Vector (H)
-        H = (light_dir + view_dir)
-        H = unit(H) 
-        
-        # Dot Products (must be clamped to avoid negative light/view angles)
-        NdotH = max(0.0, np.dot(surface_normal, H))
+    def get_specular_component(self, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray) -> Color:
+        """Get the specular component including the cosine term."""
+        brdf = self._calculate_microfacet_brdf(light_dir, view_dir, surface_normal)
         NdotL = max(0.0, np.dot(surface_normal, light_dir))
-        NdotV = max(0.0, np.dot(surface_normal, view_dir))
-        VdotH = max(0.0, np.dot(view_dir, H))
-
-        # --- 1. Normal Distribution Function (NDF - GGX) ---
-        denom_ndf = (NdotH * NdotH * (alpha_sq - 1.0) + 1.0)
-        NDF = alpha_sq / (np.pi * denom_ndf * denom_ndf)
-        
-        # --- 2. Geometric Shadowing Function (GSF - Schlick-GGX Approximation) ---
-        k = ((alpha + 1.0) ** 2) / 8.0 
-        
-        GS_Schlick = lambda n_dot_k: n_dot_k / (n_dot_k * (1.0 - k) + k)
-        GSF = GS_Schlick(NdotL) * GS_Schlick(NdotV)
-        
-        # --- 3. Fresnel Function (FF - Schlick Approximation) ---
-        F0 = self.get_metallic_component()
-        
-        # F_schlick calculation (Color operations are handled correctly)
-        term_pow5 = (1.0 - VdotH) ** 5 
-        FF = F0 + (Color(1.0, 1.0, 1.0) - F0) * term_pow5
-
-        # --- 4. Final BRDF Term (Fs) and Specular Contribution ---
-        # Denominator of the BRDF term
-        denom_fs = 4.0 * NdotL * NdotV 
-        
-        if denom_fs > 0:
-            # Fs is the specular BRDF (Fs = D * G * F / denominator)
-            Fs = (NDF * GSF * FF) * (1.0 / denom_fs) 
-        else:
-            Fs = Color(0.0, 0.0, 0.0) 
-
-        # Final Specular Color: Light Intensity * BRDF * Cosine Term
-        specular =  Fs * NdotL * self.data.specular_intensity
-        
-        return specular
+        return brdf * NdotL
 
     def get_metallic_component(self, bias: float = 1e-4) -> Color:
         """

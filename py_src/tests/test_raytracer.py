@@ -16,10 +16,10 @@ from src.Geometry.Core import Sphere
 from src.Geometry.Primitive import Primitive
 from src.Lighting.Core import LightSource
 from src.Material.Core import PBRMaterial
-from src.Rendering.Raytracing import Raytracer
+from src.Rendering.Raytracing import RayTracer
 from src.Rendering.Shading import LambertShading
-from src.Utilities.Camera import Camera, CameraType
-from src.Utilities.Scene import Scene
+from src.Data.Camera import Camera, CameraType
+from src.Data.Scene import Scene
 
 def test_ray_structure():
     """Test basic Ray structure functionality."""
@@ -189,7 +189,7 @@ def test_ambient_lighting():
     scene = Scene(name="ambient_test", camera=cam, objects=[sphere], lights=[
         light
     ], background_color=Color(0.0, 0.0, 0.0))
-    raytracer = Raytracer(
+    raytracer = RayTracer(
         max_depth=2,
         sampling_manager=None,
         ray_generator=None,

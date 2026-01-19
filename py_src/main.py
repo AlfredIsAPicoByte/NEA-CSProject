@@ -2,15 +2,14 @@ import os
 import argparse
 import gc
 
-from src.Data.Ratio import Ratio
 from src.Rendering.Core import Algorithm
-from src.Rendering.Raytracing import *
-from src.Rendering.Intersections import *
-from src.Rendering.Shading import *
-from src.Rendering.Interactions import *
+from src.Rendering.RayTracing.Core import *
+from src.Rendering.RayTracing.Intersections import *
+from src.Rendering.RayTracing.Shading import *
+from src.Rendering.RayTracing.Interactions import *
 from src.Image.Film import Film
-from src.Utilities.Scene import Scene
-from src.Utilities.Sampling import SamplingManager, SampleSettings, PixelFilter
+from src.Data.Scene import Scene
+from src.Data.Sampling import SamplingManager, SampleSettings, PixelFilter
 from src.Utilities.Memory.Profiler import MemoryProfiler
 from tests.test_scenes import *
 PostProcessingPipeline = None
@@ -32,8 +31,38 @@ def render_process(scene: Scene, algorithm: Algorithm):
 
     return film
 
+def apply_post_processing(raw_img):
+    """
+    Apply post-processing pipeline to the raw image.
+    
+    Args:
+        raw_img: Raw image data from the renderer
+        
+    Returns:
+        Processed image data
+    """
+    from src.Image.PostProcessing.Pipeline import ImagePipeline
+    from src.Image.PostProcessing.Passes import (
+        AutoExposure,
+        Bloom,
+        ChromaticAberration,
+        Vignette,
+        ACESFilmicToneMapping,
+        GammaCorrection
+    )
+    
+    pipeline = ImagePipeline()
+    pipeline.add_pass(AutoExposure())
+    pipeline.add_pass(Bloom(1, 5, 0.67, 0.75))
+    pipeline.add_pass(ChromaticAberration())
+    pipeline.add_pass(Vignette(0.15, 0.6))
+    pipeline.add_pass(ACESFilmicToneMapping())
+    pipeline.add_pass(GammaCorrection(2.2))
+    
+    return pipeline.execute(raw_img)
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Raytracer CLI")
+    parser = argparse.ArgumentParser(description="RayTracer CLI")
     parser.add_argument("--no-post", dest="disable_post", action="store_true", help="Disable post-processing to reduce memory and runtime")
     args = parser.parse_args()
 
@@ -67,7 +96,7 @@ if __name__ == "__main__":
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
-        intersection = BVHIntersection(max_distance=50, max_steps=128)
+        intersection = BVHIntersection(max_distance=1000, max_steps=512)
         interactor = TerminalInteraction()
         shading = LambertShading(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
@@ -75,7 +104,7 @@ if __name__ == "__main__":
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
         )
 
-        raytracer = Raytracer(
+        raytracer = RayTracer(
             max_recursions=0,
             sampling_manager=sampling_manager,
             intersection_strategy=intersection,
@@ -133,25 +162,8 @@ if __name__ == "__main__":
             processed_img = raw_img_data
 
             if not args.disable_post:
-                from src.Image.PostProcessing.Pipeline import ImagePipeline
-                from src.Image.PostProcessing.Passes import *
-
                 with MemoryProfiler(enable_tracemalloc=True, top=6) as mp:
-                    pipeline =  ImagePipeline()
-
-                    pipeline.add_pass(AutoExposure())
-                    
-                    pipeline.add_pass(Bloom(1, 5, 0.67, 0.75))
-
-                    pipeline.add_pass(ChromaticAberration())
-
-                    pipeline.add_pass(Vignette(0.15, 0.6))
-
-                    pipeline.add_pass(ACESFilmicToneMapping())
-
-                    pipeline.add_pass(GammaCorrection(2.2))
-
-                    processed_img = pipeline.execute(processed_img)
+                    processed_img = apply_post_processing(raw_img_data)
 
                 try:
                     with open(mem_report_out_path, "a", encoding="utf-8") as f:

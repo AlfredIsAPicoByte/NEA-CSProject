@@ -1,8 +1,12 @@
+from __future__ import annotations
 import numpy as np
+from typing import TYPE_CHECKING
 
 from src.Data.Transform import Transform
 from src.Data.Ray import Ray
-from src.Geometry.Core import Shape
+
+if TYPE_CHECKING:
+    from src.Geometry.Core import Shape
 
 class AABB:
     """
@@ -40,7 +44,7 @@ class AABB:
         return float('inf')
 
     @staticmethod
-    def from_transform_shape(world_Transform: Transform, shape: Shape, padding: float = 1e-2) -> 'AABB':
+    def from_transform_shape(world_Transform: Transform, shape: "Shape", padding: float = 1e-2) -> 'AABB':
         """
         Calculates the world-space AABB for a given object.
         """

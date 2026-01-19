@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Type, Any, Tuple
 
 from src.Image.Film import Film
-from src.Utilities.Scene import Scene
-from src.Utilities.Sampling import Sampler
+from src.Data.Scene import Scene
+from src.Data.Sampling import Sampler
 from src.Utilities.Memory.Core import get_process_id, get_memory_mb
 
 @dataclass

@@ -72,6 +72,12 @@ class Primitive:
             self.update_world_matrices()
         
         return self._world_matrix
+    
+    def get_aabb(self) -> AABB:
+        """Calculate world-space AABB for this primitive."""
+        if self.shape is None:
+            return AABB(np.zeros(3), np.zeros(3))
+        return AABB.from_transform_shape(self.world_transform, self.shape)
 
     @property
     def world_transform(self) -> Transform:
