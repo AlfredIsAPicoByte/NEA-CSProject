@@ -82,6 +82,14 @@ def attenuate_inv_sqr_distance(distance: float, bias: float = 1e-6) -> float:
     factor = 1 / ((distance ** 2) + bias)
     return factor
 
+def attenuate_inv_sqr_distance_arguments(bias: float = 1e-6, *distances) -> float:
+    """
+    Calculates the inverse of the sum of squared distances plus a bias.
+    Formula: 1 / (bias + sum(distance^2))
+    """
+    sum_of_squares = sum(d ** 2 for d in distances)
+    return 1.0 / (bias + sum_of_squares)
+
 def attenuate_distance_exponential(distance: float, decay_rate: float = 1.0) -> float:
     """
     Calculates exponential falloff (Beer's Law).
