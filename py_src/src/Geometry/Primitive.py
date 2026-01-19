@@ -8,7 +8,6 @@ from src.Data.AABB import AABB
 from .Core import Shape
 from src.Material.Core import PBRMaterial
 
-
 @dataclass
 class Primitive:
     """
@@ -29,6 +28,7 @@ class Primitive:
     # We store the calculated world matrix here so we don't recalculate it for every ray
     _world_matrix: Optional[np.ndarray] = None
     _inverse_world_matrix: Optional[np.ndarray] = None
+    _safe_scale: float = 1
 
     def add_child(self, child: 'Primitive'):
         """Attaches a child node to this node."""
@@ -42,7 +42,7 @@ class Primitive:
             self.children.remove(child)
             child.parent = None
 
-    def update_world_matrices(self, parent_matrix: Optional[np.ndarray] = None):
+    def update_matrices(self, parent_matrix: Optional[np.ndarray] = None):
         """
         Recursive pass to update the world matrix of this node and all children.
         Call this ONCE before rendering starts.
@@ -64,12 +64,12 @@ class Primitive:
 
         # 4. Propagate down the tree
         for child in self.children:
-            child.update_world_matrices(self._world_matrix)
+            child.update_matrices(self._world_matrix)
 
     def get_world_matrix(self) -> np.ndarray:
         """Safe getter that ensures matrix exists."""
         if self._world_matrix is None:
-            self.update_world_matrices()
+            self.update_matrices()
         
         return self._world_matrix
     

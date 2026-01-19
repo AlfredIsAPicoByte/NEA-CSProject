@@ -15,7 +15,7 @@ sphere = Primitive(name="S", transform=Transform(position=np.array([0.0,0.0,0.0]
 scene = Scene(camera=None)
 scene.add_object(sphere)
 
-sphere.update_world_matrices()
+sphere.update_matrices()
 
 # Fire rays to +X, +Y, +Z from far away
 rays = [

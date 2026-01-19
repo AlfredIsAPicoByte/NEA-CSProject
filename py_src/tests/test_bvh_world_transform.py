@@ -16,8 +16,8 @@ def test_bvh_respects_world_transforms():
     p1 = Primitive(name="A", transform=Transform(position=np.array([0.0, 0.0, 0.0])), shape=Sphere())
     p2 = Primitive(name="B", transform=Transform(position=np.array([5.0, 0.0, 0.0])), shape=Sphere())
 
-    p1.update_world_matrices()
-    p2.update_world_matrices()
+    p1.update_matrices()
+    p2.update_matrices()
 
     bvh = BVHIntersection()
     root = bvh._build_bvh([p1, p2])

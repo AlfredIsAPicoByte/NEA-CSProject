@@ -26,7 +26,8 @@ class AABB:
         """
         # We use the inverse direction to replace division with multiplication
         # This handles division by zero gracefully (results in +/- inf)
-        inv_dir = 1.0 / (ray.orientation + bias) 
+        with np.errstate(divide='ignore'):
+            inv_dir = 1.0 / ray.orientation
         
         t0 = (self.min_point - ray.origin) * inv_dir
         t1 = (self.max_point - ray.origin) * inv_dir
@@ -38,8 +39,10 @@ class AABB:
         t_enter = np.max(tmin)
         t_exit = np.min(tmax)
 
-        if t_exit >= t_enter:
-            return t_enter
+        if t_exit >= t_enter and t_exit > 0 and t_enter < max_t:
+            # If we are inside the box (t_enter < 0), return 0 or t_exit?
+            # Usually for BVH culling, returning t_enter is fine.
+            return max(t_enter, 0.0)
         
         return float('inf')
 
@@ -101,3 +104,7 @@ class AABB:
             np.minimum(box_a.min_point, box_b.min_point),
             np.maximum(box_a.max_point, box_b.max_point)
         )
+    
+    @property
+    def center(self) -> np.ndarray:
+        return (self.min_point + self.max_point) * 0.5

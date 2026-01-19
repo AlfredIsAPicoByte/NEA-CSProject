@@ -24,18 +24,20 @@ class RayTracer(Algorithm):
         interaction_strategy: Optional[Interactions.InteractionStrategy] = None,
         shading_strategy: Optional[Shading.ShadingStrategy] = None,
         sample_settings: Optional[SampleSettings] = None,
+        debug_mode: bool = False
     ):
         super().__init__()
         self.sampling_manager = sampling_manager
         self.sample_settings = sample_settings or SampleSettings()
 
-        self.intersector: Intersections.IntersectionStrategy = intersection_strategy if intersection_strategy is not None else Intersections.RayMarchingIntersection()
+        self.intersector: Intersections.IntersectionStrategy = intersection_strategy if intersection_strategy is not None else Intersections.InverseSDFIntersection()
         self.shader: Shading.ShadingStrategy = shading_strategy if shading_strategy is not None else Shading.LambertShading()
         self.interactor: Interactions.InteractionStrategy = interaction_strategy if interaction_strategy is not None else Interactions.StandardInteraction()
         
         self.max_recursions = max_recursions
 
         self.stats: TracingStats = TracingStats()
+        self.debug_mode = debug_mode
 
         # NaN logging: tracks when we last emitted a NaN warning and threshold to avoid spam
         self._last_nan_logged: int = 0
@@ -59,65 +61,71 @@ class RayTracer(Algorithm):
         print(f" NaN events: {self.stats.nan_errors} total{loc}. Reason: {reason}. Emitting summary log.")
         self._last_nan_logged = self.stats.nan_errors
 
-    def _sanitize_color(self, c: Any, ray: Optional[TracingRay] = None, reason: str = "") -> Color:
+    def _sanitize_color(self, c: Color) -> Color:
         """Turn arbitrary shader output into a finite Color and record NaN events if needed."""
-        if c is None:
-            self._record_nan(reason=reason, ray=ray)
-            return Color(0.0, 0.0, 0.0)
-        try:
-            vals = np.array([c.r, c.g, c.b], dtype=float)
-        except Exception:
-            self._record_nan(reason=reason, ray=ray)
-            return Color(0.0, 0.0, 0.0)
-
-        if not np.all(np.isfinite(vals)):
-            # Record NaN and clamp values
-            self._record_nan(reason=reason, ray=ray)
-            vals = np.nan_to_num(vals, nan=0.0, posinf=1e6, neginf=-1e6)
-        return Color(float(vals[0]), float(vals[1]), float(vals[2]), getattr(c, 'a', 1.0))
+        # 1. Handle None or Invalid types quickly
+        if c is None: 
+            return np.array([0.0, 0.0, 0.0])
+            
+        # 2. Extract values
+        # Accessing slots directly (c.r) is faster than methods
+        vals = np.array([c.r, c.g, c.b], dtype=np.float32)
+        
+        # 3. Check Finite (Vectorized)
+        if not np.isfinite(vals).all():
+            self.stats.nan_errors += 1
+            return np.nan_to_num(vals, nan=0.0, posinf=1.0)
+            
+        return Color(*vals)
 
     def _trace_ray(self, scene: Scene, ray: TracingRay, recursions_left: int, sampler: Sampler) -> Color:
         # 1. Base Case
         if recursions_left < 0:
-            self._record_nan(reason='negative recursion depth', ray=ray)
-            return Color(0.0, 0.0, 0.0)
+            return Color.black()
 
         # 2. Geometry Intersection
+        # The stats object is passed down for internal counters
         hit_info = self.intersector.find_hit(scene, ray, self.stats)
 
+        # 3. Miss -> Background
         if not hit_info.hit:
+            # Assuming background settings handle their own safety
             return self.shader.background_settings.get_background_color(ray.orientation)
 
-        # Validate hit_info (point and normal must be finite and present)
-        if getattr(hit_info, 'point', None) is None or getattr(hit_info, 'normal', None) is None:
-            self._record_nan(reason='hit_info missing point/normal', ray=ray)
+        # Only do expensive error checking if debugging
+        if self.debug_mode:
+            # Validate hit_info (point and normal must be finite and present)
+            if getattr(hit_info, 'point', None) is None or getattr(hit_info, 'normal', None) is None:
+                self._record_nan(reason='hit_info missing point/normal', ray=ray)
+                return Color(0.0, 0.0, 0.0)
+
+            if not (np.all(np.isfinite(np.asarray(hit_info.point))) and np.all(np.isfinite(np.asarray(hit_info.normal)))):
+                self._record_nan(reason='hit_info point/normal not finite', ray=ray)
+                return Color(0.0, 0.0, 0.0)
+
+        # 4. Shading & Recursion
+        # The Shader is responsible for casting secondary rays via the 'trace_function' callback
+        try:
+            color = self.shader.shade(
+                scene=scene,
+                ray=ray,
+                hit_info=hit_info,
+                recursions_left=recursions_left,
+                trace_function=self._trace_ray,
+                sampler=sampler,
+                stats=self.stats
+            )
+        except ArithmeticError as e:
+            # Catch divide-by-zero or overflow in shading math
+            if self.debug_mode: self._record_nan(reason=f'Arithmetic error: {e}', ray=ray)
             return Color(0.0, 0.0, 0.0)
 
-        if not (np.all(np.isfinite(np.asarray(hit_info.point))) and np.all(np.isfinite(np.asarray(hit_info.normal)))):
-            self._record_nan(reason='hit_info point/normal not finite', ray=ray)
-            return Color(0.0, 0.0, 0.0)
+        if self.debug_mode:
+            if color is None:
+                self._record_nan(reason='shader returned None', ray=ray)
+                return Color(0.0, 0.0, 0.0)
 
-        # 3. Shading (Direct + Indirect handled by shader)
-        # The shader is responsible for ALL recursion.
-        # We do NOT call interact() here - that would double-count indirect lighting.
-        shaded_color = self.shader.shade(
-            scene=scene, 
-            ray=ray, 
-            hit_info=hit_info,
-            recursions_left=recursions_left,  # Pass full recursion budget to shader
-            trace_function=self._trace_ray,
-            sampler=sampler,
-            stats=self.stats
-        )
-
-        # Sanitize shaded color; track NaNs
-        if shaded_color is None:
-            self._record_nan(reason='shader returned None', ray=ray)
-            shaded_color = Color(0.0, 0.0, 0.0)
-        shaded_color = self._sanitize_color(shaded_color, ray=ray, reason='shaded output')
-
-        # Return the shaded color directly
-        return shaded_color
+        return color
 
     def render(
         self,
@@ -134,28 +142,17 @@ class RayTracer(Algorithm):
         cam_width, cam_height = camera.width, camera.height
 
         # Ensure object world transforms are up-to-date so BVH & intersections use correct positions
-        try:
-            for obj in scene.objects:
-                obj.update_world_matrices()
-        except Exception:
-            # If scene contains non-Primitive items, ignore and proceed
-            pass
+        scene.prepare()
 
         # Create a film for sample_color buffer
         film = Film(cam_width, cam_height)
 
-        if region:
-            rx, ry, rw, rh = region
-        else:
-            rx, ry, rw, rh = 0, 0, cam_width, cam_height
+        rx, ry, rw, rh = region if region else (0, 0, cam_width, cam_height)
 
         # Initialize output image and sample counter
         self.sample_settings.width = rw
         self.sample_settings.height = rh
         pixels_processed = 0
-
-        # Handle tile_size parameter
-        ts = tile_size if tile_size is not None else 64
 
         # Create default sampler if not provided
         if sampler is None:
@@ -165,11 +162,11 @@ class RayTracer(Algorithm):
         # total_tiles = ((rw + ts - 1) // ts) * ((rh + ts - 1) // ts)
         # tile_count = 0
 
-        for tile_y in range(ry, ry + rh, ts):
-            for tile_x in range(rx, rx + rw, ts):
+        for tile_y in range(ry, ry + rh, tile_size):
+            for tile_x in range(rx, rx + rw, tile_size):
                 # Calculate current tile dimensions (handle edges)
-                current_w = min(ts, (rx + rw) - tile_x)
-                current_h = min(ts, (ry + rh) - tile_y)
+                current_w = min(tile_size, (rx + rw) - tile_x)
+                current_h = min(tile_size, (ry + rh) - tile_y)
                 
                 # Define tile region: (x, y, w, h)
                 tile_region = (tile_x, tile_y, current_w, current_h)
@@ -178,15 +175,13 @@ class RayTracer(Algorithm):
                 rays = camera.generate_screen_rays(region=tile_region, sampler=sampler)
                 self.stats.rays_primary += len(rays)
 
-                self.stats = update_memory_stats(self.stats) # type: ignore
-
                 for ray in rays:
                     if ray is None: continue
                     
                     # Trace Ray
                     pixel_color = self._trace_ray(scene, ray, self.max_recursions, sampler)
 
-                    # sample = Sample(ray.sample_u, ray.sample_v, 1.0) # weight 1.0
+                    pixel_color = self._sanitize_color(pixel_color)
 
                     film.add_pixel_batch(
                         ray.pixel_x,
@@ -197,6 +192,8 @@ class RayTracer(Algorithm):
 
                     # Store in Film Sample Buffer
                     pixels_processed += 1
+                
+                self.stats = update_memory_stats(self.stats)
 
         self.stats.pixels_processed = pixels_processed
         self.stats.stop_timer()
