@@ -4,14 +4,18 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Type, Any, Tuple
 
-from src.Image.Film import Film
 from src.Data.Scene import Scene
 from src.Data.Sampling import Sampler
+from src.Image.Film import Film
 from src.Utilities.Memory.Core import get_process_id, get_memory_mb
 
 @dataclass
 class RenderStats:
     memory_usage: float = 0.0  # in MB
+    
+    # --- Logic & Debugging ---
+    pixels_processed: int = 0
+    nan_errors: int = 0
     
     # --- Timing (Internal use) ---
     time_taken_seconds: float = 0.0
@@ -31,12 +35,25 @@ class RenderStats:
         new_stats.memory_usage = max(self.memory_usage, other.memory_usage)
 
         return new_stats
+    
+    def format_report(self) -> str:
+        """
+        Generates a formatted string report suitable for saving to a .txt file.
+        """
+        lines = []
+        lines.append(f"=== Rendering Stats ===")
+        lines.append(f"Time: {self.time_taken_seconds:.3f}s | Mem: {self.memory_usage:.2f}MB")
+        lines.append(f"-------------------------")
+        lines.append(f"Diagnostics:")
+        lines.append(f"  - NaN Errors:      {self.nan_errors}")
+        
+        return "\n".join(lines)
+    
+    def print_verbose_report(self):
+        print()
+        print(self.format_report())
 
 def update_memory_stats(stats: RenderStats) -> RenderStats:
-    """
-    Returns a NEW TracingStats object with updated memory usage,
-    leaving the original object untouched (Immutability).
-    """
     from dataclasses import replace
     
     current_mem = get_memory_mb(get_process_id())
@@ -51,7 +68,7 @@ class TracingStats(RenderStats):
     rays_shadow: int = 0
     rays_reflection: int = 0
     rays_refraction: int = 0
-    rays_transparency: int = 0  # NEW: Rays passing through alpha cutouts
+    rays_transparency: int = 0
     missed_rays: int = 0
     
     # --- Intersection Performance (BVH Health) ---
@@ -63,10 +80,6 @@ class TracingStats(RenderStats):
     max_recursions: int = 0
     roulette_kills: int = 0
     lights_sampled: int = 0
-    
-    # --- Logic & Debugging ---
-    pixels_processed: int = 0
-    nan_errors: int = 0      
 
     @property
     def total_rays(self) -> int:
@@ -144,10 +157,6 @@ class TracingStats(RenderStats):
         lines.append(f"  - NaN Rate:        {na_rate:.2f} per 1000 rays")
         
         return "\n".join(lines)
-    
-    def print_verbose_report(self):
-        print()
-        print(self.format_report())
 
 class Algorithm(ABC):
     """
@@ -175,21 +184,3 @@ class Algorithm(ABC):
 
     def reset_stats(self) -> None:
         self.stats = RenderStats()
-
-# Lightweight registry/factory for algorithm implementations
-_ALGO_REGISTRY: Dict[str, Type[Algorithm]] = { }
-
-def register_algorithm(name: str):
-    def _decorator(cls: Type[Algorithm]):
-        _ALGO_REGISTRY[name] = cls
-        return cls
-    return _decorator
-
-def create_algorithm(name: str, **kwargs) -> Algorithm:
-    """
-    Instantiate a registered algorithm by name.
-    Use this to avoid hard imports at call sites.
-    """
-    if name not in _ALGO_REGISTRY:
-        raise ValueError(f"Unknown algorithm '{name}'. Registered: {list(_ALGO_REGISTRY.keys())}")
-    return _ALGO_REGISTRY[name](**kwargs)
