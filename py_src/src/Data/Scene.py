@@ -1,10 +1,8 @@
-from typing import Callable, List, Tuple, Optional, cast
+from typing import List, Tuple, Optional, cast
 import numpy as np
-from math import atan2, asin, pi, floor
 
 from src.Data.Transform import Transform
 from src.Data.Ray import Ray
-from src.Data.Color import Color
 from src.Data.Hit import HitInfo
 from src.Geometry.Core import Shape
 from src.Geometry.Primitive import Primitive
@@ -14,9 +12,12 @@ from .Camera import Camera
 class Scene:
     def __init__(self, name: str = "Scene", camera: Optional[Camera] = None, **kwargs):
         self.name = name
+        self.camera: Camera = camera or Camera()
+
         self.objects: List[Primitive] = []
         self.lights: List[LightSource] = []
-        self.camera: Camera = camera if camera is not None else Camera(Transform.identity())
+
+        self._cache_objects: List[Primitive] = []
 
         for key, value in kwargs.items():
             setattr(self, key, value)

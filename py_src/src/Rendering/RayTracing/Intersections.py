@@ -432,9 +432,9 @@ class BVHIntersection(IntersectionStrategy):
         elif self.split_mode == BVHSplitMode.BALANCED:
             # Sort objects by their center along all axes (average)
             object_bounds = [(obj, obj.get_aabb()) for obj in node.objects]
-            object_bounds.sort(key=lambda item: np.mean([item[1].min_point, item[1].max_point]))
+            sorted_objs = sorted(object_bounds, key=lambda item: np.mean([item[1].min_point, item[1].max_point]))
 
-            mid = len(object_bounds) // 2
+            mid = len(sorted_objs) // 2
 
             # Create child nodes
             left_objs = [item[0] for item in sorted_objs[:mid]]

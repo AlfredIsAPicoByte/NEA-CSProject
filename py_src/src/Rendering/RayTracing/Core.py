@@ -6,7 +6,6 @@ from src.Data.Color import Color
 from ..Core import Algorithm, TracingStats, register_algorithm, update_memory_stats
 from . import Intersections
 from . import Shading
-from . import Interactions
 from src.Image.Film import Film
 from src.Data.Sampling import SamplingManager, SampleSettings, Sampler, RandomSampler
 from src.Data.Scene import Scene
@@ -19,22 +18,22 @@ class RayTracer(Algorithm):
     def __init__(
         self,
         max_recursions: int = 4,
+        tile_size: int = 64,
         sampling_manager: Optional[SamplingManager] = None,
-        intersection_strategy: Optional[Intersections.IntersectionStrategy] = None,
-        interaction_strategy: Optional[Interactions.InteractionStrategy] = None,
-        shading_strategy: Optional[Shading.ShadingStrategy] = None,
         sample_settings: Optional[SampleSettings] = None,
-        debug_mode: bool = False
+        intersection_strategy: Optional[Intersections.IntersectionStrategy] = None,
+        shading_strategy: Optional[Shading.ShadingStrategy] = None,
+        debug_mode: bool = False,
     ):
         super().__init__()
         self.sampling_manager = sampling_manager
         self.sample_settings = sample_settings or SampleSettings()
 
-        self.intersector: Intersections.IntersectionStrategy = intersection_strategy if intersection_strategy is not None else Intersections.InverseSDFIntersection()
-        self.shader: Shading.ShadingStrategy = shading_strategy if shading_strategy is not None else Shading.LambertShading()
-        self.interactor: Interactions.InteractionStrategy = interaction_strategy if interaction_strategy is not None else Interactions.StandardInteraction()
+        self.intersector: Intersections.IntersectionStrategy = intersection_strategy or Intersections.InverseSDFIntersection()
+        self.shader: Shading.ShadingStrategy = shading_strategy or Shading.LambertShading()
         
         self.max_recursions = max_recursions
+        self.tile_size = tile_size
 
         self.stats: TracingStats = TracingStats()
         self.debug_mode = debug_mode
@@ -74,14 +73,14 @@ class RayTracer(Algorithm):
         # 3. Check Finite (Vectorized)
         if not np.isfinite(vals).all():
             self.stats.nan_errors += 1
-            return np.nan_to_num(vals, nan=0.0, posinf=1.0)
+            return Color(*np.nan_to_num(vals, nan=0.0, posinf=1.0))
             
         return Color(*vals)
 
     def _trace_ray(self, scene: Scene, ray: TracingRay, recursions_left: int, sampler: Sampler) -> Color:
         # 1. Base Case
         if recursions_left < 0:
-            return Color.black()
+            return Color(0.0, 0.0, 0.0)
 
         # 2. Geometry Intersection
         # The stats object is passed down for internal counters
@@ -131,8 +130,7 @@ class RayTracer(Algorithm):
         self,
         scene: Scene,
         sampler: Optional[Sampler] = None,
-        region: Optional[Tuple[int, int, int, int]] = None,
-        tile_size: Optional[int] = None,
+        region: Optional[Tuple[int, int, int, int]] = None
     ) -> Film:
         self.stats.reset_ray_counter()
         self.stats.start_timer()
@@ -140,9 +138,6 @@ class RayTracer(Algorithm):
         camera = scene.camera
         if camera is None: raise ValueError("No camera provided in Scene")
         cam_width, cam_height = camera.width, camera.height
-
-        # Ensure object world transforms are up-to-date so BVH & intersections use correct positions
-        scene.prepare()
 
         # Create a film for sample_color buffer
         film = Film(cam_width, cam_height)
@@ -162,11 +157,11 @@ class RayTracer(Algorithm):
         # total_tiles = ((rw + ts - 1) // ts) * ((rh + ts - 1) // ts)
         # tile_count = 0
 
-        for tile_y in range(ry, ry + rh, tile_size):
-            for tile_x in range(rx, rx + rw, tile_size):
+        for tile_y in range(ry, ry + rh, self.tile_size):
+            for tile_x in range(rx, rx + rw, self.tile_size):
                 # Calculate current tile dimensions (handle edges)
-                current_w = min(tile_size, (rx + rw) - tile_x)
-                current_h = min(tile_size, (ry + rh) - tile_y)
+                current_w = min(self.tile_size, (rx + rw) - tile_x)
+                current_h = min(self.tile_size, (ry + rh) - tile_y)
                 
                 # Define tile region: (x, y, w, h)
                 tile_region = (tile_x, tile_y, current_w, current_h)

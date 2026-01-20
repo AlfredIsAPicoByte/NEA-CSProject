@@ -329,61 +329,6 @@ class LambertShading(ShadingStrategy):
             
             return float(visible_count) / float(self.shadow_settings.samples)
         
-class RecursiveLambertShading(LambertShading):
-    def shade(
-            self,
-            scene: Scene,
-            ray: TracingRay,
-            hit_info: HitInfo,
-            recursions_left: int,
-            trace_function: Callable[[Scene, TracingRay, int, Sampler], Color],
-            sampler: Sampler,
-            bias: float = 1e-4,
-            stats: Optional["TracingStats"] = None
-        ) -> Color:
-
-        # Material validation
-        material = cast(PBRMaterial, getattr(hit_info.obj, 'material', None))
-        if material is None:
-            return Color(1.0, 0.0, 1.0) # Material Error
-
-        # --- 1. Direct Lighting, reuse basic lambert shading
-        if material.type == MaterialType.EMISSIVE:
-            return material.get_emissive_component()
-        
-        direct_light = super().shade(scene, ray, hit_info, recursions_left, trace_function, sampler, bias, stats)
-
-        # --- 2. Indirect Lighting (Recursion) ---
-        indirect_light = Color(0.0, 0.0, 0.0)
-        
-        # Only recurse if we have bounces left
-        if recursions_left > 0:
-            # Import here to avoid circular imports
-            from .Interactions import StandardInteraction
-            
-            # Create a proper interaction to get the next bounce direction
-            # This handles diffuse/specular/refraction based on material type
-            interactor = StandardInteraction()
-            bounce_ray = interactor.interact(
-                ray=ray,
-                hit_info=hit_info,
-                sampler=sampler,
-                bias=bias,
-                stats=stats
-            )
-            
-            # If a ray was generated (not absorbed), trace it
-            if bounce_ray is not None:
-                # Recursively trace the bounced ray
-                # NOTE: The bounce_ray's throughput is already modulated by material.albedo
-                # by the interact() method, so we just need to trace and use the result directly
-                indirect_light = trace_function(scene, bounce_ray, recursions_left - 1, sampler)
-
-        # --- 3. Combine Direct + Indirect ---
-        final_color = direct_light + indirect_light
-
-        return final_color
-
 class VolumetricShading(ShadingStrategy):
     """
     Renders objects based on their volume. 
