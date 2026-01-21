@@ -51,9 +51,7 @@ class AABB:
         """
         Calculates the world-space AABB for a given object.
         """
-        # Get the object's local bounds (e.g., Sphere is [-r, -r, -r] to [r, r, r])
-        # This assumes your Shape classes have a 'get_bounds()' method.
-        # Fallback: Approximate with a unit cube scaled by transform
+        # Get the object's local bounds
         
         # 1. Get Transform Matrix
         matrix = world_Transform.get_global_matrix()
@@ -62,18 +60,30 @@ class AABB:
         local_corners = None
         
         if shape is not None:
-            # 1. Handle Cubes / Meshes (Anything with corners)
-            if hasattr(shape, "convex_hull"):
-                local_corners = np.array(shape.convex_hull())
-            
-            # 2. Handle Spheres (Look for radius)
-            elif hasattr(shape, "radius"):
+            # 1. Handle Spheres (Look for radius)
+            if hasattr(shape, "radius"):
                 # Create a box that fully encloses the sphere
                 r = float(shape.radius)
                 local_corners = np.array([
                     [-r, -r, -r], [r, -r, -r], [-r, r, -r], [r, r, -r],
                     [-r, -r, r],  [r, -r, r],  [-r, r, r],  [r, r, r]
                 ])
+
+            # 2. Handle Cube/Cuboids/Prisims (Look for size)
+            if hasattr(shape, "size"):
+                half_x = shape.size[0] * 0.5
+                half_y = shape.size[1] * 0.5
+                half_z = shape.size[2] * 0.5
+                local_corners = np.array([
+                    [-half_x, -half_y, -half_z], [half_x, -half_y, -half_z], 
+                    [-half_x, half_y, -half_z], [half_x, half_y, -half_z],
+                    [-half_x, -half_y, half_z],  [half_x, -half_y, half_z],  
+                    [-half_x, half_y, half_z],  [half_x, half_y, half_z]
+                ])
+
+            # 3. Handle Meshes (Anything with corners)
+            if hasattr(shape, "convex_hull"):
+                local_corners = np.array(shape.convex_hull())
 
         # C. Fallback: Unit Cube (-0.5 to 0.5)
         if local_corners is None:

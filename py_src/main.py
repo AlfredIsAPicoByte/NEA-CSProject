@@ -6,7 +6,6 @@ from src.Rendering.Core import Algorithm
 from src.Rendering.RayTracing.Core import *
 from src.Rendering.RayTracing.Intersections import *
 from src.Rendering.RayTracing.Shading import *
-from src.Rendering.RayTracing.Interactions import *
 from src.Image.Film import Film
 from src.Data.Scene import Scene
 from src.Data.Sampling import SamplingManager, SampleSettings, PixelFilter
@@ -97,20 +96,13 @@ if __name__ == "__main__":
 
     for scene in all_scenes:
         intersection = BVHIntersection(max_distance=1000, max_steps=512)
-        interactor = TerminalInteraction()
         shading = LambertShading(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
             shadow_settings=ShadowSettings(True, 16, 1e-3),
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
         )
 
-        raytracer = RayTracer(
-            max_recursions=0,
-            sampling_manager=sampling_manager,
-            intersection_strategy=intersection,
-            interaction_strategy=interactor,
-            shading_strategy=shading,
-        )
+        raytracer = RayTracer()
         # Reset tracing stats per-scene to avoid accumulation and keep reported memory accurate
         raytracer.stats = TracingStats()
 
