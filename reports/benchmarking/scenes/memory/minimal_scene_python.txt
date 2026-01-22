@@ -1,22 +1,22 @@
-Time: 84.0507s | RSS Δ: 23.414 MB
-RSS start: 42.562 MB | RSS end: 65.977 MB
-tracemalloc current: 147.73 KB | peak: 11345.70 KB
+Time: 607.9770s | RSS Δ: 23.215 MB
+RSS start: 42.484 MB | RSS end: 65.699 MB
+tracemalloc current: 144.69 KB | peak: 11341.57 KB
 Top allocations (most recent frame):
   1. /home/codespace/.local/lib/python3.12/site-packages/numpy/_core/numeric.py:1548 | 45.94 KB (980 allocs)
   2. /home/codespace/.local/lib/python3.12/site-packages/numpy/_core/numeric.py:1469 | 38.30 KB (817 allocs)
   3. /workspaces/NEA-CSProject/py_src/src/Image/Film.py:11 | 27.14 KB (3 allocs)
-  4. /home/codespace/.local/lib/python3.12/site-packages/numpy/linalg/_linalg.py:2432 | 11.96 KB (257 allocs)
+  4. /home/codespace/.local/lib/python3.12/site-packages/numpy/linalg/_linalg.py:2432 | 10.72 KB (230 allocs)
   5. /workspaces/NEA-CSProject/py_src/src/Image/Film.py:12 | 9.09 KB (2 allocs)
-  6. /workspaces/NEA-CSProject/py_src/src/Data/Ray.py:117 | 3.72 KB (68 allocs)
+  6. /workspaces/NEA-CSProject/py_src/src/Data/Ray.py:117 | 3.94 KB (72 allocs)
 
 Postprocessing:
-Time: 1.0037s | RSS Δ: 15.449 MB
-RSS start: 66.352 MB | RSS end: 81.801 MB
-tracemalloc current: 14157.03 KB | peak: 14426.86 KB
+Time: 0.7850s | RSS Δ: 15.535 MB
+RSS start: 66.074 MB | RSS end: 81.609 MB
+tracemalloc current: 14173.75 KB | peak: 14443.74 KB
 Top allocations (most recent frame):
-  1. <frozen importlib._bootstrap_external>:753 | 8074.69 KB (48049 allocs)
-  2. <frozen importlib._bootstrap>:488 | 1519.47 KB (17103 allocs)
-  3. <frozen abc>:106 | 237.46 KB (729 allocs)
+  1. <frozen importlib._bootstrap_external>:753 | 8093.96 KB (48405 allocs)
+  2. <frozen importlib._bootstrap>:488 | 1516.97 KB (17053 allocs)
+  3. <frozen abc>:106 | 237.88 KB (735 allocs)
   4. /home/codespace/.local/lib/python3.12/site-packages/scipy/_lib/_util.py:1269 | 167.71 KB (68 allocs)
   5. /home/codespace/.local/lib/python3.12/site-packages/scipy/_lib/doccer.py:79 | 143.94 KB (33 allocs)
   6. /home/codespace/.local/lib/python3.12/site-packages/scipy/_lib/_array_api.py:813 | 135.61 KB (26 allocs)

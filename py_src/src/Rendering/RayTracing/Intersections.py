@@ -391,7 +391,7 @@ class BVHIntersection(IntersectionStrategy):
                 continue
             
             # INTERNAL: Use Helper
-            self._push_valid_children(stack, node, ray, current_max)
+            self._push_valid_children(stack, node, ray, min(current_max, self.max_distance))
                 
         return closest_hit
     

@@ -89,7 +89,7 @@ if __name__ == "__main__":
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
-        intersection = RayMarchingIntersection(max_distance=scene.camera.far * 10, max_steps=2048)
+        intersection = BVHIntersection(max_distance=scene.camera.far * 10, max_steps=2048)
         shading = LambertShading(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
             shadow_settings=ShadowSettings(True, 16, 1e-3),

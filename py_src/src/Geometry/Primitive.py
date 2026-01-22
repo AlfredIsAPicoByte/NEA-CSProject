@@ -35,7 +35,7 @@ class Primitive:
 
     def __post_init__(self):
         self._safe_scale_local = min(*self.transform.scale, 1e-6)
-        self._safe_scale_world = min(*self.world_transform.scale, 1e-6)
+        self._safe_scale_world = min(*self.world_transform.scale)
 
     def add_child(self, child: 'Primitive'):
         """Attaches a child node to this node."""
