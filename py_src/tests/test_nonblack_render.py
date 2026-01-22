@@ -12,7 +12,7 @@ from src.Rendering.RayTracing.Core import RayTracer
 from src.Rendering.RayTracing.Intersections import AnalyticalIntersection
 from src.Rendering.RayTracing.Shading import RecursiveLambertShading
 from src.Rendering.RayTracing.Interactions import StandardInteraction
-from src.Data.Sampling import SamplingManager, SampleSettings, PixelFilter
+from src.Data.Sampling.Core import SamplingManager, SampleSettings, PixelFilter
 from src.Data.Camera import Camera
 
 def test_minimal_scene_not_all_background():

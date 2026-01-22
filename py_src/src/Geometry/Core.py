@@ -173,6 +173,10 @@ class Shape2D(Shape):
     Base for 2D shapes (Planes, Disks).
     Strictly defined on the Local XZ Plane (y=0) where possible (Y-Up).
     """
+
+    def get_normal(self, *args, **kwargs) -> np.ndarray:
+        return np.array([0.0, 1.0, 0.0])
+
     @property
     def dimensions(self) -> int:
         return 2
@@ -184,6 +188,9 @@ class Shape2D(Shape):
     def unit_signed_distance(self, local_point: np.ndarray) -> float:
         # Default fallback: Treat as flat plane with thickness 0 along Y
         return abs(local_point[1])
+
+    def get_uv(self, local_point: np.ndarray, *args, **kwargs) -> np.ndarray:
+        return np.array([local_point[0], local_point[2]])
 
 class Circle(Shape2D):
     def __init__(self, **kwargs):
@@ -219,11 +226,7 @@ class Circle(Shape2D):
             
         return []
 
-    def get_normal(self, local_point: np.ndarray) -> np.ndarray:
-        # Normal is always +Y in local space
-        return np.array([0.0, 1.0, 0.0])
-
-    def get_uv(self, local_point: np.ndarray, local_normal: np.ndarray) -> np.ndarray:
+    def get_uv(self, local_point: np.ndarray, *args, **kwargs) -> np.ndarray:
         # Planar mapping using X and Z
         u = (local_point[0] / self.radius) * 0.5 + 0.5
         v = (local_point[2] / self.radius) * 0.5 + 0.5
@@ -251,13 +254,6 @@ class Plane(Shape2D):
         if t >= 0:
             return [local_ray.point_at(t)]
         return []
-
-    def get_normal(self, local_point: np.ndarray) -> np.ndarray:
-        return np.array([0.0, 1.0, 0.0])
-
-    def get_uv(self, local_point: np.ndarray, local_normal: np.ndarray) -> np.ndarray:
-        # Tiling UVs using X and Z
-        return np.array([local_point[0], local_point[2]])
 
 class ClippedPlane(Shape2D):
     def __init__(self, clip_polygon: List[np.ndarray], **kwargs):
@@ -308,12 +304,6 @@ class ClippedPlane(Shape2D):
                 inside = not inside
                 
         return inside
-    
-    def get_normal(self, local_point: np.ndarray) -> np.ndarray:
-        return np.array([0.0, 1.0, 0.0])
-
-    def get_uv(self, local_point: np.ndarray, local_normal: np.ndarray) -> np.ndarray:
-        return np.array([local_point[0], local_point[2]])
 
 class Shape3D(Shape):
     """
@@ -368,14 +358,14 @@ class Triangle(Shape3D):
         self.cb = self.v3 - self.v2
         self.ac = self.v1 - self.v3
 
-    def signed_distance(self, p: np.ndarray) -> float:
+    def signed_distance(self, local_point: np.ndarray) -> float:
         """
         Calculates distance to the face if projected inside, 
         or distance to the nearest edge if projected outside.
         """
-        pa = p - self.v1
-        pb = p - self.v2
-        pc = p - self.v3
+        pa = local_point - self.v1
+        pb = local_point - self.v2
+        pc = local_point - self.v3
         
         # 1. Project point to plane to check if inside the triangle "cone"
         # Uses cross product to determine which side of the edge vector the point lies on
@@ -422,10 +412,10 @@ class Triangle(Shape3D):
             return [local_ray.point_at(t)]
         return []
 
-    def get_normal(self, local_point: np.ndarray) -> np.ndarray:
+    def get_normal(self, *args, **kwargs) -> np.ndarray:
         return self.normal
 
-    def get_uv(self, local_point: np.ndarray, local_normal: np.ndarray) -> np.ndarray:
+    def get_uv(self, local_point: np.ndarray, *args, **kwargs) -> np.ndarray:
         # Barycentric UV mapping could go here, for now simpler planar projection
         return local_point[:2]
 
@@ -483,10 +473,10 @@ class Polygon(Shape3D):
             all_hits.sort(key=lambda p: np.linalg.norm(p - local_ray.origin))
         return all_hits
 
-    def get_normal(self, local_point: np.ndarray) -> np.ndarray:
+    def get_normal(self, *args, **kwargs) -> np.ndarray:
         return self.normal
-        
-    def get_uv(self, local_point: np.ndarray, local_normal: np.ndarray) -> np.ndarray:
+
+    def get_uv(self, local_point: np.ndarray, *args, **kwargs) -> np.ndarray:
         return local_point[:2]
 
     # --- Shape3D Implementation ---
@@ -530,12 +520,12 @@ class Sphere(Shape3D):
         if t2 >= 0: hits.append(local_ray.point_at(t2))
         return hits
 
-    def get_normal(self, local_point: np.ndarray) -> np.ndarray:
+    def get_normal(self, local_point: np.ndarray, *args, **kwargs) -> np.ndarray:
         dist = np.linalg.norm(local_point)
         if dist < 1e-6: return np.array([0, 1, 0])
         return local_point / dist
 
-    def get_uv(self, local_point: np.ndarray, local_normal: np.ndarray) -> np.ndarray:
+    def get_uv(self, local_normal: np.ndarray, *args, **kwargs) -> np.ndarray:
         # Spherical UV mapping (Y-Up)
         # Y is Latitude (poles at +1, -1), X/Z is Longitude
         n = local_normal
@@ -545,7 +535,7 @@ class Sphere(Shape3D):
         v = 0.5 + np.arcsin(n[1]) / np.pi
         return np.array([u, v])
 
-    def convex_hull(self, resolution: int = 12) -> List[np.ndarray]:
+    def convex_hull(self, resolution: int = 128) -> List[np.ndarray]:
         points = []
         phi = (1 + np.sqrt(5)) / 2
         for i in range(resolution):
@@ -670,11 +660,11 @@ class Cylinder(Shape3D):
         self.height = float(height)
         self.half_height = height / 2.0
 
-    def signed_distance(self, p: np.ndarray) -> float:
+    def signed_distance(self, local_point: np.ndarray) -> float:
         # Distance to infinite cylinder on (x, z)
-        d_axial = np.linalg.norm(p[[0, 2]]) - self.radius
+        d_axial = np.linalg.norm(local_point[[0, 2]]) - self.radius
         # Distance from vertical bounds
-        d_vertical = abs(p[1]) - self.half_height
+        d_vertical = abs(local_point[1]) - self.half_height
         
         # Exterior distance (Euclidean)
         outside = np.linalg.norm(np.maximum(np.array([d_axial, d_vertical]), 0.0))
@@ -723,35 +713,35 @@ class Cylinder(Shape3D):
         hits.sort(key=lambda p: np.linalg.norm(p - local_ray.origin))
         return hits
 
-    def get_normal(self, p: np.ndarray) -> np.ndarray:
+    def get_normal(self, local_point: np.ndarray, *args, **kwargs) -> np.ndarray:
         # Determine if we are on the caps or the side
         # (This logic favors the side if exactly on the edge)
-        dist_axis = np.linalg.norm(p[[0, 2]])
-        dist_cap_top = abs(p[1] - self.half_height)
-        dist_cap_btm = abs(p[1] + self.half_height)
+        dist_axis = np.linalg.norm(local_point[[0, 2]])
+        dist_cap_top = abs(local_point[1] - self.half_height)
+        dist_cap_btm = abs(local_point[1] + self.half_height)
         
         # Epsilon for edge cases
         eps = 1e-4
         
         if dist_axis < self.radius - eps:
             # On caps
-            return np.array([0.0, 1.0, 0.0]) if p[1] > 0 else np.array([0.0, -1.0, 0.0])
+            return np.array([0.0, 1.0, 0.0]) if local_point[1] > 0 else np.array([0.0, -1.0, 0.0])
         else:
             # On side (Normal is in XZ plane)
-            n = np.array([p[0], 0.0, p[2]])
+            n = np.array([local_point[0], 0.0, local_point[2]])
             norm = np.linalg.norm(n)
             return n / norm if norm > 0 else np.array([1.0, 0.0, 0.0])
 
-    def get_uv(self, p: np.ndarray, n: np.ndarray) -> np.ndarray:
+    def get_uv(self, local_point: np.ndarray, local_normal: np.ndarray) -> np.ndarray:
         # Cylindrical mapping
         # If normal is roughly vertical, use Planar mapping
-        if abs(n[1]) > 0.9:
+        if abs(local_normal[1]) > 0.9:
             # Caps: Map XZ to UV
-            return (p[[0, 2]] / self.radius) * 0.5 + 0.5
+            return (local_point[[0, 2]] / self.radius) * 0.5 + 0.5
         else:
             # Side: Unrap
-            u = (np.arctan2(p[0], p[2]) / (2 * np.pi)) + 0.5
-            v = (p[1] / self.height) + 0.5
+            u = (np.arctan2(local_point[0], local_point[2]) / (2 * np.pi)) + 0.5
+            v = (local_point[1] / self.height) + 0.5
             return np.array([u, v])
 
     @property
@@ -788,14 +778,14 @@ class Capsule(Shape3D):
         self.segment_height = float(height)
         self.half_seg = self.segment_height / 2.0
 
-    def signed_distance(self, p: np.ndarray) -> float:
-        # Vector from p to the axis line
-        # Since axis is Y, closest point on infinite axis is (0, p.y, 0)
+    def signed_distance(self, local_point: np.ndarray) -> float:
+        # Vector from local_point to the axis line
+        # Since axis is Y, closest point on infinite axis is (0, local_point.y, 0)
         # Clamped to segment:
-        y_clamped = np.clip(p[1], -self.half_seg, self.half_seg)
+        y_clamped = np.clip(local_point[1], -self.half_seg, self.half_seg)
         closest_on_segment = np.array([0.0, y_clamped, 0.0])
         
-        dist = np.linalg.norm(p - closest_on_segment)
+        dist = np.linalg.norm(local_point - closest_on_segment)
         return float(dist - self.radius)
 
     def get_ray_intersections(self, local_ray: Ray) -> List[np.ndarray]:
@@ -850,18 +840,18 @@ class Capsule(Shape3D):
         hits.sort(key=lambda p: np.linalg.norm(p - local_ray.origin))
         return hits
 
-    def get_normal(self, p: np.ndarray) -> np.ndarray:
+    def get_normal(self, local_point: np.ndarray, *args, **kwargs) -> np.ndarray:
         # Gradient of SDF
-        y_clamped = np.clip(p[1], -self.half_seg, self.half_seg)
+        y_clamped = np.clip(local_point[1], -self.half_seg, self.half_seg)
         closest_on_segment = np.array([0.0, y_clamped, 0.0])
-        normal = p - closest_on_segment
+        normal = local_point - closest_on_segment
         norm = np.linalg.norm(normal)
         return normal / norm if norm > 0 else np.array([0, 0, 1])
 
-    def get_uv(self, p: np.ndarray, n: np.ndarray) -> np.ndarray:
+    def get_uv(self, local_point: np.ndarray, local_normal: np.ndarray) -> np.ndarray:
         # Spherical coordinates, but stretched vertically for the cylinder part
-        u = 0.5 + np.arctan2(n[2], n[0]) / (2 * np.pi)
-        v = (p[1] + self.half_seg + self.radius) / (self.segment_height + 2*self.radius)
+        u = 0.5 + np.arctan2(local_normal[2], local_normal[0]) / (2 * np.pi)
+        v = (local_point[1] + self.half_seg + self.radius) / (self.segment_height + 2*self.radius)
         return np.array([u, v])
 
     @property

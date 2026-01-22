@@ -9,7 +9,7 @@ from src.Rendering.RayTracing.Interactions import StandardInteraction
 from src.Rendering.RayTracing.Shading import LambertShading
 from src.Data.Ray import TracingRay
 from src.Data.Scene import Scene
-from src.Data.Sampling import RandomSampler, SampleSettings
+from src.Data.Sampling.Core import RandomSampler, SampleSettings
 from src.Data.Color import Color
 
 

@@ -196,13 +196,32 @@ class Transform:
         self.update_orientations()
 
     def rotate(self, angle: float, axis: np.ndarray, space: str = "global"):
-        # Note: This simple addition logic works for small updates but isn't 
-        # mathematically perfect for accumulating arbitrary axis rotations over time.
-        # For a full engine, you'd use Quaternions here.
-        axis = unit(np.asarray(axis, dtype=float))
-        delta = axis * angle
-        if space == "global": self.rotation += delta
-        else: self.local_rotation += delta
+        axis = unit(axis)
+        angle_rad = angle
+        if space == "global":
+            rot_matrix = self._rotation_matrix_from_euler(self.rotation)
+            axis_local = rot_matrix.T @ axis
+        else:
+            axis_local = axis
+
+        ux, uy, uz = axis_local
+        c = np.cos(angle_rad)
+        s = np.sin(angle_rad)
+        R = np.array([
+            [c + ux*ux*(1-c),     ux*uy*(1-c) - uz*s, ux*uz*(1-c) + uy*s],
+            [uy*ux*(1-c) + uz*s,  c + uy*uy*(1-c),    uy*uz*(1-c) - ux*s],
+            [uz*ux*(1-c) - uy*s,  uz*uy*(1-c) + ux*s, c + uz*uz*(1-c)]
+        ])
+
+        current_rot_matrix = self._rotation_matrix_from_euler(self.local_rotation if space == "local" else self.rotation)
+        new_rot_matrix = R @ current_rot_matrix
+        new_euler = self._matrix_to_euler(new_rot_matrix)
+
+        if space == "global":
+            self.rotation = new_euler - self.local_rotation
+        else:
+            self.local_rotation = new_euler
+
         self.update_orientations()
     
     def enlarge(self, vector: np.ndarray, space: str = "global"):
@@ -267,9 +286,10 @@ class Transform:
     def inverse_transform_ray(self, ray: Ray) -> Ray:
         """
         World -> Local (Ray).
-        Essential for Ray Tracing: We transform the incoming ray into the object's local space,
-        intersect with the perfect sphere/cube, and then transform the result back.
         """
+        # Note: If your Ray class expects Local -> World, use transform_ray
+        # Usually: Object stores geometry in Local. Ray is World.
+        # To intersect, we transform Ray World -> Local.
         return Ray(
             self.inverse_transform_point(ray.origin),
             self.inverse_transform_direction(ray.direction, normalize=True)

@@ -5,12 +5,15 @@ from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
 from src.Data.Scene import Scene
-from src.Data.Sampling import Sampler, RandomSampler
+from src.Data.Sampling.Core import Sampler, RandomSampler
 from src.Image.Film import Film
 from src.Utilities.Memory.Core import get_process_id, get_memory_mb
 
 @dataclass
 class RenderStats:
+    """
+    Statistics collected during rendering for performance analysis and debugging.
+    """
     memory_usage: float = 0.0  # in MB
     pixels_processed: int = 0
     nan_errors: int = 0
@@ -60,25 +63,21 @@ class AlgorithmSettings:
     image_width: int
     image_height: int
 
-    raw_film: Film = field(default_factory=lambda: Film(0, 0))
-    final_film: Film = field(default_factory=lambda: Film(0, 0))
+    film: Film = field(default_factory=lambda: Film(0, 0))
 
 class Algorithm(ABC):
     """
     Abstract base for rendering algorithms (ray marcher, path tracer, rasterizer, ...).
     Implementations should be side-effect free where possible and avoid global state.
     """
+    settings_type = AlgorithmSettings
     def __init__(self, settings: AlgorithmSettings):
         self.settings = settings
         self.stats = RenderStats()
 
     def setup(self, scene: Scene) -> None:
         """
-        Docstring for setup
-        
-        :param self: Description
-        :param scene: Description
-        :type scene: Scene
+        Genric setup called once per-scene before rendering begins.
         """
         pass
 
@@ -87,26 +86,26 @@ class Algorithm(ABC):
         self,
         scene: Scene,
         sampler: Sampler,
-        x: int,
-        y: int,
-        h: int,
-        h: int,
+        tile_x: int,
+        tile_y: int,
+        width: int,
+        height: int,
     ) -> None:
         """
-        Docstring for render_tile
+        Resolves a single tile of the image.
         
-        :param scene: Description
+        :param scene: The scene to render
         :type scene: Scene
-        :param sampler: Description
+        :param sampler: The sampler to use for pixel sampling
         :type sampler: Sampler
-        :param x: Description
-        :type x: int
-        :param y: Description
-        :type y: int
-        :param h: Description
-        :type h: int
-        :param h: Description
-        :type h: int
+        :param tile_x: The x-coordinate of the tile's top-left corner
+        :type tile_x: int
+        :param tile_y: The y-coordinate of the tile's top-left corner
+        :type tile_y: int
+        :param width: The width of the tile
+        :type width: int
+        :param height: The height of the tile
+        :type height: int
         """
         ...
     
@@ -115,18 +114,16 @@ class Algorithm(ABC):
             scene: Scene,
             sampler: Optional[Sampler] = None,
             region: Optional[Tuple[int, int, int, int]] = None,
-        ) -> Film:
+        ) -> None:
         """
-        Docstring for generate_film
-        
-        :param scene: Description
+        Generates a film for the given scene using the specified sampler and region.
+
+        :param scene: The scene to render
         :type scene: Scene
-        :param sampler: Description
+        :param sampler: The sampler to use for pixel sampling
         :type sampler: Optional[Sampler]
-        :param region: Description
+        :param region: The region to render (x, y, width, height)
         :type region: Optional[Tuple[int, int, int, int]]
-        :return: Description
-        :rtype: Film
         """
         self.reset_stats()
         self.setup(scene)
@@ -136,10 +133,14 @@ class Algorithm(ABC):
 
         self.render_tile(scene, sampler, *region)
 
-        return Film(0, 0)
+        self.settings.film = Film(0, 0)
 
     def reset_stats(self) -> None:
+        """Resets the rendering statistics."""
         self.stats = RenderStats()
 
 class RenderManager:
+    """
+    Manages the rendering process using a specified algorithm.
+    """
     pass

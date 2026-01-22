@@ -24,9 +24,9 @@ def create_algorithm(name: str, settings: AlgorithmSettings) -> Algorithm:
 
     cls = _ALGO_REGISTRY[name]
 
-    if hasattr(cls, "SettingsType") and not isinstance(settings, cls.SettingsType):
+    if hasattr(cls, "settings_type") and not isinstance(settings, cls.settings_type):
         raise TypeError(
-            f"{name} expects settings of type {cls.SettingsType.__name__}, "
+            f"{name} expects settings of type {cls.settings_type.__name__}, "
             f"got {type(settings).__name__}"
         )
 

@@ -115,3 +115,10 @@ class LightSource:
             radiance *= spot_factor
 
         return radiance
+    
+def build_light_tree(lights: list[LightSource]) -> None:
+    """
+    Placeholder for future spatial acceleration structure for lights.
+    Currently does nothing.
+    """
+    pass

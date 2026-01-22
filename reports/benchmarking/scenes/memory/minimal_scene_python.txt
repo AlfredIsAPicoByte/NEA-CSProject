@@ -1,22 +1,22 @@
-Time: 33.9074s | RSS Δ: 1.992 MB
-RSS start: 36.559 MB | RSS end: 38.551 MB
-tracemalloc current: 134.64 KB | peak: 448.68 KB
+Time: 84.0507s | RSS Δ: 23.414 MB
+RSS start: 42.562 MB | RSS end: 65.977 MB
+tracemalloc current: 147.73 KB | peak: 11345.70 KB
 Top allocations (most recent frame):
-  1. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\numeric.py:1548 | 46.27 KB (987 allocs)
-  2. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\numeric.py:1469 | 38.58 KB (823 allocs)
-  3. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:11 | 15.35 KB (4 allocs)
-  4. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\linalg\_linalg.py:2432 | 14.78 KB (296 allocs)
-  5. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:12 | 5.16 KB (2 allocs)
-  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Data\Ray.py:117 | 4.05 KB (74 allocs)
+  1. /home/codespace/.local/lib/python3.12/site-packages/numpy/_core/numeric.py:1548 | 45.94 KB (980 allocs)
+  2. /home/codespace/.local/lib/python3.12/site-packages/numpy/_core/numeric.py:1469 | 38.30 KB (817 allocs)
+  3. /workspaces/NEA-CSProject/py_src/src/Image/Film.py:11 | 27.14 KB (3 allocs)
+  4. /home/codespace/.local/lib/python3.12/site-packages/numpy/linalg/_linalg.py:2432 | 11.96 KB (257 allocs)
+  5. /workspaces/NEA-CSProject/py_src/src/Image/Film.py:12 | 9.09 KB (2 allocs)
+  6. /workspaces/NEA-CSProject/py_src/src/Data/Ray.py:117 | 3.72 KB (68 allocs)
 
 Postprocessing:
-Time: 0.0019s | RSS Δ: 0.141 MB
-RSS start: 59.117 MB | RSS end: 59.258 MB
-tracemalloc current: 38.50 KB | peak: 188.38 KB
+Time: 1.0037s | RSS Δ: 15.449 MB
+RSS start: 66.352 MB | RSS end: 81.801 MB
+tracemalloc current: 14157.03 KB | peak: 14426.86 KB
 Top allocations (most recent frame):
-  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\PostProcessing\Passes.py:40 | 30.47 KB (2 allocs)
-  2. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\lib\_index_tricks_impl.py:185 | 1.00 KB (1 allocs)
-  3. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\_methods.py:115 | 0.70 KB (2 allocs)
-  4. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\PostProcessing\Passes.py:141 | 0.50 KB (1 allocs)
-  5. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\PostProcessing\Passes.py:121 | 0.50 KB (1 allocs)
-  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\PostProcessing\Passes.py:87 | 0.50 KB (1 allocs)
+  1. <frozen importlib._bootstrap_external>:753 | 8074.69 KB (48049 allocs)
+  2. <frozen importlib._bootstrap>:488 | 1519.47 KB (17103 allocs)
+  3. <frozen abc>:106 | 237.46 KB (729 allocs)
+  4. /home/codespace/.local/lib/python3.12/site-packages/scipy/_lib/_util.py:1269 | 167.71 KB (68 allocs)
+  5. /home/codespace/.local/lib/python3.12/site-packages/scipy/_lib/doccer.py:79 | 143.94 KB (33 allocs)
+  6. /home/codespace/.local/lib/python3.12/site-packages/scipy/_lib/_array_api.py:813 | 135.61 KB (26 allocs)

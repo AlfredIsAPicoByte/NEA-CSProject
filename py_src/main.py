@@ -8,7 +8,7 @@ from src.Rendering.RayTracing.Intersections import *
 from src.Rendering.RayTracing.Shading import *
 from src.Image.Film import Film
 from src.Data.Scene import Scene
-from src.Data.Sampling import SamplingManager, SampleSettings, PixelFilter
+from src.Data.Sampling.Core import SamplingManager, SampleSettings, PixelFilter
 from src.Utilities.Memory.Profiler import MemoryProfiler
 from tests.test_scenes import *
 PostProcessingPipeline = None
@@ -18,27 +18,21 @@ def render_process(scene: Scene, algorithm: Algorithm):
     Execute the rendering algorithm on the scene and return the rendered image as a numpy array.
     """
     # Render using the algorithm
-    film = algorithm.render(scene, tile_size=16)
-    
+    algorithm.generate_film(scene)
+    print(" + Rendering complete")
+    print(f"{algorithm.settings.film}")
+
     # Convert List[Color] to numpy array (width x height x 3)
     cam = scene.camera
     width = cam.width if cam is not None else 64
     height = cam.height if cam is not None else 32
-    
-    if len(film.accum_color) * len(film.accum_color[1]) != width * height:
-        print(f"Warning: Rendered pixel count ({len(film.accum_color) * len(film.accum_color[1])}) does not match Camera dimensions ({width}x{height}={width*height}).")
 
-    return film
+    if len(algorithm.settings.film.accum_color) * len(algorithm.settings.film.accum_color[1]) != width * height:
+        print(f"Warning: Rendered pixel count ({len(algorithm.settings.film.accum_color) * len(algorithm.settings.film.accum_color[1])}) does not match Camera dimensions ({width}x{height}={width*height}).")
 
 def apply_post_processing(raw_img):
     """
     Apply post-processing pipeline to the raw image.
-    
-    Args:
-        raw_img: Raw image data from the renderer
-        
-    Returns:
-        Processed image data
     """
     from src.Image.PostProcessing.Pipeline import ImagePipeline
     from src.Image.PostProcessing.Passes import (
@@ -71,38 +65,49 @@ if __name__ == "__main__":
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
-    img_width, img_height = 16 * 3, 9 * 3
+    img_width, img_height = 640, 480 # 480p
 
     all_scenes = [
         get_minimal_scene(img_width, img_height),
         get_gradient_scene(img_width, img_height),
-        # get_emissive_scene(img_width, img_height),
-        # get_lit_studio_scene(img_width, img_height),
-        # get_rgb_room_with_objects_scene(img_width, img_height),
-        # get_cyberpunk_scene(img_width, img_height),
-        # get_material_deck_scene(img_width, img_height),
-        # get_refraction_lab_scene(img_width, img_height),
-        # get_scifi_corridor_scene(img_width, img_height),
-        # get_sunset_monolith_scene(img_width, img_height),
-        # get_pastel_blocks_scene(img_width, img_height),
-        # get_glass_prism_scene(img_width, img_height),
-        # get_glass_sculpture_scene(img_width, img_height),
-        # get_100_spheres_grid_scene(img_width, img_height),
-        # get_low_ior_scene(img_width, img_height),
+        get_emissive_scene(img_width, img_height),
+        get_lit_studio_scene(img_width, img_height),
+        get_rgb_room_with_objects_scene(img_width, img_height),
+        get_cyberpunk_scene(img_width, img_height),
+        get_material_deck_scene(img_width, img_height),
+        get_refraction_lab_scene(img_width, img_height),
+        get_scifi_corridor_scene(img_width, img_height),
+        get_sunset_monolith_scene(img_width, img_height),
+        get_pastel_blocks_scene(img_width, img_height),
+        get_glass_prism_scene(img_width, img_height),
+        get_glass_sculpture_scene(img_width, img_height),
+        get_100_spheres_grid_scene(img_width, img_height),
+        get_low_ior_scene(img_width, img_height),
     ]
 
-    sample_settings = SampleSettings(samples_per_pixel=8, filter_type=PixelFilter.GAUSSIAN, filter_width=4)
+    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=8, filter_type=PixelFilter.GAUSSIAN, filter_width=4)
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
-        intersection = BVHIntersection(max_distance=1000, max_steps=512)
+        intersection = RayMarchingIntersection(max_distance=scene.camera.far * 10, max_steps=2048)
         shading = LambertShading(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
             shadow_settings=ShadowSettings(True, 16, 1e-3),
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
         )
 
-        raytracer = RayTracer()
+        raytracer = RayTracer(RayTracingSettings(
+            image_width=img_width,
+            image_height=img_height,
+            sampling_manager=sampling_manager,
+            max_recursions=6, #7
+            intersection_method=intersection,
+            shading_method=shading,
+            use_tiling=True,
+            tile_size=64,
+            debug_mode=True,
+            verbose_logging=True
+        ))
         # Reset tracing stats per-scene to avoid accumulation and keep reported memory accurate
         raytracer.stats = TracingStats()
 
@@ -128,7 +133,7 @@ if __name__ == "__main__":
         
         try:
             with MemoryProfiler(enable_tracemalloc=True, top=6) as mp:
-                film_data = render_process(scene, raytracer)
+                render_process(scene, raytracer)
             
             try:
                 with open(stats_report_out_path, "w", encoding="utf-8") as f:
@@ -147,7 +152,7 @@ if __name__ == "__main__":
                 import traceback
                 traceback.print_exc()
 
-            raw_img_data = film_data.get_image()
+            raw_img_data = raytracer.settings.film.get_image()
             Film.save(raw_img_data, raw_image_out_path)
 
             # 2. Post-Process (The Pipeline)

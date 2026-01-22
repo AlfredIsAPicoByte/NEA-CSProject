@@ -4,7 +4,7 @@ from typing import Optional, Union, List, Tuple, cast
 from dataclasses import dataclass, field
 
 from src.Data.Transform import Transform
-from src.Data.AABB import AABB
+from .AABB import AABB
 from .Core import Shape
 from src.Material.Core import PBRMaterial
 
@@ -28,7 +28,14 @@ class Primitive:
     # We store the calculated world matrix here so we don't recalculate it for every ray
     _world_matrix: Optional[np.ndarray] = None
     _inverse_world_matrix: Optional[np.ndarray] = None
-    _safe_scale: float = 1
+    _safe_scale_local: float = 1
+    _safe_scale_world: float = 1
+    _aabb_bounds: Optional[AABB] = None
+    _cache_objects: Optional[List['Primitive']] = None
+
+    def __post_init__(self):
+        self._safe_scale_local = min(*self.transform.scale, 1e-6)
+        self._safe_scale_world = min(*self.world_transform.scale, 1e-6)
 
     def add_child(self, child: 'Primitive'):
         """Attaches a child node to this node."""
@@ -87,22 +94,43 @@ class Primitive:
         mat = self.get_world_matrix()
         return Transform.from_matrix(mat)
 
-    def flatten(self) -> List['Primitive']:
+    def flatten_children(self, include_self: bool):
         """
         Returns a flat list of this object and all descendants.
         Useful for building the global list of objects for the BVH or Renderer.
         """
         result = []
-        stack = [self]
+        stack = [self] if include_self else []
         
         while stack:
             current = stack.pop()
-            result.append(current)
-            # Add children to stack in reverse order to preserve processing order
-            for child in reversed(current.children):
-                stack.append(child)
-                
-        return result
+            
+            if current is not None:
+                result.append(current)
+
+                for child in reversed(current.children):
+                    stack.append(child)
+            else:
+                for child in reversed(self.children):
+                    stack.append(child)
+
+        self._cache_objects = result
+
+    def get_objects_flat(self, include_self: bool):
+        if self._cache_objects is None:
+            self.flatten_children(include_self)
+        
+        return self._cache_objects
+    
+    def generate_bounds(self, padding: float = 1e-2) -> None:
+        self_bounds = getattr(self, "_aabb_bounds", AABB(np.zeros(3), np.zeros(3)))
+        
+        shape = getattr(self, "shape", None)
+        if shape is None:
+            self._aabb_bounds = self_bounds
+        safe_shape = cast(Shape, shape)
+        
+        self._aabb_bounds = self_bounds.from_transform_shape(self.world_transform, safe_shape, padding)
 
     def __hash__(self):
         return id(self)

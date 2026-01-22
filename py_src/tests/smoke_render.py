@@ -10,7 +10,7 @@ from src.Rendering.Intersections import BVHIntersection
 from src.Rendering.Interactions import TerminalInteraction
 from src.Rendering.Shading import LambertShading, AmbienceSettings, ShadowSettings, BackgroundSettings
 from src.Image.Film import Film
-from src.Data.Sampling import SamplingManager, SampleSettings
+from src.Data.Sampling.Core import SamplingManager, SampleSettings
 
 def main():
     width, height = 64, 32

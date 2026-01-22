@@ -1,18 +1,21 @@
 from __future__ import annotations
 import numpy as np
-from typing import Optional, Callable, cast
+from typing import TYPE_CHECKING, Optional, Callable, List
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
 from src.Data.Color import Color, ColorGradient
-from ..Core import TracingStats
+from src.Geometry.Primitive import Primitive
 from src.Material.Core import PBRMaterial, MaterialType
 from src.Lighting.Core import LightSource
-from src.Data.Sampling import Sampler
+from src.Data.Sampling.Core import Sampler
 from src.Data.Scene import Scene
 from src.Utilities.Common import unit, attenuate_distance_exponential
+
+if TYPE_CHECKING:
+    from .Core import TracingStats
 
 @dataclass
 class AmbienceSettings:
@@ -136,6 +139,7 @@ class ShadingStrategy(ABC):
         hit_info: HitInfo,
         recursions_left: int,
         trace_function: Callable[[Scene, TracingRay, int, Sampler], Color],
+        occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
         sampler: Sampler,
         bias: float = 1e-4,
         stats: Optional["TracingStats"] = None
@@ -228,7 +232,7 @@ class FlatShading(ShadingStrategy):
     No lighting, no shadows, no recursion. 
     Fastest possible render mode.
     """
-    def shade( self, hit_info: HitInfo, *args, **kwargs) -> Color:
+    def shade(self, hit_info: HitInfo, *args, **kwargs) -> Color:
         # Material validation
         material: Optional[PBRMaterial] = getattr(hit_info.obj, 'material', None)
         if material is None:
@@ -249,6 +253,7 @@ class LambertShading(ShadingStrategy):
             hit_info: "HitInfo",
             recursions_left: int,
             trace_function: Callable[[Scene, TracingRay, int, Sampler], Color],
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
             sampler: Sampler,
             bias: float = 1e-4,
             stats: Optional["TracingStats"] = None
@@ -267,23 +272,22 @@ class LambertShading(ShadingStrategy):
 
         # 2. Handle Emission (Self-Illumination)
         # Even in basic shading, emissive objects should glow.
-        if material.type == MaterialType.EMISSIVE:
-            return material.get_emissive_component()
+        if material.data.type == MaterialType.EMISSIVE:
+            return material.evaluate_emissive_component()
 
         # 3. Iterate Over Scene Lights
         # ----------------------------
         def visibility_fn(point: np.ndarray, light: LightSource) -> float:
             # Calculate direction to this specific light (or sample point)
             # Note: _calculate_shadow_visibility expects light_dir and we pass the hit object to avoid self-shadowing
-            light_dir_to_source, _ = light.get_direction_and_dist(point)
-            return self._calculate_shadow_visibility(scene, point, light, light_dir_to_source, sampler, exclude_obj=hit_info.obj)
+            return self._calculate_shadow_visibility(scene, point, light, sampler, occlusion_function, exclude_obj=hit_info.obj, stats= stats)
 
         # 4. Evaluate Direct Lighting
         # The material class already contains the logic to loop over lights
         # and apply the BRDF (Diffuse + Specular).
         
         direct_light = material.evaluate_direct_light(
-            scene_lights=scene.get_lights(),
+            scene_lights=scene.lights,
             hit_info=hit_info,
             view_dir=view_dir,
             visibility_function=visibility_fn,
@@ -295,14 +299,43 @@ class LambertShading(ShadingStrategy):
         # 5. Ambient Light (Optional)
         # Adds a flat base color so shadowed areas aren't pitch black
         if self.ambience_settings.enabled:
-            final_color += material.get_ambient_color(self.ambience_settings.color, self.ambience_settings.intensity)
+            final_color += material.evaluate_ambient_color(self.ambience_settings.color, self.ambience_settings.intensity)
 
         return final_color
 
-    def _calculate_shadow_visibility(self, scene: Scene, point: np.ndarray, light: LightSource, light_dir: np.ndarray, sampler: Sampler, exclude_obj = None) -> float:
+    def _calculate_shadow_visibility(
+            self,
+            scene: Scene,
+            point: np.ndarray,
+            light: LightSource,
+            sampler: Sampler,
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            bias: float = 1e-4,
+            exclude_obj: Optional[Primitive] = None,
+            stats: Optional["TracingStats"] = None
+        ) -> float:
         """
         Calculates what fraction of the light is visible from 'point'.
         Returns 0.0 (Fully Blocked) to 1.0 (Fully Visible).
+        
+        :param scene: Description
+        :type scene: Scene
+        :param point: Description
+        :type point: np.ndarray
+        :param light: Description
+        :type light: LightSource
+        :param sampler: Description
+        :type sampler: Sampler
+        :param occlusion_function: Description
+        :type occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool]
+        :param bias: Description
+        :type bias: float
+        :param exclude_obj: Description
+        :type exclude_obj: Optional[Primitive]
+        :param stats: Description
+        :type stats: Optional["TracingStats"]
+        :return: Description
+        :rtype: float
         """
         if not self.shadow_settings.enabled:
             return 1.0
@@ -312,7 +345,7 @@ class LambertShading(ShadingStrategy):
         # Case A: Point Light (Hard Shadows)
         if radius <= 0.0 or self.shadow_settings.samples <= 1:
             # Check if a ray from point -> light is blocked
-            is_blocked = scene.is_occluded(point, light.position, bias=self.shadow_settings.bias, exclude_obj=exclude_obj)
+            is_blocked = occlusion_function(point, light.position, scene._cache_objects or scene.objects, bias, exclude_obj, stats)
             return 0.0 if is_blocked else 1.0
         
         # Case B: Area Light (Soft Shadows)
@@ -322,9 +355,9 @@ class LambertShading(ShadingStrategy):
                 # Pick a random point on the light source
                 # Note: light_dir here is the general direction, but for area lights 
                 # we usually sample the disc facing the point.
-                sample_pos = self._random_point_on_disc(light.position, -light_dir, float(radius), sampler)
+                sample_pos = self._random_point_on_disc(light.position, -light.get_direction_and_dist(point)[0], float(radius), sampler)
                 
-                if not scene.is_occluded(point, sample_pos, bias=self.shadow_settings.bias, exclude_obj=exclude_obj):
+                if not occlusion_function(point, sample_pos, scene._cache_objects or scene.objects, bias, exclude_obj, stats):
                     visible_count += 1
             
             return float(visible_count) / float(self.shadow_settings.samples)

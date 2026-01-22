@@ -4,11 +4,12 @@ from typing import Optional, Tuple
 
 from src.Data.Ray import TracingRay, RayPool
 from src.Data.Color import Color
-from ..Core import Algorithm, RenderStats, AlgorithmSettings, register_algorithm, update_memoregion_y_stats
+from .. import register_algorithm
+from ..Core import Algorithm, RenderStats, AlgorithmSettings
 from . import Intersections
 from . import Shading
 from src.Image.Film import Film
-from src.Data.Sampling import SamplingManager, SampleSettings, Sampler, RandomSampler
+from src.Data.Sampling.Core import SamplingManager, SampleSettings, Sampler, RandomSampler
 from src.Data.Scene import Scene
 
 # TODO: Pool tracing rays and hit info to reduce memoregion_y useage at runtime
@@ -17,7 +18,7 @@ from src.Data.Scene import Scene
 @dataclass(slots=True)
 class TracingStats(RenderStats):
     # --- Basic Counters ---
-    rays_primaregion_y: int = 0
+    rays_primary: int = 0
     rays_shadow: int = 0
     rays_reflection: int = 0
     rays_refraction: int = 0
@@ -38,7 +39,7 @@ class TracingStats(RenderStats):
 
     @property
     def total_rays(self) -> int:
-        return (self.rays_primaregion_y + self.rays_shadow + 
+        return (self.rays_primary + self.rays_shadow + 
                 self.rays_reflection + self.rays_refraction + 
                 self.rays_transparency)
 
@@ -79,7 +80,7 @@ class TracingStats(RenderStats):
         
         # Handle manual updates for non-sum fields
         self.time_taken_seconds += other.time_taken_seconds
-        self.memoregion_y_usage = max(self.memoregion_y_usage, other.memoregion_y_usage)
+        self.memory_usage = max(self.memory_usage, other.memory_usage)
         self.max_recursions = max(self.max_recursions, other.max_recursions)
         return self
 
@@ -89,11 +90,11 @@ class TracingStats(RenderStats):
         """
         lines = []
         lines.append(f"=== Tracing Stats ===")
-        lines.append(f"Time: {self.time_taken_seconds:.3f}s | Mem: {self.memoregion_y_usage:.2f}MB")
+        lines.append(f"Time: {self.time_taken_seconds:.3f}s | Mem: {self.memory_usage:.2f}MB")
         lines.append(f"-------------------------")
         lines.append(f"Ray Traffic:")
         lines.append(f"  - Total:       {self.total_rays:,}")
-        lines.append(f"  - Primaregion_y:     {self.rays_primaregion_y:<10,} ({self.rays_primaregion_y/max(1,self.total_rays)*100:.1f}%)")
+        lines.append(f"  - Primaregion_y:     {self.rays_primary:<10,} ({self.rays_primary/max(1,self.total_rays)*100:.1f}%)")
         lines.append(f"  - Shadow:      {self.rays_shadow:<10,} (Lights used: {self.lights_sampled:,})")
         lines.append(f"  - Bounce:      {(self.rays_reflection+self.rays_refraction):<10,}")
         lines.append(f"-------------------------")
@@ -115,17 +116,18 @@ class TracingStats(RenderStats):
 
 @dataclass(slots=True)
 class RayTracingSettings(AlgorithmSettings):
-    sampling_manager: SamplingManager
+    sampling_manager: SamplingManager = SamplingManager(SampleSettings(), "random")
     
     max_recursions: int = 4
 
-    intersection_method: Intersections.IntersectionStrategy = field(default_factoregion_y=lambda: Intersections.RayMarchingIntersection())
-    shading_method: Shading.ShadingStrategy = field(default_factoregion_y=lambda: Shading.LambertShading())
+    intersection_method: Intersections.IntersectionStrategy = field(default_factory=lambda: Intersections.RayMarchingIntersection())
+    shading_method: Shading.ShadingStrategy = field(default_factory=lambda: Shading.LambertShading())
 
     use_tiling: bool = True
     tile_size: int = 64
     
     debug_mode: bool = False
+    verbose_logging: bool = False
 
 # RayTracer using strategies
 @register_algorithm("ray-tracer")
@@ -133,27 +135,10 @@ class RayTracer(Algorithm):
     settings_type = RayTracingSettings
 
     def __init__(self, settings: RayTracingSettings):
-        super().__init__()
+        super().__init__(settings)
         self.settings = settings
         self.stats: TracingStats = TracingStats()
     
-    def _sanitize_color(self, c: Color) -> Color:
-        """Turn arbitraregion_y shader output into a finite Color and record NaN events if needed."""
-        # 1. Handle None or Invalid types quickly
-        if c is None: 
-            return np.array([0.0, 0.0, 0.0])
-            
-        # 2. Extract values
-        # Accessing slots directly (c.r) is faster than methods
-        vals = np.array([c.r, c.g, c.b], dtype=np.float32)
-        
-        # 3. Check Finite (Vectorized)
-        if not np.isfinite(vals).all():
-            self.stats.nan_errors += 1
-            return Color(*np.nan_to_num(vals, nan=0.0, posinf=1.0))
-            
-        return Color(*vals)
-
     def _trace_ray(self, scene: Scene, ray: TracingRay, recursions_left: int, sampler: Sampler) -> Color:
         # 1. Base Case
         if recursions_left < 0:
@@ -186,6 +171,7 @@ class RayTracer(Algorithm):
                 hit_info=hit_info,
                 recursions_left=recursions_left,
                 trace_function=self._trace_ray,
+                occlusion_function=self.settings.intersection_method.is_point_occluded,
                 sampler=sampler,
                 stats=self.stats
             )
@@ -195,15 +181,20 @@ class RayTracer(Algorithm):
 
         return color
     
-    def render_tile(self, scene, sampler, x, y, w, h):
+    def render_tile(
+            self,
+            scene: Scene,
+            sampler: Sampler,
+            tile_x: int,
+            tile_y: int, 
+            width: int,
+            height: int
+        ) -> None:
         camera = scene.camera
 
         # Generate rays for this tile
-        rays = camera.generate_screen_rays(
-            region=(x, y, h, w),
-            sampler=sampler
-        )
-        self.stats.rays_primaregion_y += len(rays)
+        rays = camera.generate_screen_rays(sampler, region=(tile_x, tile_y, width, height))
+        self.stats.rays_primary += len(rays)
 
         for ray in rays:
             if ray is None:
@@ -218,7 +209,7 @@ class RayTracer(Algorithm):
 
             color = self._sanitize_color(color)
 
-            self._film.add_pixel_batch(
+            self.settings.film.add_pixel_batch(
                 ray.pixel_x,
                 ray.pixel_y,
                 color.to_np_array(),
@@ -227,21 +218,24 @@ class RayTracer(Algorithm):
 
             self.stats.pixels_processed += 1
 
-    def ge(
+    def generate_film(
         self,
         scene: Scene,
         sampler: Optional[Sampler] = None,
         region: Optional[Tuple[int, int, int, int]] = None
-    ) -> Film:
+    ):
         self.stats.reset_ray_counter()
         self.stats.start_timer()
+
+        if self.settings.verbose_logging:
+            print(" * Starting rendering...")
 
         camera = scene.camera
         if camera is None: raise ValueError("No camera provided in Scene")
         cam_width, cam_height = camera.width, camera.height
 
         # Create a film for sample_color buffer
-        film = Film(cam_width, cam_height)
+        self.settings.film = Film(cam_width, cam_height)
 
         region_x, region_y, region_width, region_height = region or (0, 0, cam_width, cam_height)
 
@@ -250,21 +244,44 @@ class RayTracer(Algorithm):
 
         # Create default sampler if not provided
         if sampler is None:
-            sampler = RandomSampler(SampleSettings(self.settings.image_width))
+            sampler = self.settings.sampling_manager.sampler
 
         total_tiles = ((region_width + self.settings.tile_size - 1) // self.settings.tile_size) * ((region_height + self.settings.tile_size - 1) // self.settings.tile_size)
         tile_count = 0
 
         if self.settings.use_tiling:
-            for _ in range(region_y, region_y + region_height, self.settings.tile_size):
-                for _ in range(region_x, region_x + region_width, self.settings.tile_size):
-                    self.render_tile(scene, sampler, region_x, region_y, region_width, region_height)
+            for tile_y in range(region_y, region_y + region_height, self.settings.tile_size):
+                for tile_x in range(region_x, region_x + region_width, self.settings.tile_size):
+                    tile_w = min(self.settings.tile_size, region_x + region_width - tile_x)
+                    tile_h = min(self.settings.tile_size, region_y + region_height - tile_y)
+                    
+                    self.render_tile(scene, sampler, tile_x, tile_y, tile_w, tile_h)
+                    
                     tile_count += 1
-                    print(f" * Rendered tile {tile_count}/{total_tiles}")
+                    if self.settings.verbose_logging:
+                        print(f" * Rendered tile {tile_count}/{total_tiles}")
         else:
             self.render_tile(scene, sampler, region_x, region_y, region_width, region_height)
 
         self.stats.pixels_processed = pixels_processed
         self.stats.stop_timer()
 
-        return film
+        if self.settings.verbose_logging:
+            print(" * Rendering complete.")
+    
+    def _sanitize_color(self, color: Color) -> Color:
+        """Turn arbitrary shader output into a finite Color and record NaN events if needed."""
+        # 1. Handle None or Invalid types quickly
+        if color is None: 
+            return np.array([0.0, 0.0, 0.0])
+            
+        # 2. Extract values
+        # Accessing slots directly (c.r) is faster than methods
+        vals = np.array([color.r, color.g, color.b], dtype=np.float32)
+        
+        # 3. Check Finite (Vectorized)
+        if not np.isfinite(vals).all():
+            self.stats.nan_errors += 1
+            return Color(*np.nan_to_num(vals, nan=0.0, posinf=1.0))
+            
+        return Color(*vals)

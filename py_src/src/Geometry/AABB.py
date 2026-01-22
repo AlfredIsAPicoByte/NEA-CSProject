@@ -51,7 +51,8 @@ class AABB:
         """
         Calculates the world-space AABB for a given object.
         """
-        # Get the object's local bounds
+        if shape is None:
+            return AABB(np.zeros(3), np.zeros(3))
         
         # 1. Get Transform Matrix
         matrix = world_Transform.get_global_matrix()
