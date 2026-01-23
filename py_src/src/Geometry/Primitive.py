@@ -28,14 +28,8 @@ class Primitive:
     # We store the calculated world matrix here so we don't recalculate it for every ray
     _world_matrix: Optional[np.ndarray] = None
     _inverse_world_matrix: Optional[np.ndarray] = None
-    _safe_scale_local: float = 1
-    _safe_scale_world: float = 1
     _aabb_bounds: Optional[AABB] = None
     _cache_objects: Optional[List['Primitive']] = None
-
-    def __post_init__(self):
-        self._safe_scale_local = min(*self.transform.scale, 1e-6)
-        self._safe_scale_world = min(*self.world_transform.scale)
 
     def add_child(self, child: 'Primitive'):
         """Attaches a child node to this node."""

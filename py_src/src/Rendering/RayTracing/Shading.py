@@ -362,6 +362,43 @@ class LambertShading(ShadingStrategy):
             
             return float(visible_count) / float(self.shadow_settings.samples)
         
+class RecursiveLambertShading(LambertShading):
+    """
+    Base class for recursive shaders (Reflection, Refraction, etc).
+    Handles recursion depth and common setup.
+    """
+    def shade(
+            self,
+            scene: "Scene",
+            ray: TracingRay,
+            hit_info: "HitInfo",
+            recursions_left: int,
+            trace_function: Callable[[Scene, TracingRay, int, Sampler], Color],
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            sampler: Sampler,
+            bias: float = 1e-4,
+            stats: Optional["TracingStats"] = None
+        ) -> Color:
+        # First, get the base Lambertian color
+        base_color = super().shade(
+            scene,
+            ray,
+            hit_info,
+            recursions_left,
+            trace_function,
+            occlusion_function,
+            sampler,
+            bias,
+            stats
+        )
+
+        # If we have no recursion left, return base color
+        if recursions_left <= 0:
+            return base_color
+
+        # Otherwise, subclasses will implement their own recursion logic
+        return base_color
+        
 class VolumetricShading(ShadingStrategy):
     """
     Renders objects based on their volume. 

@@ -12,7 +12,7 @@ from src.Image.Film import Film
 from src.Data.Sampling.Core import SamplingManager, SampleSettings, Sampler, RandomSampler
 from src.Data.Scene import Scene
 
-# TODO: Pool tracing rays and hit info to reduce memoregion_y useage at runtime
+# TODO: Pool tracing rays and hit info to reduce memory useage at runtime
 
 # Stats for ray tracing
 @dataclass(slots=True)
@@ -58,7 +58,7 @@ class TracingStats(RenderStats):
         Measures how well the BVH protects us from triangle tests.
         Ratio of Box Tests to Triangle Tests.
         High = Good (we test many cheap boxes to find few expensive triangles).
-        Low (near 1.0) = Bad (We are testing triangles for everegion_y box we hit).
+        Low (near 1.0) = Bad (We are testing triangles for every box we hit).
         """
         if self.triangle_tests == 0: return 0.0
         return self.aabb_tests / self.triangle_tests
@@ -94,7 +94,7 @@ class TracingStats(RenderStats):
         lines.append(f"-------------------------")
         lines.append(f"Ray Traffic:")
         lines.append(f"  - Total:       {self.total_rays:,}")
-        lines.append(f"  - Primaregion_y:     {self.rays_primary:<10,} ({self.rays_primary/max(1,self.total_rays)*100:.1f}%)")
+        lines.append(f"  - Primary:     {self.rays_primary:<10,} ({self.rays_primary/max(1,self.total_rays)*100:.1f}%)")
         lines.append(f"  - Shadow:      {self.rays_shadow:<10,} (Lights used: {self.lights_sampled:,})")
         lines.append(f"  - Bounce:      {(self.rays_reflection+self.rays_refraction):<10,}")
         lines.append(f"-------------------------")
@@ -144,7 +144,7 @@ class RayTracer(Algorithm):
         if recursions_left < 0:
             return Color(0.0, 0.0, 0.0)
 
-        # 2. Geometregion_y Intersection
+        # 2. Geometry Intersection
         # The stats object is passed down for internal counters
         hit_info = self.settings.intersection_method.find_hit(scene, ray, self.stats)
 
@@ -264,6 +264,7 @@ class RayTracer(Algorithm):
             self.render_tile(scene, sampler, region_x, region_y, region_width, region_height)
 
         self.stats.pixels_processed = pixels_processed
+        self.stats.lights_sampled = len(scene.lights)
         self.stats.stop_timer()
 
         if self.settings.verbose_logging:

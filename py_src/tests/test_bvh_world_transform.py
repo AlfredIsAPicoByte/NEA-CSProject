@@ -149,6 +149,6 @@ def test_bvh_no_hit_beyond_max_distance():
     hit = bvh.find_hit(scene, ray)
 
     # Since max_distance=1000, and object at 1500, should not hit
-    # But as we saw, for small objects, _safe_scale_world=1, max_dist_local=1000
+    # But as we saw, for small objects, min(*safe_transform.scale)=1, max_dist_local=1000
     # For sphere radius 1, at 1500, local distance 1500, so should not hit
     assert not hit.hit, f"Expected no hit for object beyond max_distance, but got hit at {hit.distance}"

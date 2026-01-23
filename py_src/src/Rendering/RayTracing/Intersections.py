@@ -97,14 +97,14 @@ class IntersectionStrategy(ABC):
 
         # 1. Transform Ray to Local Space
         # We assume world_transform is up to date
-        safe_transform = getattr(obj, 'world_transform', obj.transform)
+        safe_transform = cast(Transform, getattr(obj, 'world_transform', obj.transform))
         local_ray = safe_transform.inverse_transform_ray(ray)
         local_ray.orientation = unit(local_ray.orientation)
 
         # 2. Safety for Non-Uniform Scales
         # Convert world max distance to local space
         # We divide by the SMALLEST scale to ensure we cover the full world distance
-        max_dist_local = self.max_distance / obj._safe_scale_world
+        max_dist_local = self.max_distance / min(*safe_transform.scale)
 
         t = 0.0
         sign_modifier = -1.0 if ray.is_inside else 1.0
@@ -306,7 +306,7 @@ class RayMarchingIntersection(IntersectionStrategy):
             try:
                 local_dist = float(shape.signed_distance(local_point))
                 
-                world_dist = local_dist * obj._safe_scale_world
+                world_dist = local_dist * min(*safe_transform.scale)
             except Exception:
                 continue
 

@@ -85,7 +85,7 @@ if __name__ == "__main__":
         get_low_ior_scene(img_width, img_height),
     ]
 
-    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=8, filter_type=PixelFilter.GAUSSIAN, filter_width=4)
+    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.GAUSSIAN, filter_width=16)
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
@@ -104,7 +104,7 @@ if __name__ == "__main__":
             intersection_method=intersection,
             shading_method=shading,
             use_tiling=True,
-            tile_size=64,
+            tile_size=128,
             debug_mode=True,
             verbose_logging=True
         ))
