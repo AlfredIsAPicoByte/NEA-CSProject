@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(current_dir, 'src'))
 sys.path.insert(0, current_dir)
 
 from src.Data.Transform import Transform
+from src.Data.Sampling import SamplingManager, SampleSettings, PixelFilter
 from src.Data.Ray import Ray
 from src.Data.Color import Color, ColorGradient
 from src.Data.Ratio import Ratio
@@ -16,8 +17,8 @@ from src.Geometry.Core import Sphere
 from src.Geometry.Primitive import Primitive
 from src.Lighting.Core import LightSource
 from src.Material.Core import PBRMaterial
-from src.Rendering.Raytracing import RayTracer
-from src.Rendering.Shading import LambertShading
+from src.Material.Factory import MaterialFactory
+from src.Rendering.RayTracing import RayTracer, RayTracingSettings, Shading
 from src.Data.Camera import Camera, CameraType
 from src.Data.Scene import Scene
 
@@ -107,7 +108,7 @@ def test_Primitive_creation():
     transform = Transform.identity()
     shape = Sphere()
     
-    obj = Primitive(shape, transform)
+    obj = Primitive(transform=transform, shape=shape)
     
     assert obj.shape == shape
     assert obj.transform == transform
@@ -126,7 +127,7 @@ def test_color_math():
 
 def test_camera_logic():
     transform = Transform.identity()
-    cam = Camera(transform, 90, 0.1, 1000, 1440, 810)
+    cam = Camera(transform, 1440, 810, 90, 0.1, 1000)
     
     cam.aspect_ratio.simplify()
     assert cam.aspect_ratio.width == 16 and cam.aspect_ratio.height == 9 # Assuming internally simplified
@@ -142,16 +143,15 @@ def test_ray_shape_intersection():
     ray_hit = Ray(np.zeros(3), np.array([1, 0, 0])) # Originates inside
     ray_miss = Ray(np.array([2, 2, 2]), np.array([1, 0, 0]))
     
-    assert sphere.check_ray_intersection(ray_hit) == True
-    assert sphere.check_ray_intersection(ray_miss) == False
+    assert sphere.get_ray_intersections(ray_hit) is not None
+    assert sphere.get_ray_intersections(ray_miss) is None
 
 def test_background_gradient():
-    cam = Camera(Transform(np.array([0,0,-3]), np.zeros(3), np.ones(3)), 60, 0.1, 100, 8, 8, CameraType.PERSPECTIVE)
+    cam = Camera(Transform(np.array([0,0,-3]), np.zeros(3), np.ones(3)), 8, 8, 60, 0.1, 100, CameraType.PERSPECTIVE)
     grad = ColorGradient([Color.from_hex("#000033"), Color.from_hex("#87CEEB")], np.array([0.0, 1.0]))
-    scene = Scene(name="bg_test", camera=cam, background_color=grad)
     
-    up_color = scene.get_background_color([0.0, 1.0, 0.0])
-    down_color = scene.get_background_color([0.0, -1.0, 0.0])
+    up_color = grad.get_color(0.99)
+    down_color = grad.get_color(0.01)
     
     # Helper to get array from Color object
     def get_rgb(c):
@@ -179,25 +179,22 @@ def test_ambient_lighting():
         camera_type=CameraType.PERSPECTIVE
     )
     light = LightSource(position=np.array([10,10,-10]), color=Color(1.0, 1.0, 1.0), intensity=0.5)
-    material = PBRMaterial.create_diffuse(
+    material = MaterialFactory.create_diffuse(
         albedo=Color(0.8, 0.8, 0.8),
         roughness=0.5,
     )
-    sphere = Primitive(Sphere(), Transform.identity())
+    sphere = Primitive(shape=Sphere())
     # Attach PBR data to shape for compatibility
     sphere.material = material
     scene = Scene(name="ambient_test", camera=cam, objects=[sphere], lights=[
         light
     ], background_color=Color(0.0, 0.0, 0.0))
     raytracer = RayTracer(
-        max_depth=2,
-        sampling_manager=None,
-        ray_generator=None,
-        intersection_strategy=None,
-        interaction_strategy=None,
-        shading_strategy=LambertShading(),
-        custom_background=scene.get_background_color([0.0, 0.0, -1.0]),
-        enable_scene_background=True
+        RayTracingSettings(
+            image_width=4, image_height=4,
+            sampling_manager=SamplingManager(SampleSettings(4, 4, 1, 4, 0.05, PixelFilter.BOX, 1), "halton"),
+            debug_mode=True, verbose_logging=False
+        )
     )
     pixels = raytracer.render(scene)
     # Check center pixel

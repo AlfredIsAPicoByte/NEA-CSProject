@@ -333,6 +333,60 @@ class Camera:
                     rays.append(ray)
         return rays
 
+    def screen_to_world(self, screen_x: float, screen_y: float, depth: float) -> np.ndarray:
+        """
+        Convert normalized screen coordinates (0..1) and depth to world space position.
+
+        :param screen_x: Normalized horizontal coordinate [0,1].
+        :param screen_y: Normalized vertical coordinate [0,1].
+        :param depth: Depth value from near to far plane.
+        :return: World space position as a numpy array.
+        """
+        # 1. Convert screen coords to NDC
+        ndc_x = (2.0 * screen_x) - 1.0
+        ndc_y = 1.0 - (2.0 * screen_y)
+        ndc_z = (2.0 * depth) - 1.0  # Assuming depth is normalized [0,1]
+
+        # 2. Create clip space position
+        clip_space_pos = np.array([ndc_x, ndc_y, ndc_z, 1.0])
+
+        # 3. Inverse Projection to View Space
+        inv_proj = np.linalg.inv(self.get_projection_matrix())
+        view_space_pos = inv_proj @ clip_space_pos
+        view_space_pos /= view_space_pos[3]  # Perspective divide
+
+        # 4. Inverse View to World Space
+        inv_view = np.linalg.inv(self.get_view_matrix())
+        world_space_pos = inv_view @ np.array([view_space_pos[0], view_space_pos[1], view_space_pos[2], 1.0])
+        
+        return world_space_pos[:3]
+    
+    def world_to_screen(self, world_pos: np.ndarray) -> Tuple[float, float, float]:
+        """
+        Convert a world space position to normalized screen coordinates (0..1) and depth.
+
+        :param world_pos: World space position as a numpy array.
+        :return: Tuple of (screen_x, screen_y, depth) in normalized coordinates.
+        """
+        # 1. World to View Space
+        view_space_pos = self.get_view_matrix() @ np.array([world_pos[0], world_pos[1], world_pos[2], 1.0])
+
+        # 2. View to Clip Space
+        clip_space_pos = self.get_projection_matrix() @ view_space_pos
+
+        # 3. Perspective Divide to NDC
+        if clip_space_pos[3] == 0:
+            return (0.0, 0.0, 0.0)  # Avoid division by zero
+
+        ndc_pos = clip_space_pos / clip_space_pos[3]
+
+        # 4. NDC to Screen Space
+        screen_x = (ndc_pos[0] + 1.0) / 2.0
+        screen_y = (1.0 - ndc_pos[1]) / 2.0
+        depth = (ndc_pos[2] + 1.0) / 2.0  # Normalize depth to [0,1]
+
+        return (screen_x, screen_y, depth)
+
     # ==========================================================
     # Methods for OpenGL / Rasterization (Legacy Support)
     # ==========================================================

@@ -65,7 +65,7 @@ if __name__ == "__main__":
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
-    img_width, img_height = 640, 480 # 480p
+    img_width, img_height = 16 * 2, 9 * 2
 
     all_scenes = [
         get_minimal_scene(img_width, img_height),
@@ -85,16 +85,19 @@ if __name__ == "__main__":
         get_low_ior_scene(img_width, img_height),
     ]
 
-    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.GAUSSIAN, filter_width=16)
+    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.NEAREST, filter_width=1.5)
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
-        intersection = BVHIntersection(max_distance=scene.camera.far * 10, max_steps=2048)
-        shading = LambertShading(
+        intersection = BVHIntersection(IntersectionSettings(
+            max_distance=scene.camera.far * 10,
+            max_steps=2048
+        ))
+        shading = LambertShading(ShadingSettings(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
-            shadow_settings=ShadowSettings(True, 16, 1e-3),
+            shadow_settings=ShadowSettings(True, 32, 1e-3),
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
-        )
+        ))
 
         raytracer = RayTracer(RayTracingSettings(
             image_width=img_width,

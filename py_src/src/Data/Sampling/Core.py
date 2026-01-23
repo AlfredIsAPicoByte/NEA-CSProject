@@ -10,6 +10,7 @@ class PixelFilter(Enum):
     BOX = 0
     TENT = 1
     GAUSSIAN = 2
+    NEAREST = 3
 
 @dataclass
 class SampleSettings:
@@ -79,6 +80,11 @@ def evaluate_filter_weight(
         gx = np.exp(-alpha * dist_x[mask]**2) - shift
         gy = np.exp(-alpha * dist_y[mask]**2) - shift
         weights[mask] = np.maximum(0.0, gx * gy)
+
+    elif ftype == PixelFilter.NEAREST:
+        # All weight to the nearest pixel (0 distance)
+        near_mask = mask & (np.abs(dist_x) < 0.5) & (np.abs(dist_y) < 0.5)
+        weights[near_mask] = 1.0
 
     return weights
 
