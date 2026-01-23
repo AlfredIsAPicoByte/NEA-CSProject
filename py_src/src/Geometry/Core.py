@@ -181,6 +181,17 @@ class Shape2D(Shape):
     def dimensions(self) -> int:
         return 2
 
+    @property
+    @abstractmethod
+    def perimeter(self) -> float:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def area(self) -> float:
+        raise NotImplementedError
+    
+    @property
     def volume(self) -> float:
         return 0.0
     
@@ -197,8 +208,8 @@ class Circle(Shape2D):
         """
         A Disk on the XZ plane (Y=0).
         """
-        super().__init__(**kwargs)
         self.radius = 1
+        super().__init__(**kwargs)
 
     def signed_distance(self, local_point: np.ndarray) -> float:
         """SDF for a Disk on the XZ plane."""
@@ -236,10 +247,66 @@ class Circle(Shape2D):
     def area(self) -> float:
         return np.pi * self.radius ** 2
 
-class Plane(Shape2D):
+    @property
+    def perimeter(self) -> float:
+        return 2 * np.pi * self.radius
+
+class Square(Shape2D):
     def __init__(self, **kwargs):
+        """
+        A Square on the XZ plane (Y=0).
+        """
+        self.size = 1.0
         super().__init__(**kwargs)
 
+    def signed_distance(self, local_point: np.ndarray) -> float:
+        # 2D distance from center in X/Z
+        dx = abs(local_point[0]) - (self.size / 2)
+        dz = abs(local_point[2]) - (self.size / 2)
+        
+        # Outside distance
+        outside_dist = np.sqrt(max(dx, 0.0)**2 + max(dz, 0.0)**2)
+        
+        # Inside distance
+        inside_dist = min(max(dx, dz), 0.0)
+        
+        return outside_dist + inside_dist + abs(local_point[1])
+
+    def get_ray_intersections(self, local_ray: Ray) -> List[np.ndarray]:
+        # Intersect with Plane Y=0
+        if abs(local_ray.orientation[1]) < 1e-6:
+            return []
+            
+        t = -local_ray.origin[1] / local_ray.orientation[1]
+        
+        if t < 0: return []
+        
+        p = local_ray.point_at(t)
+        
+        # Check if point is within square bounds
+        half_size = self.size / 2
+        if abs(p[0]) <= half_size and abs(p[2]) <= half_size:
+            return [p]
+            
+        return []
+
+    def get_uv(self, local_point: np.ndarray, *args, **kwargs) -> np.ndarray:
+        u = (local_point[0] / self.size) + 0.5
+        v = (local_point[2] / self.size) + 0.5
+        return np.array([u, v])
+
+    @property
+    def area(self) -> float:
+        return self.size ** 2
+
+    @property
+    def perimeter(self) -> float:
+        return 4 * self.size
+
+class Plane(Shape2D):
+    """
+    Infinite Plane on the XZ plane (Y=0).
+    """
     def signed_distance(self, local_point: np.ndarray) -> float:
         # Distance to Y=0 plane is just Y height
         return local_point[1]
@@ -255,11 +322,21 @@ class Plane(Shape2D):
             return [local_ray.point_at(t)]
         return []
 
+    @property
+    def perimeter(self) -> float:
+        return float('inf')
+
+    @property
+    def area(self) -> float:
+        return float('inf')
+
 class ClippedPlane(Shape2D):
+    """
+    Plane clipped to a polygonal boundary on the XZ plane.
+    """
     def __init__(self, clip_polygon: List[np.ndarray], **kwargs):
         """
-        clip_polygon: List of 2D points (x, z) defining the clip boundary 
-                      on the local XZ plane.
+        :param clip_polygon: List of 2D points (x, z) defining the clip boundary 
         """
         super().__init__(**kwargs)
         if len(clip_polygon) < 3:
@@ -305,6 +382,31 @@ class ClippedPlane(Shape2D):
                 
         return inside
 
+    @property
+    def perimeter(self) -> float:
+        if not self.clip_polygon:
+            return 0.0
+        perimeter = 0.0
+        n = len(self.clip_polygon)
+        for i in range(n):
+            p1 = self.clip_polygon[i]
+            p2 = self.clip_polygon[(i + 1) % n]
+            perimeter += np.linalg.norm(p2 - p1)
+        return float(perimeter)
+
+    @property
+    def area(self) -> float:
+        if not self.clip_polygon or len(self.clip_polygon) < 3:
+            return 0.0
+        # Shoelace formula for polygon area
+        area = 0.0
+        n = len(self.clip_polygon)
+        for i in range(n):
+            x1, z1 = self.clip_polygon[i]
+            x2, z2 = self.clip_polygon[(i + 1) % n]
+            area += x1 * z2 - x2 * z1
+        return abs(area) / 2.0
+
 class Shape3D(Shape):
     """
     Base for 3D shapes (Spheres, Boxes, Meshes).
@@ -328,10 +430,14 @@ class Shape3D(Shape):
     def area(self) -> float:
         return self.surface_area
 
+    @abstractmethod
     def convex_hull(self) -> List[np.ndarray]:
         raise NotImplementedError
     
 class Triangle(Shape3D):
+    """
+    A 3D Triangle defined by 3 vertices in Local Space.
+    """
     def __init__(self, v1: np.ndarray, v2: np.ndarray, v3: np.ndarray, **kwargs):
         super().__init__(**kwargs)
         
@@ -436,6 +542,9 @@ class Triangle(Shape3D):
         return [self.v1, self.v2, self.v3]
 
 class Polygon(Shape3D):
+    """
+    A 3D Polygon defined by a list of vertices in Local Space.
+    """
     def __init__(self, vertices: List[np.ndarray], **kwargs):
         super().__init__(**kwargs)
         self.vertices = [np.asarray(v, dtype=float) for v in vertices]
@@ -634,20 +743,83 @@ class Cube(Shape3D):
         return 2 * (s[0]*s[1] + s[1]*s[2] + s[2]*s[0])
 
 class Pyramid(Shape3D):
-    def __init__(self, base_polygon: Polygon, height: float, **kwargs):
+    def __init__(self, base: Shape2D, height: float, **kwargs):
         super().__init__(**kwargs)
-        self.base_polygon = base_polygon
+        self.base = base
         if height <= 0:
             raise ValueError("Height must be > 0")
         self.height = float(height)
 
+    @property
+    def volume(self) -> float:
+        return (1/3) * self.base.area * self.height
+
+    @property
+    def surface_area(self) -> float:
+        # Approximation: base + lateral assuming slant height = height / 2
+        lateral = self.base.perimeter * (self.height / 2) / 2
+        return self.base.area + lateral
+
+    def signed_distance(self, local_point: np.ndarray) -> float:
+        # Approximation for pyramid SDF
+        base_dist = self.base.signed_distance(np.array([local_point[0], 0, local_point[2]]))
+        y_from_base = (local_point[1] + self.height/2) / self.height
+        scale = max(0, min(1, y_from_base))
+        scaled_dist = base_dist * (1 - scale)
+        y_dist = abs(local_point[1]) - self.height / 2
+        return max(scaled_dist, y_dist)
+
+    def get_ray_intersections(self, local_ray: Ray) -> List[np.ndarray]:
+        # Analytical intersection is complex for general base, return empty
+        return []
+
+    def get_normal(self, local_point: np.ndarray, *args, **kwargs) -> np.ndarray:
+        # Approximation
+        return np.array([0.0, 1.0, 0.0])
+
+    def get_uv(self, local_point: np.ndarray, *args, **kwargs) -> np.ndarray:
+        return local_point[:2]
+
+    def convex_hull(self) -> List[np.ndarray]:
+        # Approximation
+        return []
+
 class Prism(Shape3D):
-    def __init__(self, base_polygon: Polygon, height: float, **kwargs):
+    def __init__(self, base: Shape2D, height: float, **kwargs):
         super().__init__(**kwargs)
-        self.base_polygon = base_polygon
+        self.base = base
         if height <= 0:
             raise ValueError("Height must be > 0")
         self.height = float(height)
+
+    @property
+    def volume(self) -> float:
+        return self.base.area * self.height
+
+    @property
+    def surface_area(self) -> float:
+        lateral = self.base.perimeter * self.height
+        return 2 * self.base.area + lateral
+
+    def signed_distance(self, local_point: np.ndarray) -> float:
+        base_dist = self.base.signed_distance(np.array([local_point[0], 0, local_point[2]]))
+        y_dist = abs(local_point[1]) - self.height / 2
+        return max(base_dist, y_dist)
+
+    def get_ray_intersections(self, local_ray: Ray) -> List[np.ndarray]:
+        # Analytical intersection is complex for general base, return empty
+        return []
+
+    def get_normal(self, local_point: np.ndarray, *args, **kwargs) -> np.ndarray:
+        # Approximation
+        return np.array([0.0, 1.0, 0.0])
+
+    def get_uv(self, local_point: np.ndarray, *args, **kwargs) -> np.ndarray:
+        return local_point[:2]
+
+    def convex_hull(self) -> List[np.ndarray]:
+        # Approximation
+        return []
 
 class Cylinder(Shape3D):
     def __init__(self, radius: float = 1.0, height: float = 2.0, **kwargs):

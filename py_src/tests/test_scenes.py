@@ -63,6 +63,17 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     sph_2 = Primitive("EmissiveOrbObject", Transform(np.array([-0.5, 2.5, 1.5])), Sphere(), mat_glow)
     scene.add_object(sph_2)
 
+    # New: Cylinder object
+    mat_cylinder = MaterialFactory.create_specular(Color.from_hex("#FFD700"), 0.1, 0.8, 0.9, 0.5)
+    cyl_1 = Primitive("GoldenCylinder", Transform(np.array([2.0, 1.0, 3.0])), Cylinder(height=2.0, radius=0.5), mat_cylinder)
+    cyl_1.transform.rotate(np.deg2rad(30), np.array([0, 1, 0]))
+    scene.add_object(cyl_1)
+
+    # New: Pyramid object
+    mat_pyramid = MaterialFactory.create_diffuse(Color.from_hex("#8B4513"), 0.7)
+    pyr_1 = Primitive("WoodenPyramid", Transform(np.array([-2.5, 0.5, 2.0])), Pyramid(base=Square(size=1.5), height=1.5), mat_pyramid)
+    scene.add_object(pyr_1)
+
     return scene
 
 def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
@@ -242,6 +253,11 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     v_glass_cube.transform.rotate(-15.0, np.array([0.0, 1.0, 0.0]))
     scene.add_object(v_glass_cube)
 
+    # New: Cylinder object
+    mat_cylinder = MaterialFactory.create_specular(Color.from_hex("#FFD700"), 0.2, 0.7, 0.9, 0.5)
+    v_cylinder = Primitive("CylinderObj", Transform(np.array([1.5, 1.0, 1.0])), Cylinder(height=2.0, radius=0.4), mat_cylinder)
+    scene.add_object(v_cylinder)
+
     # Lighting
     ceiling_light = LightSource(
         position=np.array([0.0, 5.8, 0.0]), 
@@ -303,6 +319,11 @@ def get_cyberpunk_scene(width: int = 120, height: int = 120) -> Scene:
     v_bldg_right.transform.translate(np.array([2.5, 1.3, 2.2]))
     v_bldg_right.transform.enlarge(np.array([0.65, 1.3, 0.65]))
     scene.add_object(v_bldg_right)
+
+    # New: Neon cylinder
+    mat_neon_cyl = MaterialFactory.create_emissive(Color.from_hex("#FF00FF"), 3.0)
+    v_neon_cyl = Primitive("NeonCylinder", Transform(np.array([1.0, 1.0, -1.0])), Cylinder(height=2.0, radius=0.1), mat_neon_cyl)
+    scene.add_object(v_neon_cyl)
 
     # Lighting
     light_pink = LightSource(
@@ -394,6 +415,19 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
     v_s5.material = MaterialFactory.create_diffuse(Color.from_hex("#FF0000"), roughness=0.1)
     v_s5.transform.translate(np.array([3.0, 0.5, 0.0]))
     scene.add_object(v_s5)
+
+    # New: Cylinder with varying metallicness
+    cyl1_shape = Cylinder(height=1.2, radius=0.3, name="Cylinder_0.0")
+    v_cyl1 = Primitive(shape=cyl1_shape, name="C_Mirror")
+    v_cyl1.material = MaterialFactory.create_specular(Color.from_hex("#FFD700"), roughness=0.0, metallicness=1.0)
+    v_cyl1.transform.translate(np.array([-4.5, 0.6, 0.0]))
+    scene.add_object(v_cyl1)
+
+    cyl2_shape = Cylinder(height=1.2, radius=0.3, name="Cylinder_0.5")
+    v_cyl2 = Primitive(shape=cyl2_shape, name="C_Matte")
+    v_cyl2.material = MaterialFactory.create_specular(Color.from_hex("#FFD700"), roughness=0.5, metallicness=0.5)
+    v_cyl2.transform.translate(np.array([4.5, 0.6, 0.0]))
+    scene.add_object(v_cyl2)
 
     # Lighting
     scene.add_light(LightSource(position=np.array([0.0, 5.0, -5.0]), color=Color(1.0, 1.0, 1.0), intensity=15.0, name="Main"))
@@ -929,4 +963,188 @@ def get_low_ior_scene(width: int = 120, height: int = 120) -> Scene:
     # Light
     scene.add_light(LightSource(position=np.array([2.0, 2.0, -3.0]), color=Color(1.0, 1.0, 1.0), intensity=10.0, name="Front"))
 
+    return scene
+
+def get_shape_showcase_scene(width: int = 160, height: int = 120) -> Scene:
+    """
+    A showcase scene featuring all available 3D shapes arranged in a grid.
+    Demonstrates variety of geometries with different materials.
+    """
+    cam_transform = Transform(np.array([0.0, 3.0, -8.0]), np.array([0.0, 0.0, 0.0]), np.ones(3))
+    cam = Camera(cam_transform, fov=70.0, near=0.1, far=100.0, resolution_width=width, resolution_height=height)
+    
+    scene = Scene(name="shape_showcase", camera=cam, background_color=Color.from_hex("#1a1a2e"))
+
+    # Materials
+    mat_metal = MaterialFactory.create_specular(Color.from_hex("#C0C0C0"), 0.1, 0.9, 0.8, 0.2)
+    mat_glass = MaterialFactory.create_glass(Color.from_hex("#FFFFFF"), Color(1.0, 1.0, 1.0), 0.0, 0.0, 1.5, 1.0)
+    mat_diffuse = MaterialFactory.create_diffuse(Color.from_hex("#FF6B6B"), 0.3)
+    mat_emissive = MaterialFactory.create_emissive(Color.from_hex("#4ECDC4"), 1.5)
+
+    # Row 1: Spheres and Cubes
+    sphere1 = Primitive("Sphere1", Transform(np.array([-3.0, 1.0, 0.0])), Sphere(radius=0.5), mat_metal)
+    scene.add_object(sphere1)
+    
+    cube1 = Primitive("Cube1", Transform(np.array([-1.0, 1.0, 0.0])), Cube(size=1.0), mat_diffuse)
+    scene.add_object(cube1)
+    
+    sphere2 = Primitive("Sphere2", Transform(np.array([1.0, 1.0, 0.0])), Sphere(radius=0.5), mat_glass)
+    scene.add_object(sphere2)
+    
+    cube2 = Primitive("Cube2", Transform(np.array([3.0, 1.0, 0.0])), Cube(size=1.0), mat_emissive)
+    scene.add_object(cube2)
+
+    # Row 2: Cylinders and Pyramids
+    cylinder1 = Primitive("Cylinder1", Transform(np.array([-3.0, -1.0, 0.0])), Cylinder(height=1.5, radius=0.4), mat_metal)
+    scene.add_object(cylinder1)
+    
+    pyramid1 = Primitive("Pyramid1", Transform(np.array([-1.0, -1.0, 0.0])), Pyramid(base_size=1.0, height=1.0), mat_diffuse)
+    scene.add_object(pyramid1)
+    
+    cylinder2 = Primitive("Cylinder2", Transform(np.array([1.0, -1.0, 0.0])), Cylinder(height=1.5, radius=0.4), mat_glass)
+    scene.add_object(cylinder2)
+    
+    pyramid2 = Primitive("Pyramid2", Transform(np.array([3.0, -1.0, 0.0])), Pyramid(base_size=1.0, height=1.0), mat_emissive)
+    scene.add_object(pyramid2)
+
+    # Row 3: Prisms and Capsules
+    prism1 = Primitive("Prism1", Transform(np.array([-2.0, -3.0, 0.0])), Prism(base_radius=0.5, height=1.0), mat_metal)
+    scene.add_object(prism1)
+    
+    capsule1 = Primitive("Capsule1", Transform(np.array([0.0, -3.0, 0.0])), Capsule(radius=0.3, height=1.0), mat_glass)
+    scene.add_object(capsule1)
+    
+    prism2 = Primitive("Prism2", Transform(np.array([2.0, -3.0, 0.0])), Prism(base_radius=0.5, height=1.0), mat_emissive)
+    scene.add_object(prism2)
+
+    # Floor
+    floor_mat = MaterialFactory.create_diffuse(Color.from_hex("#333333"), 0.8)
+    floor = Primitive("Floor", Transform(np.array([0.0, -5.0, 0.0])), Cube(size=20.0), floor_mat)
+    floor.transform.enlarge(np.array([1.0, 0.1, 1.0]))
+    scene.add_object(floor)
+
+    # Lighting
+    scene.add_light(LightSource(position=np.array([5.0, 5.0, -5.0]), color=Color(1.0, 1.0, 1.0), intensity=20.0, name="Main"))
+    scene.add_light(LightSource(position=np.array([-5.0, 3.0, 5.0]), color=Color(0.8, 0.8, 1.0), intensity=10.0, name="Fill"))
+
+    cam.transform.look_at(np.array([0, -1, 0]))
+    return scene
+
+def get_abstract_geometry_scene(width: int = 140, height: int = 100) -> Scene:
+    """
+    An abstract scene with geometric shapes arranged in a artistic composition.
+    Features overlapping transparent shapes and dramatic lighting.
+    """
+    cam_transform = Transform(np.array([2.0, 2.0, -5.0]), np.array([0.0, 0.0, 0.0]), np.ones(3))
+    cam = Camera(cam_transform, fov=65.0, near=0.1, far=50.0, resolution_width=width, resolution_height=height)
+    
+    scene = Scene(name="abstract_geometry", camera=cam, background_color=Color.from_hex("#0f0f23"))
+
+    # Materials
+    mat_transparent = MaterialFactory.create_glass(Color.from_hex("#FFFFFF"), Color(0.9, 0.95, 1.0), 0.0, 0.0, 1.4, 0.8)
+    mat_mirror = MaterialFactory.create_specular(Color.from_hex("#FFFFFF"), 0.0, 1.0, 1.0, 0.0)
+    mat_emiss_red = MaterialFactory.create_emissive(Color.from_hex("#FF1744"), 2.0)
+    mat_emiss_blue = MaterialFactory.create_emissive(Color.from_hex("#2979FF"), 2.0)
+
+    # Central composition
+    # Large transparent sphere
+    sphere_large = Primitive("LargeSphere", Transform(np.array([0.0, 0.0, 0.0])), Sphere(radius=1.2), mat_transparent)
+    scene.add_object(sphere_large)
+    
+    # Intersecting cylinder
+    cylinder = Primitive("IntersectCylinder", Transform(np.array([0.5, 0.0, 0.0])), Cylinder(height=3.0, radius=0.4), mat_mirror)
+    cylinder.transform.rotate(np.deg2rad(45), np.array([0, 0, 1]))
+    scene.add_object(cylinder)
+    
+    # Floating cubes
+    cube1 = Primitive("FloatCube1", Transform(np.array([-1.5, 1.0, 1.0])), Cube(size=0.8), mat_emiss_red)
+    scene.add_object(cube1)
+    
+    cube2 = Primitive("FloatCube2", Transform(np.array([1.5, -1.0, -1.0])), Cube(size=0.8), mat_emiss_blue)
+    scene.add_object(cube2)
+    
+    # Pyramid on top
+    pyramid = Primitive("TopPyramid", Transform(np.array([0.0, 1.8, 0.0])), Pyramid(base_size=0.6, height=0.8), mat_transparent)
+    scene.add_object(pyramid)
+    
+    # Prism base
+    prism = Primitive("BasePrism", Transform(np.array([0.0, -1.5, 0.0])), Prism(base_radius=0.8, height=0.6), mat_mirror)
+    scene.add_object(prism)
+
+    # Lighting
+    scene.add_light(LightSource(position=np.array([3.0, 3.0, -3.0]), color=Color(1.0, 1.0, 1.0), intensity=15.0, name="Key"))
+    scene.add_light(LightSource(position=np.array([-3.0, -1.0, 3.0]), color=Color(0.5, 0.7, 1.0), intensity=8.0, name="Fill"))
+
+    cam.transform.look_at(np.array([0, 0, 0]))
+    return scene
+
+def get_industrial_shapes_scene(width: int = 150, height: int = 100) -> Scene:
+    """
+    An industrial-themed scene with metallic shapes, pipes, and machinery-like objects.
+    """
+    cam_transform = Transform(np.array([0.0, 2.0, -6.0]), np.array([0.0, 0.0, 0.0]), np.ones(3))
+    cam = Camera(cam_transform, fov=70.0, near=0.1, far=50.0, resolution_width=width, resolution_height=height)
+    
+    scene = Scene(name="industrial_shapes", camera=cam, background_color=Color.from_hex("#2c2c2c"))
+
+    # Materials
+    mat_rusty_metal = MaterialFactory.create_specular(Color.from_hex("#8B4513"), 0.4, 0.8, 0.7, 0.3)
+    mat_steel = MaterialFactory.create_specular(Color.from_hex("#C0C0C0"), 0.1, 0.9, 0.9, 0.1)
+    mat_brass = MaterialFactory.create_specular(Color.from_hex("#B87333"), 0.2, 0.7, 0.8, 0.4)
+    mat_concrete = MaterialFactory.create_diffuse(Color.from_hex("#696969"), 0.9)
+
+    # Floor
+    floor = Primitive("ConcreteFloor", Transform(np.array([0.0, -2.0, 0.0])), Cube(size=20.0), mat_concrete)
+    floor.transform.enlarge(np.array([1.0, 0.1, 1.0]))
+    scene.add_object(floor)
+
+    # Main structure: large cube base
+    base = Primitive("BaseStructure", Transform(np.array([0.0, -1.0, 0.0])), Cube(size=4.0), mat_steel)
+    base.transform.enlarge(np.array([1.0, 0.5, 1.0]))
+    scene.add_object(base)
+
+    # Pipes: cylinders
+    pipe1 = Primitive("Pipe1", Transform(np.array([-1.5, 0.0, 0.0])), Cylinder(height=3.0, radius=0.2), mat_brass)
+    pipe1.transform.rotate(np.deg2rad(90), np.array([0, 1, 0]))
+    scene.add_object(pipe1)
+    
+    pipe2 = Primitive("Pipe2", Transform(np.array([1.5, 0.5, 0.0])), Cylinder(height=2.0, radius=0.15), mat_rusty_metal)
+    pipe2.transform.rotate(np.deg2rad(45), np.array([1, 0, 0]))
+    scene.add_object(pipe2)
+
+    # Gears: thick cylinders
+    gear1 = Primitive("Gear1", Transform(np.array([0.0, 1.0, 1.0])), Cylinder(height=0.3, radius=0.8), mat_steel)
+    scene.add_object(gear1)
+    
+    gear2 = Primitive("Gear2", Transform(np.array([0.0, 1.0, -1.0])), Cylinder(height=0.3, radius=0.6), mat_brass)
+    scene.add_object(gear2)
+
+    # Support beams: prisms
+    beam1 = Primitive("Beam1", Transform(np.array([-2.0, 0.5, 2.0])), Prism(base_radius=0.2, height=2.0), mat_rusty_metal)
+    beam1.transform.rotate(np.deg2rad(30), np.array([0, 1, 0]))
+    scene.add_object(beam1)
+    
+    beam2 = Primitive("Beam2", Transform(np.array([2.0, 0.5, -2.0])), Prism(base_radius=0.2, height=2.0), mat_steel)
+    beam2.transform.rotate(np.deg2rad(-30), np.array([0, 1, 0]))
+    scene.add_object(beam2)
+
+    # Control panel: small cubes and pyramid
+    panel_base = Primitive("PanelBase", Transform(np.array([0.0, 0.2, 2.5])), Cube(size=1.5), mat_steel)
+    panel_base.transform.enlarge(np.array([1.0, 0.1, 0.5]))
+    scene.add_object(panel_base)
+    
+    button1 = Primitive("Button1", Transform(np.array([-0.3, 0.4, 2.5])), Cube(size=0.2), mat_emiss_red)
+    scene.add_object(button1)
+    
+    button2 = Primitive("Button2", Transform(np.array([0.3, 0.4, 2.5])), Cube(size=0.2), mat_emiss_blue)
+    scene.add_object(button2)
+    
+    antenna = Primitive("Antenna", Transform(np.array([0.0, 0.8, 2.5])), Pyramid(base_size=0.1, height=0.3), mat_brass)
+    scene.add_object(antenna)
+
+    # Lighting: harsh industrial lighting
+    scene.add_light(LightSource(position=np.array([0.0, 4.0, 0.0]), color=Color(1.0, 1.0, 0.9), intensity=25.0, name="Overhead"))
+    scene.add_light(LightSource(position=np.array([3.0, 1.0, -3.0]), color=Color(0.8, 0.8, 1.0), intensity=10.0, name="Side"))
+
+    cam.transform.look_at(np.array([0, 0, 0]))
     return scene

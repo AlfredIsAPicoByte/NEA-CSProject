@@ -121,6 +121,7 @@ class RayTracingSettings(AlgorithmSettings):
     max_recursions: int = 4
 
     intersection_method: Intersections.IntersectionStrategy = field(default_factory=lambda: Intersections.RayMarchingIntersection())
+
     shading_method: Shading.ShadingStrategy = field(default_factory=lambda: Shading.LambertShading())
 
     use_tiling: bool = True
@@ -171,6 +172,7 @@ class RayTracer(Algorithm):
                 hit_info=hit_info,
                 recursions_left=recursions_left,
                 trace_function=self._trace_ray,
+                intersection_function=self.settings.intersection_method.find_hit,
                 occlusion_function=self.settings.intersection_method.is_point_occluded,
                 sampler=sampler,
                 stats=self.stats

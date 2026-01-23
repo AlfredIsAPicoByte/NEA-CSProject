@@ -1,6 +1,6 @@
 from __future__ import annotations
 import numpy as np
-from typing import TYPE_CHECKING, Optional, Callable, List
+from typing import TYPE_CHECKING, Optional, Callable, List, Tuple
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 
@@ -8,7 +8,9 @@ from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
 from src.Data.Color import Color, ColorGradient
 from src.Geometry.Primitive import Primitive
+from src.Geometry.BVH import BVHNode, build_bvh_tree
 from src.Material.Core import PBRMaterial, MaterialType
+from src.Material.BSDF import calculate_throughput_weight
 from src.Lighting.Core import LightSource
 from src.Data.Sampling.Core import Sampler
 from src.Data.Scene import Scene
@@ -23,13 +25,18 @@ class AmbienceSettings:
     color: Color = field(default_factory=lambda: Color(0.03, 0.03, 0.03, 1.0))
     intensity: float = 0.1
 
-    occlusion_enabled: bool = False
+    occlusion_map_enabled: bool = False
+    occlusion_sample_count: int = 16
+    occlusion_radius: float = 1.0
+    occlusion_bias: float = 1e-4
 
 @dataclass
 class ShadowSettings:
     enabled: bool = True
     samples: int = 8
     bias: float = 1e-3
+
+    use_light_tree: bool = False # Optimize shadow rays with a BVH over lights
 
 @dataclass
 class BackgroundSettings:
@@ -120,16 +127,18 @@ class BackgroundSettings:
         # Fallback
         return Color(0.0, 0.0, 0.0, 1.0)
 
+@dataclass
+class ShadingSettings:
+    ambience_settings: AmbienceSettings = field(default_factory=lambda: AmbienceSettings())
+    shadow_settings: ShadowSettings = field(default_factory=lambda: ShadowSettings())
+    background_settings: BackgroundSettings = field(default_factory=lambda: BackgroundSettings())
+
 class ShadingStrategy(ABC):
-    def __init__(
-            self,
-            ambience_settings: Optional[AmbienceSettings] = None,
-            shadow_settings: Optional[ShadowSettings] = None,
-            background_settings: Optional[BackgroundSettings] = None
-        ):
-        self.ambience_settings = ambience_settings if ambience_settings is not None else AmbienceSettings()
-        self.shadow_settings = shadow_settings if shadow_settings is not None else ShadowSettings()
-        self.background_settings = background_settings if background_settings is not None else BackgroundSettings() 
+    def __init__(self, settings: Optional[ShadingSettings] = None):
+        self.settings = settings if settings is not None else ShadingSettings()
+        self.ambience_settings = self.settings.ambience_settings
+        self.shadow_settings = self.settings.shadow_settings
+        self.background_settings = self.settings.background_settings
 
     @abstractmethod
     def shade(
@@ -139,11 +148,39 @@ class ShadingStrategy(ABC):
         hit_info: HitInfo,
         recursions_left: int,
         trace_function: Callable[[Scene, TracingRay, int, Sampler], Color],
-        occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
         sampler: Sampler,
+        intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
+        occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
         bias: float = 1e-4,
         stats: Optional["TracingStats"] = None
     ) -> Color:
+        """
+        Shading function to compute the color at a ray-object intersection point.
+        
+        :param self: Description
+        :param scene: Description
+        :type scene: Scene
+        :param ray: Description
+        :type ray: TracingRay
+        :param hit_info: Description
+        :type hit_info: HitInfo
+        :param recursions_left: Description
+        :type recursions_left: int
+        :param trace_function: Description
+        :type trace_function: Callable[[Scene, TracingRay, int, Sampler], Color]
+        :param sampler: Description
+        :type sampler: Sampler
+        :param intersection_function: Description
+        :type intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]]
+        :param occlusion_function: Description
+        :type occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool]
+        :param bias: Description
+        :type bias: float
+        :param stats: Description
+        :type stats: Optional["TracingStats"]
+        :return: Description
+        :rtype: Color
+        """
         ...
     
     def _random_point_on_disc(self, center: np.ndarray, normal: np.ndarray, radius: float, sampler: Sampler) -> np.ndarray:
@@ -165,6 +202,21 @@ class ShadingStrategy(ABC):
         
         offset = tangent * (r * np.cos(theta)) + bitangent * (r * np.sin(theta))
         return center + offset
+
+    def _random_point_in_sphere(self, center: np.ndarray, radius: float, sampler: Sampler) -> np.ndarray:
+        u1 = sampler.next_1d()
+        u2 = sampler.next_1d()
+        u3 = sampler.next_1d()
+
+        r = radius * (u1 ** (1/3))  # Cube root for uniform distribution in volume
+        theta = np.arccos(1 - 2 * u2)  # Polar angle
+        phi = 2 * np.pi * u3           # Azimuthal angle
+
+        x = r * np.sin(theta) * np.cos(phi)
+        y = r * np.sin(theta) * np.sin(phi)
+        z = r * np.cos(theta)
+
+        return center + np.array([x, y, z])
 
 class NormalShading(ShadingStrategy):
     """
@@ -240,127 +292,6 @@ class FlatShading(ShadingStrategy):
 
         # Just return the base color (Albedo)
         return material.data.albedo
-
-class LambertShading(ShadingStrategy):
-    """
-    Simple Lambertian shader (Direct Light Only).
-    Calculates lighting from scene lights but does NOT recurse for reflections/refractions.
-    """
-    def shade(
-            self,
-            scene: "Scene",
-            ray: TracingRay,
-            hit_info: "HitInfo",
-            recursions_left: int,
-            trace_function: Callable[[Scene, TracingRay, int, Sampler], Color],
-            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
-            sampler: Sampler,
-            bias: float = 1e-4,
-            stats: Optional["TracingStats"] = None
-        ) -> Color:
-
-        # Material validation
-        material: Optional[PBRMaterial] = getattr(hit_info.obj, 'material', None)
-        if material is None:
-            return Color(1.0, 0.0, 1.0) # Material Error
-
-        # 1. Setup Geometry
-        # We need the View Direction (V) for specular highlights
-        view_dir = -unit(ray.orientation) 
-        hit_point = hit_info.point
-        final_color = Color(0.0, 0.0, 0.0)
-
-        # 2. Handle Emission (Self-Illumination)
-        # Even in basic shading, emissive objects should glow.
-        if material.data.type == MaterialType.EMISSIVE:
-            return material.evaluate_emissive_component()
-
-        # 3. Iterate Over Scene Lights
-        # ----------------------------
-        def visibility_fn(point: np.ndarray, light: LightSource) -> float:
-            # Calculate direction to this specific light (or sample point)
-            # Note: _calculate_shadow_visibility expects light_dir and we pass the hit object to avoid self-shadowing
-            return self._calculate_shadow_visibility(scene, point, light, sampler, occlusion_function, exclude_obj=hit_info.obj, stats= stats)
-
-        # 4. Evaluate Direct Lighting
-        # The material class already contains the logic to loop over lights
-        # and apply the BRDF (Diffuse + Specular).
-        
-        direct_light = material.evaluate_direct_light(
-            scene_lights=scene.lights,
-            hit_info=hit_info,
-            view_dir=view_dir,
-            visibility_function=visibility_fn,
-            bias=bias
-        )
-        
-        final_color += direct_light
-
-        # 5. Ambient Light (Optional)
-        # Adds a flat base color so shadowed areas aren't pitch black
-        if self.ambience_settings.enabled:
-            final_color += material.evaluate_ambient_color(self.ambience_settings.color, self.ambience_settings.intensity)
-
-        return final_color
-
-    def _calculate_shadow_visibility(
-            self,
-            scene: Scene,
-            point: np.ndarray,
-            light: LightSource,
-            sampler: Sampler,
-            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
-            bias: float = 1e-4,
-            exclude_obj: Optional[Primitive] = None,
-            stats: Optional["TracingStats"] = None
-        ) -> float:
-        """
-        Calculates what fraction of the light is visible from 'point'.
-        Returns 0.0 (Fully Blocked) to 1.0 (Fully Visible).
-        
-        :param scene: Description
-        :type scene: Scene
-        :param point: Description
-        :type point: np.ndarray
-        :param light: Description
-        :type light: LightSource
-        :param sampler: Description
-        :type sampler: Sampler
-        :param occlusion_function: Description
-        :type occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool]
-        :param bias: Description
-        :type bias: float
-        :param exclude_obj: Description
-        :type exclude_obj: Optional[Primitive]
-        :param stats: Description
-        :type stats: Optional["TracingStats"]
-        :return: Description
-        :rtype: float
-        """
-        if not self.shadow_settings.enabled:
-            return 1.0
-
-        radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
-        
-        # Case A: Point Light (Hard Shadows)
-        if radius <= 0.0 or self.shadow_settings.samples <= 1:
-            # Check if a ray from point -> light is blocked
-            is_blocked = occlusion_function(point, light.position, scene._cache_objects or scene.objects, bias, exclude_obj, stats)
-            return 0.0 if is_blocked else 1.0
-        
-        # Case B: Area Light (Soft Shadows)
-        else:
-            visible_count = 0
-            for _ in range(self.shadow_settings.samples):
-                # Pick a random point on the light source
-                # Note: light_dir here is the general direction, but for area lights 
-                # we usually sample the disc facing the point.
-                sample_pos = self._random_point_on_disc(light.position, -light.get_direction_and_dist(point)[0], float(radius), sampler)
-                
-                if not occlusion_function(point, sample_pos, scene._cache_objects or scene.objects, bias, exclude_obj, stats):
-                    visible_count += 1
-            
-            return float(visible_count) / float(self.shadow_settings.samples)
         
 class VolumetricShading(ShadingStrategy):
     """
@@ -385,7 +316,6 @@ class VolumetricShading(ShadingStrategy):
         self.max_thickness = max_thickness
 
         self.intersection_function = intersection_function
-        
 
     def shade(
         self,
@@ -459,4 +389,319 @@ class VolumetricShading(ShadingStrategy):
             
             final_color += self.rim_color * rim_intensity
 
+        return final_color
+
+class PhysicalShadingSettings(ShadingSettings):
+    """
+    Settings specific to physically-based shading strategies.
+    Inherits from ShadingSettings and adds more options.
+    """
+    enable_reflection_caustics: bool = False
+    enable_refraction_caustics: bool = False
+    enable_ambient_occlusion: bool = False
+    enable_bidirectional_scattering: bool = False
+
+class PhysicalShadingStrategy(ShadingStrategy):
+    """
+    Base class for physically-based shading models.
+    Implements common functionality for direct lighting, shadows, ambient occlusion, etc.
+    Specific BRDFs (e.g., Lambertian, Cook-Torrance) should inherit from this class.
+    """
+    _cache_ambient_occlusion_map: Optional[np.ndarray] = None
+    _cache_light_bvh: Optional[BVHNode] = None
+    
+    def _calculate_shadow_visibility(
+            self,
+            scene: Scene,
+            point: np.ndarray,
+            light: LightSource,
+            sampler: Sampler,
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            bias: float = 1e-4,
+            exclude_obj: Optional[Primitive] = None,
+            stats: Optional["TracingStats"] = None
+        ) -> float:
+        """
+        Calculates what fraction of the light is visible from 'point'.
+        Returns 0.0 (Fully Blocked) to 1.0 (Fully Visible).
+        
+        :param scene: Description
+        :type scene: Scene
+        :param point: Description
+        :type point: np.ndarray
+        :param light: Description
+        :type light: LightSource
+        :param sampler: Description
+        :type sampler: Sampler
+        :param occlusion_function: Description
+        :type occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool]
+        :param bias: Description
+        :type bias: float
+        :param exclude_obj: Description
+        :type exclude_obj: Optional[Primitive]
+        :param stats: Description
+        :type stats: Optional["TracingStats"]
+        :return: Description
+        :rtype: float
+        """
+        if not self.shadow_settings.enabled:
+            return 1.0
+
+        radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
+        
+        # Case A: Point Light (Hard Shadows)
+        if radius <= 0.0 or self.shadow_settings.samples <= 1:
+            # Check if a ray from point -> light is blocked
+            is_blocked = occlusion_function(point, light.position, scene._cache_objects or scene.objects, bias, exclude_obj, stats)
+            return 0.0 if is_blocked else 1.0
+        
+        # Case B: Flat Area Light (Soft Shadows)
+        else:
+            visible_count = 0
+            for _ in range(self.shadow_settings.samples):
+                # Pick a random point on the light source
+                # Note: light_dir here is the general direction, but for area lights 
+                # we usually sample the disc facing the point.
+                sample_pos = self._random_point_on_disc(light.position, -light.get_direction_and_dist(point)[0], float(radius), sampler)
+                
+                if not occlusion_function(point, sample_pos, scene._cache_objects or scene.objects, bias, exclude_obj, stats):
+                    visible_count += 1
+            
+            return float(visible_count) / float(self.shadow_settings.samples)
+        
+        # Case C: Spherical Light (Soft Shadows)
+        # Not implemented here, but could be added similarly.
+        
+    def _calculate_shadow_visibility_spherical(
+            self,
+            scene: Scene,
+            point: np.ndarray,
+            light: LightSource,
+            sampler: Sampler,
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            bias: float = 1e-4,
+            exclude_obj: Optional[Primitive] = None,
+            stats: Optional["TracingStats"] = None
+        ) -> float:
+        """
+        Calculates what fraction of the light is visible from 'point' for spherical lights.
+        Returns 0.0 (Fully Blocked) to 1.0 (Fully Visible).
+        """
+        if not self.shadow_settings.enabled:
+            return 1.0
+
+        radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
+        
+        # Case A: Point Light (Hard Shadows)
+        if radius <= 0.0 or self.shadow_settings.samples <= 1:
+            # Check if a ray from point -> light is blocked
+            is_blocked = occlusion_function(point, light.position, scene._cache_objects or scene.objects, bias, exclude_obj, stats)
+            return 0.0 if is_blocked else 1.0
+        
+        # Case B: Spherical Light (Soft Shadows)
+        else:
+            visible_count = 0
+            for _ in range(self.shadow_settings.samples):
+                # Pick a random point inside the sphere
+                sample_pos = self._random_point_in_sphere(light.position, float(radius), sampler)
+                
+                if not occlusion_function(point, sample_pos, scene._cache_objects or scene.objects, bias, exclude_obj, stats):
+                    visible_count += 1
+            
+            return float(visible_count) / float(self.shadow_settings.samples)
+
+    def _calculate_occlusion_factor(
+            self,
+            point: np.ndarray,
+            normal: np.ndarray,
+            scene_objects: List[Primitive],
+            sampler: Sampler,
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            stats: Optional["TracingStats"] = None) -> float:
+        """
+        Generates an ambient occlusion factor based on surrounding geometry.
+        Returns 0.0 (Fully Occluded) to 1.0 (Fully Open).
+        """
+        if not self.ambience_settings.enabled or self.ambience_settings.occlusion_sample_count <= 0:
+            return 1.0
+
+        occluded_count = 0
+        for _ in range(self.ambience_settings.occlusion_sample_count):
+            # Sample a random direction in the hemisphere around the normal
+            sample_dir = sampler.sample_cosine_hemisphere(normal)
+            sample_origin = point + normal * self.ambience_settings.occlusion_bias
+
+            if occlusion_function(sample_origin, sample_dir, scene_objects, self.ambience_settings.occlusion_radius, None, stats):
+                occluded_count += 1
+
+        occlusion_factor = 1.0 - (float(occluded_count) / float(self.ambience_settings.occlusion_sample_count))
+        return occlusion_factor
+    
+    def _generate_ambient_occlusion_map(
+            self,
+            scene: Scene,
+            sampler: Sampler,
+            intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            stats: Optional["TracingStats"] = None
+        ) -> np.ndarray:
+        """
+        Precomputes an ambient occlusion map for the entire scene.
+        Stores results in self._cache_ambient_occlusion_map for reuse.
+        """
+        width = scene.camera.width
+        height = scene.camera.height
+
+        ao_map = np.zeros((height, width), dtype=float)
+
+        for y in range(height):
+            for x in range(width):
+                ray = scene.camera.generate_ray(x + 0.5, y + 0.5)
+                hit_info = intersection_function(scene, TracingRay(ray.origin, ray.orientation), stats)
+
+                if hit_info and hit_info.hit:
+                    point = hit_info.point
+                    normal = hit_info.normal
+                    ao_factor = self._calculate_occlusion_factor(point, normal, scene._cache_objects or scene.objects, sampler, occlusion_function, stats)
+                    ao_map[y, x] = ao_factor
+                else:
+                    ao_map[y, x] = 1.0  # No hit means fully open
+
+        self._cache_ambient_occlusion_map = ao_map
+        return ao_map
+
+class LambertShading(PhysicalShadingStrategy):
+    """
+    Simple Lambertian shader (Direct Light Only).
+    Calculates lighting from scene lights but does NOT recurse for reflections/refractions.
+    """
+    def shade(
+            self,
+            scene: "Scene",
+            ray: TracingRay,
+            hit_info: "HitInfo",
+            sampler: Sampler,
+            intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            bias: float = 1e-4,
+            stats: Optional["TracingStats"] = None,
+            *args, **kwargs
+        ) -> Color:
+        # Material validation
+        material: Optional[PBRMaterial] = getattr(hit_info.obj, 'material', None)
+        if material is None:
+            return Color(1.0, 0.0, 1.0) # Material Error
+
+        # 1. Setup Geometry
+        # We need the View Direction (V) for specular highlights
+        view_dir = -unit(ray.orientation)
+        final_color = Color(0.0, 0.0, 0.0)
+
+        # 2. Handle Emission (Self-Illumination)
+        # Even in basic shading, emissive objects should glow.
+        if material.data.type == MaterialType.EMISSIVE:
+            return material.evaluate_emissive_component()
+
+        # 3. Iterate Over Scene Lights
+        # ----------------------------
+        def visibility_fn(point: np.ndarray, light: LightSource) -> float:
+            # Calculate direction to this specific light (or sample point)
+            shadow_factor = self._calculate_shadow_visibility(scene, point, light, sampler, occlusion_function, exclude_obj=hit_info.obj, stats=stats)
+            ambient_occlusion = 1.0
+            if self.ambience_settings.occlusion_map_enabled:
+                if self._cache_ambient_occlusion_map is None:
+                    self._cache_ambient_occlusion_map = self._generate_ambient_occlusion_map(
+                        scene,
+                        sampler,
+                        intersection_function,
+                        occlusion_function,
+                        stats
+                    )
+                screen_coords = scene.camera.world_to_screen(hit_info.point)
+                x_idx = int(round(screen_coords[0]))
+                y_idx = int(round(screen_coords[1]))
+                ambient_occlusion = self._cache_ambient_occlusion_map[y_idx, x_idx]
+            else:
+                ambient_occlusion = 1.0
+
+            return shadow_factor * ambient_occlusion
+        
+        # 4. Evaluate Direct Lighting
+        # The material class already contains the logic to loop over lights
+        # and apply the BRDF (Diffuse + Specular).
+        
+        direct_light = material.evaluate_direct_light(
+            scene_lights=scene.lights,
+            hit_info=hit_info,
+            view_dir=view_dir,
+            visibility_function=visibility_fn,
+            bias=bias
+        )
+        
+        final_color += direct_light
+
+        # 5. Ambient Light (Optional)
+        # Adds a flat base color so shadowed areas aren't pitch black
+        if self.ambience_settings.enabled:
+            final_color += material.evaluate_ambient_color(self.ambience_settings.color, self.ambience_settings.intensity)
+
+        return final_color
+
+class RecursiveLabertShading(LambertShading):
+    """
+    Extends Lambertian shading with recursive reflections and refractions.
+    """
+    def shade(
+            self,
+            scene: "Scene",
+            ray: TracingRay,
+            hit_info: "HitInfo",
+            recursions_left: int,
+            trace_function: Callable[[Scene, TracingRay, int, Sampler], Color],
+            sampler: Sampler,
+            intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            bias: float = 1e-4,
+            stats: Optional["TracingStats"] = None,
+            *args, **kwargs
+        ) -> Color:
+        # Start with base Lambertian shading
+        final_color = super().shade(
+            scene,
+            ray,
+            hit_info,
+            sampler,
+            intersection_function,
+            occlusion_function,
+            bias,
+            stats,
+            *args,
+            **kwargs
+        )
+
+        # Material validation
+        material: Optional[PBRMaterial] = getattr(hit_info.obj, 'material', None)
+        if material is None:
+            return final_color  # Material Error already handled in base
+
+        if recursions_left <= 0:
+            return final_color
+        
+        indirect_color = Color(0.0, 0.0, 0.0)
+
+        # Sample indirect lighting contribution
+        direction, throughput, pdf = material.sample_indirect_contribution(hit_info.direction, hit_info.normal, sampler)
+
+        if pdf > 1e-6 and np.linalg.norm(throughput.to_array()[:3]) > 1e-6:
+            # Create new ray for indirect bounce
+            new_origin = hit_info.point + direction * bias
+            indirect_ray = TracingRay(new_origin, direction, is_inside=hit_info.is_inside)
+
+            # Trace the indirect ray
+            bounced_color = trace_function(scene, indirect_ray, recursions_left - 1, sampler)
+
+            # Accumulate indirect contribution
+            indirect_color += Color(*calculate_throughput_weight(direction, hit_info.normal, throughput, pdf)) * bounced_color
+        
+        final_color += indirect_color
         return final_color

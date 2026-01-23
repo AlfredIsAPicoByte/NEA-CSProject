@@ -2,6 +2,7 @@ from __future__ import annotations
 import numpy as np
 from abc import ABC, abstractmethod
 from typing import Optional, List, Tuple, cast
+from dataclasses import dataclass, field, replace
 
 from src.Data.Transform import Transform
 from src.Data.Ray import TracingRay
@@ -13,18 +14,28 @@ from src.Geometry.Primitive import Primitive
 from src.Utilities.Common import unit
 from src.Data.Scene import Scene
 
+@dataclass
+class IntersectionSettings:
+    epsilon: float = 1e-4          # Hit Threshold
+    max_steps: int = 128           # Performance Cap
+    max_distance: float = 1000.0   # Far Clip Plane
+    step_relaxation: float = 0.9
+
+    def __post_init__(self):
+        if self.epsilon <= 0.0:
+            raise ValueError("Epsilon must be positive and non-zero.")
+        if self.max_steps <= 0:
+            raise ValueError("Max steps must be a positive integer.")
+        if self.max_distance <= 0.0:
+            raise ValueError("Max distance must be positive and non-zero.")
+        if not (0.0 < self.step_relaxation <= 1.0):
+            raise ValueError("Step relaxation must be in the range (0.0, 1.0].")    
+    
+    always_rebuild_bvh: bool = False # If true, forces BVH to rebuild on next use
+
 class IntersectionStrategy(ABC):
-    def __init__(
-            self,
-            epsilon: float = 1e-4,          # Hit Threshold
-            max_steps: int = 128,           # Performance Cap
-            max_distance: float = 1000.0,   # Far Clip Plane
-            step_relaxation: float = 0.9
-        ):
-        self.epsilon = epsilon
-        self.max_distance = max_distance
-        self.max_steps = max_steps
-        self.step_relaxation = step_relaxation
+    def __init__(self, settings: IntersectionSettings):
+        self.settings = settings
     
     @abstractmethod
     def find_hit(
@@ -104,12 +115,12 @@ class IntersectionStrategy(ABC):
         # 2. Safety for Non-Uniform Scales
         # Convert world max distance to local space
         # We divide by the SMALLEST scale to ensure we cover the full world distance
-        max_dist_local = self.max_distance / obj._safe_scale_world
+        max_dist_local = self.settings.max_distance / obj._safe_scale_world
 
         t = 0.0
         sign_modifier = -1.0 if ray.is_inside else 1.0
 
-        for _ in range(self.max_steps):
+        for _ in range(self.settings.max_steps):
             local_point = local_ray.point_at(t)
 
             if stats: stats.triangle_tests += 1
@@ -118,7 +129,7 @@ class IntersectionStrategy(ABC):
             local_dist = safe_shape.signed_distance(local_point) * sign_modifier
 
             # Hit Condition
-            if local_dist < self.epsilon:
+            if local_dist < self.settings.epsilon:
                 # A. Transform Local Point -> World Point
                 world_point = safe_transform.transform_point(local_point)
 
@@ -138,7 +149,7 @@ class IntersectionStrategy(ABC):
                 )
 
             # Step Forward
-            t += local_dist * self.step_relaxation
+            t += local_dist * self.settings.step_relaxation
 
             # Boundary Check
             if t > max_dist_local:
@@ -199,7 +210,7 @@ class IntersectionStrategy(ABC):
             hit = self._intersect_sdf_object(obj, shadow_ray)
             
             # If we hit something, and that hit is CLOSER than the light (point_2)
-            if hit.hit and hit.distance < (distance - self.epsilon):
+            if hit.hit and hit.distance < (distance - self.settings.epsilon):
                 return True
 
         return False
@@ -216,7 +227,7 @@ class RayMarchingIntersection(IntersectionStrategy):
         ) -> HitInfo:
         distance_world = 0.0
 
-        for _ in range(self.max_steps):
+        for _ in range(self.settings.max_steps):
             if stats is not None:
                 stats.aabb_tests += 1
 
@@ -230,7 +241,7 @@ class RayMarchingIntersection(IntersectionStrategy):
                 break
             
             # Hit Check
-            if distance_to_closest <= self.epsilon:
+            if distance_to_closest <= self.settings.epsilon:
                 surface_normal = np.array([0.0, 0.0, 1.0])
                 
                 if closest_object is not None:
@@ -256,13 +267,13 @@ class RayMarchingIntersection(IntersectionStrategy):
                 )
             
             # Advance
-            distance_world += distance_to_closest * self.step_relaxation
+            distance_world += distance_to_closest * self.settings.step_relaxation
             
             # Frustum/Far Plane checks
             if scene.camera:
                 obj_pos = getattr(closest_object, 'world_transform', Transform.identity()).position
                 far_plane_dist = np.linalg.norm(scene.camera.transform.position - obj_pos)
-                if distance_world >= self.max_distance or far_plane_dist >= scene.camera.far:
+                if distance_world >= self.settings.max_distance or far_plane_dist >= scene.camera.far:
                     break
 
         if stats is not None:
@@ -322,8 +333,8 @@ class InverseSDFIntersection(IntersectionStrategy):
     the SDF defines a mathematical function that erturns a vector/point based on a distance.
     Inverting the SDF allows for the point to calculate the distance
     """
-    def __init__(self, use_bounding_box: bool = True, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, settings: IntersectionSettings, use_bounding_box: bool = True):
+        super().__init__(settings)
         self.use_bounding_box = use_bounding_box
 
     def find_hit(
@@ -357,18 +368,27 @@ class BVHIntersection(IntersectionStrategy):
     """
     Find hits between rays and objects using a BVH data structure.
     """
-    def __init__(self, max_depth: int = 512, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, settings: IntersectionSettings, max_depth: int = 512):
+        super().__init__(settings)
         self.max_depth = max_depth
         self._cached_bvh_root: Optional[BVHNode] = None
         self._cached_scene_version: Optional[int] = None
 
     def find_hit(self, scene: Scene, ray: TracingRay, stats: Optional["TracingStats"] = None) -> HitInfo:
-        if self._cached_bvh_root is None or scene.version != self._cached_scene_version:
-            print(f" < Building Hierarchy for {len(scene.objects)} objects...")
-            self._cached_bvh_root = build_bvh_tree(scene.objects)
+        if (self._cached_bvh_root is None or scene.version != self._cached_scene_version) or self.settings.always_rebuild_bvh:
+            print(f" < Building Hierarchy for scene objects...")
+            
+            # Update world matrices for all root objects
+            for obj in scene.objects:
+                obj.update_matrices()
+                scene.update_version() # Ensure scene version increments if transforms changed
+            
+            # Get all objects including children
+            all_objects = scene.get_objects_flat()
+            
+            self._cached_bvh_root = build_bvh_tree(all_objects)
             self._cached_scene_version = scene.version
-            print(f" < Hierarchy build Complete.")
+            print(f" < Hierarchy build Complete for {len(all_objects)} objects.")
 
         closest_hit = HitInfo.miss()
         stack = [(self._cached_bvh_root, 0.0)]
@@ -391,7 +411,7 @@ class BVHIntersection(IntersectionStrategy):
                 continue
             
             # INTERNAL: Use Helper
-            self._push_valid_children(stack, node, ray, min(current_max, self.max_distance))
+            self._push_valid_children(stack, node, ray, min(current_max, self.settings.max_distance))
                 
         return closest_hit
     
@@ -451,7 +471,7 @@ class BVHIntersection(IntersectionStrategy):
                     
                     # EARLY EXIT: We found a blocker!
                     # We don't care if it's the closest one, just that it exists.
-                    if hit.hit and hit.distance < (distance - self.epsilon):
+                    if hit.hit and hit.distance < (distance - self.settings.epsilon):
                         return True
                 continue
 
@@ -527,7 +547,7 @@ class AnalyticalIntersection(IntersectionStrategy):
                 world_p = transform.transform_point(local_p)
                 dist = np.linalg.norm(world_p - ray.origin)
                 
-                if self.epsilon < dist < min_dist:
+                if self.settings.epsilon < dist < min_dist:
                     min_distance = dist
                     closest_object = obj
                     closest_point = world_p
