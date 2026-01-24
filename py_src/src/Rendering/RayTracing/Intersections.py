@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 from abc import ABC, abstractmethod
-from typing import Optional, List, Tuple, cast
+from typing import TYPE_CHECKING, Optional, List, Tuple, cast
 from dataclasses import dataclass, field, replace
 
 from src.Data.Transform import Transform
@@ -13,6 +13,9 @@ from src.Geometry.BVH import BVHNode
 from src.Geometry.Primitive import Primitive
 from src.Utilities.Common import unit
 from src.Data.Scene import Scene
+
+if TYPE_CHECKING:
+    from .Core import TracingStats
 
 @dataclass
 class IntersectionSettings:
@@ -115,7 +118,7 @@ class IntersectionStrategy(ABC):
         # 2. Safety for Non-Uniform Scales
         # Convert world max distance to local space
         # We divide by the SMALLEST scale to ensure we cover the full world distance
-        max_dist_local = self.settings.max_distance / obj._safe_scale_world
+        max_dist_local = self.settings.max_distance / min(*safe_transform.scale)
 
         t = 0.0
         sign_modifier = -1.0 if ray.is_inside else 1.0
@@ -131,7 +134,7 @@ class IntersectionStrategy(ABC):
             # Hit Condition
             if local_dist < self.settings.epsilon:
                 # A. Transform Local Point -> World Point
-                world_point = safe_transform.transform_point(local_point)
+                world_point = local_point
 
                 # B. Resolve Surface Normal
                 surface_normal = self._resolve_normal(world_point, safe_transform, safe_shape)
@@ -234,7 +237,7 @@ class RayMarchingIntersection(IntersectionStrategy):
             world_point = ray.point_at(distance_world)
 
             safe_objects = scene._cache_objects or scene.objects
-            closest_object, distance_to_closest = self._distance_estimator(safe_objects, world_point)
+            closest_object, distance_to_closest = self._distance_estimator(safe_objects, world_point, ray=ray)
 
             # Optimization: If we marched into the void
             if closest_object is None:
@@ -281,22 +284,25 @@ class RayMarchingIntersection(IntersectionStrategy):
 
         return HitInfo.miss()
     
-    def _distance_estimator(self, objects: List[Primitive], point: np.ndarray, exclude_obj: Optional[Primitive] = None) -> Tuple[Optional[Primitive], float]:
+    def _distance_estimator(self, objects: List[Primitive], point: np.ndarray, ray: Optional[TracingRay] = None, exclude_obj: Optional[Primitive] = None) -> Tuple[Optional[Primitive], float]:
         """
         Evaluates the Scene SDF to find the closest object and the distance to it.
         This relies on obj.shape.signed_distance() correctly handling Local->World conversion.
         
-        :param objects: Description
+        :param objects: List of primitive objects in the scene.
         :type objects: List[Primitive]
-        :param point: Description
+        :param point: The world-space point to evaluate distance from.
         :type point: np.ndarray
-        :param exclude_obj: Description
+        :param ray: Optional ray for handling internal marching (is_inside flag).
+        :type ray: Optional[TracingRay]
+        :param exclude_obj: Object to exclude from distance calculations.
         :type exclude_obj: Optional[Primitive]
-        :return: Description
+        :return: Tuple of (closest_object, distance_to_closest)
         :rtype: Tuple[Primitive | None, float]
         """
         min_dist = float("inf")
         closest_object = None
+        sign_modifier = -1.0 if (ray and ray.is_inside) else 1.0
 
         for obj in objects:
             # 1. Skip exclusion (Self-Shadowing fix)
@@ -317,7 +323,8 @@ class RayMarchingIntersection(IntersectionStrategy):
             try:
                 local_dist = float(shape.signed_distance(local_point))
                 
-                world_dist = local_dist * min(*safe_transform.scale)
+                # Apply sign modifier for internal marching
+                world_dist = local_dist * min(*safe_transform.scale) * sign_modifier
             except Exception:
                 continue
 
@@ -520,6 +527,7 @@ class AnalyticalIntersection(IntersectionStrategy):
         min_dist = float("inf")
         
         safe_objects = scene._cache_objects or scene.objects
+        sign_modifier = -1.0 if ray.is_inside else 1.0
 
         for obj in safe_objects:
             local_shape = getattr(obj, "shape", None)
@@ -547,8 +555,11 @@ class AnalyticalIntersection(IntersectionStrategy):
                 world_p = transform.transform_point(local_p)
                 dist = np.linalg.norm(world_p - ray.origin)
                 
-                if self.settings.epsilon < dist < min_dist:
-                    min_distance = dist
+                # Respect is_inside flag: for internal rays, invert sign of distance
+                signed_dist = dist * sign_modifier
+                
+                if self.settings.epsilon < signed_dist < min_dist:
+                    min_dist = signed_dist
                     closest_object = obj
                     closest_point = world_p
 
@@ -566,11 +577,14 @@ class AnalyticalIntersection(IntersectionStrategy):
 
         surface_normal = self._resolve_normal(closest_point, safe_transform, safe_shape)
 
+        # Convert back to unsigned distance for hit result
+        unsigned_distance = float(abs(min_dist))
+
         return HitInfo(
             did_hit=True,
             point=closest_point,
             direction=ray.orientation,
             normal=surface_normal,
-            distance=float(min_dist),
+            distance=unsigned_distance,
             obj=closest_object
         )

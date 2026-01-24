@@ -27,6 +27,7 @@ class Ray:
     @property
     def direction(self) -> np.ndarray:
         return self.orientation
+    
     @direction.setter
     def direction(self, v):
         self.orientation = v

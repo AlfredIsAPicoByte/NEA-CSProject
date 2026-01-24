@@ -148,11 +148,11 @@ class PBRMaterial:
         
         # --- A. EMISSIVE ---
         if self.data.type == MaterialType.EMISSIVE:
-            return reflect(I, N), self.evaluate_emissive_component(), 1.0
+            return N, self.evaluate_emissive_component(), 0.0
 
         # --- B. TRANSPARENT ---
         if self.data.type == MaterialType.TRANSPARENT:
-            return I, self.data.albedo, 1.0
+            return I, Color(0.0, 0.0, 0.0), 0.0
         
         # --- C. DIFFUSE (Lambertian) ---
         if self.data.type == MaterialType.DIFFUSE:
@@ -180,16 +180,16 @@ class PBRMaterial:
                 
                 # If we reflected INTO the object (due to fuzz), absorb the ray
                 if np.dot(reflected, N) < 0:
-                    return N, Color(0,0,0), 0.0
+                    return N, Color(0.0, 0.0, 0.0), 0.0
 
             # 3. Throughput
             # Metals tint the reflection with their Albedo
-            return reflected, self.evaluate_metallic_component(), 1.0
+            return reflected, self.evaluate_metallic_component(), 0.0
         
         # --- E. GLASS (Dielectric) ---
         # skipped due to complexity, instead delegated to a seperate function sample_glass_contribution
                 
-        return N, Color(0,0,0), 0.0
+        return N, Color(0.0, 0.0, 0.0), 0.0 # No contribution
     
     def sample_glass_contribution(self, incident_dir: np.ndarray, surface_normal: np.ndarray, sampler: Sampler, other_ior: float):
         """
@@ -237,7 +237,7 @@ class PBRMaterial:
             
             # Check for Total Internal Reflection (TIR)
             if refracted is None:
-                return reflected, Color(1.0, 1.0, 1.0), 1.0
+                return reflected, Color(1.0, 1.0, 1.0)
             
             return refracted, Color(1.0, 1.0, 1.0)
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 import numpy as np
-from typing import TYPE_CHECKING, Optional, Callable, List, Tuple
+from typing import TYPE_CHECKING, Optional, Callable, List
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 
@@ -14,7 +14,7 @@ from src.Material.BSDF import calculate_throughput_weight
 from src.Lighting.Core import LightSource
 from src.Data.Sampling.Core import Sampler
 from src.Data.Scene import Scene
-from src.Utilities.Common import unit, attenuate_distance_exponential
+from src.Utilities.Common import unit, attenuate_distance_exponential, attenuate_distance_coefficents
 
 if TYPE_CHECKING:
     from .Core import TracingStats
@@ -41,8 +41,11 @@ class ShadowSettings:
 @dataclass
 class BackgroundSettings:
     enabled: bool = True
-    default: Color = field(default_factory=lambda: Color(0.0, 0.0, 1.0, 0.0))
-    custom: Optional[Color | ColorGradient | np.ndarray] = field(default_factory=lambda: Color(1.0, 1.0, 1.0, 0.0))
+    default_color: Color = field(default_factory=lambda: Color(0.0, 0.0, 1.0, 0.0))
+    current_value: Optional[Color | ColorGradient | np.ndarray] = field(default_factory=lambda: Color(1.0, 1.0, 1.0, 0.0))
+    environment_effect_enabled: bool = False
+    environment_contribution_factor: float = 0.05
+    
 
     def get_background_color(self, direction: np.ndarray) -> Color:
         """
@@ -51,15 +54,15 @@ class BackgroundSettings:
         """
         if not self.enabled:
             # Ensure we always return a Color even if default is None or an unexpected type
-            if isinstance(self.default, Color):
-                return self.default
+            if isinstance(self.default_color, Color):
+                return self.default_color
             return Color(0.0, 0.0, 0.0, 1.0)
         
-        type_name = type(self.custom).__name__
+        type_name = type(self.current_value).__name__
 
         # --- Solid ---
         if type_name == 'Color':
-            return self.custom
+            return self.current_value
         
         # --- Skybox --- 
         elif type_name == 'ColorGradient':
@@ -68,18 +71,18 @@ class BackgroundSettings:
 
             # Map Y [-1, 1] to [0, 1]
             t = 0.5 * (dir[1] + 1.0)
-            return self.custom.get_color(t)
+            return self.current_value.get_color(t)
 
         # --- Texture Map ---
-        elif isinstance(self.custom, np.ndarray):
+        elif isinstance(self.current_value, np.ndarray):
             # Resolve Direction (reuse logic or recalculate)
             dir = unit(direction)
             # Ensure we never feed invalid values to asin by normalizing & clamping
             dir = dir / (np.linalg.norm(dir) + 1e-12)
-            return self._sample_equirectangular_map(self.custom, dir)
+            return self._sample_equirectangular_map(self.current_value, dir)
 
         # Ensure we always return a Color even if default is None or an unexpected type
-        return self.default if isinstance(self.default, Color) else Color(0.0, 0.0, 0.0, 1.0)
+        return self.default_color if isinstance(self.default_color, Color) else Color(0.0, 0.0, 0.0, 1.0)
     
     def _sample_equirectangular_map(self, texture: np.ndarray, direction: np.ndarray) -> Color:
         """
@@ -252,11 +255,12 @@ class DistanceShading(ShadingStrategy):
     """
     def __init__(
             self,
+            settings: Optional[ShadingSettings] = None,
             min_distance: float = 0.0,
             max_distance: float = 20.0,
             color_gradient: ColorGradient = ColorGradient([Color(0, 0, 0), Color(1, 1, 1)], np.array([0.0, 1.0]))
             ):
-        super().__init__()
+        super().__init__(settings)
         self.min_dist = min_distance
         self.max_dist = max_distance
         self.color_gradient = color_gradient
@@ -273,10 +277,10 @@ class DistanceShading(ShadingStrategy):
         normalized = (dist - self.min_dist) / range_dist
         normalized = max(0.0, min(1.0, normalized))
         
-        # Close = White (1.0), Far = Black (0.0)
+        # Close = 1.0, Far = 0.0
         val = 1.0 - normalized
         
-        return self.color_gradient.get_color(val)
+        return self.color_gradient.get_color(val) # use color gradient 
 
 class FlatShading(ShadingStrategy):
     """
@@ -293,43 +297,6 @@ class FlatShading(ShadingStrategy):
         # Just return the base color (Albedo)
         return material.data.albedo
         
-class RecursiveLambertShading(LambertShading):
-    """
-    Base class for recursive shaders (Reflection, Refraction, etc).
-    Handles recursion depth and common setup.
-    """
-    def shade(
-            self,
-            scene: "Scene",
-            ray: TracingRay,
-            hit_info: "HitInfo",
-            recursions_left: int,
-            trace_function: Callable[[Scene, TracingRay, int, Sampler], Color],
-            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
-            sampler: Sampler,
-            bias: float = 1e-4,
-            stats: Optional["TracingStats"] = None
-        ) -> Color:
-        # First, get the base Lambertian color
-        base_color = super().shade(
-            scene,
-            ray,
-            hit_info,
-            recursions_left,
-            trace_function,
-            occlusion_function,
-            sampler,
-            bias,
-            stats
-        )
-
-        # If we have no recursion left, return base color
-        if recursions_left <= 0:
-            return base_color
-
-        # Otherwise, subclasses will implement their own recursion logic
-        return base_color
-        
 class VolumetricShading(ShadingStrategy):
     """
     Renders objects based on their volume. 
@@ -337,7 +304,8 @@ class VolumetricShading(ShadingStrategy):
     """
     def __init__(
         self,
-        intersection_function: Callable,
+        settings: Optional[ShadingSettings] = None,
+        intersection_function: Callable[[Scene, bool, Optional["TracingStats"]], HitInfo] = lambda: HitInfo.miss(),
         density: float = 1.0,                               # Beer's Law coefficient (Higher = rapid absorption)
         absorption_color: Color = Color(0.2, 0.8, 1.0),     # The color of the object material
         invert_style: bool = True,                          # True = Sci-Fi (Thick is Bright), False = Glass (Thick is Dark)
@@ -345,6 +313,7 @@ class VolumetricShading(ShadingStrategy):
         rim_color: Color = Color(1.0, 1.0, 1.0),            # Color of the edge highlight
         max_thickness: float = 10.0,                        # Clamping value to prevent infinite vals on open meshes
     ):
+        super.__init__(settings)
         self.density = density
         self.absorption_color = absorption_color
         self.invert_style = invert_style
@@ -446,6 +415,12 @@ class PhysicalShadingStrategy(ShadingStrategy):
     """
     _cache_ambient_occlusion_map: Optional[np.ndarray] = None
     _cache_light_bvh: Optional[BVHNode] = None
+
+    def __init__(self, settings: Optional[PhysicalShadingSettings] = None):
+        self.settings = settings if settings is not None else PhysicalShadingSettings()
+        self.ambience_settings = self.settings.ambience_settings
+        self.shadow_settings = self.settings.shadow_settings
+        self.background_settings = self.settings.background_settings
     
     def _calculate_shadow_visibility(
             self,
@@ -688,6 +663,11 @@ class RecursiveLabertShading(LambertShading):
     """
     Extends Lambertian shading with recursive reflections and refractions.
     """
+    
+    a = 3.0
+    b = 0.7
+    c = 1.0
+
     def shade(
             self,
             scene: "Scene",
@@ -727,18 +707,29 @@ class RecursiveLabertShading(LambertShading):
         indirect_color = Color(0.0, 0.0, 0.0)
 
         # Sample indirect lighting contribution
-        direction, throughput, pdf = material.sample_indirect_contribution(hit_info.direction, hit_info.normal, sampler)
-
-        if pdf > 1e-6 and np.linalg.norm(throughput.to_array()[:3]) > 1e-6:
+        if material.data.type == MaterialType.GLASS:
+            if self.settings.enable_bidirectional_scattering:
+                direction, throughput = material.sample_glass_contribution(hit_info.direction, hit_info.normal, sampler, 1.0003)
+                pdf = 1.0
+            else:
+                direction = hit_info.normal
+                throughput = material.data.albedo
+                pdf = 0.0
+        else:
+            direction, throughput, pdf = material.sample_indirect_contribution(hit_info.direction, hit_info.normal, sampler)
+        
+        if pdf > 1e-6 and np.linalg.norm(throughput.to_np_array()[:3]) > 1e-6:
+            weighted_throughput = Color(*calculate_throughput_weight(direction, hit_info.normal, throughput, pdf))
+            attenuation = attenuate_distance_coefficents(hit_info.distance, self.a, self.b, self.c)
             # Create new ray for indirect bounce
             new_origin = hit_info.point + direction * bias
-            indirect_ray = TracingRay(new_origin, direction, is_inside=hit_info.is_inside)
+            indirect_ray = TracingRay(new_origin, direction, is_inside=ray.is_inside)
 
             # Trace the indirect ray
             bounced_color = trace_function(scene, indirect_ray, recursions_left - 1, sampler)
 
             # Accumulate indirect contribution
-            indirect_color += Color(*calculate_throughput_weight(direction, hit_info.normal, throughput, pdf)) * bounced_color
+            indirect_color += weighted_throughput * bounced_color
         
         final_color += indirect_color
         return final_color

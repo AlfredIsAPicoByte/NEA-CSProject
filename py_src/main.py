@@ -46,9 +46,9 @@ def apply_post_processing(raw_img):
     
     pipeline = ImagePipeline()
     pipeline.add_pass(AutoExposure())
-    pipeline.add_pass(Bloom(1, 5, 0.67, 0.75))
-    pipeline.add_pass(ChromaticAberration())
-    pipeline.add_pass(Vignette(0.15, 0.6))
+    #pipeline.add_pass(Bloom(1, 25, 0.67, 0.75))
+    #pipeline.add_pass(ChromaticAberration())
+    #pipeline.add_pass(Vignette(0.15, 0.6))
     pipeline.add_pass(ACESFilmicToneMapping())
     pipeline.add_pass(GammaCorrection(2.2))
     
@@ -57,6 +57,9 @@ def apply_post_processing(raw_img):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RayTracer CLI")
     parser.add_argument("--no-post", dest="disable_post", action="store_true", help="Disable post-processing to reduce memory and runtime")
+    parser.add_argument("--verbose", dest="verbose", action="store_true", help="Enable verbose logging during rendering")
+    parser.add_argument("--debug", dest="debug", action="store_true", help="Enable debug mode during rendering")
+    parser.add_argument("--mem-trace", dest="memory_trace", action="store_true", help="Enable memory tracing during rendering")
     args = parser.parse_args()
 
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -65,7 +68,9 @@ if __name__ == "__main__":
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
-    img_width, img_height = 16 * 2, 9 * 2
+    img_width, img_height = 16 * 32, 9 * 32
+
+    # 16 * 32, 9 * 32
 
     all_scenes = [
         get_minimal_scene(img_width, img_height),
@@ -83,36 +88,37 @@ if __name__ == "__main__":
         get_glass_sculpture_scene(img_width, img_height),
         get_100_spheres_grid_scene(img_width, img_height),
         get_low_ior_scene(img_width, img_height),
+        get_abstract_geometry_scene(img_width, img_height),
+        get_industrial_shapes_scene(img_width, img_height),
+        get_shape_showcase_scene(img_width, img_height),
     ]
 
-    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.NEAREST, filter_width=1.5)
-    sampling_manager = SamplingManager(sample_settings, "halton")
+    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.NEAREST, filter_width=1)
+    sampling_manager = SamplingManager(sample_settings, "adaptive")
 
     for scene in all_scenes:
         intersection = BVHIntersection(IntersectionSettings(
-            max_distance=scene.camera.far * 10,
-            max_steps=2048
+            max_distance=1000,
+            max_steps=256
         ))
         shading = LambertShading(ShadingSettings(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
-            shadow_settings=ShadowSettings(True, 32, 1e-3),
-            background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None))
+            shadow_settings=ShadowSettings(True, 8, 1e-3),
+            background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None), False)
         ))
 
         raytracer = RayTracer(RayTracingSettings(
             image_width=img_width,
             image_height=img_height,
             sampling_manager=sampling_manager,
-            max_recursions=6, #7
-            intersection_method=intersection,
-            shading_method=shading,
+            max_recursions=1, #6, 7
+            intersection_strategy=intersection,
+            shading_strategy=shading,
             use_tiling=True,
             tile_size=128,
-            debug_mode=True,
-            verbose_logging=True
+            debug_mode=args.debug,
+            verbose_logging=args.verbose
         ))
-        # Reset tracing stats per-scene to avoid accumulation and keep reported memory accurate
-        raytracer.stats = TracingStats()
 
         sanitized_name = scene.name.replace(" ", "_").lower()
         raw_image_out_path = os.path.join(IMG_OUT_DIR, "raw")
@@ -133,9 +139,13 @@ if __name__ == "__main__":
         width = scene.camera.width if scene.camera is not None else img_width
         height = scene.camera.height if scene.camera is not None else img_height
         print(f"Rendering '{scene.name}' -> {raw_image_out_path} ({width}x{height})")
+        if not args.disable_post:
+            print(f"Post Processing '{scene.name}' -> {processed_image_out_path} ({width}x{height})")
+        else:
+            print("Skipping Post Processing (--no-post active)")
         
         try:
-            with MemoryProfiler(enable_tracemalloc=True, top=6) as mp:
+            with MemoryProfiler(enable_tracemalloc=args.memory_trace, top=6) as mp: # Track only overall memory usage during rendering
                 render_process(scene, raytracer)
             
             try:
@@ -162,7 +172,7 @@ if __name__ == "__main__":
             processed_img = raw_img_data
 
             if not args.disable_post:
-                with MemoryProfiler(enable_tracemalloc=True, top=6) as mp:
+                with MemoryProfiler(enable_tracemalloc=args.memory_trace, top=6) as mp:
                     processed_img = apply_post_processing(raw_img_data)
 
                 try:
@@ -176,8 +186,6 @@ if __name__ == "__main__":
                     traceback.print_exc()
 
                 Film.save(processed_img, processed_image_out_path)
-            else:
-                print(" > Skipping post-processing (--no-post active)")
 
             # Free large buffers promptly to avoid accumulation between scenes
             try:

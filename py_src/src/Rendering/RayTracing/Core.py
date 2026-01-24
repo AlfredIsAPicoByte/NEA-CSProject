@@ -120,9 +120,9 @@ class RayTracingSettings(AlgorithmSettings):
     
     max_recursions: int = 4
 
-    intersection_method: Intersections.IntersectionStrategy = field(default_factory=lambda: Intersections.RayMarchingIntersection())
+    intersection_strategy: Intersections.IntersectionStrategy = field(default_factory=lambda: Intersections.RayMarchingIntersection())
 
-    shading_method: Shading.ShadingStrategy = field(default_factory=lambda: Shading.LambertShading())
+    shading_strategy: Shading.ShadingStrategy = field(default_factory=lambda: Shading.LambertShading())
 
     use_tiling: bool = True
     tile_size: int = 64
@@ -147,12 +147,19 @@ class RayTracer(Algorithm):
 
         # 2. Geometry Intersection
         # The stats object is passed down for internal counters
-        hit_info = self.settings.intersection_method.find_hit(scene, ray, self.stats)
+        hit_info = self.settings.intersection_strategy.find_hit(scene, ray, self.stats)
 
-        # 3. Miss -> Background
+        # 3. Missed First -> Background (The bounced rays return black only if the environmental contribuion is enabled in the shading_strategy)
         if not hit_info.hit:
-            # Assuming background settings handle their own safety
-            return self.settings.shading_method.background_settings.get_background_color(ray.orientation)
+            if self.settings.shading_strategy.background_settings.environment_effect_enabled:
+                if ray.current_depth == 0:
+                    return self.settings.shading_strategy.background_settings.get_background_color(ray.orientation)
+                
+                return self.settings.shading_strategy.background_settings.get_background_color(ray.orientation) * self.settings.shading_strategy.background_settings.environment_contribution_factor
+            elif ray.current_depth == 0:
+                return self.settings.shading_strategy.background_settings.get_background_color(ray.orientation)
+            else:
+                return Color(0.0, 0.0, 0.0)
 
         # Only do expensive error checking if debugging
         if self.settings.debug_mode:
@@ -166,14 +173,14 @@ class RayTracer(Algorithm):
         # 4. Shading & Recursion
         # The Shader is responsible for casting secondary rays via the 'trace_function' callback
         try:
-            color = self.settings.shading_method.shade(
+            color = self.settings.shading_strategy.shade(
                 scene=scene,
                 ray=ray,
                 hit_info=hit_info,
                 recursions_left=recursions_left,
                 trace_function=self._trace_ray,
-                intersection_function=self.settings.intersection_method.find_hit,
-                occlusion_function=self.settings.intersection_method.is_point_occluded,
+                intersection_function=self.settings.intersection_strategy.find_hit,
+                occlusion_function=self.settings.intersection_strategy.is_point_occluded,
                 sampler=sampler,
                 stats=self.stats
             )

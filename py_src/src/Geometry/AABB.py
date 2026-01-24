@@ -84,8 +84,10 @@ class AABB:
 
             # 3. Handle Meshes (Anything with corners)
             if hasattr(shape, "convex_hull"):
-                local_corners = np.array(shape.convex_hull())
-
+                hull = shape.convex_hull()
+                if isinstance(hull, list) and len(hull) > 0:
+                    local_corners = np.array(hull)
+                    
         # C. Fallback: Unit Cube (-0.5 to 0.5)
         if local_corners is None:
             local_corners = np.array([
@@ -97,6 +99,7 @@ class AABB:
 
         # 2. Transform to World Space
         # Convert to homogeneous coordinates (N, 4)
+        
         ones = np.ones((len(local_corners), 1))
         corners_4d = np.hstack([local_corners, ones]) 
         
