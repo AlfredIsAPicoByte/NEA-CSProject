@@ -1,12 +1,10 @@
 from __future__ import annotations
 import numpy as np
-from typing import TYPE_CHECKING
+from typing import Any
 
 from src.Data.Transform import Transform
 from src.Data.Ray import Ray
-
-if TYPE_CHECKING:
-    from src.Geometry.Core import Shape
+from .Operations import *
 
 class AABB:
     """
@@ -47,7 +45,7 @@ class AABB:
         return float('inf')
 
     @staticmethod
-    def from_transform_shape(world_Transform: Transform, shape: "Shape", padding: float = 1e-2) -> 'AABB':
+    def from_transform_shape(world_Transform: Transform, shape: Any, padding: float = 1e-2) -> 'AABB':
         """
         Calculates the world-space AABB for a given object.
         """
@@ -61,7 +59,11 @@ class AABB:
         local_corners = None
         
         if shape is not None:
-            # 1. Handle Spheres (Look for radius)
+            # 1. Delegate to the signed distance shape interface (Already defined within the shape class)
+            if hasattr(shape, "transform_aabb") and callable(shape.transform_aabb):
+                return shape.transform_aabb(matrix, padding)
+
+            # 2. Handle Spheres (Look for radius)
             if hasattr(shape, "radius"):
                 # Create a box that fully encloses the sphere
                 r = float(shape.radius)
@@ -70,7 +72,7 @@ class AABB:
                     [-r, -r, r],  [r, -r, r],  [-r, r, r],  [r, r, r]
                 ])
 
-            # 2. Handle Cube/Cuboids/Prisims (Look for size)
+            # 3. Handle Boxes (Look for size)
             if hasattr(shape, "size"):
                 half_x = shape.size[0] * 0.5
                 half_y = shape.size[1] * 0.5
@@ -82,12 +84,12 @@ class AABB:
                     [-half_x, half_y, half_z],  [half_x, half_y, half_z]
                 ])
 
-            # 3. Handle Meshes (Anything with corners)
+            # 4. Handle Convex Shapes (Anything with corners)
             if hasattr(shape, "convex_hull"):
                 hull = shape.convex_hull()
                 if isinstance(hull, list) and len(hull) > 0:
                     local_corners = np.array(hull)
-                    
+
         # C. Fallback: Unit Cube (-0.5 to 0.5)
         if local_corners is None:
             local_corners = np.array([
@@ -113,11 +115,25 @@ class AABB:
         return AABB(min_p, max_p)
 
     @staticmethod
-    def union(box_a: 'AABB', box_b: 'AABB') -> 'AABB':
-        return AABB(
-            np.minimum(box_a.min_point, box_b.min_point),
-            np.maximum(box_a.max_point, box_b.max_point)
-        )
+    def combine(box_a: 'AABB', box_b: 'AABB', operation: str) -> 'AABB':
+        """
+        Combines two AABBs using the specified operation.
+        Supported operations: 'union', 'intersect'
+        """
+        if operation == 'union':
+            min_point = np.maximum(box_a.min_point, box_b.min_point)
+            max_point = np.maximum(box_a.max_point, box_b.max_point)
+        elif operation == 'intersect':
+            min_point = np.maximum(box_a.min_point, box_b.min_point)
+            max_point = np.minimum(box_a.max_point, box_b.max_point)
+            
+            # Ensure valid AABB
+            if np.any(min_point > max_point):
+                return AABB(np.zeros(3), np.zeros(3))  # Empty AABB
+        else:
+            raise ValueError(f"Unsupported operation '{operation}' for AABB combination.")
+        
+        return AABB(min_point, max_point)
     
     @property
     def center(self) -> np.ndarray:

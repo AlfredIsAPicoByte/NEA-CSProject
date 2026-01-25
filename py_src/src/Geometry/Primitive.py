@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 from src.Data.Transform import Transform
 from .AABB import AABB
-from .Core import Shape
+from .Core import SignedDistanceShape
 from src.Material.Core import PBRMaterial
 
 @dataclass
@@ -17,7 +17,7 @@ class Primitive:
     """
     name: str = "Object"
     transform: Transform = field(default_factory=Transform.identity)
-    shape: Optional[Shape] = None
+    shape: Optional[SignedDistanceShape] = None
     material: Optional[PBRMaterial] = None
 
     # Hierarchy
