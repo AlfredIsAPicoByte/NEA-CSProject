@@ -397,6 +397,7 @@ class VolumetricShading(ShadingStrategy):
 
         return final_color
 
+@dataclass
 class PhysicalShadingSettings(ShadingSettings):
     """
     Settings specific to physically-based shading strategies.

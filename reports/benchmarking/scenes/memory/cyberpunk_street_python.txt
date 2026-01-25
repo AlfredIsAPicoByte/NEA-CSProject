@@ -1,8 +1,22 @@
-Time: 387.4862s | RSS Δ: 0.957 MB
-RSS start: 70.316 MB | RSS end: 71.273 MB
-tracemalloc current: 0.00 KB | peak: 0.00 KB
+Time: 3484.8990s | RSS Δ: 15.512 MB
+RSS start: 134.578 MB | RSS end: 150.090 MB
+tracemalloc current: 970.74 KB | peak: 121575.36 KB
+Top allocations (most recent frame):
+  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:11 | 432.09 KB (2 allocs)
+  2. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:12 | 144.09 KB (2 allocs)
+  3. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Data\Color.py:416 | 140.48 KB (1998 allocs)
+  4. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Rendering\RayTracing\Core.py:238 | 108.61 KB (1986 allocs)
+  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\numeric.py:1548 | 46.69 KB (996 allocs)
+  6. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\numeric.py:1469 | 38.91 KB (830 allocs)
 
 Postprocessing:
-Time: 0.0428s | RSS Δ: 3.430 MB
-RSS start: 74.316 MB | RSS end: 77.746 MB
-tracemalloc current: 0.00 KB | peak: 0.00 KB
+Time: 0.0042s | RSS Δ: 3.301 MB
+RSS start: 134.598 MB | RSS end: 137.898 MB
+tracemalloc current: 864.61 KB | peak: 3457.96 KB
+Top allocations (most recent frame):
+  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\PostProcessing\Passes.py:40 | 864.09 KB (2 allocs)
+  2. C:\Python311\Lib\tracemalloc.py:560 | 0.14 KB (2 allocs)
+  3. C:\Python311\Lib\tracemalloc.py:423 | 0.14 KB (2 allocs)
+  4. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\psutil\_pswindows.py:666 | 0.12 KB (1 allocs)
+  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:57 | 0.12 KB (1 allocs)
+  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Utilities\Memory\Profiler.py:45 | 0.05 KB (2 allocs)

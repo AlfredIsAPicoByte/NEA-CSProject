@@ -309,9 +309,10 @@ class Plane(Shape2D):
     """
     Infinite* Plane on the XZ plane (Y=0).
     """
+    size = 1e12
+
     def signed_distance(self, local_point: np.ndarray) -> float:
         # Distance to Y=0 plane is just Y height
-        self.size = 1e6
         return local_point[1]
 
     def get_ray_intersections(self, local_ray: Ray) -> List[np.ndarray]:
@@ -338,10 +339,10 @@ class Plane(Shape2D):
         # Use a very large square to represent an infinite plane
         half = self.size / 2
         return [
-            np.array([-half[0], 0, -half[2]]),
-            np.array([half[0], 0, -half[2]]),
-            np.array([half[0], 0, half[2]]),
-            np.array([-half[0], 0, half[2]])
+            np.array([-half, 0, -half]),
+            np.array([half, 0, -half]),
+            np.array([half, 0, half]),
+            np.array([-half, 0, half])
         ]
 
 class ClippedPlane(Shape2D):

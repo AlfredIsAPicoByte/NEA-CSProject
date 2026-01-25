@@ -39,11 +39,11 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     scene = Scene("gradient_scene", cam, background_color=ColorGradient(sky_colors, sky_positions))
 
     # Primary Key Light (Sharp, slightly yellow, placed high and to the left for side lighting)
-    key_light = LightSource(position=np.array([4.0, 5.0, 0.0]), color=Color.from_hex("#FFEDC7"), intensity=15.0, radius=0.5, name="Key Light")
+    key_light = LightSource(position=np.array([4.0, 5.0, 0.0]), color=Color.from_hex("#FFEDC7"), intensity=150.0, radius=0.5, name="Key Light")
     scene.add_light(key_light)
 
     # Soft Fill Light (Simulates general ambient light or bounce light)
-    fill_light = LightSource(position=np.array([-5.0, 2.0, -5.0]), color=Color.from_hex("#C7E5FF"), intensity=3.0, radius=4, name="Fill Light")
+    fill_light = LightSource(position=np.array([-5.0, 2.0, -5.0]), color=Color.from_hex("#C7E5FF"), intensity=500.0, radius=4, name="Fill Light")
     scene.add_light(fill_light)
 
     # Main Sphere (Mid-Ground): Highly Reflective Metal
@@ -159,13 +159,13 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     scene.add_object(v_plane)
 
     # Lights
-    key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#EEE0BA"), intensity=25.0, radius=100, name="StudioKey")
+    key = LightSource(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#EEE0BA"), intensity=2500.0, radius=100, name="StudioKey")
     key.radius = 0.3
     scene.add_light(key)
-    rim = LightSource(position=np.array([-3.0, 2.0, 1.0]), color=Color.from_hex("#DC97C5"), intensity=10.0, radius=0.75, name="StudioRim")
+    rim = LightSource(position=np.array([-3.0, 2.0, 1.0]), color=Color.from_hex("#DC97C5"), intensity=50.0, radius=0.75, name="StudioRim")
     rim.radius = 0.2
     scene.add_light(rim)
-    fill = LightSource(position=np.array([0.0, -2.5, -2.0]), color=Color.from_hex("#C7DBD8"), intensity=15.0, radius=2, name="StudioFill")
+    fill = LightSource(position=np.array([0.0, -2.5, -2.0]), color=Color.from_hex("#C7DBD8"), intensity=150.0, radius=2, name="StudioFill")
     scene.add_light(fill)
 
     return scene
@@ -262,7 +262,7 @@ def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scen
     ceiling_light = LightSource(
         position=np.array([0.0, 5.8, 0.0]), 
         color=Color.from_hex("#FFECDE"), 
-        intensity=25.0, 
+        intensity=1000.0, 
         radius=5, 
         name="CeilingLight"
     )
@@ -329,7 +329,7 @@ def get_cyberpunk_scene(width: int = 120, height: int = 120) -> Scene:
     light_pink = LightSource(
         position=np.array([-3.0, 2.0, -2.0]), 
         color=Color.from_hex("#FF0099"), 
-        intensity=15.0, 
+        intensity=25.0, 
         radius=0.2, 
         name="NeonPink"
     )
@@ -337,7 +337,7 @@ def get_cyberpunk_scene(width: int = 120, height: int = 120) -> Scene:
     light_cyan = LightSource(
         position=np.array([-2.5, 1.5, 2.0]), 
         color=Color.from_hex("#00F0FF"), 
-        intensity=12.0, 
+        intensity=20.0, 
         radius=0.2, 
         name="NeonCyan"
     )
@@ -345,7 +345,7 @@ def get_cyberpunk_scene(width: int = 120, height: int = 120) -> Scene:
     light_blue = LightSource(
         position=np.array([3.0, 1.0, -1.0]), 
         color=Color.from_hex("#3700FF"), 
-        intensity=10.0, 
+        intensity=18.0, 
         radius=0.2, 
         name="NeonBlue"
     )
@@ -353,7 +353,7 @@ def get_cyberpunk_scene(width: int = 120, height: int = 120) -> Scene:
     light_rim = LightSource(
         position=np.array([0.0, 3.0, 4.0]),
         color=Color.from_hex("#FFFFFF"),
-        intensity=5.0,
+        intensity=15.0,
         radius=0.5,
         name="StreetLight"
     )
@@ -430,8 +430,8 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
     scene.add_object(v_cyl2)
 
     # Lighting
-    scene.add_light(LightSource(position=np.array([0.0, 5.0, -5.0]), color=Color(1.0, 1.0, 1.0), intensity=15.0, name="Main"))
-    scene.add_light(LightSource(position=np.array([5.0, 2.0, -2.0]), color=Color(0.8, 0.8, 1.0), intensity=10.0, name="Fill"))
+    scene.add_light(LightSource(position=np.array([0.0, 5.0, -5.0]), color=Color(1.0, 1.0, 1.0), intensity=150.0, name="Main"))
+    scene.add_light(LightSource(position=np.array([5.0, 2.0, -2.0]), color=Color(0.8, 0.8, 1.0), intensity=500.0, radius=5, name="Fill"))
 
     cam.transform.look_at(v_s3.transform.position)
     return scene
@@ -486,7 +486,7 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
     scene.add_object(v_s_water)
 
     # Lighting
-    scene.add_light(LightSource(position=np.array([2.0, 3.0, -3.0]), color=Color(1.0, 1.0, 1.0), intensity=15.0, name="FrontLight"))
+    scene.add_light(LightSource(position=np.array([2.0, 3.0, -3.0]), color=Color(1.0, 1.0, 1.0), intensity=150.0, name="FrontLight"))
     
     cam.transform.look_at(np.array([0, 0.5, 0]))
     return scene
@@ -553,7 +553,7 @@ def get_scifi_corridor_scene(width: int = 120, height: int = 120) -> Scene:
         scene.add_object(v_l_strip)
 
         # Actual Light Sources corresponding to strips
-        light = LightSource(position=np.array([0.0, 0.5, z]), color=Color.from_hex("#00AAAA"), intensity=5.0, radius=2.0, name=f"PointLight_{z}")
+        light = LightSource(position=np.array([0.0, 0.5, z]), color=Color.from_hex("#00AAAA"), intensity=200.0, radius=2.0, name=f"PointLight_{z}")
         scene.add_light(light)
 
     # End focal point
@@ -616,12 +616,12 @@ def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
 
     # Lighting
     # Sun (Low angle, very bright, sharp shadows)
-    sun = LightSource(position=np.array([-8.0, 2.0, 10.0]), color=Color.from_hex("#FF9944"), intensity=30.0, radius=100.0, name="Sun")
+    sun = LightSource(position=np.array([-8.0, 2.0, 10.0]), color=Color.from_hex("#FF9944"), intensity=3000.0, radius=100.0, name="Sun")
     sun.radius = 0.5 # Make it physically small for sharp shadows
     scene.add_light(sun)
 
     # Skylight fill (Purple/Blue ambient)
-    fill = LightSource(position=np.array([5.0, 10.0, -5.0]), color=Color.from_hex("#5544AA"), intensity=4.0, radius=20.0, name="SkyFill")
+    fill = LightSource(position=np.array([5.0, 10.0, -5.0]), color=Color.from_hex("#5544AA"), intensity=5000.0, radius=20.0, name="SkyFill")
     scene.add_light(fill)
 
     cam.transform.look_at(np.array([0, 1.5, 0]))
@@ -681,11 +681,11 @@ def get_pastel_blocks_scene(width: int = 120, height: int = 120) -> Scene:
 
     # Lighting (Soft Studio setup)
     # Main soft light
-    key = LightSource(position=np.array([3.0, 5.0, -5.0]), color=Color.from_hex("#FFFBEB"), intensity=18.0, radius=5.0, name="Key")
+    key = LightSource(position=np.array([3.0, 5.0, -5.0]), color=Color.from_hex("#FFFBEB"), intensity=180.0, radius=5.0, name="Key")
     scene.add_light(key)
 
     # Fill light
-    fill = LightSource(position=np.array([-4.0, 2.0, -2.0]), color=Color.from_hex("#E6E6FA"), intensity=8.0, radius=5.0, name="Fill")
+    fill = LightSource(position=np.array([-4.0, 2.0, -2.0]), color=Color.from_hex("#E6E6FA"), intensity=100.0, radius=5.0, name="Fill")
     scene.add_light(fill)
 
     cam.transform.look_at(np.array([0, 1.2, 0]))
@@ -773,7 +773,7 @@ def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
         scene.add_object(v_bar)
 
     # Light
-    scene.add_light(LightSource(position=np.array([0.0, 5.0, -3.0]), color=Color(1.0, 1.0, 1.0), intensity=20.0, name="TopLight"))
+    scene.add_light(LightSource(position=np.array([0.0, 5.0, -3.0]), color=Color(1.0, 1.0, 1.0), intensity=50.0, name="TopLight"))
 
     return scene
 
@@ -829,9 +829,9 @@ def get_glass_sculpture_scene(width: int = 120, height: int = 120) -> Scene:
 
     # Lights
     # Cyan light to contrast with red glass
-    scene.add_light(LightSource(position=np.array([4.0, 4.0, -4.0]), color=Color.from_hex("#00FFFF"), intensity=15.0, name="CyanKey"))
+    scene.add_light(LightSource(position=np.array([4.0, 4.0, -4.0]), color=Color.from_hex("#00FFFF"), intensity=150.0, name="CyanKey"))
     # White rim
-    scene.add_light(LightSource(position=np.array([-4.0, 1.0, 0.0]), color=Color.from_hex("#FFFFFF"), intensity=5.0, name="Rim"))
+    scene.add_light(LightSource(position=np.array([-4.0, 1.0, 0.0]), color=Color.from_hex("#FFFFFF"), intensity=50.0, name="Rim"))
 
     return scene
 
@@ -878,7 +878,7 @@ def get_100_spheres_grid_scene(width: int = 128, height: int = 128) -> Scene:
             color = Color(r / rows, 0.5, c / cols)
             
             if (r + c) % 2 == 0:
-                mat = MaterialFactory.create_specular(color, roughness=0.1, metallicness=0.9)
+                mat = MaterialFactory.create_specular(color, roughness=0.2, metallicness=0.9)
             else:
                 mat = MaterialFactory.create_diffuse(color, roughness=0.8)
             
@@ -904,7 +904,7 @@ def get_100_spheres_grid_scene(width: int = 128, height: int = 128) -> Scene:
     scene.add_object(Primitive("Floor", t_floor, floor_shape, mat_floor))
 
     # Light
-    scene.add_light(LightSource(position=np.array([10.0, 20.0, -10.0]), color=Color(1.0, 1.0, 0.9), intensity=50.0, name="Sun"))
+    scene.add_light(LightSource(position=np.array([10.0, 20.0, -10.0]), color=Color(1.0, 1.0, 0.9), intensity=1000.0, name="Sun"))
     
     # Ensure camera looks below the origin
     cam.transform.look_at(np.array([0, -1, 0]))
@@ -961,7 +961,7 @@ def get_low_ior_scene(width: int = 120, height: int = 120) -> Scene:
             ))
 
     # Light
-    scene.add_light(LightSource(position=np.array([2.0, 2.0, -3.0]), color=Color(1.0, 1.0, 1.0), intensity=10.0, name="Front"))
+    scene.add_light(LightSource(position=np.array([2.0, 2.0, -3.0]), color=Color(1.0, 1.0, 1.0), intensity=1000.0, name="Front"))
 
     return scene
 
@@ -1024,8 +1024,8 @@ def get_shape_showcase_scene(width: int = 160, height: int = 120) -> Scene:
     scene.add_object(floor)
 
     # Lighting
-    scene.add_light(LightSource(position=np.array([5.0, 5.0, -5.0]), color=Color(1.0, 1.0, 1.0), intensity=20.0, name="Main"))
-    scene.add_light(LightSource(position=np.array([-5.0, 3.0, 5.0]), color=Color(0.8, 0.8, 1.0), intensity=10.0, name="Fill"))
+    scene.add_light(LightSource(position=np.array([5.0, 5.0, -5.0]), color=Color(1.0, 1.0, 1.0), intensity=2000.0, name="Main"))
+    scene.add_light(LightSource(position=np.array([-5.0, 3.0, 5.0]), color=Color(0.8, 0.8, 1.0), intensity=1000.0, radius=5, name="Fill"))
 
     cam.transform.look_at(np.array([0, -1, 0]))
     return scene
@@ -1072,8 +1072,8 @@ def get_abstract_geometry_scene(width: int = 140, height: int = 100) -> Scene:
     scene.add_object(prism)
 
     # Lighting
-    scene.add_light(LightSource(position=np.array([3.0, 3.0, -3.0]), color=Color(1.0, 1.0, 1.0), intensity=15.0, name="Key"))
-    scene.add_light(LightSource(position=np.array([-3.0, -1.0, 3.0]), color=Color(0.5, 0.7, 1.0), intensity=8.0, name="Fill"))
+    scene.add_light(LightSource(position=np.array([3.0, 3.0, -3.0]), color=Color(1.0, 1.0, 1.0), intensity=500.0, name="Key"))
+    scene.add_light(LightSource(position=np.array([-3.0, -1.0, 3.0]), color=Color(0.5, 0.7, 1.0), intensity=120.0, radius=2, name="Fill"))
 
     cam.transform.look_at(np.array([0, 0, 0]))
     return scene
@@ -1145,8 +1145,8 @@ def get_industrial_shapes_scene(width: int = 150, height: int = 100) -> Scene:
     scene.add_object(antenna)
 
     # Lighting: harsh industrial lighting
-    scene.add_light(LightSource(position=np.array([0.0, 4.0, 0.0]), color=Color(1.0, 1.0, 0.9), intensity=25.0, name="Overhead"))
-    scene.add_light(LightSource(position=np.array([3.0, 1.0, -3.0]), color=Color(0.8, 0.8, 1.0), intensity=10.0, name="Side"))
+    scene.add_light(LightSource(position=np.array([0.0, 4.0, 0.0]), color=Color(1.0, 1.0, 0.9), intensity=250.0, name="Overhead"))
+    scene.add_light(LightSource(position=np.array([3.0, 1.0, -3.0]), color=Color(0.8, 0.8, 1.0), intensity=100.0, name="Side"))
 
     cam.transform.look_at(np.array([0, 0, 0]))
     return scene

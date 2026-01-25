@@ -68,7 +68,7 @@ if __name__ == "__main__":
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
-    img_width, img_height = 16 * 32, 9 * 32
+    img_width, img_height = 16 * 16, 9 * 16
 
     # 16 * 32, 9 * 32
 
@@ -93,15 +93,15 @@ if __name__ == "__main__":
         get_shape_showcase_scene(img_width, img_height),
     ]
 
-    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.NEAREST, filter_width=1)
-    sampling_manager = SamplingManager(sample_settings, "adaptive")
+    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=8, filter_type=PixelFilter.GAUSSIAN, filter_width=16)
+    sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
         intersection = BVHIntersection(IntersectionSettings(
             max_distance=1000,
             max_steps=256
         ))
-        shading = LambertShading(ShadingSettings(
+        shading = RecursiveLabertShading(PhysicalShadingSettings(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None), False)
@@ -111,7 +111,7 @@ if __name__ == "__main__":
             image_width=img_width,
             image_height=img_height,
             sampling_manager=sampling_manager,
-            max_recursions=1, #6, 7
+            max_recursions=6, 
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,

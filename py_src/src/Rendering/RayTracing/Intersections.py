@@ -134,7 +134,7 @@ class IntersectionStrategy(ABC):
             # Hit Condition
             if local_dist < self.settings.epsilon:
                 # A. Transform Local Point -> World Point
-                world_point = local_point
+                world_point = safe_transform.transform_point(local_point)
 
                 # B. Resolve Surface Normal
                 surface_normal = self._resolve_normal(world_point, safe_transform, safe_shape)

@@ -9,7 +9,7 @@ from ..Core import Algorithm, RenderStats, AlgorithmSettings
 from . import Intersections
 from . import Shading
 from src.Image.Film import Film
-from src.Data.Sampling.Core import SamplingManager, SampleSettings, Sampler, RandomSampler
+from src.Data.Sampling.Core import SamplingManager, SampleSettings, Sampler, Sample, reconstruct_pixel
 from src.Data.Scene import Scene
 
 # TODO: Pool tracing rays and hit info to reduce memory useage at runtime
@@ -205,27 +205,70 @@ class RayTracer(Algorithm):
         rays = camera.generate_screen_rays(sampler, region=(tile_x, tile_y, width, height))
         self.stats.rays_primary += len(rays)
 
+        # Map: (local_tile_index) -> List[(Sample, Color)]
+        tile_samples = [[] for _ in range(width * height)]
+
         for ray in rays:
             if ray is None:
                 continue
 
-            color = self._trace_ray(
+            # Global Coordinates
+            px, py = ray.pixel_x, ray.pixel_y
+                    
+            # Convert to Local Tile Coordinates
+            local_x = px - tile_x
+            local_y = py - tile_y
+
+            if not (0 <= local_x < width and 0 <= local_y < height):
+                continue
+            
+            pixle_color = self._trace_ray(
                 scene,
                 ray,
                 self.settings.max_recursions,
                 sampler
             )
+            pixle_color = self._sanitize_color(pixle_color)
 
-            color = self._sanitize_color(color)
-
-            self.settings.film.add_pixel_batch(
-                ray.pixel_x,
-                ray.pixel_y,
-                color.to_np_array(),
-                1.0
-            )
+            s_u = getattr(ray, "sample_u", (px + 0.5) / width)
+            s_v = getattr(ray, "sample_v", (py + 0.5) / height)
+            sample = Sample(s_u, s_v, 1.0)
+            
+            local_idx = local_y * width + local_x
+            tile_samples[local_idx].append((sample, pixle_color))
 
             self.stats.pixels_processed += 1
+
+        # Reconstruct Tile
+        for i in range(len(tile_samples)):
+                samples_and_colors = tile_samples[i]
+                
+                if not samples_and_colors: continue
+                # Calculate Global Pixel Index
+                local_y_in_tile = i // width
+                local_x_in_tile = i % width
+                    
+                global_x = tile_x + local_x_in_tile
+                global_y = tile_y + local_y_in_tile
+                    
+                # Reconstruct
+                samples = [sc[0] for sc in samples_and_colors]
+                # Convert Color objects to RGBA arrays
+                colors = []
+                for sc in samples_and_colors:
+                    color_obj: Color = sc[1]
+                    color_array = color_obj.to_np_array(include_alpha=True)
+                    colors.append(color_array)
+                
+                rec_rgb = reconstruct_pixel(global_x, global_y, samples, colors, self.settings.sampling_manager.settings)
+                final_color = Color(*rec_rgb)
+                
+                self.settings.film.add_pixel_batch(
+                    global_x,
+                    global_y,
+                    final_color.to_np_array(),
+                    1.0
+                )
 
     def generate_film(
         self,
