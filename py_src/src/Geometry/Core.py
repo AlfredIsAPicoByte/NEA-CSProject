@@ -4,9 +4,7 @@ import numpy as np
 from typing import TYPE_CHECKING, Optional, Union, List, Tuple
 
 from src.Data.Ray import Ray
-
-if TYPE_CHECKING:
-    from .AABB import AABB
+from .AABB import AABB
 
 class SignedDistanceFunction(ABC):
     """
@@ -79,14 +77,8 @@ class CorrespondingBoundingBox(ABC):
     Only applied to simple shapes.
     """
 
-    def __init__(self, )
-    
-    @staticmethod
-    def transform_local_bounds(cls, transformation_matrix: np.ndarray, local_bounds: np.ndarray) -> np.ndarray:
-        ones = np.ones((len(corners), 1))
-        corners_4d = np.hstack([corners, ones])
-
-        return (transformation_matrix @ corners_4d.T).T[:, :3]
+    def __init__(self):
+        pass
 
     @abstractmethod
     def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
@@ -286,7 +278,7 @@ class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
             [-r, -r, 0], [r, -r, 0],
             [-r, r, 0],  [r, r, 0]
         ])
-        world_bounds = self.transform_local_bounds(matrix, local_bounds)
+        world_bounds = AABB().transform_local_bounds(matrix, local_bounds)
         
         min_point = np.min(world_bounds, axis=0)
         max_point = np.max(world_bounds, axis=0)
@@ -381,7 +373,7 @@ class Square(SignedDistanceShape2D, CorrespondingBoundingBox):
             [-r, -r, 0], [r, -r, 0],
             [-r, r, 0],  [r, r, 0]
         ])
-        world_bounds = self.transform_local_bounds(matrix, local_bounds)
+        world_bounds = AABB().transform_local_bounds(matrix, local_bounds)
         
         min_point = np.min(world_bounds, axis=0)
         max_point = np.max(world_bounds, axis=0)
@@ -472,10 +464,10 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
         r = self.half_size + padding
 
         local_bounds = np.array([
-            [-r, -r, 0], [r, -r, 0],
-            [-r, r, 0],  [r, r, 0]
+            [-r[0], -r[1], 0], [r[0], -r[1], 0],
+            [-r[0], r[1], 0],  [r[0], r[1], 0]
         ])
-        world_bounds = self.transform_local_bounds(matrix, local_bounds)
+        world_bounds = AABB().transform_local_bounds(matrix, local_bounds)
         
         min_point = np.min(world_bounds, axis=0)
         max_point = np.max(world_bounds, axis=0)
@@ -503,15 +495,15 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
     
     def get_convex_hull(self) -> List[np.ndarray]:
         points = [
-            np.array([-self.half_size, -self.half_size, 0]),
-            np.array([ self.half_size, -self.half_size, 0]),
-            np.array([ self.half_size,  self.half_size, 0]),
-            np.array([-self.half_size,  self.half_size, 0])
+            np.array([-self.half_size[0], -self.half_size[1], 0]),
+            np.array([ self.half_size[0], -self.half_size[1], 0]),
+            np.array([ self.half_size[0],  self.half_size[1], 0]),
+            np.array([-self.half_size[0],  self.half_size[1], 0])
         ]
         return points
 
 
-class Triangle(SignedDistanceShape2D):
+class Triangle(SignedDistanceShape2D, CorrespondingBoundingBox):
     """
     A simple 2D triangle shape defined by a signed distance function.
     Defined by three vertices in 2D space.
@@ -542,7 +534,7 @@ class Triangle(SignedDistanceShape2D):
         # Placeholder implementation
         return AABB(np.zeros(3), np.zeros(3))
     
-class Sphere(SignedDistanceShape3D):
+class Sphere(SignedDistanceShape3D, CorrespondingBoundingBox):
     """
     A simple 3D sphere shape defined by a signed distance function.
     Centered at the origin with a given radius.
@@ -574,7 +566,7 @@ class Sphere(SignedDistanceShape3D):
     def surface_area(self) -> float:
         raise NotImplementedError()
 
-class Cube(SignedDistanceShape3D):
+class Cube(SignedDistanceShape3D, CorrespondingBoundingBox):
     """
     A simple 3D cube shape defined by a signed distance function.
     Centered at the origin with a given half-size.

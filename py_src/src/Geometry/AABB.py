@@ -1,4 +1,5 @@
 from __future__ import annotations
+from turtle import Shape
 import numpy as np
 from typing import Any
 
@@ -43,6 +44,13 @@ class AABB:
             return max(t_enter, 0.0)
         
         return float('inf')
+    
+    @staticmethod
+    def transform_local_bounds(cls, transformation_matrix: np.ndarray, local_bounds: np.ndarray) -> np.ndarray:
+        ones = np.ones((len(corners), 1))
+        corners_4d = np.hstack([corners, ones])
+
+        return (transformation_matrix @ corners_4d.T).T[:, :3]
 
     @staticmethod
     def from_transform_shape(world_Transform: Transform, shape: Any, padding: float = 1e-2) -> 'AABB':
@@ -56,59 +64,32 @@ class AABB:
         matrix = world_Transform.get_global_matrix()
         
         # 2. Define the 8 corners of a cube localy
-        local_corners = None
+        local_bounds = None
         
         if shape is not None:
             # 1. Delegate to the signed distance shape interface (Already defined within the shape class)
             if hasattr(shape, "transform_aabb") and callable(shape.transform_aabb):
                 return shape.transform_aabb(matrix, padding)
 
-            # 2. Handle Spheres (Look for radius)
-            if hasattr(shape, "radius"):
-                # Create a box that fully encloses the sphere
-                r = float(shape.radius)
-                local_corners = np.array([
-                    [-r, -r, -r], [r, -r, -r], [-r, r, -r], [r, r, -r],
-                    [-r, -r, r],  [r, -r, r],  [-r, r, r],  [r, r, r]
-                ])
-
-            # 3. Handle Boxes (Look for size)
-            if hasattr(shape, "size"):
-                half_x = shape.size[0] * 0.5
-                half_y = shape.size[1] * 0.5
-                half_z = shape.size[2] * 0.5
-                local_corners = np.array([
-                    [-half_x, -half_y, -half_z], [half_x, -half_y, -half_z], 
-                    [-half_x, half_y, -half_z], [half_x, half_y, -half_z],
-                    [-half_x, -half_y, half_z],  [half_x, -half_y, half_z],  
-                    [-half_x, half_y, half_z],  [half_x, half_y, half_z]
-                ])
-
-            # 4. Handle Convex Shapes (Anything with corners)
+            # 2. Handle Convex Shapes (Anything with corners)
             if hasattr(shape, "convex_hull"):
                 hull = shape.convex_hull()
                 if isinstance(hull, list) and len(hull) > 0:
-                    local_corners = np.array(hull)
+                    local_bounds = np.array(hull)
 
-        # C. Fallback: Unit Cube (-0.5 to 0.5)
-        if local_corners is None:
-            local_corners = np.array([
+        # Fallback: Unit Cube (-0.5 to 0.5)
+        if local_bounds is None:
+            local_bounds = np.array([
                 [-0.5, -0.5, -0.5], [0.5, -0.5, -0.5], 
                 [-0.5, 0.5, -0.5], [0.5, 0.5, -0.5],
                 [-0.5, -0.5, 0.5],  [0.5, -0.5, 0.5],  
                 [-0.5, 0.5, 0.5],  [0.5, 0.5, 0.5]
             ])
-
-        # 2. Transform to World Space
-        # Convert to homogeneous coordinates (N, 4)
-        
-        ones = np.ones((len(local_corners), 1))
-        corners_4d = np.hstack([local_corners, ones]) 
         
         # Apply Matrix (Scale, Rotate, Translate)
-        world_corners = (matrix @ corners_4d.T).T[:, :3]
+        world_corners = self.transform_local_bounds(matrix, local_bounds)
 
-        # 4. Find min/max of transformed corners
+        # 3. Find min/max of transformed corners
         min_p = np.min(world_corners, axis=0) - padding # Small padding
         max_p = np.max(world_corners, axis=0) + padding
         
@@ -126,7 +107,7 @@ class AABB:
         elif operation == 'intersect':
             min_point = np.maximum(box_a.min_point, box_b.min_point)
             max_point = np.minimum(box_a.max_point, box_b.max_point)
-            
+
             # Ensure valid AABB
             if np.any(min_point > max_point):
                 return AABB(np.zeros(3), np.zeros(3))  # Empty AABB
