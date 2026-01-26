@@ -71,13 +71,13 @@ class Primitive:
         if self._world_matrix is None:
             self.update_matrices()
         
-        return self._world_matrix
+        return self._world_matrix or np.eye(4)
     
     def get_world_inverse_matrix(self) -> np.ndarray:
         if self._inverse_world_matrix is None:
             self.update_matrices()
         
-        return self._inverse_world_matrix
+        return self._inverse_world_matrix or np.eye(4)
 
     @property
     def world_transform(self) -> Transform:
@@ -121,7 +121,7 @@ class Primitive:
         shape = getattr(self, "shape", None)
         if shape is None:
             self._aabb_bounds = self_bounds
-        safe_shape = cast(Shape, shape)
+        safe_shape = cast(SignedDistanceShape, shape)
         
         self._aabb_bounds = self_bounds.from_transform_shape(self.world_transform, safe_shape, padding)
 
