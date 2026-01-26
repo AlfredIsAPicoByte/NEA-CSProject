@@ -68,17 +68,16 @@ class Primitive:
             child.update_matrices(self._world_matrix)
 
     def get_world_matrix(self) -> np.ndarray:
-        """Safe getter that ensures matrix exists."""
         if self._world_matrix is None:
             self.update_matrices()
         
         return self._world_matrix
     
-    def get_aabb(self) -> AABB:
-        """Calculate world-space AABB for this primitive."""
-        if self.shape is None:
-            return AABB(np.zeros(3), np.zeros(3))
-        return AABB.from_transform_shape(self.world_transform, self.shape)
+    def get_world_inverse_matrix(self) -> np.ndarray:
+        if self._inverse_world_matrix is None:
+            self.update_matrices()
+        
+        return self._inverse_world_matrix
 
     @property
     def world_transform(self) -> Transform:
@@ -88,7 +87,7 @@ class Primitive:
         mat = self.get_world_matrix()
         return Transform.from_matrix(mat)
 
-    def flatten_children(self, include_self: bool):
+    def flatten_children(self, include_self: bool = True):
         """
         Returns a flat list of this object and all descendants.
         Useful for building the global list of objects for the BVH or Renderer.
@@ -110,7 +109,7 @@ class Primitive:
 
         self._cache_objects = result
 
-    def get_objects_flat(self, include_self: bool):
+    def get_objects_flat(self, include_self: bool = True):
         if self._cache_objects is None:
             self.flatten_children(include_self)
         
@@ -125,6 +124,12 @@ class Primitive:
         safe_shape = cast(Shape, shape)
         
         self._aabb_bounds = self_bounds.from_transform_shape(self.world_transform, safe_shape, padding)
+
+    def get_bounds(self):
+        if self._aabb_bounds is None:
+            self.generate_bounds()
+        
+        return self._aabb_bounds
 
     def __hash__(self):
         return id(self)

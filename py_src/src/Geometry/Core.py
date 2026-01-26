@@ -475,11 +475,11 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
     
     @property
     def perimeter(self) -> float:
-        return 8 * self.half_size
+        return 4 * self.half_size[0] + 4 * self.half_size[1]
 
     @property
     def area(self) -> float:
-        return (2 * self.half_size) ** 2
+        return (self.half_size[0] * self.half_size[1]) ** 2
     
     @property
     def is_closed(self) -> bool:
