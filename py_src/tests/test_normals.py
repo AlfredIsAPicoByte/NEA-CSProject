@@ -10,20 +10,20 @@ sys.path.insert(0, current_dir)
 
 from src.Data.Transform import Transform
 from src.Data.Ray import Ray
-from src.Geometry.Core import Sphere
-from src.Geometry.Primitive import Primitive
+from py_src.src.Geometry.SDF import Sphere
+from py_src.src.Geometry.Node import SceneNode
 from src.Data.Scene import Scene
 
 
 def test_world_transform_applied_to_normals():
     # Parent with non-uniform scale to introduce a difference between local and world transform
     parent_transform = Transform(position=np.zeros(3), rotation=np.zeros(3), scale=np.array([2.0, 1.0, 1.0]))
-    parent = Primitive(transform=parent_transform, name="parent")
+    parent = SceneNode(transform=parent_transform, name="parent")
 
     # Child sphere at origin (local)
     child_transform = Transform.identity()
     sphere = Sphere()
-    child = Primitive(transform=child_transform, shape=sphere, name="child")
+    child = SceneNode(transform=child_transform, shape=sphere, name="child")
 
     parent.add_child(child)
 

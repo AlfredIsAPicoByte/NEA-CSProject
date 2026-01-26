@@ -7,11 +7,11 @@ from dataclasses import dataclass, field, replace
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
 from src.Data.Color import Color, ColorGradient
-from src.Geometry.Primitive import Primitive
+from src.Data.Scene import SceneNode
 from src.Geometry.BVH import BVHNode, build_bvh_tree
 from src.Material.Core import PBRMaterial, MaterialType
 from src.Material.BSDF import calculate_throughput_weight
-from src.Lighting.Core import LightSource
+from src.Lighting.Core import Light
 from src.Data.Sampling.Core import Sampler
 from src.Data.Scene import Scene
 from src.Utilities.Common import unit, attenuate_distance_exponential, attenuate_distance_coefficents
@@ -87,7 +87,7 @@ class BackgroundSettings:
     def _sample_equirectangular_map(self, texture: np.ndarray, direction: np.ndarray) -> Color:
         """
         Samples a 2D texture using Spherical (Equirectangular) mapping.
-        Texture is assumed to be a numpy array of shape (H, W, 3).
+        Texture is assumed to be a numpy array of SignedDistanceShape (H, W, 3).
         """
         # Convert 3D Direction -> 2D UV Coordinates
         # u = atan2(z, x) / 2pi + 0.5
@@ -102,7 +102,7 @@ class BackgroundSettings:
         v = float(np.arcsin(y_clamped)) / np.pi + 0.5
         
         # Map UV to Pixel Coordinates (robust to tiny floating errors)
-        height, width, _ = texture.shape
+        height, width, _ = texture.SignedDistanceShape
 
         # Ensure u/v are in [0,1)
         u = u % 1.0
@@ -153,7 +153,7 @@ class ShadingStrategy(ABC):
         trace_function: Callable[[Scene, TracingRay, int, Sampler], Color],
         sampler: Sampler,
         intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
-        occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+        occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
         bias: float = 1e-4,
         stats: Optional["TracingStats"] = None
     ) -> Color:
@@ -176,7 +176,7 @@ class ShadingStrategy(ABC):
         :param intersection_function: Description
         :type intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]]
         :param occlusion_function: Description
-        :type occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool]
+        :type occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool]
         :param bias: Description
         :type bias: float
         :param stats: Description
@@ -415,7 +415,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
     Specific BRDFs (e.g., Lambertian, Cook-Torrance) should inherit from this class.
     """
     _cache_ambient_occlusion_map: Optional[np.ndarray] = None
-    _cache_light_bvh: Optional[BVHNode] = None
+    _cache_light_tree: Optional[BVHNode] = None
 
     def __init__(self, settings: Optional[PhysicalShadingSettings] = None):
         self.settings = settings if settings is not None else PhysicalShadingSettings()
@@ -427,11 +427,11 @@ class PhysicalShadingStrategy(ShadingStrategy):
             self,
             scene: Scene,
             point: np.ndarray,
-            light: LightSource,
+            light: Light,
             sampler: Sampler,
-            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
             bias: float = 1e-4,
-            exclude_obj: Optional[Primitive] = None,
+            exclude_obj: Optional[SceneNode] = None,
             stats: Optional["TracingStats"] = None
         ) -> float:
         """
@@ -443,15 +443,15 @@ class PhysicalShadingStrategy(ShadingStrategy):
         :param point: Description
         :type point: np.ndarray
         :param light: Description
-        :type light: LightSource
+        :type light: Light
         :param sampler: Description
         :type sampler: Sampler
         :param occlusion_function: Description
-        :type occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool]
+        :type occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool]
         :param bias: Description
         :type bias: float
         :param exclude_obj: Description
-        :type exclude_obj: Optional[Primitive]
+        :type exclude_obj: Optional[SceneNode]
         :param stats: Description
         :type stats: Optional["TracingStats"]
         :return: Description
@@ -489,11 +489,11 @@ class PhysicalShadingStrategy(ShadingStrategy):
             self,
             scene: Scene,
             point: np.ndarray,
-            light: LightSource,
+            light: Light,
             sampler: Sampler,
-            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
             bias: float = 1e-4,
-            exclude_obj: Optional[Primitive] = None,
+            exclude_obj: Optional[SceneNode] = None,
             stats: Optional["TracingStats"] = None
         ) -> float:
         """
@@ -527,9 +527,9 @@ class PhysicalShadingStrategy(ShadingStrategy):
             self,
             point: np.ndarray,
             normal: np.ndarray,
-            scene_objects: List[Primitive],
+            objects: List[SceneNode],
             sampler: Sampler,
-            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
             stats: Optional["TracingStats"] = None) -> float:
         """
         Generates an ambient occlusion factor based on surrounding geometry.
@@ -544,7 +544,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
             sample_dir = sampler.sample_cosine_hemisphere(normal)
             sample_origin = point + normal * self.ambience_settings.occlusion_bias
 
-            if occlusion_function(sample_origin, sample_dir, scene_objects, self.ambience_settings.occlusion_radius, None, stats):
+            if occlusion_function(sample_origin, sample_dir, objects, self.ambience_settings.occlusion_radius, None, stats):
                 occluded_count += 1
 
         occlusion_factor = 1.0 - (float(occluded_count) / float(self.ambience_settings.occlusion_sample_count))
@@ -555,7 +555,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
             scene: Scene,
             sampler: Sampler,
             intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
-            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
             stats: Optional["TracingStats"] = None
         ) -> np.ndarray:
         """
@@ -595,7 +595,7 @@ class LambertShading(PhysicalShadingStrategy):
             hit_info: "HitInfo",
             sampler: Sampler,
             intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
-            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
             bias: float = 1e-4,
             stats: Optional["TracingStats"] = None,
             *args, **kwargs
@@ -617,7 +617,7 @@ class LambertShading(PhysicalShadingStrategy):
 
         # 3. Iterate Over Scene Lights
         # ----------------------------
-        def visibility_fn(point: np.ndarray, light: LightSource) -> float:
+        def visibility_fn(point: np.ndarray, light: Light) -> float:
             # Calculate direction to this specific light (or sample point)
             shadow_factor = self._calculate_shadow_visibility(scene, point, light, sampler, occlusion_function, exclude_obj=hit_info.obj, stats=stats)
             ambient_occlusion = 1.0
@@ -642,9 +642,20 @@ class LambertShading(PhysicalShadingStrategy):
         # 4. Evaluate Direct Lighting
         # The material class already contains the logic to loop over lights
         # and apply the BRDF (Diffuse + Specular).
+        lights = scene.get_objects_by_type(Light)
+        if lights is None or len(lights) == 0:
+            return final_color  # No lights in scene
+        
+        active_lights = [light for light in lights if light.active]
+        if not active_lights:
+            return final_color  # No active lights in scene
+        
+        if self._cache_light_tree is None and self.shadow_settings.use_light_tree:
+            self._cache_light_tree = build_bvh_tree(active_lights)
+            active_lights = self._cache_light_tree # Use BVH for light sampling
         
         direct_light = material.evaluate_direct_light(
-            scene_lights=scene.lights,
+            scene_lights=active_lights,
             hit_info=hit_info,
             view_dir=view_dir,
             visibility_function=visibility_fn,
@@ -678,7 +689,7 @@ class RecursiveLabertShading(LambertShading):
             trace_function: Callable[[Scene, TracingRay, int, Sampler], Color],
             sampler: Sampler,
             intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
-            occlusion_function: Callable[[np.ndarray, np.ndarray, List[Primitive], float, Optional[Primitive], Optional["TracingStats"]], bool],
+            occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
             bias: float = 1e-4,
             stats: Optional["TracingStats"] = None,
             *args, **kwargs

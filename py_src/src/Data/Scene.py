@@ -1,22 +1,157 @@
+import numpy as np
 from typing import List, Optional
+from dataclasses import dataclass, field
 
+from .Transform import Transform
 from .Camera import Camera
-from src.Geometry.Primitive import Primitive
-from src.Lighting.Core import LightSource
+from .Context import ContextBase
+from src.Geometry.AABB import AABB
+
+@dataclass
+class SceneNode:
+    """
+    A node in the scene graph. 
+    Combines a position in 3D space and possibley some data.
+    Can act as a parent to other SceneNodes.
+    The data object contains the contents of the node (e.g., mesh, light, SDF, etc). This prevents inheritance explosion hell lol.
+    """
+    name: str = "Object"
+    context: Optional[ContextBase] = None  # Generic data field; can be shape, mesh, etc.
+    transform: Transform = field(default_factory=Transform.identity)
+
+    active: bool = True  # Whether this node is active in the scene
+
+    # Hierarchy
+    children: List['SceneNode'] = field(default_factory=list)
+    parent: Optional['SceneNode'] = field(default=None, repr=False)
+    
+    # Caching / Optimization
+    _world_matrix: Optional[np.ndarray] = None # 4x4 World Transformation Matrix
+    _inverse_world_matrix: Optional[np.ndarray] = None # Inverse of the world matrix
+    _cache_objects: Optional[List['SceneNode']] = None # A list of this and all descendants in a flat list
+    _aabb_bounds: Optional[AABB] = None # Axis-Aligned Bounding Box for this SceneNode
+
+    def __post_init__(self):
+        # Ensure children know their parent
+        for child in self.children:
+            child.parent = self
+
+    def add_child(self, child: 'SceneNode'):
+        """Attaches a child node to this node."""
+        if child not in self.children:
+            self.children.append(child)
+            child.parent = self
+
+    def remove_child(self, child: 'SceneNode'):
+        """Detaches a child node."""
+        if child in self.children:
+            self.children.remove(child)
+            child.parent = None
+
+    def update_matrices(self, parent_matrix: Optional[np.ndarray] = None):
+        """
+        Recursive pass to update the world matrix of this node and all children.
+        Call this ONCE before rendering starts.
+        """
+        # 1. Get Local Matrix
+        local_mat = self.transform.to_matrix()
+
+        # 2. Multiply by Parent (if exists)
+        if parent_matrix is not None:
+            self._world_matrix = parent_matrix @ local_mat
+        else:
+            self._world_matrix = local_mat
+            
+        # 3. Calculate Inverse (Needed for Ray Intersection: World -> Local)
+        try:
+            self._inverse_world_matrix = np.linalg.inv(self._world_matrix)
+        except np.linalg.LinAlgError:
+            self._inverse_world_matrix = np.eye(4)
+
+        # 4. Propagate down the tree
+        for child in self.children:
+            child.update_matrices(self._world_matrix)
+
+    def get_world_matrix(self) -> np.ndarray:
+        if self._world_matrix is None:
+            self.update_matrices()
+        
+        return self._world_matrix or np.eye(4)
+    
+    def get_world_inverse_matrix(self) -> np.ndarray:
+        if self._inverse_world_matrix is None:
+            self.update_matrices()
+        
+        return self._inverse_world_matrix or np.eye(4)
+
+    @property
+    def world_transform(self) -> Transform:
+        """Returns a `Transform` representing the object's world transform (position/rotation/scale).
+        Useful for APIs that expect a `Transform` object rather than raw matrices."""
+        # Ensure matrices are up-to-date
+        mat = self.get_world_matrix()
+        return Transform.from_matrix(mat)
+
+    def flatten_children(self, include_self: bool = True):
+        """
+        Returns a flat list of this object and all descendants.
+        Useful for building the global list of objects for the BVH or Renderer.
+        """
+        result = []
+        stack = [self] if include_self else []
+        
+        while stack:
+            current = stack.pop()
+            
+            if current is not None:
+                result.append(current)
+
+                for child in reversed(current.children):
+                    stack.append(child)
+            else:
+                for child in reversed(self.children):
+                    stack.append(child)
+
+        self._cache_objects = result
+
+    def get_objects_flat(self, include_self: bool = True):
+        if self._cache_objects is None:
+            self.flatten_children(include_self)
+        
+        return self._cache_objects
+    
+    def get_bounds(self) -> AABB:
+        """
+        Delegates the bounds calculation to the data object if it exists.
+        """
+        # Check if context exists and has the method we need
+        if self.context is not None and hasattr(self.context, 'get_bounds') and callable(self.context.get_bounds):
+            self._aabb_bounds = self.context.get_bounds(self.get_world_matrix())
+            return self._aabb_bounds or AABB.empty()
+            
+        return AABB.empty()
+    
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        return self is other
+
+    def __repr__(self):
+        return f"SceneNode(name={self.name})"
 
 class Scene:
     """
-    A container for objects and lights used in rendering algorithms
+    A container for Scene Node objects used in rendering algorithms.
     """
     def __init__(self, name: str = "Scene", camera: Optional[Camera] = None, **kwargs):
         self.name = name
         self.camera: Camera = camera or Camera()
 
-        self.objects: List[Primitive] = []
-        self.lights: List[LightSource] = []
+        self.objects: List[SceneNode] = []
         
         self._version: int = 1
-        self._cache_objects: Optional[List[Primitive]] = None
+        self._cache_objects: Optional[List[SceneNode]] = None
 
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -32,12 +167,13 @@ class Scene:
         """
         return self._version
     
-    def get_objects_flat(self) -> List[Primitive]:
+    def get_objects_flat(self) -> List[SceneNode]:
         """
-        Docstring for get_objects_flat
+        Returns a flat list of all objects in the scene, including children.
+        Caches the result for faster access on subsequent calls.
         
         :return: Description
-        :rtype: List[Primitive]
+        :rtype: List[SceneNode]
         """
         if self._cache_objects is None:
             self.flatten_objects()
@@ -84,20 +220,46 @@ class Scene:
         """
         self.camera = camera
 
-    def add_object(self, obj: Primitive):
+    def add_object(self, obj: SceneNode):
         """
-        Adds an object to the scene. 
+        Adds a new object to the scene and updates the version counter.
         """
         self.objects.append(obj)
         self.update_version()
 
-    def add_light(self, light: LightSource):
+    def add_object_by_context(self, context: ContextBase, name: str = "Object") -> SceneNode:
         """
-        Adds a light source to the scene.
+        Creates a new SceneNode with the given context and adds it to the scene.
+        
+        :param context: The context data to attach to the new SceneNode.
+        :param name: The name of the new SceneNode.
+        :return: The newly created SceneNode.
         """
-        self.lights.append(light)
-        self.update_version()
+        new_node = SceneNode(name=name, context=context)
+        self.add_object(new_node)
+        return new_node
 
+    def remove_object(self, obj: SceneNode):
+        """
+        Removes an object from the scene and updates the version counter.
+        """
+        if obj in self.objects:
+            self.objects.remove(obj)
+            self.update_version()
+
+    def get_objects_by_type(self, context_type: type) -> List[SceneNode]:
+        """
+        Returns a list of all scene objects that contain data of the specified context type.
+        
+        :param context_type: The type of context to filter by (e.g., MeshContext, LightContext).
+        :return: A list of SceneNode objects matching the specified context type.
+        """
+        result = []
+        for obj in self.get_objects_flat():
+            if obj.data is not None and isinstance(obj.data, context_type):
+                result.append(obj)
+        return result
+    
     def clear(self):
         """
         Removes all the objects and light sources from the scene, while updating the version counter.
@@ -105,13 +267,6 @@ class Scene:
         self.objects.clear()
         self.lights.clear()
         self.update_version()
-
-    def reset(self):
-        """
-        Removes all the objects and light sources from the scene, without updating the version counter.
-        """
-        self.objects.clear()
-        self.lights.clear()
     
     def update_version(self):
         """

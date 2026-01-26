@@ -13,9 +13,9 @@ from src.Data.Sampling import SamplingManager, SampleSettings, PixelFilter
 from src.Data.Ray import Ray
 from src.Data.Color import Color, ColorGradient
 from src.Data.Ratio import Ratio
-from src.Geometry.Core import Sphere
-from src.Geometry.Primitive import Primitive
-from src.Lighting.Core import LightSource
+from py_src.src.Geometry.SDF import Sphere
+from py_src.src.Geometry.Node import SceneNode
+from src.Lighting.Core import Light
 from src.Material.Core import PBRMaterial
 from src.Material.Factory import MaterialFactory
 from src.Rendering.RayTracing import RayTracer, RayTracingSettings, Shading
@@ -104,11 +104,11 @@ def test_ray_check_points(t, expected_point, should_match):
     else:
         assert not is_close, f"Point at t={t} matched {expected_point} but shouldn't have"
 
-def test_Primitive_creation():
+def test_SceneNode_creation():
     transform = Transform.identity()
     shape = Sphere()
     
-    obj = Primitive(transform=transform, shape=shape)
+    obj = SceneNode(transform=transform, shape=shape)
     
     assert obj.shape == shape
     assert obj.transform == transform
@@ -178,12 +178,12 @@ def test_ambient_lighting():
         resolution_width=4, resolution_height=4,
         camera_type=CameraType.PERSPECTIVE
     )
-    light = LightSource(position=np.array([10,10,-10]), color=Color(1.0, 1.0, 1.0), intensity=0.5)
+    light = Light(position=np.array([10,10,-10]), color=Color(1.0, 1.0, 1.0), intensity=0.5)
     material = MaterialFactory.create_diffuse(
         albedo=Color(0.8, 0.8, 0.8),
         roughness=0.5,
     )
-    sphere = Primitive(shape=Sphere())
+    sphere = SceneNode(shape=Sphere())
     # Attach PBR data to shape for compatibility
     sphere.material = material
     scene = Scene(name="ambient_test", camera=cam, objects=[sphere], lights=[

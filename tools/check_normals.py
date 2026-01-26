@@ -4,14 +4,14 @@ import numpy as np
 repo = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.join(repo, 'py_src'))
 
-from src.Geometry.Primitive import Primitive
-from src.Geometry.Core import Sphere
+from src.Geometry.Node import SceneNode
+from src.Geometry.SDF import Sphere
 from src.Data.Transform import Transform
 from src.Utilities.Scene import Scene
 from src.Data.Ray import Ray
 
 # Sphere at origin
-sphere = Primitive(name="S", transform=Transform(position=np.array([0.0,0.0,0.0])), shape=Sphere())
+sphere = SceneNode(name="S", transform=Transform(position=np.array([0.0,0.0,0.0])), shape=Sphere())
 scene = Scene(camera=None)
 scene.add_object(sphere)
 

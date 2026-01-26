@@ -1,8 +1,8 @@
-from .Core import LightSource, LightType
+from .Core import Light, LightType
 from .Optics import reflect, refract, calculate_reflectance, schlick_fresnel_metalic, schlick_fresnel_refactive, get_reflection_ratio, REFRACTIVE_INDICES
 
 __all__ = [
-    "LightSource",
+    "Light",
     "LightType",
     "reflect",
     "refract",

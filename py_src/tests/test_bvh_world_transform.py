@@ -1,8 +1,8 @@
 import numpy as np
 from src.Data.Transform import Transform
 from src.Geometry.BVH import build_bvh_tree
-from src.Geometry.Primitive import Primitive
-from src.Geometry.Core import Sphere
+from py_src.src.Geometry.Node import SceneNode
+from py_src.src.Geometry.SDF import Sphere
 from src.Rendering.RayTracing.Intersections import BVHIntersection
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
@@ -11,8 +11,8 @@ from src.Data.Scene import Scene
 
 def test_bvh_respects_world_transforms():
     # Create two spheres separated along X axis
-    p1 = Primitive(name="A", transform=Transform(position=np.array([0.0, 0.0, 0.0])), shape=Sphere())
-    p2 = Primitive(name="B", transform=Transform(position=np.array([5.0, 0.0, 0.0])), shape=Sphere())
+    p1 = SceneNode(name="A", transform=Transform(position=np.array([0.0, 0.0, 0.0])), shape=Sphere())
+    p2 = SceneNode(name="B", transform=Transform(position=np.array([5.0, 0.0, 0.0])), shape=Sphere())
 
     p1.update_matrices()
     p2.update_matrices()
@@ -31,7 +31,7 @@ def test_bvh_respects_world_transforms():
 def test_bvh_large_distant_object_no_hit():
     """Test that a large object far beyond max_distance is not hit."""
     # Create a large sphere far away
-    large_sphere = Primitive(
+    large_sphere = SceneNode(
         name="LargeBackground", 
         transform=Transform(position=np.array([0.0, 0.0, 1500.0]), scale=np.array([100.0, 100.0, 100.0])), 
         shape=Sphere()
@@ -53,7 +53,7 @@ def test_bvh_large_distant_object_no_hit():
 def test_bvh_large_distant_object_with_hit():
     """Test that the same large distant object is hit when max_distance is increased."""
     # Create a large sphere far away
-    large_sphere = Primitive(
+    large_sphere = SceneNode(
         name="LargeBackground", 
         transform=Transform(position=np.array([0.0, 0.0, 1500.0]), scale=np.array([100.0, 100.0, 100.0])), 
         shape=Sphere()
@@ -76,7 +76,7 @@ def test_bvh_large_distant_object_with_hit():
 def test_bvh_large_scaled_object():
     """Test BVH with a large scaled object close by."""
     # Create a large scaled sphere close by
-    large_sphere = Primitive(
+    large_sphere = SceneNode(
         name="LargeClose", 
         transform=Transform(position=np.array([0.0, 0.0, 10.0]), scale=np.array([50.0, 50.0, 50.0])), 
         shape=Sphere()
@@ -110,7 +110,7 @@ def test_bvh_camera_rays_hit_distant_objects():
     )
 
     # Large object far away
-    large_sphere = Primitive(
+    large_sphere = SceneNode(
         name="DistantLarge", 
         transform=Transform(position=np.array([0.0, 0.0, 1000.0]), scale=np.array([50.0, 50.0, 50.0])), 
         shape=Sphere()
@@ -133,7 +133,7 @@ def test_bvh_camera_rays_hit_distant_objects():
 def test_bvh_no_hit_beyond_max_distance():
     """Test that objects beyond max_distance are not hit."""
     # Object at distance 1500
-    distant_obj = Primitive(
+    distant_obj = SceneNode(
         name="VeryDistant", 
         transform=Transform(position=np.array([0.0, 0.0, 1500.0])), 
         shape=Sphere()

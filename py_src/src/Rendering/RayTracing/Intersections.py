@@ -7,10 +7,9 @@ from dataclasses import dataclass, field, replace
 from src.Data.Transform import Transform
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
+from src.Data.Scene import SceneNode
 from src.Geometry.BVH import BVHNode, build_bvh_tree
-from src.Geometry.Core import Shape
-from src.Geometry.BVH import BVHNode
-from src.Geometry.Primitive import Primitive
+from src.Geometry.SDF import SignedDistanceShape
 from src.Utilities.Common import unit
 from src.Data.Scene import Scene
 
@@ -61,7 +60,7 @@ class IntersectionStrategy(ABC):
         """
         ...
     
-    def _resolve_normal(self, world_point: np.ndarray, world_transform: Transform, local_shape: Shape) -> np.ndarray:
+    def _resolve_normal(self, world_point: np.ndarray, world_transform: Transform, local_shape: SignedDistanceShape) -> np.ndarray:
         """
         Calculates the World Normal by transforming the point to local space,
         getting the local normal, and transforming it back.
@@ -71,7 +70,7 @@ class IntersectionStrategy(ABC):
         :param world_transform: The transform component of the object being hit.
         :type world_transform: Transform
         :param local_shape: The geometric definition (SDF) of the object.
-        :type local_shape: Shape
+        :type local_shape: SignedDistanceShape
         :return: The normalized surface normal vector in World Space.
         :rtype: np.ndarray
         """
@@ -88,15 +87,15 @@ class IntersectionStrategy(ABC):
 
     def _intersect_sdf_object(
             self,
-            obj: Primitive,
+            obj: SceneNode,
             ray: TracingRay,
             stats: Optional["TracingStats"] = None
         ) -> HitInfo:
         """
         Shared logic for Ray vs SDF Object intersection using signed distance fields.
         
-        :param obj: The specific object primitive to test intersection against.
-        :type obj: Primitive
+        :param obj: The specific object SceneNode to test intersection against.
+        :type obj: SceneNode
         :param ray: The ray to march through the object's distance field.
         :type ray: TracingRay
         :param stats: Optional stats collector for profiling intersection costs.
@@ -104,10 +103,10 @@ class IntersectionStrategy(ABC):
         :return: HitInfo indicating if and where the ray intersected the object.
         :rtype: HitInfo
         """
-        local_shape = getattr(obj, "shape", None)
+        local_shape = getattr(obj.context, "shape", None)
         if local_shape is None:
             return HitInfo.miss()
-        safe_shape = cast(Shape, local_shape)
+        safe_shape = cast(SignedDistanceShape, local_shape)
 
         # 1. Transform Ray to Local Space
         # We assume world_transform is up to date
@@ -128,8 +127,8 @@ class IntersectionStrategy(ABC):
 
             if stats: stats.triangle_tests += 1
 
-            # Get unscaled distance from shape
-            local_dist = safe_shape.signed_distance(local_point) * sign_modifier
+            # Get unscaled distance from SignedDistanceShape
+            local_dist = safe_shape.get_distance(local_point) * sign_modifier
 
             # Hit Condition
             if local_dist < self.settings.epsilon:
@@ -164,9 +163,9 @@ class IntersectionStrategy(ABC):
             self,
             point_1: np.ndarray,
             point_2: np.ndarray,
-            objects: List[Primitive],
+            objects: List[SceneNode],
             bias: float = 1e-4,
-            exclude_obj: Optional[Primitive] = None,
+            exclude_obj: Optional[SceneNode] = None,
             stats: Optional["TracingStats"] = None
         ) -> bool:
         """
@@ -176,12 +175,12 @@ class IntersectionStrategy(ABC):
         :type point_1: np.ndarray
         :param point_2: The target point (usually the light source position).
         :type point_2: np.ndarray
-        :param objects: A list of primitives in the scene to check for occlusion.
-        :type objects: List[Primitive]
+        :param objects: A list of SceneNodes in the scene to check for occlusion.
+        :type objects: List[SceneNode]
         :param bias: A small offset applied to the origin to avoid surface acne.
         :type bias: float
         :param exclude_obj: The object the ray originated from (to prevent self-shadowing).
-        :type exclude_obj: Optional[Primitive]
+        :type exclude_obj: Optional[SceneNode]
         :return: True if an object blocks the path between point_1 and point_2, False otherwise.
         :param stats: Optional stats collector for profiling intersection costs.
         :type stats: Optional["TracingStats"]
@@ -248,10 +247,10 @@ class RayMarchingIntersection(IntersectionStrategy):
                 surface_normal = np.array([0.0, 0.0, 1.0])
                 
                 if closest_object is not None:
-                    shape = getattr(closest_object, "shape", None)
+                    SignedDistanceShape = getattr(closest_object, "SignedDistanceShape", None)
 
-                    if shape is not None:
-                        safe_shape = cast(Shape, shape)
+                    if SignedDistanceShape is not None:
+                        safe_shape = cast(SignedDistanceShape, SignedDistanceShape)
                         safe_transform = getattr(closest_object, 'world_transform', closest_object.transform)
 
                         # 3. Rotate normal back to world space
@@ -284,21 +283,21 @@ class RayMarchingIntersection(IntersectionStrategy):
 
         return HitInfo.miss()
     
-    def _distance_estimator(self, objects: List[Primitive], point: np.ndarray, ray: Optional[TracingRay] = None, exclude_obj: Optional[Primitive] = None) -> Tuple[Optional[Primitive], float]:
+    def _distance_estimator(self, objects: List[SceneNode], point: np.ndarray, ray: Optional[TracingRay] = None, exclude_obj: Optional[SceneNode] = None) -> Tuple[Optional[SceneNode], float]:
         """
         Evaluates the Scene SDF to find the closest object and the distance to it.
-        This relies on obj.shape.signed_distance() correctly handling Local->World conversion.
+        This relies on obj.context.shape.signed_distance() correctly handling Local->World conversion.
         
-        :param objects: List of primitive objects in the scene.
-        :type objects: List[Primitive]
+        :param objects: List of SceneNode objects in the scene.
+        :type objects: List[SceneNode]
         :param point: The world-space point to evaluate distance from.
         :type point: np.ndarray
         :param ray: Optional ray for handling internal marching (is_inside flag).
         :type ray: Optional[TracingRay]
         :param exclude_obj: Object to exclude from distance calculations.
-        :type exclude_obj: Optional[Primitive]
+        :type exclude_obj: Optional[SceneNode]
         :return: Tuple of (closest_object, distance_to_closest)
-        :rtype: Tuple[Primitive | None, float]
+        :rtype: Tuple[SceneNode | None, float]
         """
         min_dist = float("inf")
         closest_object = None
@@ -309,11 +308,11 @@ class RayMarchingIntersection(IntersectionStrategy):
             if exclude_obj is not None and obj is exclude_obj:
                 continue
             
-            # 2. Check for Shape
-            shape = getattr(obj, "shape", None)
+            # 2. Check for SignedDistanceShape
+            shape = getattr(obj.context, "shape", None)
             if shape is None:
                 continue
-            shape = cast(Shape, shape)
+            safe_shape = cast(SignedDistanceShape, shape)
 
             # 3. Calculate Distance
             # Use the WORLD transform so hierarchical/parented objects are handled properly
@@ -321,7 +320,7 @@ class RayMarchingIntersection(IntersectionStrategy):
             local_point = safe_transform.inverse_transform_point(point)
 
             try:
-                local_dist = float(shape.signed_distance(local_point))
+                local_dist = float(safe_shape.signed_distance(local_point))
                 
                 # Apply sign modifier for internal marching
                 world_dist = local_dist * min(*safe_transform.scale) * sign_modifier
@@ -352,11 +351,12 @@ class InverseSDFIntersection(IntersectionStrategy):
         ) -> HitInfo:
         closest_hit = HitInfo.miss()
         
-        for obj in scene.objects:
+        for obj in scene.get_objects_flat():
             # Optional: AABB Culling
             if self.use_bounding_box:
-                obj.generate_bounds()
-                if obj._aabb_bounds and obj._aabb_bounds.intersect(ray) == float('inf'):
+                box = obj.get_bounds()
+                t_box = box.intersect(ray, self.settings.max_distance)
+                if t_box == float('inf'):
                     continue
 
             # Intersect
@@ -426,9 +426,9 @@ class BVHIntersection(IntersectionStrategy):
         self, 
         point_1: np.ndarray, 
         point_2: np.ndarray, 
-        objects: List[Primitive], 
+        objects: List[SceneNode], 
         bias: float = 1e-4,
-        exclude_obj: Optional[Primitive] = None,
+        exclude_obj: Optional[SceneNode] = None,
         stats: Optional["TracingStats"] = None
     ) -> bool:
         """
@@ -530,10 +530,10 @@ class AnalyticalIntersection(IntersectionStrategy):
         sign_modifier = -1.0 if ray.is_inside else 1.0
 
         for obj in safe_objects:
-            local_shape = getattr(obj, "shape", None)
+            local_shape = getattr(obj.context, "shape", None)
             if local_shape is None:
                 return HitInfo.miss()
-            safe_shape = cast(Shape, local_shape)
+            safe_shape = cast(SignedDistanceShape, local_shape)
             
             # --- 1. Transform Ray to Local Space ---
             # We use the cached 'world_transform' if available, otherwise calculate it
@@ -541,8 +541,8 @@ class AnalyticalIntersection(IntersectionStrategy):
             local_ray = transform.inverse_transform_ray(ray)
 
             # --- 2. Get Intersections (Analytical) ---
-            # Shape returns local points (e.g., (0,0,1) for a unit sphere)
-            local_hits = safe_shape.get_ray_intersections(local_ray)
+            # SignedDistanceShape returns local points (e.g., (0,0,1) for a unit sphere)
+            local_hits = safe_shape.ray_intersect(local_ray, self.settings.max_distance * sign_modifier)
             
             if not local_hits:
                 continue
@@ -569,10 +569,10 @@ class AnalyticalIntersection(IntersectionStrategy):
             return HitInfo.miss()
 
         # Calculate Normal for the closest hit
-        local_shape = getattr(closest_object, "shape", None)
+        local_shape = getattr(closest_object.context, "shape", None)
         if local_shape is None:
             return HitInfo.miss()
-        safe_shape = cast(Shape, local_shape)
+        safe_shape = cast(SignedDistanceShape, local_shape)
         safe_transform = getattr(closest_object, 'world_transform', closest_object.transform)
 
         surface_normal = self._resolve_normal(closest_point, safe_transform, safe_shape)

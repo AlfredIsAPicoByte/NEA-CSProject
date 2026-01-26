@@ -10,9 +10,9 @@ sys.path.insert(0, current_dir)
 
 from src.Data.Transform import Transform
 from src.Data.Color import Color
-from src.Geometry.Core import Plane
-from src.Geometry.Primitive import Primitive
-from src.Lighting import LightSource
+from py_src.src.Geometry.SDF import Plane
+from py_src.src.Geometry.Node import SceneNode
+from src.Lighting import Light
 from src.Rendering.Shading import LambertShading, ShadowSettings, AmbienceSettings, BackgroundSettings
 from src.Data.Scene import Scene
 
@@ -21,12 +21,12 @@ def test_self_shadow_ignored():
 
     # Large plane centered at origin
     plane = Plane()
-    plane_obj = Primitive(transform=Transform.identity(), shape=plane, material=None)
+    plane_obj = SceneNode(transform=Transform.identity(), shape=plane, material=None)
 
     # Make a light very close above the plane center
-    light = LightSource(position=np.array([0.0, 5.0, 0.0]), color=Color(1,1,1), intensity=1.0, radius=0.0)
+    light = Light(position=np.array([0.0, 5.0, 0.0]), color=Color(1,1,1), intensity=1.0, radius=0.0)
     scene.add_object(plane_obj)
-    scene.add_light(light)
+    scene.add_object(light)
 
     # Hit point near the center of plane
     point = np.array([0.0, 0.0, 0.0]) + np.array([0.0, 1e-3, 0.0])  # slightly above the plane

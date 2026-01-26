@@ -10,11 +10,11 @@ sys.path.insert(0, current_dir)
 from src.Data.Transform import Transform
 from src.Data.Ray import Ray
 from src.Data.Color import Color
-from src.Geometry.Core import  Sphere
-from src.Geometry.Primitive import Primitive
-from src.Rendering.Raytracing import RayTracer
-from src.Rendering.Intersections import BVHIntersection
-from src.Rendering.Shading import ShadingStrategy, AmbienceSettings, ShadowSettings, BackgroundSettings
+from src.Geometry.SDF import  Sphere
+from src.Geometry.Node import SceneNode
+from src.Rendering.RayTracing.Core import RayTracer
+from src.Rendering.RayTracing.Intersections import BVHIntersection
+from src.Rendering.RayTracing.Shading import ShadingStrategy, AmbienceSettings, ShadowSettings, BackgroundSettings
 from src.Data.Sampling.Core import RandomSampler
 from src.Data.Scene import Scene
 
@@ -28,7 +28,7 @@ class NaNShading(ShadingStrategy):
 def test_nan_tracking():
     scene = Scene()
     sph = Sphere()
-    obj = Primitive(transform=Transform.identity(), shape=sph)
+    obj = SceneNode(transform=Transform.identity(), shape=sph)
     scene.add_object(obj)
 
     ray = Ray(origin=np.array([0.0, 0.0, -5.0]), orientation=np.array([0.0, 0.0, 1.0]))

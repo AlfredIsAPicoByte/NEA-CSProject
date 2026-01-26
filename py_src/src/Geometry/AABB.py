@@ -53,11 +53,11 @@ class AABB:
         return (transformation_matrix @ corners_4d.T).T[:, :3]
 
     @staticmethod
-    def from_transform_shape(world_Transform: Transform, shape: Any, padding: float = 1e-2) -> 'AABB':
+    def from_transform_data_object(world_Transform: Transform, data: Any, padding: float = 1e-2) -> 'AABB':
         """
         Calculates the world-space AABB for a given object.
         """
-        if shape is None:
+        if data is None:
             return AABB(np.zeros(3), np.zeros(3))
         
         # 1. Get Transform Matrix
@@ -66,16 +66,26 @@ class AABB:
         # 2. Define the 8 corners of a cube localy
         local_bounds = None
         
-        if shape is not None:
-            # 1. Delegate to the signed distance shape interface (Already defined within the shape class)
-            if hasattr(shape, "transform_aabb") and callable(shape.transform_aabb):
-                return shape.transform_aabb(matrix, padding)
+        if data is not None:
+            # Try to get local bounds from data object
+            if hasattr(data, "get_local_bounds"):
+                local_bounds = data.get_local_bounds()
 
-            # 2. Handle Convex Shapes (Anything with corners)
-            if hasattr(shape, "convex_hull"):
-                hull = shape.convex_hull()
+            # Try to get convex hull points if available
+            if hasattr(data, "convex_hull"):
+                hull = data.convex_hull()
                 if isinstance(hull, list) and len(hull) > 0:
                     local_bounds = np.array(hull)
+            
+            # Try to get vertex/point array if available
+            if hasattr(data, "vertices"):
+                verts = data.get_vertex_array()
+                if verts is not None and len(verts) > 0:
+                    local_bounds = verts
+            elif hasattr(data, "points"):
+                pts = data.get_point_array()
+                if pts is not None and len(pts) > 0:
+                    local_bounds = pts
 
         # Fallback: Unit Cube (-0.5 to 0.5)
         if local_bounds is None:
@@ -104,6 +114,7 @@ class AABB:
         if operation == 'union':
             min_point = np.maximum(box_a.min_point, box_b.min_point)
             max_point = np.maximum(box_a.max_point, box_b.max_point)
+        
         elif operation == 'intersect':
             min_point = np.maximum(box_a.min_point, box_b.min_point)
             max_point = np.minimum(box_a.max_point, box_b.max_point)
@@ -119,3 +130,25 @@ class AABB:
     @property
     def center(self) -> np.ndarray:
         return (self.min_point + self.max_point) * 0.5
+    
+    @property
+    def size(self) -> np.ndarray:
+        return self.max_point - self.min_point
+    
+    @staticmethod
+    def empty() -> 'AABB':
+        """Returns an empty AABB."""
+        return AABB(np.full(3, np.inf), np.full(3, -np.inf))
+    
+    @staticmethod
+    def infinite() -> 'AABB':
+        """Returns an infinite AABB."""
+        return AABB(np.full(3, -np.inf), np.full(3, np.inf))
+    
+    @staticmethod
+    def unit_cube() -> 'AABB':
+        """Returns a unit cube AABB from (-0.5, -0.5, -0.5) to (0.5, 0.5, 0.5)."""
+        return AABB(np.full(3, -0.5), np.full(3, 0.5))
+    
+    def __repr__(self) -> str:
+        return f"AABB(min={self.min_point}, max={self.max_point})"

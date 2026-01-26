@@ -1,5 +1,14 @@
 import numpy as np
 
+"""
+Geometry Constructive Solid Geometry (CSG) Operations.
+Provides functions to combine signed distance fields (SDFs) using CSG operations.
+Also includes:
+    - Smooth variants for blending shapes
+    - Standard operations: union, addition, subtraction, intersection
+    - XOR operation for exclusive combinations
+"""
+
 def op_union(d1, d2):
     return np.min(d1, d2)
 

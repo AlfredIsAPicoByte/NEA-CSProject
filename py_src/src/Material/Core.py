@@ -7,7 +7,7 @@ from typing import List, Tuple, Callable
 from src.Data.Hit import HitInfo
 from src.Data.Color import Color
 from .BSDF import *
-from src.Lighting.Core import LightSource
+from src.Lighting.Core import Light
 from src.Lighting.Optics import reflect, schlick_fresnel_metalic
 from src.Utilities.Common import lerp, unit, attenuate_inv_sqr_distance, attenuate_distance_exponential
 
@@ -59,10 +59,10 @@ class PBRMaterial:
 
     def evaluate_direct_light(
         self,
-        scene_lights: List[LightSource],
+        scene_lights: List[Light],
         hit_info: HitInfo,
         view_dir: np.ndarray,
-        visibility_function: Callable[[np.ndarray, LightSource], float],
+        visibility_function: Callable[[np.ndarray, Light], float],
         bias: float = 1e-4
     ) -> Color:
         """
@@ -71,13 +71,13 @@ class PBRMaterial:
         Uses visibility function for shadow calculations (world-space).
         
         :param scene_lights: List of light sources in the scene
-        :type scene_lights: List[LightSource]
+        :type scene_lights: List[Light]
         :param hit_info: Surface intersection information (normal, point, etc.)
         :type hit_info: HitInfo
         :param view_dir: Direction from surface point to camera/viewer
         :type view_dir: np.ndarray
         :param visibility_function: Function to determine light visibility (shadow testing)
-        :type visibility_function: Callable[[np.ndarray, LightSource], float]
+        :type visibility_function: Callable[[np.ndarray, Light], float]
         :param bias: Small offset to prevent self-intersection in shadow rays
         :type bias: float
         :return: Accumulated color contribution from all direct lights

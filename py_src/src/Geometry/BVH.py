@@ -1,23 +1,31 @@
+from __future__ import annotations
 import numpy as np
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from .AABB import AABB
-from .Primitive import Primitive
+
+if TYPE_CHECKING:
+    from src.Data.Scene import SceneNode
 
 class BVHSplitMode(Enum):
     LONGEST_AXIS = "longest_axis"
     BALANCED = "balanced"
 
 class BVHNode:
-    def __init__(self, objects: Optional[List[Primitive]] = None):
+    """
+    A node in the Bounding Volume Hierarchy (BVH) tree.
+    Each node may have left and right children, an AABB bounding box,
+    and a list of SceneNode objects if it's a leaf.
+    """
+    def __init__(self, objects: Optional[List["SceneNode"]] = None):
         self.left: Optional[BVHNode] = None
         self.right: Optional[BVHNode] = None
         self.box: Optional[AABB] = None
-        self.objects: Optional[List[Primitive]] = objects
+        self.objects: Optional[List["SceneNode"]] = objects
 
 def build_bvh_tree(
-        objects: List[Primitive],
+        objects: List["SceneNode"],
         split_mode: BVHSplitMode = BVHSplitMode.LONGEST_AXIS,
         enable_limit: bool = False,
         max_depth: int = 0,
@@ -26,15 +34,16 @@ def build_bvh_tree(
     """
     Public entry point: Calculates AABBs once and starts recursion.
     """
-    # 1. Pre-calculate AABBs for all objects once. 
+    
+    # Pre-calculate AABBs for all objects once. 
     # This prevents O(N * Depth) re-calculations.
     item_cache = []
     for obj in objects:
-        # Use the existing static method to generate the box
-        box = AABB.from_transform_shape(
-            getattr(obj, 'world_transform', obj.transform), 
-            obj.shape
-        )
+        if obj is None: # Empty nodes are discarded
+            continue
+        
+        # Get local bounds for objects within BoundingSceneNode
+        box = obj.get_bounds() # Handles None internally
         item_cache.append((obj, box))
 
     return _build_bvh_recursive(
@@ -46,7 +55,7 @@ def build_bvh_tree(
     )
 
 def _build_bvh_recursive(
-        items: List[Tuple[Primitive, AABB]], 
+        items: List[Tuple["SceneNode", AABB]], 
         split_mode: BVHSplitMode,
         enable_limit: bool,
         max_depth: int,
@@ -69,6 +78,10 @@ def _build_bvh_recursive(
     node_max = items[0][1].max_point.copy()
     
     for _, box in items:
+        if box is None: # Handle missing boxes, by giving large bounds to avoid issues with culled nodes exept empty nodes
+            box = AABB(np.full(3, np.inf), np.full(3, -np.inf))
+            continue
+
         node_min = np.minimum(node_min, box.min_point)
         node_max = np.maximum(node_max, box.max_point)
     
@@ -82,11 +95,8 @@ def _build_bvh_recursive(
         return node
 
     # 4. Split Strategy
-    
-    # Helper lambda to get center of a cached box
-    # box is at index 1 of the tuple
     def get_center(item, axis_idx):
-        return (item[1].min_point[axis_idx] + item[1].max_point[axis_idx]) * 0.5
+        return (item[1].center[axis_idx] if item[1] is not None else 0.0)
 
     # Determine sorting based on mode
     if split_mode == BVHSplitMode.LONGEST_AXIS:
@@ -100,7 +110,7 @@ def _build_bvh_recursive(
     elif split_mode == BVHSplitMode.BALANCED:
         # Sort by the average of all axes (scalar sort)
         # This keeps spatially coherent clusters somewhat together
-        items.sort(key=lambda item: np.mean(item[1].min_point + item[1].max_point))
+        items.sort(key=lambda item: np.mean(item[1].center) if item[1] is not None else 0.0)
 
     # 5. Partition
     mid = len(items) // 2
