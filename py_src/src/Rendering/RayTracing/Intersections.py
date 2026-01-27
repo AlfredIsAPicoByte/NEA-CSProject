@@ -8,13 +8,14 @@ from dataclasses import dataclass, field, replace
 from src.Data.Transform import Transform
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
-from src.Data.Scene import SceneNode
 from src.Geometry.BVH import BVHNode, build_bvh_tree
 from src.Geometry.SDF import SignedDistanceShape
 from src.Utilities.Common import unit
 from src.Data.Scene import Scene
 
 if TYPE_CHECKING:
+    from src.Data.Scene import SceneNode
+    from src.Data.Context import LightContext, SDFContext, MeshContext
     from .Core import TracingStats
 
 @dataclass
@@ -37,8 +38,8 @@ class IntersectionSettings:
     always_rebuild_bvh: bool = False # If true, forces BVH to rebuild on next use
 
 class IntersectionStrategy(ABC):
-    def __init__(self, settings: Optional[IntersectionSettings]):
-        self.settings = settings
+    def __init__(self, settings: Optional[IntersectionSettings] = None):
+        self.settings = settings or IntersectionSettings()
     
     @abstractmethod
     def find_hit(
@@ -308,7 +309,15 @@ class RayMarchingIntersection(IntersectionStrategy):
             # 1. Skip exclusion (Self-Shadowing fix)
             if exclude_obj is not None and obj is exclude_obj:
                 continue
+
+            # Skip lights
+            if isinstance(obj.context, LightContext):
+                continue
             
+            # Skip meshes for now
+            if isinstance(obj.context, MeshContext):
+                continue
+
             # 2. Check for SignedDistanceShape
             shape = getattr(obj.context, "shape", None)
             if shape is None:
@@ -321,7 +330,7 @@ class RayMarchingIntersection(IntersectionStrategy):
             local_point = safe_transform.inverse_transform_point(point)
 
             try:
-                local_dist = float(safe_shape.signed_distance(local_point))
+                local_dist = float(safe_shape.get_distance(local_point))
                 
                 # Apply sign modifier for internal marching
                 world_dist = local_dist * min(*safe_transform.scale) * sign_modifier
@@ -340,7 +349,7 @@ class InverseSDFIntersection(IntersectionStrategy):
     the SDF defines a mathematical function that erturns a vector/point based on a distance.
     Inverting the SDF allows for the point to calculate the distance
     """
-    def __init__(self, settings: IntersectionSettings, use_bounding_box: bool = True):
+    def __init__(self, settings: Optional[IntersectionSettings] = None, use_bounding_box: bool = True):
         super().__init__(settings)
         self.use_bounding_box = use_bounding_box
 
@@ -377,7 +386,7 @@ class BVHIntersection(IntersectionStrategy):
     """
     Find hits between rays and objects using a BVH data structure.
     """
-    def __init__(self, settings: IntersectionSettings, max_depth: int = 512):
+    def __init__(self, settings: Optional[IntersectionSettings] = None, max_depth: int = 512):
         super().__init__(settings)
         self.max_depth = max_depth
         self._cached_bvh_root: Optional[BVHNode] = None
@@ -503,9 +512,7 @@ class BVHIntersection(IntersectionStrategy):
         """
         # Check intersections with child boxes (returns float('inf') if miss or no child)
         t_left = node.left.box.intersect(ray, limit_dist) if node.left and node.left.box else float('inf')
-        if stats: stats.aabb_tests += 1
         t_right = node.right.box.intersect(ray, limit_dist) if node.right and node.right.box else float('inf')
-        if stats: stats.aabb_tests += 1
 
         # Optimization: Push the FURTHEST valid node first, so we pop the CLOSEST node first.
         # This maximizes the chance of finding a closer hit early and shrinking the limit_dist.

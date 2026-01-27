@@ -122,7 +122,7 @@ class Camera:
                 [0.0, 0.0, 0.0, 1.0]
             ], dtype=float)
         
-        return np.Identity(4)
+        return np.identity(4)
     
     def resize(self, width: float, height: float):
         """

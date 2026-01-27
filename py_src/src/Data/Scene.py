@@ -1,6 +1,6 @@
 from token import OP
 import numpy as np
-from typing import List, Optional
+from typing import List, Optional, Union
 from dataclasses import dataclass, field
 
 from .Transform import Transform
@@ -55,7 +55,8 @@ class SceneNode:
         Call this ONCE before rendering starts.
         """
         # 1. Get Local Matrix
-        local_mat = self.transform.to_matrix()
+        # FIX: Use self.transform (Local), NOT self.world_transform (Computed Global)
+        local_mat = self.transform.to_matrix() 
 
         # 2. Multiply by Parent (if exists)
         if parent_matrix is not None:
@@ -73,16 +74,10 @@ class SceneNode:
         for child in self.children:
             child.update_matrices(self._world_matrix)
 
-    def get_world_matrix(self) -> np.ndarray:
-        if self._world_matrix is None:
-            self.update_matrices()
-        
+    def get_world_matrix(self):
         return self._world_matrix
     
-    def get_world_inverse_matrix(self) -> np.ndarray:
-        if self._inverse_world_matrix is None:
-            self.update_matrices()
-        
+    def get_world_inverse_matrix(self):
         return self._inverse_world_matrix
 
     @property
@@ -172,6 +167,7 @@ class Scene:
         """
         Adds a new object to the scene and updates the version counter.
         """
+        obj.update_matrices()
         self.objects.append(obj)
         self.update_version()
 
@@ -192,24 +188,94 @@ class Scene:
 
     def get_object_by_id(self, id: int) -> Optional[SceneNode]:
         for obj in self.get_objects_flat():
-            if id(obj) == id:
+            if hash(obj) == id:
                 return obj
         
         return None
 
-    def get_objects_by_type(self, context_type: type) -> List[SceneNode]:
+    @staticmethod
+    def _matches_context(context, type_or_name: Union[type, str]) -> bool:
+        """Helper to check if a context matches a type (class) or name (str)."""
+        if isinstance(type_or_name, type):
+            return isinstance(context, type_or_name)
+        return type(context).__name__ == type_or_name
+
+    def get_objects_by_type(self, context_type: Union[type, str]) -> List[SceneNode]:
         """
         Returns a list of all scene objects that contain data of the specified context type.
-        
-        :param context_type: The type of context to filter by (e.g., MeshContext, LightContext).
-        :return: A list of SceneNode objects matching the specified context type.
         """
         result = []
+        for obj in self.get_objects_flat():
+            if obj.context is not None:
+                if self._matches_context(obj.context, context_type):
+                    result.append(obj)
+        return result
+
+    def get_objects_by_types(self, context_types: List[Union[type, str]]) -> List[SceneNode]:
+        """
+        Returns a list of all scene objects that contain data of ANY of the specified context types.
+        """
+        result = []
+        
+        # Optimization: Separate real classes from string names once
+        real_types = tuple(t for t in context_types if isinstance(t, type))
+        type_names = {t for t in context_types if isinstance(t, str)}
 
         for obj in self.get_objects_flat():
-            if obj.context is not None and isinstance(obj.context, context_type):
+            if obj.context is None:
+                continue
+                
+            # Check 1: Is it an instance of the real classes? (Fast)
+            if real_types and isinstance(obj.context, real_types):
                 result.append(obj)
+                continue
+            
+            # Check 2: Does the class name match one of the strings? (Slower fallback)
+            if type_names and type(obj.context).__name__ in type_names:
+                result.append(obj)
+                
+        return result
+
+    def get_objects_not_of_type(self, context_type: Union[type, str]) -> List[SceneNode]:
+        """
+        Returns a list of all scene objects that do NOT contain data of the specified context type.
+        """
+        result = []
+        for obj in self.get_objects_flat():
+            # If context is None, it definitely doesn't match the type, so we include it
+            if obj.context is None:
+                result.append(obj)
+                continue
+
+            if not self._matches_context(obj.context, context_type):
+                result.append(obj)
+        return result
+
+    def get_objects_not_of_types(self, context_types: List[Union[type, str]]) -> List[SceneNode]:
+        """
+        Returns a list of all scene objects that do NOT contain data of ANY of the specified context types.
+        """
+        result = []
         
+        real_types = tuple(t for t in context_types if isinstance(t, type))
+        type_names = {t for t in context_types if isinstance(t, str)}
+
+        for obj in self.get_objects_flat():
+            if obj.context is None:
+                result.append(obj)
+                continue
+
+            # Check 1: If it matches a real type, EXCLUDE it
+            if real_types and isinstance(obj.context, real_types):
+                continue
+            
+            # Check 2: If it matches a string name, EXCLUDE it
+            if type_names and type(obj.context).__name__ in type_names:
+                continue
+
+            # If we reached here, it didn't match anything
+            result.append(obj)
+            
         return result
     
     def get_objects_flat(self) -> List[SceneNode]:

@@ -56,9 +56,9 @@ def apply_post_processing(raw_img):
     
     pipeline = ImagePipeline()
     pipeline.add_pass(AutoExposure())
-    #pipeline.add_pass(Bloom(1, 25, 0.67, 0.75))
-    #pipeline.add_pass(ChromaticAberration())
-    #pipeline.add_pass(Vignette(0.15, 0.6))
+    pipeline.add_pass(Bloom(1, 25, 0.67, 0.75))
+    pipeline.add_pass(ChromaticAberration())
+    pipeline.add_pass(Vignette(0.15, 0.6))
     pipeline.add_pass(ACESFilmicToneMapping())
     pipeline.add_pass(GammaCorrection(2.2))
     
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
-    img_width, img_height = 16 * 32, 9 * 32
+    img_width, img_height = 16 * 4, 9 * 4
 
     # 16 * 32, 9 * 32
 
@@ -103,7 +103,7 @@ if __name__ == "__main__":
         # get_shape_showcase_scene(img_width, img_height),
     ]
 
-    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.NEAREST, filter_width=4)
+    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.NEAREST, filter_width=2)
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
@@ -111,7 +111,7 @@ if __name__ == "__main__":
             max_distance=1000,
             max_steps=256
         ))
-        shading = NormalShading(PhysicalShadingSettings(
+        shading = LambertShading(PhysicalShadingSettings(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None), False)

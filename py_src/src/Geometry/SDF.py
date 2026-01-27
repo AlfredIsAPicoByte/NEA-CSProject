@@ -97,13 +97,13 @@ class SignedDistanceShape(SignedDistanceFunction, SignedDistanceGradient):
     """
     
     @abstractmethod
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
         """
         Compute the intersection of a ray with the shape.
         
         :param ray: The ray to test for intersection.
         :param max_t: The maximum distance to consider for intersection.
-        :return: The distance to the intersection point, or infinity if no intersection.
+        :return: A list of distances along the ray where intersections occur. An empty list if no intersection.
         """
         pass
 
@@ -164,7 +164,7 @@ class SignedDistanceShape(SignedDistanceFunction, SignedDistanceGradient):
         """
         return 3
 
-    def get_transformed_aabb(self, matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
         """
         Default AABB computation for SDF shapes.
         """
@@ -174,7 +174,7 @@ class SignedDistanceShape(SignedDistanceFunction, SignedDistanceGradient):
             [-r, -r, 0], [r, -r, 0],
             [-r, r, 0],  [r, r, 0]
         ])
-        world_bounds = AABB().transform_local_bounds(matrix, local_bounds)
+        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
         
         min_point = np.min(world_bounds, axis=0)
         max_point = np.max(world_bounds, axis=0)
@@ -185,7 +185,7 @@ class SignedDistanceShape2D(SignedDistanceShape):
     Abstract base class for 2D shapes defined by Signed Distance Functions and their gradients.
     Combines both SDF and SDG functionalities for 2D space.
     """
-    
+    @property
     def dimension(self) -> int:
         return 2
 
@@ -212,7 +212,7 @@ class SignedDistanceShape3D(SignedDistanceShape):
     Abstract base class for 3D shapes defined by Signed Distance Functions and their gradients.
     Combines both SDF and SDG functionalities for 3D space.
     """
-
+    @property
     def dimension(self) -> int:
         return 3
 
@@ -238,7 +238,6 @@ class SignedDistanceShape3DExtrusion(SignedDistanceShape3D):
     """
     A 3D shape created by extruding a 2D signed distance shape along an axis.
     """
-
     def __init__(self, shape_2d: SignedDistanceShape2D, height: float = 1.0, axis: np.ndarray = np.array([0, 1, 0])):
         self.shape_2d = shape_2d
         self.height = height
@@ -250,7 +249,7 @@ class SignedDistanceShape3DExtrusion(SignedDistanceShape3D):
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
     
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
         raise NotImplementedError()
     
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
@@ -283,7 +282,6 @@ class SignedDistanceShape3DRevolution(SignedDistanceShape3D):
     """
     A 3D shape created by revolving a 2D signed distance shape around an axis.   
     """
-
     def __init__(self, shape_2d: SignedDistanceShape2D, axis: np.ndarray = np.array([0, 1, 0])):
         self.shape_2d = shape_2d
         self.axis = axis / np.linalg.norm(axis)
@@ -294,7 +292,7 @@ class SignedDistanceShape3DRevolution(SignedDistanceShape3D):
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
     
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
         raise NotImplementedError()
     
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
@@ -333,7 +331,7 @@ class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
         self.radius = radius
 
     def get_distance(self, point: np.ndarray) -> float:
-        return np.linalg.norm(point[:2]) - self.radius
+        return float(np.linalg.norm(point[:2]) - self.radius)
 
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
         dist = np.linalg.norm(point[:3])
@@ -341,44 +339,48 @@ class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
             return np.array([0.0, 1.0, 0])
         return point[:3] / dist
 
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
         # Ray-circle intersection in 2D
         origin_2d = ray.origin[:2]
-        direction_2d = ray.direction[:2] / np.linalg.norm(ray.direction[:2])
+        # Ensure direction is normalized
+        direction_2d = ray.direction[:2] 
+        dir_len = np.linalg.norm(direction_2d)
+        if dir_len == 0: return []
+        direction_2d /= dir_len
 
-        a = np.dot(direction_2d, direction_2d)
+        a = 1.0 # Since direction is normalized
         b = 2 * np.dot(origin_2d, direction_2d)
         c = np.dot(origin_2d, origin_2d) - self.radius ** 2
 
         discriminant = b ** 2 - 4 * a * c
         if discriminant < 0:
-            return float('inf')  # No intersection
+            return []
 
         sqrt_disc = np.sqrt(discriminant)
         t1 = (-b - sqrt_disc) / (2 * a)
         t2 = (-b + sqrt_disc) / (2 * a)
 
-        if 0 < t1 < max_t:
-            return t1
-        if 0 < t2 < max_t:
-            return t2
-        return float('inf')
+        hits = []
+        if 0 < t1 < max_t: hits.append(t1)
+        if 0 < t2 < max_t: hits.append(t2)
+        
+        return sorted(hits)
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
         angle = np.arctan2(point[1], point[0])
         u = (angle + np.pi) / (2 * np.pi)
         v = 0.5  # Circle has no height variation
         return u, v
-    
-    def get_transformed_aabb(self, matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
         r = self.radius + padding
 
         local_bounds = np.array([
             [-r, -r, 0], [r, -r, 0],
             [-r, r, 0],  [r, r, 0]
         ])
-        world_bounds = AABB().transform_local_bounds(matrix, local_bounds)
-        
+        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
+
         min_point = np.min(world_bounds, axis=0)
         max_point = np.max(world_bounds, axis=0)
         return AABB(min_point, max_point)
@@ -410,7 +412,6 @@ class Square(SignedDistanceShape2D, CorrespondingBoundingBox):
     A simple 2D square shape defined by a signed distance function.
     Centered at the origin with a given half-size.
     """
-
     def __init__(self, size: float = 1.0):
         self.half_size = size / 2
 
@@ -433,13 +434,17 @@ class Square(SignedDistanceShape2D, CorrespondingBoundingBox):
             return grad / norm
         return np.array([0.0, 0.0])
     
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
-        # Ray-square intersection in 2D (AABB method)
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
         origin_2d = ray.origin[:2]
-        direction_2d = ray.direction[:2] / np.linalg.norm(ray.direction[:2])
-
-        tmin = (-self.half_size - origin_2d) / direction_2d
-        tmax = (self.half_size - origin_2d) / direction_2d
+        direction_2d = ray.direction[:2]
+        
+        # Handle small direction components to avoid div by zero
+        inv_dir = np.zeros_like(direction_2d)
+        with np.errstate(divide='ignore'):
+            inv_dir = 1.0 / direction_2d
+        
+        tmin = (-self.half_size - origin_2d) * inv_dir
+        tmax = (self.half_size - origin_2d) * inv_dir
 
         t1 = np.minimum(tmin, tmax)
         t2 = np.maximum(tmin, tmax)
@@ -447,24 +452,27 @@ class Square(SignedDistanceShape2D, CorrespondingBoundingBox):
         t_enter = np.max(t1)
         t_exit = np.min(t2)
 
-        if t_exit >= t_enter and t_exit > 0 and t_enter < max_t:
-            return max(t_enter, 0.0)
+        if t_exit >= t_enter and t_enter < max_t:
+            hits = []
+            if t_enter > 0: hits.append(t_enter)
+            if t_exit > 0: hits.append(t_exit)
+            return sorted(list(set(hits))) # remove duplicates if corner hit
         
-        return float('inf')
+        return []
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
         u = (point[0] + self.half_size) / (2 * self.half_size)
         v = (point[1] + self.half_size) / (2 * self.half_size)
         return u, v
     
-    def get_transformed_aabb(self, matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
         r = self.half_size + padding
 
         local_bounds = np.array([
             [-r, -r, 0], [r, -r, 0],
             [-r, r, 0],  [r, r, 0]
         ])
-        world_bounds = AABB().transform_local_bounds(matrix, local_bounds)
+        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
         
         min_point = np.min(world_bounds, axis=0)
         max_point = np.max(world_bounds, axis=0)
@@ -496,7 +504,6 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
     A simple 2D square shape defined by a signed distance function.
     Centered at the origin with a given half-size.
     """
-
     def __init__(self, size: np.ndarray = np.array([1.0, 1.0])):
         self.half_size = size / 2
 
@@ -519,13 +526,17 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
             return grad / norm
         return np.array([0.0, 1.0, 0.0])
     
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
-        # Ray-square intersection in 2D (AABB method)
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
         origin_2d = ray.origin[:2]
-        direction_2d = ray.direction[:2] / np.linalg.norm(ray.direction[:2])
-
-        tmin = (-self.half_size - origin_2d) / direction_2d
-        tmax = (self.half_size - origin_2d) / direction_2d
+        direction_2d = ray.direction[:2]
+        
+        # Handle small direction components to avoid div by zero
+        inv_dir = np.zeros_like(direction_2d)
+        with np.errstate(divide='ignore'):
+            inv_dir = 1.0 / direction_2d
+        
+        tmin = (-self.half_size - origin_2d) * inv_dir
+        tmax = (self.half_size - origin_2d) * inv_dir
 
         t1 = np.minimum(tmin, tmax)
         t2 = np.maximum(tmin, tmax)
@@ -533,24 +544,27 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
         t_enter = np.max(t1)
         t_exit = np.min(t2)
 
-        if t_exit >= t_enter and t_exit > 0 and t_enter < max_t:
-            return max(t_enter, 0.0)
+        if t_exit >= t_enter and t_enter < max_t:
+            hits = []
+            if t_enter > 0: hits.append(t_enter)
+            if t_exit > 0: hits.append(t_exit)
+            return sorted(list(set(hits))) # remove duplicates if corner hit
         
-        return float('inf')
+        return []
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
-        u = (point[0] + self.half_size) / (2 * self.half_size)
-        v = (point[1] + self.half_size) / (2 * self.half_size)
+        u = (point[0] + self.half_size[0]) / (2 * self.half_size[0])
+        v = (point[1] + self.half_size[1]) / (2 * self.half_size[1])
         return u, v
     
-    def get_transformed_aabb(self, matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
         r = self.half_size + padding
 
         local_bounds = np.array([
             [-r[0], -r[1], 0], [r[0], -r[1], 0],
             [-r[0], r[1], 0],  [r[0], r[1], 0]
         ])
-        world_bounds = AABB().transform_local_bounds(matrix, local_bounds)
+        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
         
         min_point = np.min(world_bounds, axis=0)
         max_point = np.max(world_bounds, axis=0)
@@ -578,6 +592,9 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
         return points
 
 class Triangle(SignedDistanceShape2D, CorrespondingBoundingBox):
+    """
+    A simple 2D triangle shape defined by a signed distance function.
+    Defined by three vertices in 3D space (z=0)."""
     def __init__(self, v0: np.ndarray, v1: np.ndarray, v2: np.ndarray):
         self.v0 = v0
         self.v1 = v1
@@ -623,28 +640,55 @@ class Triangle(SignedDistanceShape2D, CorrespondingBoundingBox):
         dx = self.get_distance(point + np.array([h, 0, 0])) - self.get_distance(point - np.array([h, 0, 0]))
         dy = self.get_distance(point + np.array([0, h, 0])) - self.get_distance(point - np.array([0, h, 0]))
         return np.array([dx, dy, 0]) / (2*h)
+    
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        # Möller–Trumbore intersection algorithm
+        epsilon = 1e-8
+        
+        edge1 = self.v1 - self.v0
+        edge2 = self.v2 - self.v0
+        h = np.cross(ray.direction, edge2)
+        a = np.dot(edge1, h)
 
-    def get_transformed_aabb(self, matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+        if -epsilon < a < epsilon:
+            return []  # Ray is parallel to triangle
+
+        f = 1.0 / a
+        s = ray.origin - self.v0
+        u = f * np.dot(s, h)
+
+        if u < 0.0 or u > 1.0:
+            return []
+
+        q = np.cross(s, edge1)
+        v = f * np.dot(ray.direction, q)
+
+        if v < 0.0 or u + v > 1.0:
+            return []
+
+        t = f * np.dot(edge2, q)
+
+        if epsilon < t < max_t:
+            return [t]
+            
+        return []
+
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
         # Transform the three vertices
-        pts = np.array([self.v0, self.v1, self.v2])
-        # Add 1.0 for homogeneous coord if needed, or assume 3D transform
-        ones = np.ones((3, 1))
-        pts_h = np.hstack([pts, ones]) 
-        
-        transformed = (matrix @ pts_h.T).T
-        transformed = transformed[:, :3] # Back to 3D
-        
-        min_p = np.min(transformed, axis=0) - padding
-        max_p = np.max(transformed, axis=0) + padding
+        local_bounds = np.array([self.v0, self.v1, self.v2])
+        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
+
+        min_p = np.min(world_bounds, axis=0) - padding
+        max_p = np.max(world_bounds, axis=0) + padding
         return AABB(min_p, max_p)
     
     @property
     def area(self) -> float:
-        return 0.5 * np.linalg.norm(np.cross(self.v1-self.v0, self.v2-self.v0))
+        return float(0.5 * np.linalg.norm(np.cross(self.v1-self.v0, self.v2-self.v0)))
     
     @property
     def perimeter(self) -> float:
-        return (np.linalg.norm(self.v1-self.v0) + 
+        return float(np.linalg.norm(self.v1-self.v0) + 
                 np.linalg.norm(self.v2-self.v1) + 
                 np.linalg.norm(self.v0-self.v2))
     
@@ -653,7 +697,6 @@ class Ellipse(SignedDistanceShape2D, CorrespondingBoundingBox):
     A simple 2D ellipse shape defined by a signed distance function.
     Centered at the origin with given radii along x and y axes.
     """
-
     def __init__(self, radius_x: float = 0.5, radius_y: float = 0.3):
         self.radius_x = radius_x
         self.radius_y = radius_y
@@ -664,13 +707,37 @@ class Ellipse(SignedDistanceShape2D, CorrespondingBoundingBox):
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
     
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
-        raise NotImplementedError()
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        # Transform ray into unit circle space: scale O and D by (1/rx, 1/ry)
+        # (ox/rx + t*dx/rx)^2 + (oy/ry + t*dy/ry)^2 = 1
+        
+        ox = ray.origin[0] / self.radius_x
+        oy = ray.origin[1] / self.radius_y
+        dx = ray.direction[0] / self.radius_x
+        dy = ray.direction[1] / self.radius_y
+        
+        a = dx**2 + dy**2
+        b = 2 * (ox * dx + oy * dy)
+        c = ox**2 + oy**2 - 1.0
+        
+        discriminant = b**2 - 4*a*c
+        if discriminant < 0:
+            return []
+            
+        sqrt_disc = np.sqrt(discriminant)
+        t1 = (-b - sqrt_disc) / (2 * a)
+        t2 = (-b + sqrt_disc) / (2 * a)
+        
+        hits = []
+        if 0 < t1 < max_t: hits.append(t1)
+        if 0 < t2 < max_t: hits.append(t2)
+        
+        return sorted(hits)
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
         raise NotImplementedError()
     
-    def get_transformed_aabb(self, matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
         raise NotImplementedError()
 
     @property
@@ -693,13 +760,16 @@ class Plane(SignedDistanceShape3D, CorrespondingBoundingBox):
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
         return self.normal
 
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
         denom = np.dot(self.normal, ray.direction)
+        
+        # Check if ray is not parallel to the plane
         if abs(denom) > 1e-6:
             t = -(np.dot(self.normal, ray.origin) + self.d) / denom
-            if t >= 0 and t < max_t:
-                return t
-        return float('inf')
+            if 0 <= t < max_t:
+                return [t]
+                
+        return []
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
         # Planar projection based on dominant axis
@@ -711,7 +781,7 @@ class Plane(SignedDistanceShape3D, CorrespondingBoundingBox):
         else:
             return point[0], point[1]
 
-    def get_transformed_aabb(self, matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
         # A plane is infinite, returning a very large AABB
         inf = 1e10
         return AABB(np.array([-inf]*3), np.array([inf]*3))
@@ -721,7 +791,7 @@ class Sphere(SignedDistanceShape3D, CorrespondingBoundingBox):
         self.radius = radius
 
     def get_distance(self, point: np.ndarray) -> float:
-        return np.linalg.norm(point) - self.radius
+        return float(np.linalg.norm(point) - self.radius)
 
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
         d = np.linalg.norm(point)
@@ -729,19 +799,24 @@ class Sphere(SignedDistanceShape3D, CorrespondingBoundingBox):
             return point / d
         return np.array([0, 1, 0])
 
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
-        oc = ray.origin # Sphere is at (0,0,0)
-        b = np.dot(oc, ray.direction)
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        oc = ray.origin
+        a = np.dot(ray.direction, ray.direction)
+        b = 2.0 * np.dot(oc, ray.direction)
         c = np.dot(oc, oc) - self.radius**2
-        h = b*b - c
-        if h < 0: 
-            return float('inf')
-        h = np.sqrt(h)
-        t = -b - h
-        if t > 0 and t < max_t: return t
-        t = -b + h
-        if t > 0 and t < max_t: return t
-        return float('inf')
+        discriminant = b*b - 4*a*c
+        
+        if discriminant < 0:
+            return []
+            
+        sqrt_disc = np.sqrt(discriminant)
+        t1 = (-b - sqrt_disc) / (2*a)
+        t2 = (-b + sqrt_disc) / (2*a)
+        
+        hits = []
+        if 0 < t1 < max_t: hits.append(t1)
+        if 0 < t2 < max_t: hits.append(t2)
+        return sorted(hits)
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
         # Spherical coordinates
@@ -750,18 +825,22 @@ class Sphere(SignedDistanceShape3D, CorrespondingBoundingBox):
         v = 0.5 - (np.arcsin(p[1])) / np.pi
         return u, v
     
-    def get_transformed_aabb(self, matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
         # Efficient sphere AABB transformation: Center translates, radius scales by max scale
         # Extract scale from matrix columns
-        scale_x = np.linalg.norm(matrix[:3, 0])
-        scale_y = np.linalg.norm(matrix[:3, 1])
-        scale_z = np.linalg.norm(matrix[:3, 2])
-        max_scale = max(scale_x, max(scale_y, scale_z))
+        r = self.radius + padding
+
+        local_bounds = np.array([
+            [-r, -r, -r], [r, -r, -r],
+            [-r, r, -r],  [r, r, -r],
+            [-r, -r, r],  [r, -r, r],
+            [-r, r, r],   [r, r, r]
+        ])
+        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
         
-        new_r = self.radius * max_scale + padding
-        center = matrix[:3, 3] # Translation part
-        
-        return AABB(center - new_r, center + new_r)
+        min_point = np.min(world_bounds, axis=0)
+        max_point = np.max(world_bounds, axis=0)
+        return AABB(min_point, max_point)
 
     @property
     def volume(self) -> float:
@@ -787,9 +866,11 @@ class Cube(SignedDistanceShape3D, CorrespondingBoundingBox):
         z = self.get_distance(point + np.array([0,0,h])) - self.get_distance(point - np.array([0,0,h]))
         return np.array([x,y,z]) / (2*h)
 
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
-        # Slab method
-        inv_dir = 1.0 / (ray.direction + 1e-9) # Avoid div by zero
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        inv_dir = np.zeros_like(ray.direction)
+        with np.errstate(divide='ignore'):
+            inv_dir = 1.0 / ray.direction
+            
         t_min_vec = (-self.half_size - ray.origin) * inv_dir
         t_max_vec = (self.half_size - ray.origin) * inv_dir
         
@@ -799,9 +880,13 @@ class Cube(SignedDistanceShape3D, CorrespondingBoundingBox):
         t_enter = np.max(t1)
         t_exit = np.min(t2)
         
-        if t_exit >= t_enter and t_exit > 0 and t_enter < max_t:
-            return max(t_enter, 0.0)
-        return float('inf')
+        if t_exit >= t_enter and t_enter < max_t:
+            hits = []
+            if t_enter > 0: hits.append(t_enter)
+            if t_exit > 0: hits.append(t_exit)
+            return sorted(list(set(hits)))
+            
+        return []
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
         # Box mapping
@@ -814,14 +899,18 @@ class Cube(SignedDistanceShape3D, CorrespondingBoundingBox):
         else:
              return (p[0]/self.half_size + 1)/2, (p[1]/self.half_size + 1)/2
 
-    def get_transformed_aabb(self, matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
         # Transform all 8 corners
-        r = self.half_size
-        corners = np.array([
+        r = self.half_size + padding
+        local_bounds = np.array([
             [-r,-r,-r], [r,-r,-r], [-r,r,-r], [r,r,-r],
             [-r,-r,r],  [r,-r,r],  [-r,r,r],  [r,r,r]
         ])
-        return AABB().transform_local_bounds(matrix, corners)
+        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
+
+        min_point = np.min(world_bounds, axis=0)
+        max_point = np.max(world_bounds, axis=0)
+        return AABB(min_point, max_point)
 
     @property
     def volume(self) -> float:
@@ -846,27 +935,66 @@ class Cylinder(SignedDistanceShape3D, CorrespondingBoundingBox):
         z = self.get_distance(point + np.array([0,0,h])) - self.get_distance(point - np.array([0,0,h]))
         return np.array([x,y,z]) / (2*h)
 
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
-        # Sphere tracing for exact finite cylinder intersection
-        t = 0.0
-        for _ in range(64):
-            p = ray.point_at(t)
-            d = self.get_distance(p)
-            if d < 1e-4:
-                return t
-            t += d
-            if t > max_t:
-                return float('inf')
-        return float('inf')
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        # Analytic Finite Cylinder Intersection
+        hits = []
+        ro = ray.origin
+        rd = ray.direction
+        
+        # 1. Intersect Infinite Cylinder (x^2 + z^2 = r^2)
+        # ignore y component for quadratic
+        oc_xz = ro[[0, 2]]
+        rd_xz = rd[[0, 2]]
+        
+        a = np.dot(rd_xz, rd_xz)
+        if a > 0:
+            b = 2.0 * np.dot(oc_xz, rd_xz)
+            c = np.dot(oc_xz, oc_xz) - self.radius**2
+            disc = b*b - 4*a*c
+            
+            if disc >= 0:
+                sqrt_disc = np.sqrt(disc)
+                t1 = (-b - sqrt_disc) / (2*a)
+                t2 = (-b + sqrt_disc) / (2*a)
+                
+                # Check bounds for t1 (height check)
+                y1 = ro[1] + t1 * rd[1]
+                if abs(y1) <= self.height / 2:
+                    if 0 < t1 < max_t: hits.append(t1)
+
+                # Check bounds for t2
+                y2 = ro[1] + t2 * rd[1]
+                if abs(y2) <= self.height / 2:
+                    if 0 < t2 < max_t: hits.append(t2)
+
+        # 2. Intersect Caps (Planes at y = +/- h/2)
+        if abs(rd[1]) > 1e-6:
+            for sign in [-1, 1]:
+                cap_y = sign * self.height / 2
+                t_cap = (cap_y - ro[1]) / rd[1]
+                if 0 < t_cap < max_t:
+                    p_cap = ro + t_cap * rd
+                    # Check if inside circle
+                    if p_cap[0]**2 + p_cap[2]**2 <= self.radius**2:
+                        hits.append(t_cap)
+
+        return sorted(hits)
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
         u = (np.arctan2(point[2], point[0]) + np.pi) / (2*np.pi)
         v = (point[1] + self.height/2) / self.height
         return u, v
+
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+        raise NotImplementedError()
     
     @property
     def volume(self) -> float:
         return np.pi * self.radius**2 * self.height
+
+    @property
+    def surface_area(self) -> float:
+        raise NotImplementedError()
 
 class Pyramid(SignedDistanceShape3D, CorrespondingBoundingBox):
     """
@@ -884,13 +1012,58 @@ class Pyramid(SignedDistanceShape3D, CorrespondingBoundingBox):
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
-        raise NotImplementedError()
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        # Decompose pyramid into 5 planar shapes: 1 square base, 4 triangular sides
+        hits = []
+        bs = self.base_half_size
+        h = self.height
+        
+        # Vertices
+        apex = np.array([0, h/2, 0])
+        p0 = np.array([-bs, -h/2, -bs])
+        p1 = np.array([ bs, -h/2, -bs])
+        p2 = np.array([ bs, -h/2,  bs])
+        p3 = np.array([-bs, -h/2,  bs])
+
+        # Helper to intersect a single triangle
+        def intersect_tri(v0, v1, v2):
+            edge1 = v1 - v0
+            edge2 = v2 - v0
+            h_vec = np.cross(ray.direction, edge2)
+            det = np.dot(edge1, h_vec)
+            if -1e-8 < det < 1e-8: return
+            inv_det = 1.0 / det
+            s = ray.origin - v0
+            u = inv_det * np.dot(s, h_vec)
+            if u < 0.0 or u > 1.0: return
+            q = np.cross(s, edge1)
+            v = inv_det * np.dot(ray.direction, q)
+            if v < 0.0 or u + v > 1.0: return
+            t = inv_det * np.dot(edge2, q)
+            if 1e-4 < t < max_t:
+                hits.append(t)
+
+        # 4 Sides
+        intersect_tri(apex, p0, p1) # Front
+        intersect_tri(apex, p1, p2) # Right
+        intersect_tri(apex, p2, p3) # Back
+        intersect_tri(apex, p3, p0) # Left
+
+        # Base (Square treated as two triangles or simple plane check)
+        # Plane y = -h/2
+        if abs(ray.direction[1]) > 1e-8:
+            t_base = (-h/2 - ray.origin[1]) / ray.direction[1]
+            if 1e-4 < t_base < max_t:
+                p_base = ray.origin + t_base * ray.direction
+                if -bs <= p_base[0] <= bs and -bs <= p_base[2] <= bs:
+                    hits.append(t_base)
+
+        return sorted(hits)
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
         raise NotImplementedError()
 
-    def get_transformed_aabb(self, matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
         raise NotImplementedError()
 
     @property
@@ -917,13 +1090,59 @@ class Cone(SignedDistanceShape3D, CorrespondingBoundingBox):
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
-        raise NotImplementedError()
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        # Analytic Cone Intersection (Apex at 0, h/2, 0; Base at 0, -h/2, 0)
+        # Cone defined by x^2 + z^2 = (radius * (h/2 - y) / h)^2
+        hits = []
+        ro = ray.origin
+        rd = ray.direction
+        
+        rh = self.base_radius / self.height
+        y_off = self.height / 2
+        
+        # Coefficients for quadratic A*t^2 + B*t + C = 0
+        # Expanded from (ox+tx)^2 + (oz+tz)^2 = rh^2 * (y_off - (oy+ty))^2
+        
+        # Simplify vars
+        ro_x, ro_y, ro_z = ro
+        rd_x, rd_y, rd_z = rd
+        
+        f = rh * rh
+        # Precompute common terms
+        k = y_off - ro_y
+        
+        A = rd_x**2 + rd_z**2 - f * rd_y**2
+        B = 2 * (ro_x*rd_x + ro_z*rd_z + f * rd_y * k)
+        C = ro_x**2 + ro_z**2 - f * k**2
+        
+        # Solve Quadratic
+        disc = B*B - 4*A*C
+        if disc >= 0:
+            sqrt_disc = np.sqrt(disc)
+            # Be careful with A being near zero (ray parallel to cone slope)
+            if abs(A) > 1e-6:
+                ts = [(-B - sqrt_disc) / (2*A), (-B + sqrt_disc) / (2*A)]
+                for t in ts:
+                    if 0 < t < max_t:
+                        y = ro_y + t * rd_y
+                        # Check height bounds (-h/2 to h/2)
+                        if -self.height/2 <= y <= self.height/2:
+                            hits.append(t)
+
+        # Intersect Base Cap (y = -h/2)
+        if abs(rd_y) > 1e-6:
+            t_cap = (-self.height/2 - ro_y) / rd_y
+            if 0 < t_cap < max_t:
+                p_cap = ro + t_cap * rd
+                if p_cap[0]**2 + p_cap[2]**2 <= self.base_radius**2:
+                    hits.append(t_cap)
+                    
+        return sorted(hits)
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
         raise NotImplementedError()
 
-    def get_transformed_aabb(self, matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
         raise NotImplementedError()
 
     @property
@@ -941,7 +1160,7 @@ class Torus(SignedDistanceShape3D, CorrespondingBoundingBox):
 
     def get_distance(self, point: np.ndarray) -> float:
         q = np.array([np.linalg.norm(point[[0, 2]]) - self.major_radius, point[1]])
-        return np.linalg.norm(q) - self.minor_radius
+        return float(np.linalg.norm(q) - self.minor_radius)
 
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
         # Analytic gradient
@@ -957,18 +1176,25 @@ class Torus(SignedDistanceShape3D, CorrespondingBoundingBox):
         if dist == 0: return np.array([0, 1, 0])
         return vec / dist
 
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
-        # Torus intersection is a quartic equation, easier to Sphere Trace
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        # Analytic torus intersection requires solving a quartic equation.
+        # Sphere tracing is often more robust numerically for Torii.
+        # We perform a sphere trace, but ensure it returns a List[float].
+        
         t = 0.0
-        for _ in range(100):
+        for _ in range(128):
             p = ray.point_at(t)
-            d = self.get_distance(p)
+            # Distance field of torus
+            q = np.array([np.linalg.norm(p[[0, 2]]) - self.major_radius, p[1]])
+            d = float(np.linalg.norm(q) - self.minor_radius)
+            
             if d < 1e-4:
-                return t
+                return [t]
             t += d
             if t > max_t:
-                return float('inf')
-        return float('inf')
+                return []
+        
+        return []
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
         u = (np.arctan2(point[2], point[0]) + np.pi) / (2*np.pi)
@@ -994,7 +1220,7 @@ class Capsule(SignedDistanceShape3D, CorrespondingBoundingBox):
         pa = point - self.a
         ba = self.b - self.a
         h = np.clip(np.dot(pa, ba) / np.dot(ba, ba), 0.0, 1.0)
-        return np.linalg.norm(pa - ba * h) - self.radius
+        return float(np.linalg.norm(pa - ba * h) - self.radius)
 
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
         # Standard finite difference for simplicity
@@ -1004,18 +1230,54 @@ class Capsule(SignedDistanceShape3D, CorrespondingBoundingBox):
         dz = self.get_distance(point + np.array([0,0,h])) - self.get_distance(point - np.array([0,0,h]))
         return np.array([dx, dy, dz]) / (2*h)
 
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> float:
-        # Analytic capsule intersection is complex, using sphere tracing
-        t = 0.0
-        for _ in range(64):
-            p = ray.point_at(t)
-            d = self.get_distance(p)
-            if d < 1e-4:
-                return t
-            t += d
-            if t > max_t:
-                return float('inf')
-        return float('inf')
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        # Capsule = Finite Cylinder (radius r) + 2 Spheres (radius r) at ends
+        hits = []
+        ro = ray.origin
+        rd = ray.direction
+        
+        # 1. Cylinder Part (between -h/2 and h/2 on Y)
+        oc_xz = ro[[0, 2]]
+        rd_xz = rd[[0, 2]]
+        a = np.dot(rd_xz, rd_xz)
+        
+        if a > 0:
+            b = 2.0 * np.dot(oc_xz, rd_xz)
+            c = np.dot(oc_xz, oc_xz) - self.radius**2
+            disc = b*b - 4*a*c
+            if disc >= 0:
+                sqrt_disc = np.sqrt(disc)
+                t_cyl = [(-b - sqrt_disc) / (2*a), (-b + sqrt_disc) / (2*a)]
+                for t in t_cyl:
+                    if 0 < t < max_t:
+                        y = ro[1] + t * rd[1]
+                        # Strictly strictly inside the cylinder height
+                        if abs(y) <= self.height / 2:
+                            hits.append(t)
+
+        # 2. Sphere Caps at (0, -h/2, 0) and (0, h/2, 0)
+        for sign in [-1, 1]:
+            center = np.array([0, sign * self.height / 2, 0])
+            oc = ro - center
+            
+            # Sphere Intersection
+            as_ = np.dot(rd, rd)
+            bs = 2.0 * np.dot(oc, rd)
+            cs = np.dot(oc, oc) - self.radius**2
+            discs = bs*bs - 4*as_*cs
+            
+            if discs >= 0:
+                sqrt_discs = np.sqrt(discs)
+                t_s = [(-bs - sqrt_discs) / (2*as_), (-bs + sqrt_discs) / (2*as_)]
+                for t in t_s:
+                    if 0 < t < max_t:
+                        # Check if this hit is on the "outer" hemisphere
+                        # (y should be > h/2 for top cap, < -h/2 for bottom cap)
+                        y = ro[1] + t * rd[1]
+                        if (sign == 1 and y >= self.height/2) or (sign == -1 and y <= -self.height/2):
+                            hits.append(t)
+                            
+        return sorted(hits)
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
         u = (np.arctan2(point[2], point[0]) + np.pi) / (2*np.pi)

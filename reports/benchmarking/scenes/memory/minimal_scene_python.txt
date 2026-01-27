@@ -1,8 +1,8 @@
-Time: 205.1990s | RSS Δ: 13.297 MB
-RSS start: 39.258 MB | RSS end: 52.555 MB
+Time: 3.0103s | RSS Δ: 131.125 MB
+RSS start: 51.371 MB | RSS end: 182.496 MB
 tracemalloc current: 0.00 KB | peak: 0.00 KB
 
 Postprocessing:
-Time: 0.5748s | RSS Δ: 15.223 MB
-RSS start: 54.812 MB | RSS end: 70.035 MB
+Time: 0.2791s | RSS Δ: 20.652 MB
+RSS start: 183.246 MB | RSS end: 203.898 MB
 tracemalloc current: 0.00 KB | peak: 0.00 KB

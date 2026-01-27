@@ -46,9 +46,9 @@ class AABB:
         return float('inf')
     
     @staticmethod
-    def transform_local_bounds(cls, transformation_matrix: np.ndarray, local_bounds: np.ndarray) -> np.ndarray:
-        ones = np.ones((len(corners), 1))
-        corners_4d = np.hstack([corners, ones])
+    def transform_local_bounds(transformation_matrix: np.ndarray, local_bounds: np.ndarray) -> np.ndarray:
+        ones = np.ones((len(local_bounds), 1))
+        corners_4d = np.hstack([local_bounds, ones])
 
         return (transformation_matrix @ corners_4d.T).T[:, :3]
 
@@ -97,7 +97,7 @@ class AABB:
             ])
         
         # Apply Matrix (Scale, Rotate, Translate)
-        world_corners = self.transform_local_bounds(matrix, local_bounds)
+        world_corners = AABB.transform_local_bounds(matrix, local_bounds)
 
         # 3. Find min/max of transformed corners
         min_p = np.min(world_corners, axis=0) - padding # Small padding

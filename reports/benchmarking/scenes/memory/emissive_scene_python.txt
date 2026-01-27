@@ -1,22 +1,8 @@
-Time: 221.3800s | RSS Δ: 15.293 MB
-RSS start: 102.309 MB | RSS end: 117.602 MB
-tracemalloc current: 726.61 KB | peak: 121431.07 KB
-Top allocations (most recent frame):
-  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:11 | 432.09 KB (2 allocs)
-  2. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:12 | 144.09 KB (2 allocs)
-  3. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Rendering\RayTracing\Core.py:238 | 108.61 KB (1986 allocs)
-  4. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\linalg\_linalg.py:2432 | 26.53 KB (494 allocs)
-  5. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Data\Ray.py:118 | 4.10 KB (75 allocs)
-  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Data\Sampling\Core.py:422 | 1.03 KB (44 allocs)
+Time: 1.9399s | RSS Δ: 168.875 MB
+RSS start: 205.648 MB | RSS end: 374.523 MB
+tracemalloc current: 0.00 KB | peak: 0.00 KB
 
 Postprocessing:
-Time: 0.0031s | RSS Δ: 3.422 MB
-RSS start: 114.344 MB | RSS end: 117.766 MB
-tracemalloc current: 864.90 KB | peak: 3458.20 KB
-Top allocations (most recent frame):
-  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\PostProcessing\Passes.py:40 | 864.09 KB (2 allocs)
-  2. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:57 | 0.23 KB (2 allocs)
-  3. C:\Python311\Lib\tracemalloc.py:560 | 0.23 KB (2 allocs)
-  4. C:\Python311\Lib\tracemalloc.py:423 | 0.23 KB (2 allocs)
-  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\psutil\_pswindows.py:666 | 0.12 KB (1 allocs)
-  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Utilities\Memory\Profiler.py:45 | 0.05 KB (2 allocs)
+Time: 0.0021s | RSS Δ: 0.125 MB
+RSS start: 374.773 MB | RSS end: 374.898 MB
+tracemalloc current: 0.00 KB | peak: 0.00 KB

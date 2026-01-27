@@ -1,15 +1,19 @@
+from __future__ import annotations
 import math
 import numpy as np
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Tuple, Callable
+from typing import TYPE_CHECKING, List, Tuple, Callable
 
 from src.Data.Hit import HitInfo
 from src.Data.Color import Color
+from src.Data.Sampling.Core import Sampler
 from .BSDF import *
-from src.Lighting.Core import Light
 from src.Lighting.Optics import reflect, schlick_fresnel_metalic
 from src.Utilities.Common import lerp, unit, attenuate_inv_sqr_distance, attenuate_distance_exponential
+
+if TYPE_CHECKING:
+    from src.Data.Scene import Scene, SceneNode
 
 class MaterialType(Enum):
     DIFFUSE = 1 # Only diffuse reflections
@@ -59,10 +63,10 @@ class PBRMaterial:
 
     def evaluate_direct_light(
         self,
-        scene_lights: List[Light],
+        scene_lights: List["SceneNode"],
         hit_info: HitInfo,
         view_dir: np.ndarray,
-        visibility_function: Callable[[np.ndarray, Light], float],
+        visibility_function: Callable[[np.ndarray, "SceneNode"], float],
         bias: float = 1e-4
     ) -> Color:
         """
@@ -71,13 +75,13 @@ class PBRMaterial:
         Uses visibility function for shadow calculations (world-space).
         
         :param scene_lights: List of light sources in the scene
-        :type scene_lights: List[Light]
+        :type scene_lights: List["SceneNode"]
         :param hit_info: Surface intersection information (normal, point, etc.)
         :type hit_info: HitInfo
         :param view_dir: Direction from surface point to camera/viewer
         :type view_dir: np.ndarray
         :param visibility_function: Function to determine light visibility (shadow testing)
-        :type visibility_function: Callable[[np.ndarray, Light], float]
+        :type visibility_function: Callable[[np.ndarray, "SceneNode"], float]
         :param bias: Small offset to prevent self-intersection in shadow rays
         :type bias: float
         :return: Accumulated color contribution from all direct lights
@@ -99,7 +103,11 @@ class PBRMaterial:
 
         for light in scene_lights:
             # --- Light Setup (World Space) ---
-            L, dist = light.get_direction_and_dist(hit_point)
+            if not Scene._matches_context(light.context, "LightContext"):
+                continue
+
+            L = light.context.light.get_direction(light.world_transform.position, hit_point)
+            dist = light.context.light.get_distance(light.world_transform.position, hit_point)
             if dist <= bias: continue
             
             # --- Visibility Check (Shadows) ---
@@ -113,7 +121,7 @@ class PBRMaterial:
             attenuation = attenuate_inv_sqr_distance(dist)
 
             # Final radiance
-            incoming_radiance = light.get_radiance(hit_point) * attenuation * visibility
+            incoming_radiance = light.context.light.get_radiance(light.world_transform.position, hit_point) * attenuation * visibility
             if incoming_radiance.r + incoming_radiance.g + incoming_radiance.b <= 0.0:
                 continue
 
@@ -269,7 +277,7 @@ class PBRMaterial:
             # Only evaluate if roughness > 0 (otherwise it's a delta distribution)
             if self.data.roughness > 0.01:
                 # Calculate the microfacet BRDF
-                specular_brdf = calculate_microfacet_brdf(self.data.roughness, self.data.specular_intensity,L, V, N, self.evaluate_metallic_component())
+                specular_brdf = calculate_microfacet_brdf(self.data.roughness, self.data.specular_intensity,L, V, N, self.evaluate_metallic_component().to_np_array())
                 
                 # Add diffuse component (scaled by metallic)
                 diffuse_brdf = (self.data.albedo / np.pi) * (1.0 - self.data.metallic)
@@ -284,7 +292,7 @@ class PBRMaterial:
             if self.data.roughness > 0.01:
                 # Evaluate both reflection and refraction lobes
                 # This is complex - see below
-                return evaluate_glass_bsdf(L, V, N)
+                return evaluate_glass_bsdf(self.data.roughness, self.data.ior, L, V, N)
             else:
                 # Perfect glass - delta distribution
                 return Color(0.0, 0.0, 0.0)
@@ -358,8 +366,7 @@ class PBRMaterial:
         F0 = self.evaluate_metallic_component()
         
         # F_schlick calculation (Color operations are handled correctly)
-        term_pow5 = (1.0 - VdotH) ** 5 
-        FF = F0 + (Color(1.0, 1.0, 1.0) - F0) * term_pow5
+        FF = schlick_fresnel_metalic(VdotH, F0.to_np_array())
 
         # --- 4. Final BRDF Term (Fs) and Specular Contribution ---
         # Denominator of the BRDF term
