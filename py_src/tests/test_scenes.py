@@ -18,6 +18,32 @@ from src.Lighting.Core import Light, LightType
 from src.Lighting.Optics import REFRACTIVE_INDICES
 from src.Material.Factory import MaterialFactory
 
+def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
+    cam_transform = Transform(np.array([0.0, 0.0, -5.0]), np.zeros(3), np.ones(3))
+    cam = Camera(
+        cam_transform,
+        fov=60.0, near=0.1, far=1000.0,
+        resolution_width=width, resolution_height=height,
+        camera_type=CameraType.PERSPECTIVE
+    )
+    scene = Scene("minimal_scene", cam, background_color=Color.from_hex("#3A4655"))
+
+    # Sphere at origin
+    mat = MaterialFactory.create_diffuse(Color.from_hex("#227DD7"), 0.2)
+    v_sphere = SDFContext(Sphere(), mat)
+    scene.add_object_by_context(v_sphere, "SphereMin", Transform.Identity())
+
+    # Ground
+    matg = MaterialFactory.create_diffuse(Color.from_hex("#3F3F3F"), 0.9)
+    v_ground = SDFContext(Sphere(100), matg)
+    scene.add_object_by_context(v_ground, "GroundMin", Transform(np.array([0.0, -100.5, 0.0])))
+
+    # Single light
+    light = Light(color=Color.from_hex("#FFFFFF"), intensity=350.0, radius=3)
+    scene.add_object_by_context(LightContext(light), "SunMin", Transform(np.array([2.0, 3.0, -1.0])))
+
+    return scene
+
 def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     cam_transform = Transform(np.array([0.0, 1.5, -4.0]), np.array([0, 0.2, 0]), np.ones(3))
     cam = Camera(
@@ -39,18 +65,18 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     scene = Scene("gradient_scene", cam, background_color=ColorGradient(sky_colors, sky_positions))
 
     # Primary Key Light (Sharp, slightly yellow, placed high and to the left for side lighting)
-    key_light = Light(position=np.array([4.0, 5.0, 0.0]), color=Color.from_hex("#FFEDC7"), intensity=150.0, radius=0.5, name="Key Light")
-    scene.add_object_by_context(LightContext(key_light))
+    key_light = Light(color=Color.from_hex("#FFEDC7"), intensity=150.0, radius=0.5)
+    scene.add_object_by_context(LightContext(key_light), name="Key Light", transform=Transform(np.array([4.0, 5.0, 0.0])))
 
     # Soft Fill Light (Simulates general ambient light or bounce light)
-    fill_light = Light(position=np.array([-5.0, 2.0, -5.0]), color=Color.from_hex("#C7E5FF"), intensity=500.0, radius=4, name="Fill Light")
-    scene.add_object_by_context(LightContext(fill_light))
+    fill_light = Light(color=Color.from_hex("#C7E5FF"), intensity=500.0, radius=4)
+    scene.add_object_by_context(LightContext(fill_light), name="Fill Light", transform=Transform(np.array([-5.0, 2.0, -5.0])))
     
     # Main Sphere (Mid-Ground): Highly Reflective Metal
     mat_metal = MaterialFactory.create_specular(Color.from_hex("#47505C"), 0.2, 0.9, 1.0, 1.0)
-    sph_1 = SDFContext("ReflectiveSphere", Transform(np.array([0.0, 2.25, 5.0])), Sphere(), mat_metal)
-    cam.transform.look_at(sph_1.transform.position, np.array([0, 1, 0]))
-    scene.add_object_by_context(sph_1)
+    sph_1 = SDFContext(Sphere(), mat_metal)
+    scene.add_object_by_context(sph_1, name="Reflective Sphere", transform=Transform(np.array([0.0, 2.25, 5.0])))
+    cam.transform.look_at(scene.objects[-1].transform.position, np.array([0, 1, 0]))
 
     # Additional Object 1: Cube (Background/Visual Anchor) - Matte and Rough
     mat_matte = MaterialFactory.create_diffuse(Color.from_hex("#C27A23"), 0.8)
@@ -76,32 +102,6 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
 
     return scene
 
-def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
-    cam_transform = Transform(np.array([0.0, 0.0, -5.0]), np.zeros(3), np.ones(3))
-    cam = Camera(
-        cam_transform,
-        fov=60.0, near=0.1, far=1000.0,
-        resolution_width=width, resolution_height=height,
-        camera_type=CameraType.PERSPECTIVE
-    )
-    scene = Scene("minimal_scene", cam, background_color=Color.from_hex("#3A4655"))
-
-    # Sphere at origin
-    mat = MaterialFactory.create_diffuse(Color.from_hex("#227DD7"), 0.2)
-    v_sphere = SDFContext(Sphere(), mat, name="SphereMin")
-    scene.add_object_by_context(v_sphere)
-
-    # Ground
-    matg = MaterialFactory.create_diffuse(Color.from_hex("#3F3F3F"), 0.9)
-    v_ground = SDFContext(Sphere(100), matg, name="GroundMin")
-    scene.add_object_by_context(v_ground)
-
-    # Single light
-    light = Light(position=np.array([2.0, 3.0, -1.0]), color=Color.from_hex("#FFFFFF"), intensity=350.0, radius=3, name="SunMin")
-    scene.add_object_by_context(light)
-
-    return scene
-
 def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
     cam_transform = Transform(np.array([0.0, 0.5, -3.5]), np.zeros(3), np.ones(3))
     cam = Camera(
@@ -114,22 +114,22 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
 
     # Emissive sphere
     mat_glow = MaterialFactory.create_emissive(Color.from_hex("#FFEA62"), 1.2)
-    v_emissive = SDFContext(Sphere(0.3), mat_glow, name="GlowingSphere")
-    scene.add_object_by_context(v_emissive)
+    v_emissive = SDFContext(Sphere(0.3), mat_glow)
+    scene.add_object_by_context(v_emissive, name="GlowingSphere")
 
     # Reflective sphere
     mat_reflect = MaterialFactory.create_specular(Color.from_hex("#6B6666"), roughness=0.2, metallicness=0.75, specular_intensity=1.0, specular_tint_amount=1.0)
-    v_mirror = SDFContext(Sphere(), mat_reflect, name="MirrorSphere")
-    scene.add_object_by_context(v_mirror)
+    v_mirror = SDFContext(Sphere(), mat_reflect)
+    scene.add_object_by_context(v_mirror, name="MirrorSphere")
 
     # Ground
     matg = MaterialFactory.create_diffuse(Color.from_hex("#202020"), roughness=0.8)
-    v_ground = SDFContext(Sphere(100), matg, name="Ground")
-    scene.add_object_by_context(v_ground)
+    v_ground = SDFContext(Sphere(100), matg)
+    scene.add_object_by_context(v_ground, name="Ground")
 
     # Small ambient fill light
-    fill = Light(position=np.array([-4.0, 2.0, -3.0]), color=Color.from_hex("#AAAACC"), intensity=1000.0, radius=10.0, name="FillEmiss")
-    scene.add_object_by_context(fill)
+    fill = Light(position=np.array([-4.0, 2.0, -3.0]), color=Color.from_hex("#AAAACC"), intensity=1000.0, radius=10.0)
+    scene.add_object_by_context(fill, name="FillEmiss")
 
     return scene
 
@@ -145,30 +145,28 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
 
     # Objects: two spheres and box as background
     mat1 = MaterialFactory.create_specular(Color.from_hex("#FFB86B"), 0.2, 0.1, 0.9, 0)
-    v_s1 = SDFContext(Sphere(0.4), mat1, name="StudioBallA")
+    v_s1 = SDFContext(Sphere(0.4), mat1)
     v_s1.transform.translate(np.array([-0.6, 0.4, 0.5]))
-    scene.add_object_by_context(v_s1)
+    scene.add_object_by_context(v_s1, name="StudioBallA")
 
     mat2 = MaterialFactory.create_specular(Color.from_hex("#6B9BFF"), 0.2, 0.4, 0.9, 0)
-    v_s2 = SDFContext(Sphere(0.45), mat2, name="StudioBallB")
+    v_s2 = SDFContext(Sphere(0.45), mat2)
     v_s2.transform.translate(np.array([0.8, 0.45, 0.2]))
-    scene.add_object_by_context(v_s2)
+    scene.add_object_by_context(v_s2, name="StudioBallB")
 
     # Background
     mat_plane = MaterialFactory.create_diffuse(Color.from_hex("#C1CBD0"), roughness=1.0)
-    v_plane = SDFContext("StudioBack", Transform(np.array([0.0, 0.5, 2.0])), Plane(), mat_plane)
+    v_plane = SDFContext(Transform(np.array([0.0, 0.5, 2.0])), Plane(), mat_plane)
     v_plane.transform.rotate(np.deg2rad(90), np.array([1.0, 0.0, 0.0]))
-    scene.add_object_by_context(v_plane)
+    scene.add_object_by_context(v_plane, name="StudioBack")
 
     # Lights
-    key = Light(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#EEE0BA"), intensity=2500.0, radius=100, name="StudioKey")
-    key.radius = 0.3
-    scene.add_object_by_context(key)
-    rim = Light(position=np.array([-3.0, 2.0, 1.0]), color=Color.from_hex("#DC97C5"), intensity=50.0, radius=0.75, name="StudioRim")
-    rim.radius = 0.2
-    scene.add_object_by_context(rim)
-    fill = Light(position=np.array([0.0, -2.5, -2.0]), color=Color.from_hex("#C7DBD8"), intensity=150.0, radius=2, name="StudioFill")
-    scene.add_object_by_context(fill)
+    key = Light(position=np.array([2.5, 3.5, -1.0]), color=Color.from_hex("#EEE0BA"), intensity=2500.0, radius=100)
+    scene.add_object_by_context(key, name="StudioKey")
+    rim = Light(position=np.array([-3.0, 2.0, 1.0]), color=Color.from_hex("#DC97C5"), intensity=50.0, radius=0.75)
+    scene.add_object_by_context(rim, name="StudioRim")
+    fill = Light(position=np.array([0.0, -2.5, -2.0]), color=Color.from_hex("#C7DBD8"), intensity=150.0, radius=2)
+    scene.add_object_by_context(fill, name="StudioFill")
 
     return scene
 

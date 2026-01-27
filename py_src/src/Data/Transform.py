@@ -37,7 +37,7 @@ class Transform:
         self.update_orientations()
 
     @classmethod
-    def identity(cls):
+    def Identity(cls):
         return cls(np.zeros(3), np.zeros(3), np.ones(3))
     
     @classmethod

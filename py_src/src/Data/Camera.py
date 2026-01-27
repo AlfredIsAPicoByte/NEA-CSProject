@@ -36,7 +36,7 @@ class Camera:
     """
     def __init__(
         self,
-        transform: Transform = Transform.identity(),
+        transform: Transform = Transform.Identity(),
         resolution_width: int = 800,
         resolution_height: int = 600,
         fov: float = 60.0,
@@ -122,7 +122,7 @@ class Camera:
                 [0.0, 0.0, 0.0, 1.0]
             ], dtype=float)
         
-        return np.identity(4)
+        return np.Identity(4)
     
     def resize(self, width: float, height: float):
         """

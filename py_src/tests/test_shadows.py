@@ -21,7 +21,7 @@ def test_self_shadow_ignored():
 
     # Large plane centered at origin
     plane = Plane()
-    plane_obj = SceneNode(transform=Transform.identity(), shape=plane, material=None)
+    plane_obj = SceneNode(transform=Transform.Identity(), shape=plane, material=None)
 
     # Make a light very close above the plane center
     light = Light(position=np.array([0.0, 5.0, 0.0]), color=Color(1,1,1), intensity=1.0, radius=0.0)

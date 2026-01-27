@@ -4,6 +4,7 @@ from typing import Optional, Tuple
 
 from src.Data.Ray import TracingRay, RayPool
 from src.Data.Color import Color
+from src.Data.Context import LightContext
 from .. import register_algorithm
 from ..Core import Algorithm, RenderStats, AlgorithmSettings
 from . import Intersections
@@ -121,7 +122,6 @@ class RayTracingSettings(AlgorithmSettings):
     max_recursions: int = 4
 
     intersection_strategy: Intersections.IntersectionStrategy = field(default_factory=lambda: Intersections.RayMarchingIntersection())
-
     shading_strategy: Shading.ShadingStrategy = field(default_factory=lambda: Shading.LambertShading())
 
     use_tiling: bool = True
@@ -316,7 +316,7 @@ class RayTracer(Algorithm):
             self.render_tile(scene, sampler, region_x, region_y, region_width, region_height)
 
         self.stats.pixels_processed = pixels_processed
-        self.stats.lights_sampled = len(scene.lights)
+        self.stats.lights_sampled = len(scene.get_objects_by_type(LightContext))
         self.stats.stop_timer()
 
         if self.settings.verbose_logging:

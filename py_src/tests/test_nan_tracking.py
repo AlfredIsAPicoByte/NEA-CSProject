@@ -28,7 +28,7 @@ class NaNShading(ShadingStrategy):
 def test_nan_tracking():
     scene = Scene()
     sph = Sphere()
-    obj = SceneNode(transform=Transform.identity(), shape=sph)
+    obj = SceneNode(transform=Transform.Identity(), shape=sph)
     scene.add_object(obj)
 
     ray = Ray(origin=np.array([0.0, 0.0, -5.0]), orientation=np.array([0.0, 0.0, 1.0]))

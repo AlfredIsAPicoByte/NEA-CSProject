@@ -21,7 +21,7 @@ def test_world_transform_applied_to_normals():
     parent = SceneNode(transform=parent_transform, name="parent")
 
     # Child sphere at origin (local)
-    child_transform = Transform.identity()
+    child_transform = Transform.Identity()
     sphere = Sphere()
     child = SceneNode(transform=child_transform, shape=sphere, name="child")
 

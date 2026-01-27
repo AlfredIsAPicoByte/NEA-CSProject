@@ -1,4 +1,5 @@
 from __future__ import annotations
+from token import OP
 import numpy as np
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional, List, Tuple, cast
@@ -36,7 +37,7 @@ class IntersectionSettings:
     always_rebuild_bvh: bool = False # If true, forces BVH to rebuild on next use
 
 class IntersectionStrategy(ABC):
-    def __init__(self, settings: IntersectionSettings):
+    def __init__(self, settings: Optional[IntersectionSettings]):
         self.settings = settings
     
     @abstractmethod
@@ -273,7 +274,7 @@ class RayMarchingIntersection(IntersectionStrategy):
             
             # Frustum/Far Plane checks
             if scene.camera:
-                obj_pos = getattr(closest_object, 'world_transform', Transform.identity()).position
+                obj_pos = getattr(closest_object, 'world_transform', Transform.Identity()).position
                 far_plane_dist = np.linalg.norm(scene.camera.transform.position - obj_pos)
                 if distance_world >= self.settings.max_distance or far_plane_dist >= scene.camera.far:
                     break
@@ -356,6 +357,7 @@ class InverseSDFIntersection(IntersectionStrategy):
             if self.use_bounding_box:
                 box = obj.get_bounds()
                 t_box = box.intersect(ray, self.settings.max_distance)
+                if stats: stats.aabb_tests += 1
                 if t_box == float('inf'):
                     continue
 
@@ -501,7 +503,9 @@ class BVHIntersection(IntersectionStrategy):
         """
         # Check intersections with child boxes (returns float('inf') if miss or no child)
         t_left = node.left.box.intersect(ray, limit_dist) if node.left and node.left.box else float('inf')
+        if stats: stats.aabb_tests += 1
         t_right = node.right.box.intersect(ray, limit_dist) if node.right and node.right.box else float('inf')
+        if stats: stats.aabb_tests += 1
 
         # Optimization: Push the FURTHEST valid node first, so we pop the CLOSEST node first.
         # This maximizes the chance of finding a closer hit early and shrinking the limit_dist.

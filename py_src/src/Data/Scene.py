@@ -1,3 +1,4 @@
+from token import OP
 import numpy as np
 from typing import List, Optional
 from dataclasses import dataclass, field
@@ -17,7 +18,7 @@ class SceneNode:
     """
     name: str = "Object"
     context: Optional[ContextBase] = None  # Generic data field; can be shape, mesh, etc.
-    transform: Transform = field(default_factory=Transform.identity)
+    transform: Transform = field(default_factory=Transform.Identity)
 
     active: bool = True  # Whether this node is active in the scene
 
@@ -76,13 +77,13 @@ class SceneNode:
         if self._world_matrix is None:
             self.update_matrices()
         
-        return self._world_matrix or np.eye(4)
+        return self._world_matrix
     
     def get_world_inverse_matrix(self) -> np.ndarray:
         if self._inverse_world_matrix is None:
             self.update_matrices()
         
-        return self._inverse_world_matrix or np.eye(4)
+        return self._inverse_world_matrix
 
     @property
     def world_transform(self) -> Transform:
@@ -166,6 +167,50 @@ class Scene:
         :rtype: int
         """
         return self._version
+
+    def add_object(self, obj: SceneNode):
+        """
+        Adds a new object to the scene and updates the version counter.
+        """
+        self.objects.append(obj)
+        self.update_version()
+
+    def add_object_by_context(self, context: ContextBase, name: str = "Object", transform: Transform = Transform.Identity()) -> SceneNode:
+        """
+        Creates a new SceneNode with the given context and adds it to the scene.
+        
+        :param context: The context data to attach to the new SceneNode.
+        :param name: The name of the new SceneNode.
+        :return: The newly created SceneNode.
+        """
+        new_node = SceneNode(name=name, context=context, transform=transform)
+        self.add_object(new_node)
+        return new_node
+
+    def get_object(self, name: str) -> Optional[SceneNode]:
+        pass
+
+    def get_object_by_id(self, id: int) -> Optional[SceneNode]:
+        for obj in self.get_objects_flat():
+            if id(obj) == id:
+                return obj
+        
+        return None
+
+    def get_objects_by_type(self, context_type: type) -> List[SceneNode]:
+        """
+        Returns a list of all scene objects that contain data of the specified context type.
+        
+        :param context_type: The type of context to filter by (e.g., MeshContext, LightContext).
+        :return: A list of SceneNode objects matching the specified context type.
+        """
+        result = []
+
+        for obj in self.get_objects_flat():
+            if obj.context is not None and isinstance(obj.context, context_type):
+                result.append(obj)
+        
+        return result
     
     def get_objects_flat(self) -> List[SceneNode]:
         """
@@ -179,6 +224,14 @@ class Scene:
             self.flatten_objects()
 
         return self._cache_objects or self.objects
+
+    def remove_object(self, obj: SceneNode):
+        """
+        Removes an object from the scene and updates the version counter.
+        """
+        if obj in self.objects:
+            self.objects.remove(obj)
+            self.update_version()
     
     def flatten_objects(self):
         """
@@ -220,52 +273,11 @@ class Scene:
         """
         self.camera = camera
 
-    def add_object(self, obj: SceneNode):
-        """
-        Adds a new object to the scene and updates the version counter.
-        """
-        self.objects.append(obj)
-        self.update_version()
-
-    def add_object_by_context(self, context: ContextBase, name: str = "Object") -> SceneNode:
-        """
-        Creates a new SceneNode with the given context and adds it to the scene.
-        
-        :param context: The context data to attach to the new SceneNode.
-        :param name: The name of the new SceneNode.
-        :return: The newly created SceneNode.
-        """
-        new_node = SceneNode(name=name, context=context)
-        self.add_object(new_node)
-        return new_node
-
-    def remove_object(self, obj: SceneNode):
-        """
-        Removes an object from the scene and updates the version counter.
-        """
-        if obj in self.objects:
-            self.objects.remove(obj)
-            self.update_version()
-
-    def get_objects_by_type(self, context_type: type) -> List[SceneNode]:
-        """
-        Returns a list of all scene objects that contain data of the specified context type.
-        
-        :param context_type: The type of context to filter by (e.g., MeshContext, LightContext).
-        :return: A list of SceneNode objects matching the specified context type.
-        """
-        result = []
-        for obj in self.get_objects_flat():
-            if obj.data is not None and isinstance(obj.data, context_type):
-                result.append(obj)
-        return result
-    
     def clear(self):
         """
         Removes all the objects and light sources from the scene, while updating the version counter.
         """
         self.objects.clear()
-        self.lights.clear()
         self.update_version()
     
     def update_version(self):

@@ -1,22 +1,8 @@
-Time: 986.3862s | RSS Δ: 40.137 MB
-RSS start: 36.922 MB | RSS end: 77.059 MB
-tracemalloc current: 960.42 KB | peak: 121568.54 KB
-Top allocations (most recent frame):
-  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:11 | 432.14 KB (3 allocs)
-  2. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:12 | 144.09 KB (2 allocs)
-  3. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Data\Color.py:416 | 135.84 KB (1932 allocs)
-  4. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Rendering\RayTracing\Core.py:238 | 108.61 KB (1986 allocs)
-  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\numeric.py:1548 | 46.64 KB (995 allocs)
-  6. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\numeric.py:1469 | 38.91 KB (830 allocs)
+Time: 205.1990s | RSS Δ: 13.297 MB
+RSS start: 39.258 MB | RSS end: 52.555 MB
+tracemalloc current: 0.00 KB | peak: 0.00 KB
 
 Postprocessing:
-Time: 1.2297s | RSS Δ: 19.395 MB
-RSS start: 65.852 MB | RSS end: 85.246 MB
-tracemalloc current: 14846.20 KB | peak: 17439.98 KB
-Top allocations (most recent frame):
-  1. <frozen importlib._bootstrap_external>:729 | 8197.95 KB (45317 allocs)
-  2. <frozen importlib._bootstrap>:241 | 1466.92 KB (16357 allocs)
-  3. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\PostProcessing\Passes.py:40 | 864.09 KB (2 allocs)
-  4. <frozen abc>:106 | 239.85 KB (742 allocs)
-  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\scipy\_lib\_util.py:1269 | 168.38 KB (68 allocs)
-  6. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\scipy\_lib\doccer.py:79 | 144.19 KB (33 allocs)
+Time: 0.5748s | RSS Δ: 15.223 MB
+RSS start: 54.812 MB | RSS end: 70.035 MB
+tracemalloc current: 0.00 KB | peak: 0.00 KB

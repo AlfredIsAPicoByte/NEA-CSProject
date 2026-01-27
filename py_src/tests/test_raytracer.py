@@ -105,7 +105,7 @@ def test_ray_check_points(t, expected_point, should_match):
         assert not is_close, f"Point at t={t} matched {expected_point} but shouldn't have"
 
 def test_SceneNode_creation():
-    transform = Transform.identity()
+    transform = Transform.Identity()
     shape = Sphere()
     
     obj = SceneNode(transform=transform, shape=shape)
@@ -126,7 +126,7 @@ def test_color_math():
     np.testing.assert_allclose([scaled.r, scaled.g, scaled.b], [0.4, 0.8, 1.2])
 
 def test_camera_logic():
-    transform = Transform.identity()
+    transform = Transform.Identity()
     cam = Camera(transform, 1440, 810, 90, 0.1, 1000)
     
     cam.aspect_ratio.simplify()
