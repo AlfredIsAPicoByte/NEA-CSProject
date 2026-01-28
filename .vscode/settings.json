@@ -94,7 +94,9 @@
       "envFile": ".venv/bin/activate",
       "type": "venv",
       "name": ".venv",
-    },
+      "envManager": "ms-python.python:venv",
+      "packageManager": "ms-python.python:pip"
+    }
   ],
   "python.analysis.include": [
     "${workspaceFolder}/py_src"
