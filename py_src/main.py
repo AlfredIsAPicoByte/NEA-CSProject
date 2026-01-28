@@ -117,7 +117,7 @@ if __name__ == "__main__":
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
-    img_width, img_height = 16 * 8, 9 * 8
+    img_width, img_height = 16 * 4, 9 * 4
 
     # 16 * 32, 9 * 32
 
@@ -150,16 +150,16 @@ if __name__ == "__main__":
             max_distance=250,
             max_steps=64
         ))
-        close, far = find_scene_extremes(scene.get_objects_by_types(scene.get_scene_objects_flattened(), ["SDF_Material", "Mesh_Material"]), scene.camera.transform.position)
-        d1 = float(np.linalg.norm(scene.camera.transform.position - close.world_transform.position))
-        d2 = float(np.linalg.norm(scene.camera.transform.position - far.world_transform.position))
+        #close, far = find_scene_extremes(scene.get_objects_by_types(scene.get_scene_objects_flattened(), ["SDF_Material", "Mesh_Material"]), scene.camera.transform.position)
+        #d1 = float(np.linalg.norm(scene.camera.transform.position - close.world_transform.position))
+        #d2 = float(np.linalg.norm(scene.camera.transform.position - far.world_transform.position))
 
-        print(f"Distances: {d1:.3g}, {d2:.3g}")
-        shading = DistanceShading(PhysicalShadingSettings(
+        #print(f"Distances: {d1:.3g}, {d2:.3g}")
+        shading = FlatShading(PhysicalShadingSettings(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None), False)
-        ), d1, d2)
+        ))
 
         raytracer = RayTracer(RayTracingSettings(
             image_width=img_width,

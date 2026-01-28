@@ -92,19 +92,15 @@ class SceneNode:
         Useful for building the global list of objects for the BVH or Renderer.
         """
         result = []
-        stack = [self] if include_self else []
+        stack = [self] if include_self else list(reversed(self.children))
         
         while stack:
             current = stack.pop()
+            result.append(current)
             
-            if current is not None:
-                result.append(current)
-
-                for child in reversed(current.children):
-                    stack.append(child)
-            else:
-                for child in reversed(self.children):
-                    stack.append(child)
+            # Add children in reversed order so they're popped in correct order
+            for child in reversed(current.children):
+                stack.append(child)
 
         self._cache_objects = result
 

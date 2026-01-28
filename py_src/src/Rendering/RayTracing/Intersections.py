@@ -249,10 +249,10 @@ class RayMarchingIntersection(IntersectionStrategy):
                 surface_normal = np.array([0.0, 0.0, 1.0])
                 
                 if closest_object is not None:
-                    SignedDistanceShape = getattr(closest_object, "SignedDistanceShape", None)
+                    shape = getattr(closest_object.context, "shape", None)
 
-                    if SignedDistanceShape is not None:
-                        safe_shape = cast(SignedDistanceShape, SignedDistanceShape)
+                    if shape is not None:
+                        safe_shape = cast(SignedDistanceShape, shape)
                         safe_transform = getattr(closest_object, 'world_transform', closest_object.transform)
 
                         # 3. Rotate normal back to world space
@@ -393,13 +393,12 @@ class BVHIntersection(IntersectionStrategy):
         self._cached_scene_version: Optional[int] = None
 
     def find_hit(self, scene: Scene, ray: TracingRay, stats: Optional["TracingStats"] = None) -> HitInfo:
-        if (self._cached_bvh_root is None or scene.version != self._cached_scene_version) or self.settings.always_rebuild_bvh:
+        if self._cached_bvh_root is None or scene.version != self._cached_scene_version or self.settings.always_rebuild_bvh:
             print(f" < Building Hierarchy for scene objects...")
             
             # Update world matrices for all root objects
             for obj in scene.objects:
                 obj.update_matrices()
-                scene.update_version() # Ensure scene version increments if transforms changed
             
             # Get all objects including children
             all_objects = scene.get_scene_objects_flattened()
@@ -407,6 +406,10 @@ class BVHIntersection(IntersectionStrategy):
             self._cached_bvh_root = build_bvh_tree(all_objects)
             self._cached_scene_version = scene.version
             print(f" < Hierarchy build Complete for {len(all_objects)} objects.")
+
+        # Safety check
+        if self._cached_bvh_root is None:
+            return HitInfo.miss()
 
         closest_hit = HitInfo.miss()
         stack = [(self._cached_bvh_root, 0.0)]
@@ -543,7 +546,7 @@ class AnalyticalIntersection(IntersectionStrategy):
         for obj in safe_objects:
             local_shape = getattr(obj.context, "shape", None)
             if local_shape is None:
-                return HitInfo.miss()
+                continue
             safe_shape = cast(SignedDistanceShape, local_shape)
             
             # --- 1. Transform Ray to Local Space ---
