@@ -3,17 +3,16 @@ import math
 import numpy as np
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Tuple, Callable
+from typing import List, Tuple, Callable, cast
 
 from src.Data.Hit import HitInfo
 from src.Data.Color import Color
 from src.Data.Sampling.Core import Sampler
+from src.Data.Scene import SceneNode
 from .BSDF import *
+from src.Lighting.Core import Light
 from src.Lighting.Optics import reflect, schlick_fresnel_metalic
 from src.Utilities.Common import lerp, unit, attenuate_inv_sqr_distance, attenuate_distance_exponential
-
-if TYPE_CHECKING:
-    from src.Data.Scene import Scene, SceneNode
 
 class MaterialType(Enum):
     DIFFUSE = 1 # Only diffuse reflections
@@ -46,27 +45,21 @@ class MaterialData:
     # --- Flags ----
     type: MaterialType = MaterialType.DIFFUSE
 
+@dataclass
 class PBRMaterial:
     """
     Physically-Based Rendering (PBR) Material for ray tracing.
     Supports multiple material types: Diffuse, Specular, Glass, Transparent, and Emissive.
     Handles direct lighting, indirect sampling, and BSDF evaluation.
     """
-    def __init__(self, data: MaterialData):
-        """
-        Initializes a PBR material with the given material data.
-        
-        :param data: Material properties including albedo, roughness, metallic, and IOR
-        :type data: MaterialData
-        """
-        self.data = data
+    data: MaterialData = field(default_factory=MaterialData)
 
     def evaluate_direct_light(
         self,
-        scene_lights: List["SceneNode"],
+        light_nodes: List[SceneNode],
         hit_info: HitInfo,
         view_dir: np.ndarray,
-        visibility_function: Callable[[np.ndarray, "SceneNode"], float],
+        visibility_function: Callable[[np.ndarray, SceneNode], float],
         bias: float = 1e-4
     ) -> Color:
         """
@@ -75,13 +68,13 @@ class PBRMaterial:
         Uses visibility function for shadow calculations (world-space).
         
         :param scene_lights: List of light sources in the scene
-        :type scene_lights: List["SceneNode"]
+        :type scene_lights: List[SceneNode]
         :param hit_info: Surface intersection information (normal, point, etc.)
         :type hit_info: HitInfo
         :param view_dir: Direction from surface point to camera/viewer
         :type view_dir: np.ndarray
         :param visibility_function: Function to determine light visibility (shadow testing)
-        :type visibility_function: Callable[[np.ndarray, "SceneNode"], float]
+        :type visibility_function: Callable[[np.ndarray, SceneNode], float]
         :param bias: Small offset to prevent self-intersection in shadow rays
         :type bias: float
         :return: Accumulated color contribution from all direct lights
@@ -100,20 +93,27 @@ class PBRMaterial:
         
         if self.data.type == MaterialType.EMISSIVE:
             return self.evaluate_emissive_component()
+        
+        if light_nodes is None or len(light_nodes) == 0:
+            return accumulated_light
 
-        for light in scene_lights:
+        for light_node in light_nodes:
             # --- Light Setup (World Space) ---
-            if not Scene._matches_context(light.context, "LightContext"):
+            light_context = light_node.context
+            light = getattr(light_context, "light", None)
+            if light is None:
                 continue
 
-            L = light.context.light.get_direction(light.world_transform.position, hit_point)
-            dist = light.context.light.get_distance(light.world_transform.position, hit_point)
+            light = cast(Light, light)
+
+            L = light.get_direction(light_node.world_transform.position, hit_point)
+            dist = light.get_distance(light_node.world_transform.position, hit_point)
             if dist <= bias: continue
             
             # --- Visibility Check (Shadows) ---
             # Note: If checking visibility through glass, this simple function 
             # usually returns 0 (blocked) unless you implement "Transparent Shadows"
-            visibility = visibility_function(hit_point, light)
+            visibility = visibility_function(hit_point, light_node)
             if visibility <= 0.0:
                 continue
             
@@ -121,7 +121,7 @@ class PBRMaterial:
             attenuation = attenuate_inv_sqr_distance(dist)
 
             # Final radiance
-            incoming_radiance = light.context.light.get_radiance(light.world_transform.position, hit_point) * attenuation * visibility
+            incoming_radiance = light.get_radiance(light_node.world_transform.position, hit_point) * attenuation * visibility
             if incoming_radiance.r + incoming_radiance.g + incoming_radiance.b <= 0.0:
                 continue
 
@@ -137,7 +137,12 @@ class PBRMaterial:
 
         return accumulated_light
     
-    def sample_indirect_contribution(self, incident_dir: np.ndarray, surface_normal: np.ndarray, sampler: Sampler) -> Tuple[np.ndarray, Color, float]:
+    def sample_indirect_contribution(
+            self,
+            incident_dir: np.ndarray,
+            surface_normal: np.ndarray,
+            sampler: Sampler
+        ) -> Tuple[np.ndarray, Color, float]:
         """
         Generates a new ray direction for indirect (global) illumination based on material type.
         Samples from appropriate distribution: Cosine-Weighted (Diffuse), Delta (Specular/Glass), or Pass-through (Transparent).
@@ -199,7 +204,13 @@ class PBRMaterial:
                 
         return N, Color(0.0, 0.0, 0.0), 0.0 # No contribution
     
-    def sample_glass_contribution(self, incident_dir: np.ndarray, surface_normal: np.ndarray, sampler: Sampler, other_ior: float):
+    def sample_glass_contribution(
+            self,
+            incident_dir: np.ndarray,
+            surface_normal: np.ndarray,
+            sampler: Sampler,
+            other_ior: float
+        ) -> Tuple[np.ndarray, Color]:
         """
         Handles refraction and reflection for glass/dielectric materials using Fresnel equations.
         Chooses between reflection and refraction probabilistically based on Schlick's Fresnel approximation.
@@ -249,7 +260,12 @@ class PBRMaterial:
             
             return refracted, Color(1.0, 1.0, 1.0)
 
-    def evaluate_bsdf(self, incident_dir: np.ndarray, view_dir: np.ndarray, normal: np.ndarray) -> Color:
+    def evaluate_bsdf(
+            self,
+            incident_dir: np.ndarray,
+            view_dir: np.ndarray,
+            normal: np.ndarray
+        ) -> Color:
         """
         Evaluates the Bidirectional Scattering Distribution Function (BSDF) for given ray directions.
         Used for Next Event Estimation and direct light sampling.
@@ -299,7 +315,11 @@ class PBRMaterial:
 
         return Color(0.0, 0.0, 0.0)
 
-    def evaluate_diffuse_component(self, light_dir: np.ndarray, surface_normal: np.ndarray) -> Color:
+    def evaluate_diffuse_component(
+            self,
+            light_dir: np.ndarray,
+            surface_normal: np.ndarray
+        ) -> Color:
         """
         Calculates Lambertian diffuse reflection component.
         Applies energy conservation by reducing diffuse contribution for metallic surfaces.
@@ -322,7 +342,12 @@ class PBRMaterial:
         
         return diffuse
 
-    def evaluate_specular_component(self, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray) -> Color:
+    def evaluate_specular_component(
+            self,
+            light_dir: np.ndarray,
+            surface_normal: np.ndarray,
+            view_dir: np.ndarray
+        ) -> Color:
         """
         Evaluates specular reflection using microfacet BRDF (GGX roughness model).
         Incorporates Normal Distribution Function (NDF), Geometric Shadowing (GSF), and Fresnel equations.

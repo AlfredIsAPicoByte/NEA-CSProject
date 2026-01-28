@@ -4,6 +4,7 @@ from enum import Enum
 from dataclasses import dataclass, field
 
 from src.Data.Color import Color
+
 from src.Utilities.Common import unit, attenuate_inv_sqr_distance_arguments
 
 class LightType(Enum):

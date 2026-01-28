@@ -6,7 +6,6 @@ from .Ratio import Ratio
 from .Sampling import SamplingManager, Sampler, SampleSettings, PixelFilter
 from .Camera import Camera
 from .Scene import SceneNode, Scene
-from .Context import ContextBase, MeshContext, SDFContext, LightContext
 
 __all__ = [
     "Transform",
@@ -24,8 +23,4 @@ __all__ = [
     "Camera",
     "SceneNode",
     "Scene",
-    "ContextBase",
-    "MeshContext",
-    "SDFContext",
-    "LightContext",
 ]

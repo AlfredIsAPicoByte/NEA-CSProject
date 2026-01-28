@@ -1,11 +1,9 @@
-from token import OP
 import numpy as np
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Any
 from dataclasses import dataclass, field
 
 from .Transform import Transform
 from .Camera import Camera
-from .Context import ContextBase
 from src.Geometry.AABB import AABB
 
 @dataclass
@@ -17,7 +15,7 @@ class SceneNode:
     The data object contains the contents of the node (e.g., mesh, light, SDF, etc). This prevents inheritance explosion hell lol.
     """
     name: str = "Object"
-    context: Optional[ContextBase] = None  # Generic data field; can be shape, mesh, etc.
+    context: Optional[Any] = None  # Generic data field; can be shapes, meshs or lights, etc.
     transform: Transform = field(default_factory=Transform.Identity)
 
     active: bool = True  # Whether this node is active in the scene
@@ -110,7 +108,7 @@ class SceneNode:
 
         self._cache_objects = result
 
-    def get_objects_flat(self, include_self: bool = True):
+    def get_scene_objects_flattened(self, include_self: bool = True):
         if self._cache_objects is None:
             self.flatten_children(include_self)
         
@@ -121,11 +119,13 @@ class SceneNode:
         Delegates the bounds calculation to the data object if it exists.
         """
         # Check if context exists and has the method we need
-        if self.context is not None and hasattr(self.context, 'get_bounds') and callable(self.context.get_bounds):
-            self._aabb_bounds = self.context.get_bounds(self.get_world_matrix())
-            return self._aabb_bounds or AABB.empty()
-            
-        return AABB.empty()
+        if self.context is None:
+            return AABB.empty()
+        
+        if hasattr(self.context, "bounding_box"):
+            return self.context.bounding_box
+        
+        return AABB.unit_cube()
     
     def __hash__(self):
         return id(self)
@@ -171,7 +171,7 @@ class Scene:
         self.objects.append(obj)
         self.update_version()
 
-    def add_object_by_context(self, context: ContextBase, name: str = "Object", transform: Transform = Transform.Identity()) -> SceneNode:
+    def add_object_by_context(self, context: Any, name: str = "Object", transform: Transform = Transform.Identity()) -> SceneNode:
         """
         Creates a new SceneNode with the given context and adds it to the scene.
         
@@ -187,31 +187,33 @@ class Scene:
         pass
 
     def get_object_by_id(self, id: int) -> Optional[SceneNode]:
-        for obj in self.get_objects_flat():
+        for obj in self.get_scene_objects_flattened():
             if hash(obj) == id:
                 return obj
         
         return None
 
     @staticmethod
-    def _matches_context(context, type_or_name: Union[type, str]) -> bool:
+    def _matches_context(context: Any, type_or_name: Union[type, str]) -> bool:
         """Helper to check if a context matches a type (class) or name (str)."""
         if isinstance(type_or_name, type):
             return isinstance(context, type_or_name)
         return type(context).__name__ == type_or_name
 
-    def get_objects_by_type(self, context_type: Union[type, str]) -> List[SceneNode]:
+    @staticmethod
+    def get_objects_by_type(objects: list[SceneNode], context_type: Union[type, str]) -> List[SceneNode]:
         """
         Returns a list of all scene objects that contain data of the specified context type.
         """
         result = []
-        for obj in self.get_objects_flat():
+        for obj in objects:
             if obj.context is not None:
-                if self._matches_context(obj.context, context_type):
+                if Scene._matches_context(obj.context, context_type):
                     result.append(obj)
         return result
 
-    def get_objects_by_types(self, context_types: List[Union[type, str]]) -> List[SceneNode]:
+    @staticmethod
+    def get_objects_by_types(objects: list[SceneNode], context_types: List[Union[type, str]]) -> List[SceneNode]:
         """
         Returns a list of all scene objects that contain data of ANY of the specified context types.
         """
@@ -221,7 +223,7 @@ class Scene:
         real_types = tuple(t for t in context_types if isinstance(t, type))
         type_names = {t for t in context_types if isinstance(t, str)}
 
-        for obj in self.get_objects_flat():
+        for obj in objects:
             if obj.context is None:
                 continue
                 
@@ -236,22 +238,24 @@ class Scene:
                 
         return result
 
-    def get_objects_not_of_type(self, context_type: Union[type, str]) -> List[SceneNode]:
+    @staticmethod
+    def get_objects_not_of_type(objects: list[SceneNode], context_type: Union[type, str]) -> List[SceneNode]:
         """
         Returns a list of all scene objects that do NOT contain data of the specified context type.
         """
         result = []
-        for obj in self.get_objects_flat():
+        for obj in objects:
             # If context is None, it definitely doesn't match the type, so we include it
             if obj.context is None:
                 result.append(obj)
                 continue
 
-            if not self._matches_context(obj.context, context_type):
+            if not Scene._matches_context(obj.context, context_type):
                 result.append(obj)
         return result
 
-    def get_objects_not_of_types(self, context_types: List[Union[type, str]]) -> List[SceneNode]:
+    @staticmethod
+    def get_objects_not_of_types(objects: list[SceneNode], context_types: List[Union[type, str]]) -> List[SceneNode]:
         """
         Returns a list of all scene objects that do NOT contain data of ANY of the specified context types.
         """
@@ -260,7 +264,7 @@ class Scene:
         real_types = tuple(t for t in context_types if isinstance(t, type))
         type_names = {t for t in context_types if isinstance(t, str)}
 
-        for obj in self.get_objects_flat():
+        for obj in objects:
             if obj.context is None:
                 result.append(obj)
                 continue
@@ -278,28 +282,7 @@ class Scene:
             
         return result
     
-    def get_objects_flat(self) -> List[SceneNode]:
-        """
-        Returns a flat list of all objects in the scene, including children.
-        Caches the result for faster access on subsequent calls.
-        
-        :return: Description
-        :rtype: List[SceneNode]
-        """
-        if self._cache_objects is None:
-            self.flatten_objects()
-
-        return self._cache_objects or self.objects
-
-    def remove_object(self, obj: SceneNode):
-        """
-        Removes an object from the scene and updates the version counter.
-        """
-        if obj in self.objects:
-            self.objects.remove(obj)
-            self.update_version()
-    
-    def flatten_objects(self):
+    def flatten_scene_objects(self):
         """
         Retruns a list of all objects in a flat list array and updated the cache for faster access
         """
@@ -330,7 +313,28 @@ class Scene:
                 stack.extend(current_obj.children)
         
         # remove duplicate objects (with the same id)
-        self._cache_objects = list(set(flat_list))
+        self._cache_objects = list({id(obj): obj for obj in flat_list}.values())
+    
+    def get_scene_objects_flattened(self) -> List[SceneNode]:
+        """
+        Returns a flat list of all objects in the scene, including children.
+        Caches the result for faster access on subsequent calls.
+        
+        :return: Description
+        :rtype: List[SceneNode]
+        """
+        if self._cache_objects is None:
+            self.flatten_scene_objects()
+
+        return self._cache_objects or self.objects
+
+    def remove_object(self, obj: SceneNode):
+        """
+        Removes an object from the scene and updates the version counter.
+        """
+        if obj in self.objects:
+            self.objects.remove(obj)
+            self.update_version()
     
     def set_camera(self, camera: Camera):
         """

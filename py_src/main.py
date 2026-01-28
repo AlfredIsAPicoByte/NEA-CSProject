@@ -2,18 +2,12 @@ import os
 import argparse
 import gc
 
-from src.Data.Transform import Transform
 from src.Data.Scene import Scene
-from src.Data.Color import Color, ColorGradient
+from src.Data.Color import Color
 from src.Data.Scene import Scene
-from src.Data.Context import LightContext, SDFContext
-from src.Data.Camera import Camera, CameraType
 from src.Data.Sampling.Core import SamplingManager, SampleSettings, PixelFilter
 from src.Geometry.SDF import *
 from src.Geometry.Mesh import *
-from src.Lighting.Core import Light, LightType
-from src.Lighting.Optics import REFRACTIVE_INDICES
-from src.Material.Factory import MaterialFactory
 from src.Rendering.Core import Algorithm
 from src.Rendering.RayTracing.Core import *
 from src.Rendering.RayTracing.Intersections import *
@@ -39,6 +33,51 @@ def render_process(scene: Scene, algorithm: Algorithm):
 
     if len(algorithm.settings.film.accum_color) * len(algorithm.settings.film.accum_color[1]) != width * height:
         print(f"Warning: Rendered pixel count ({len(algorithm.settings.film.accum_color) * len(algorithm.settings.film.accum_color[1])}) does not match Camera dimensions ({width}x{height}={width*height}).")
+
+def find_scene_extremes(
+    nodes: List['SceneNode'], 
+    target_point: np.ndarray,
+    ignore_empty: bool = True
+) -> Tuple[Optional['SceneNode'], Optional['SceneNode']]:
+    """
+    Finds the (Closest Node, Furthest Node) relative to a target point.
+    
+    :param nodes: A flat list of SceneNodes (use scene.get_objects_flat())
+    :param target_point: A numpy array [x, y, z]
+    :param ignore_empty: If True, skips nodes that have no 'data' (containers/folders)
+    :return: Tuple (closest_node, furthest_node)
+    """
+    closest_node = None
+    furthest_node = None
+    
+    # Initialize distances to infinity and negative infinity
+    min_dist_sq = float('inf')
+    max_dist_sq = float('-inf')
+
+    for node in nodes:
+        # 1. Skip logic
+        if ignore_empty and node.context is None:
+            continue
+            
+        # 2. Get Position
+        node_pos = node.get_world_matrix()[:3, 3]
+        
+        # 3. Calculate Squared Euclidean Distance
+        # (Square root is expensive, so we compare squared values for speed)
+        diff = node_pos - target_point
+        dist_sq = np.dot(diff, diff) 
+        
+        # 4. Check Closest
+        if dist_sq < min_dist_sq:
+            min_dist_sq = dist_sq
+            closest_node = node
+            
+        # 5. Check Furthest
+        if dist_sq > max_dist_sq:
+            max_dist_sq = dist_sq
+            furthest_node = node
+            
+    return closest_node, furthest_node
 
 def apply_post_processing(raw_img):
     """
@@ -66,7 +105,7 @@ def apply_post_processing(raw_img):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RayTracer CLI")
-    parser.add_argument("--no-post", dest="disable_post", action="store_true", help="Disable post-processing to reduce memory and runtime")
+    parser.add_argument("--post", dest="postprocessing", action="store_true", help="Enable post-processing")
     parser.add_argument("--verbose", dest="verbose", action="store_true", help="Enable verbose logging during rendering")
     parser.add_argument("--debug", dest="debug", action="store_true", help="Enable debug mode during rendering")
     parser.add_argument("--mem-trace", dest="memory_trace", action="store_true", help="Enable memory tracing during rendering")
@@ -78,29 +117,29 @@ if __name__ == "__main__":
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
-    img_width, img_height = 16 * 4, 9 * 4
+    img_width, img_height = 16 * 8, 9 * 8
 
     # 16 * 32, 9 * 32
 
     all_scenes = [
         get_minimal_scene(img_width, img_height),
-        # get_gradient_scene(img_width, img_height),
-        # get_emissive_scene(img_width, img_height),
-        # get_lit_studio_scene(img_width, img_height),
-        # get_rgb_room_with_objects_scene(img_width, img_height),
-        # get_cyberpunk_scene(img_width, img_height),
-        # get_material_deck_scene(img_width, img_height),
-        # get_refraction_lab_scene(img_width, img_height),
-        # get_scifi_corridor_scene(img_width, img_height),
-        # get_sunset_monolith_scene(img_width, img_height),
-        # get_pastel_blocks_scene(img_width, img_height),
-        # get_glass_prism_scene(img_width, img_height),
-        # get_glass_sculpture_scene(img_width, img_height),
-        # get_100_spheres_grid_scene(img_width, img_height),
-        # get_low_ior_scene(img_width, img_height),
-        # get_abstract_geometry_scene(img_width, img_height),
-        # get_industrial_shapes_scene(img_width, img_height),
-        # get_shape_showcase_scene(img_width, img_height),
+        get_gradient_scene(img_width, img_height),
+        get_emissive_scene(img_width, img_height),
+        get_lit_studio_scene(img_width, img_height),
+        get_rgb_room_with_objects_scene(img_width, img_height),
+        get_cyberpunk_scene(img_width, img_height),
+        get_material_deck_scene(img_width, img_height),
+        get_refraction_lab_scene(img_width, img_height),
+        get_scifi_corridor_scene(img_width, img_height),
+        get_sunset_monolith_scene(img_width, img_height),
+        get_pastel_blocks_scene(img_width, img_height),
+        get_glass_prism_scene(img_width, img_height),
+        get_glass_sculpture_scene(img_width, img_height),
+        get_100_spheres_grid_scene(img_width, img_height),
+        get_low_ior_scene(img_width, img_height),
+        get_abstract_geometry_scene(img_width, img_height),
+        get_industrial_shapes_scene(img_width, img_height),
+        get_shape_showcase_scene(img_width, img_height),
     ]
 
     sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.NEAREST, filter_width=2)
@@ -108,14 +147,19 @@ if __name__ == "__main__":
 
     for scene in all_scenes:
         intersection = BVHIntersection(IntersectionSettings(
-            max_distance=1000,
-            max_steps=256
+            max_distance=250,
+            max_steps=64
         ))
-        shading = LambertShading(PhysicalShadingSettings(
+        close, far = find_scene_extremes(scene.get_objects_by_types(scene.get_scene_objects_flattened(), ["SDF_Material", "Mesh_Material"]), scene.camera.transform.position)
+        d1 = float(np.linalg.norm(scene.camera.transform.position - close.world_transform.position))
+        d2 = float(np.linalg.norm(scene.camera.transform.position - far.world_transform.position))
+
+        print(f"Distances: {d1:.3g}, {d2:.3g}")
+        shading = DistanceShading(PhysicalShadingSettings(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
             background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None), False)
-        ))
+        ), d1, d2)
 
         raytracer = RayTracer(RayTracingSettings(
             image_width=img_width,
@@ -149,10 +193,10 @@ if __name__ == "__main__":
         width = scene.camera.width if scene.camera is not None else img_width
         height = scene.camera.height if scene.camera is not None else img_height
         print(f"Rendering '{scene.name}' -> {raw_image_out_path} ({width}x{height})")
-        if not args.disable_post:
+        if args.postprocessing:
             print(f"Post Processing '{scene.name}' -> {processed_image_out_path} ({width}x{height})")
         else:
-            print("Skipping Post Processing (--no-post active)")
+            print("Skipping Post Processing")
         
         try:
             with MemoryProfiler(enable_tracemalloc=args.memory_trace, top=6) as mp: # Track only overall memory usage during rendering
@@ -181,7 +225,7 @@ if __name__ == "__main__":
             # 2. Post-Process (The Pipeline)
             processed_img = raw_img_data
 
-            if not args.disable_post:
+            if args.postprocessing:
                 with MemoryProfiler(enable_tracemalloc=args.memory_trace, top=6) as mp:
                     processed_img = apply_post_processing(raw_img_data)
 

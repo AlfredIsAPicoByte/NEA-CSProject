@@ -1,21 +1,21 @@
 from __future__ import annotations
-from token import OP
 import numpy as np
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional, List, Tuple, cast
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass
 
 from src.Data.Transform import Transform
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
+from src.Data.Scene import SceneNode
+from src.Data.Context import Mesh_Material
 from src.Geometry.BVH import BVHNode, build_bvh_tree
 from src.Geometry.SDF import SignedDistanceShape
+from src.Lighting.Core import Light
 from src.Utilities.Common import unit
 from src.Data.Scene import Scene
 
 if TYPE_CHECKING:
-    from src.Data.Scene import SceneNode
-    from src.Data.Context import LightContext, SDFContext, MeshContext
     from .Core import TracingStats
 
 @dataclass
@@ -311,11 +311,11 @@ class RayMarchingIntersection(IntersectionStrategy):
                 continue
 
             # Skip lights
-            if isinstance(obj.context, LightContext):
+            if isinstance(obj.context, Light):
                 continue
             
             # Skip meshes for now
-            if isinstance(obj.context, MeshContext):
+            if isinstance(obj.context, Mesh_Material):
                 continue
 
             # 2. Check for SignedDistanceShape
@@ -361,7 +361,7 @@ class InverseSDFIntersection(IntersectionStrategy):
         ) -> HitInfo:
         closest_hit = HitInfo.miss()
         
-        for obj in scene.get_objects_flat():
+        for obj in scene.get_scene_objects_flattened():
             # Optional: AABB Culling
             if self.use_bounding_box:
                 box = obj.get_bounds()
@@ -402,7 +402,7 @@ class BVHIntersection(IntersectionStrategy):
                 scene.update_version() # Ensure scene version increments if transforms changed
             
             # Get all objects including children
-            all_objects = scene.get_objects_flat()
+            all_objects = scene.get_scene_objects_flattened()
             
             self._cached_bvh_root = build_bvh_tree(all_objects)
             self._cached_scene_version = scene.version

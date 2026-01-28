@@ -1,22 +1,21 @@
 from __future__ import annotations
 import numpy as np
-from typing import TYPE_CHECKING, Optional, Callable, List
+from typing import TYPE_CHECKING, Optional, Callable, List, cast
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 
 from src.Data.Ray import TracingRay
 from src.Data.Hit import HitInfo
+from src.Data.Sampling.Core import Sampler
+from src.Data.Scene import Scene, SceneNode
 from src.Data.Color import Color, ColorGradient
 from src.Geometry.BVH import BVHNode, build_bvh_tree
-from src.Material.Core import PBRMaterial, MaterialType
+from src.Lighting.Core import Light
 from src.Material.BSDF import calculate_throughput_weight
-from src.Data.Sampling.Core import Sampler
-from src.Data.Scene import Scene
+from src.Material.Core import PBRMaterial, MaterialType
 from src.Utilities.Common import unit, attenuate_distance_exponential, attenuate_distance_coefficents
 
 if TYPE_CHECKING:
-    from src.Data.Scene import SceneNode
-    from src.Data.Context import LightContext, SDFContext, MeshContext
     from .Core import TracingStats
 
 @dataclass
@@ -258,29 +257,41 @@ class DistanceShading(ShadingStrategy):
             settings: Optional[ShadingSettings] = None,
             min_distance: float = 0.0,
             max_distance: float = 20.0,
-            color_gradient: ColorGradient = ColorGradient([Color(0, 0, 0), Color(1, 1, 1)], np.array([0.0, 1.0]))
+            color_gradient: Optional[ColorGradient] = None
             ):
         super().__init__(settings)
         self.min_dist = min_distance
         self.max_dist = max_distance
-        self.color_gradient = color_gradient
+
+        if color_gradient is None:
+            # Default: Black (0.0) -> White (1.0)
+            self.color_gradient = ColorGradient(
+                [Color(0, 0, 0), Color(1, 1, 1)], 
+                np.array([0.0, 1.0])
+            )
+        else:
+            self.color_gradient = color_gradient
 
     def shade(self, hit_info: HitInfo, *args, **kwargs) -> Color:
         dist = hit_info.distance
 
         if dist < 0:
-            return Color(0.0, 1.0, 0.0) # Negative Distance
+            return Color(0.0, 1.0, 0.0) # Debug: Negative Distance is usually an error
 
+        # 1. Calculate Range
         range_dist = self.max_dist - self.min_dist
         if range_dist == 0: range_dist = 1.0
         
-        normalized = (dist - self.min_dist) / range_dist
-        normalized = max(0.0, min(1.0, normalized))
+        # 2. Normalize and Invert in one step
+        # Original: normalized = (dist - min) / range; val = 1.0 - normalized
+        # Optimized: val = (max - dist) / range
+        val = (self.max_dist - dist) / range_dist
         
-        # Close = 1.0, Far = 0.0
-        val = 1.0 - normalized
+        # 3. Clamp between 0.0 and 1.0
+        # (This handles both 'too close' and 'too far' cases)
+        val = max(0.0, min(1.0, val))
         
-        return self.color_gradient.get_color(val) # use color gradient 
+        return self.color_gradient.get_color(val)
 
 class FlatShading(ShadingStrategy):
     """
@@ -289,11 +300,21 @@ class FlatShading(ShadingStrategy):
     Fastest possible render mode.
     """
     def shade(self, hit_info: HitInfo, *args, **kwargs) -> Color:
-        # Material validation
-        material: Optional[PBRMaterial] = getattr(hit_info.obj, 'material', None)
+        if not hit_info.hit:
+            return Color(0.0, 0.0, 0.0)  # No hit, return black
+        
+        hit_obj = cast(SceneNode, hit_info.obj)
+        
+        material: Optional[PBRMaterial] = getattr(hit_obj.context, 'material', None)
         if material is None:
             return Color(1.0, 0.0, 1.0) # Material Error
 
+        if material.data.type == MaterialType.EMISSIVE:
+            return material.data.emission_color
+        
+        if material.data.type == MaterialType.GLASS:
+            return Color(1.0, 1.0, 1.0) - material.data.absorption_color
+        
         # Just return the base color (Albedo)
         return material.data.albedo
         
@@ -427,7 +448,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
             self,
             scene: Scene,
             point: np.ndarray,
-            light: SceneNode,
+            light_node: SceneNode,
             sampler: Sampler,
             occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
             bias: float = 1e-4,
@@ -460,15 +481,18 @@ class PhysicalShadingStrategy(ShadingStrategy):
         if not self.shadow_settings.enabled:
             return 1.0
         
-        if not isinstance(light.context, "LightContext"):
+        if not isinstance(light_node.context, "Light"):
             return 1.0  # Non-light objects do not cast shadows
+        
+        light = cast(Light, light_node.context)
 
-        radius = getattr(light.context.light, "radius", 0.0) or getattr(light.context.light, "size", 0.0)
+        radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
+        occluding_objects = Scene.get_objects_by_types(scene.get_scene_objects_flattened(), ["SDF_Material", "Mesh_Material"])
         
         # Case A: Point SceneNode (Hard Shadows)
         if radius <= 0.0 or self.shadow_settings.samples <= 1:
             # Check if a ray from point -> light is blocked
-            is_blocked = occlusion_function(point, light.world_transform.position, scene.get_objects_by_types(["SDFContext", "MeshContext"]), bias, exclude_obj, stats)
+            is_blocked = occlusion_function(point, light_node.world_transform.position, occluding_objects, bias, exclude_obj, stats)
             return 0.0 if is_blocked else 1.0
         
         # Case B: Flat Area SceneNode (Soft Shadows)
@@ -478,9 +502,9 @@ class PhysicalShadingStrategy(ShadingStrategy):
                 # Pick a random point on the light source
                 # Note: light_dir here is the general direction, but for area lights 
                 # we usually sample the disc facing the point.
-                sample_pos = self._random_point_on_disc(light.world_transform.position, -light.context.light.get_direction(light.world_transform.position, point), float(radius), sampler)
+                sample_pos = self._random_point_on_disc(light_node.world_transform.position, -light.get_direction(light_node.world_transform.position, point), float(radius), sampler)
                 
-                if not occlusion_function(point, sample_pos, scene.get_objects_by_types(["SDFContext", "MeshContext"]), bias, exclude_obj, stats):
+                if not occlusion_function(point, sample_pos, occluding_objects, bias, exclude_obj, stats):
                     visible_count += 1
             
             return float(visible_count) / float(self.shadow_settings.samples)
@@ -492,7 +516,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
             self,
             scene: Scene,
             point: np.ndarray,
-            light: SceneNode,
+            light_node: SceneNode,
             sampler: Sampler,
             occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
             bias: float = 1e-4,
@@ -506,15 +530,18 @@ class PhysicalShadingStrategy(ShadingStrategy):
         if not self.shadow_settings.enabled:
             return 1.0
         
-        if not isinstance(light.context, "LightContext"):
+        if not isinstance(light_node.context, "Light"):
             return 1.0  # Non-light objects do not cast shadows
+        
+        light = cast(Light, light_node.context)
 
-        radius = getattr(light.context.light, "radius", 0.0) or getattr(light.context.light, "size", 0.0)
+        radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
+        occluding_objects = Scene.get_objects_by_types(scene.get_scene_objects_flattened(), ["SDF_Material", "Mesh_Material"])
         
         # Case A: Point SceneNode (Hard Shadows)
         if radius <= 0.0 or self.shadow_settings.samples <= 1:
             # Check if a ray from point -> light is blocked
-            is_blocked = occlusion_function(point, light.world_transform.position, scene.get_objects_by_types(["SDFContext", "MeshContext"]), bias, exclude_obj, stats)
+            is_blocked = occlusion_function(point, light_node.world_transform.position, occluding_objects, bias, exclude_obj, stats)
             return 0.0 if is_blocked else 1.0
         
         # Case B: Spherical SceneNode (Soft Shadows)
@@ -522,9 +549,9 @@ class PhysicalShadingStrategy(ShadingStrategy):
             visible_count = 0
             for _ in range(self.shadow_settings.samples):
                 # Pick a random point inside the sphere
-                sample_pos = self._random_point_in_sphere(light.world_transform.position, float(radius), sampler)
+                sample_pos = self._random_point_in_sphere(light_node.world_transform.position, float(radius), sampler)
                 
-                if not occlusion_function(point, sample_pos, scene.get_objects_by_types(["SDFContext", "MeshContext"]), bias, exclude_obj, stats):
+                if not occlusion_function(point, sample_pos, occluding_objects, bias, exclude_obj, stats):
                     visible_count += 1
             
             return float(visible_count) / float(self.shadow_settings.samples)
@@ -573,6 +600,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
         height = scene.camera.height
 
         ao_map = np.zeros((height, width), dtype=float)
+        occluding_objects = Scene.get_objects_by_types(scene.get_scene_objects_flattened(), ["SDF_Material", "Mesh_Material"])
 
         for y in range(height):
             for x in range(width):
@@ -582,7 +610,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
                 if hit_info and hit_info.hit:
                     point = hit_info.point
                     normal = hit_info.normal
-                    ao_factor = self._calculate_occlusion_factor(point, normal, scene.get_objects_by_types(["SDFContext", "MeshContext"]), sampler, occlusion_function, stats)
+                    ao_factor = self._calculate_occlusion_factor(point, normal, occluding_objects, sampler, occlusion_function, stats)
                     ao_map[y, x] = ao_factor
                 else:
                     ao_map[y, x] = 1.0  # No hit means fully open
@@ -611,7 +639,9 @@ class LambertShading(PhysicalShadingStrategy):
         if not hit_info.hit:
             return Color(0.0, 0.0, 0.0)  # No hit, return black
         
-        material: Optional[PBRMaterial] = getattr(hit_info.obj.context, 'material', None)
+        hit_obj = cast(SceneNode, hit_info.obj)
+        
+        material: Optional[PBRMaterial] = getattr(hit_obj.context, 'material', None)
         if material is None:
             return Color(1.0, 0.0, 1.0) # Material Error
 
@@ -652,16 +682,14 @@ class LambertShading(PhysicalShadingStrategy):
         # 4. Evaluate Direct Lighting
         # The material class already contains the logic to loop over lights
         # and apply the BRDF (Diffuse + Specular).
-        lights = scene.get_objects_by_type("LightContext")
-        if lights is None or len(lights) == 0:
+        light_nodes = Scene.get_objects_by_type(scene.get_scene_objects_flattened(), "Light")
+        if light_nodes is None or len(light_nodes) == 0:
             return final_color  # No lights in scene
         
-        active_lights = [light for light in lights if light.active]
-        if not active_lights:
-            return final_color  # No active lights in scene
+        active_light_nodes = [ln for ln in light_nodes if ln.active]
         
         direct_light = material.evaluate_direct_light(
-            scene_lights=active_lights,
+            light_nodes=active_light_nodes,
             hit_info=hit_info,
             view_dir=view_dir,
             visibility_function=visibility_fn,
@@ -700,6 +728,9 @@ class RecursiveLabertShading(LambertShading):
             stats: Optional["TracingStats"] = None,
             *args, **kwargs
         ) -> Color:
+        if not hit_info.hit:
+            return Color(0.0, 0.0, 0.0)  # No hit, return black
+
         # Start with base Lambertian shading
         final_color = super().shade(
             scene,
@@ -713,9 +744,11 @@ class RecursiveLabertShading(LambertShading):
             *args,
             **kwargs
         )
+        
+        hit_obj = cast(SceneNode, hit_info.obj)
 
         # Material validation
-        material: Optional[PBRMaterial] = getattr(hit_info.obj, 'material', None)
+        material: Optional[PBRMaterial] = getattr(hit_obj.context, 'material', None)
         if material is None:
             return final_color  # Material Error already handled in base
 

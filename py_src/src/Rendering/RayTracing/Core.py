@@ -4,7 +4,6 @@ from typing import Optional, Tuple
 
 from src.Data.Ray import TracingRay, RayPool
 from src.Data.Color import Color
-from src.Data.Context import LightContext
 from .. import register_algorithm
 from ..Core import Algorithm, RenderStats, AlgorithmSettings
 from . import Intersections
@@ -316,7 +315,7 @@ class RayTracer(Algorithm):
             self.render_tile(scene, sampler, region_x, region_y, region_width, region_height)
 
         self.stats.pixels_processed = pixels_processed
-        self.stats.lights_sampled = len(scene.get_objects_by_type(LightContext))
+        self.stats.lights_sampled = len(Scene.get_objects_by_type(scene.get_scene_objects_flattened(), "Light"))
         self.stats.stop_timer()
 
         if self.settings.verbose_logging:
