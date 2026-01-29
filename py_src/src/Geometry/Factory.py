@@ -1,9 +1,12 @@
 from abc import ABC, abstractmethod
+import numpy as np
 
-from .Core import Shape
+from .SDF import *
 
 class ShapeFactory(ABC):
-    """Abstract factory for creating shapes."""
+    """
+    Abstract Factory for creating Shape instances.
+    """
     @abstractmethod
-    def create(self, **kwargs) -> Shape:
-        raise NotImplementedError
+    def create(self, *args, **kwargs) -> SignedDistanceShape:
+        pass

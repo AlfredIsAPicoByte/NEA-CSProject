@@ -1,14 +1,17 @@
+from __future__ import annotations
 import math
 import numpy as np
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Tuple, Callable
+from typing import List, Tuple, Callable, cast
 
 from src.Data.Hit import HitInfo
 from src.Data.Color import Color
+from src.Data.Sampling.Core import Sampler
+from src.Data.Scene import SceneNode
 from .BSDF import *
-from src.Lighting.Core import LightSource
-from src.Lighting.Optics import schlick_fresnel_metalic
+from src.Lighting.Core import Light
+from src.Lighting.Optics import reflect, schlick_fresnel_metalic, refract, schlick_fresnel_refactive
 from src.Utilities.Common import lerp, unit, attenuate_inv_sqr_distance, attenuate_distance_exponential
 
 class MaterialType(Enum):
@@ -28,9 +31,9 @@ class MaterialData:
     metallic: float = 0.0
     specular_intensity: float = 0.5
     specular_tint: float = 0.0
-    ior: float = 1.45
     
     # --- Transparency/Volume Parameters ---
+    ior: float = 1.45
     transmission: float = 0.0      # 0=Opaque, 1=Glass
     absorption_color: Color = field(default_factory=lambda: Color(1.0, 1.0, 1.0))
     absorption_density: float = 0.0
@@ -42,31 +45,40 @@ class MaterialData:
     # --- Flags ----
     type: MaterialType = MaterialType.DIFFUSE
 
+@dataclass
 class PBRMaterial:
-    def __init__(
-            self,
-            data: MaterialData
-        ):
-        self.data = data
-
-    def __getattr__(self, name):
-        """
-        Delegate attribute access to the underlying `data` container for
-        convenience (so callers can use `material.type` or `material.albedo`).
-        """
-        return getattr(self.data, name)
+    """
+    Physically-Based Rendering (PBR) Material for ray tracing.
+    Supports multiple material types: Diffuse, Specular, Glass, Transparent, and Emissive.
+    Handles direct lighting, indirect sampling, and BSDF evaluation.
+    """
+    data: MaterialData = field(default_factory=MaterialData)
 
     def evaluate_direct_light(
         self,
-        scene_lights: List[LightSource],
+        light_nodes: List[SceneNode],
         hit_info: HitInfo,
         view_dir: np.ndarray,
-        visibility_function: Callable[[np.ndarray, LightSource], float],
+        visibility_function: Callable[[np.ndarray, SceneNode], float],
         bias: float = 1e-4
     ) -> Color:
         """
-        Calculates Direct Lighting contribution.
-        Assumes hit_info.point and scene_lights are ALL in World Space.
+        Calculates direct lighting contribution from all light sources in the scene.
+        Evaluates diffuse and specular components based on material type.
+        Uses visibility function for shadow calculations (world-space).
+        
+        :param scene_lights: List of light sources in the scene
+        :type scene_lights: List[SceneNode]
+        :param hit_info: Surface intersection information (normal, point, etc.)
+        :type hit_info: HitInfo
+        :param view_dir: Direction from surface point to camera/viewer
+        :type view_dir: np.ndarray
+        :param visibility_function: Function to determine light visibility (shadow testing)
+        :type visibility_function: Callable[[np.ndarray, SceneNode], float]
+        :param bias: Small offset to prevent self-intersection in shadow rays
+        :type bias: float
+        :return: Accumulated color contribution from all direct lights
+        :rtype: Color
         """
         # Use world-space hit info directly for lighting calculations.
         # Mixing object-space and world-space (e.g., transforming hit point to local
@@ -80,17 +92,28 @@ class PBRMaterial:
             return accumulated_light
         
         if self.data.type == MaterialType.EMISSIVE:
-            return self.get_emissive_component()
+            return self.evaluate_emissive_component()
+        
+        if light_nodes is None or len(light_nodes) == 0:
+            return accumulated_light
 
-        for light in scene_lights:
+        for light_node in light_nodes:
             # --- Light Setup (World Space) ---
-            L, dist = light.get_direction_and_dist(hit_point)
+            light_context = light_node.context
+            light = getattr(light_context, "light", None)
+            if light is None:
+                continue
+
+            light = cast(Light, light)
+
+            L = light.get_direction(light_node.world_transform.position, hit_point)
+            dist = light.get_distance(light_node.world_transform.position, hit_point)
             if dist <= bias: continue
             
             # --- Visibility Check (Shadows) ---
             # Note: If checking visibility through glass, this simple function 
             # usually returns 0 (blocked) unless you implement "Transparent Shadows"
-            visibility = visibility_function(hit_point, light)
+            visibility = visibility_function(hit_point, light_node)
             if visibility <= 0.0:
                 continue
             
@@ -98,152 +121,179 @@ class PBRMaterial:
             attenuation = attenuate_inv_sqr_distance(dist)
 
             # Final radiance
-            incoming_radiance = light.get_radiance(hit_point) * attenuation * visibility
+            incoming_radiance = light.get_radiance(light_node.world_transform.position, hit_point) * attenuation * visibility
             if incoming_radiance.r + incoming_radiance.g + incoming_radiance.b <= 0.0:
                 continue
 
             # --- Material Handling ---
-            if self.type == MaterialType.DIFFUSE:
-                diffuse = self.get_diffuse_component(L, N)
+            if self.data.type == MaterialType.DIFFUSE:
+                diffuse = self.evaluate_diffuse_component(L, N)
                 accumulated_light += diffuse * incoming_radiance
 
-            elif self.type == MaterialType.SPECULAR:
-                diffuse = self.get_diffuse_component(L, N)
-                specular = self.get_specular_component(L, N, V)
+            elif self.data.type == MaterialType.SPECULAR:
+                diffuse = self.evaluate_diffuse_component(L, N)
+                specular = self.evaluate_specular_component(L, N, V)
                 accumulated_light += (diffuse + specular) * incoming_radiance
 
         return accumulated_light
     
-    def sample(self, incident_dir: np.ndarray, hit_info: HitInfo, sampler: Sampler) -> Tuple[np.ndarray, Color, float]:
+    def sample_indirect_contribution(
+            self,
+            incident_dir: np.ndarray,
+            surface_normal: np.ndarray,
+            sampler: Sampler
+        ) -> Tuple[np.ndarray, Color, float]:
         """
-        Generates a new ray direction based on the material properties.
-        Returns: (New Direction, Throughput Color, PDF)
+        Generates a new ray direction for indirect (global) illumination based on material type.
+        Samples from appropriate distribution: Cosine-Weighted (Diffuse), Delta (Specular/Glass), or Pass-through (Transparent).
+        
+        :param incident_dir: Incoming ray direction
+        :type incident_dir: np.ndarray
+        :param surface_normal: Surface normal at intersection point
+        :type surface_normal: np.ndarray
+        :param sampler: Random number sampler for stochastic sampling
+        :type sampler: Sampler
+        :return: Tuple of (new ray direction, throughput color, PDF probability density)
+        :rtype: Tuple[np.ndarray, Color, float]
         """
-        N = getattr(hit_info, "normal", np.array([0.0, 1.0, 0.0]))
+        N = unit(surface_normal)
         I = unit(incident_dir)
         
         # --- A. EMISSIVE ---
-        if self.type == MaterialType.EMISSIVE:
-            return N, self.data.emission_color * self.data.emission_intensity, 1.0
+        if self.data.type == MaterialType.EMISSIVE:
+            return N, self.evaluate_emissive_component(), 0.0
 
         # --- B. TRANSPARENT ---
-        if self.type == MaterialType.TRANSPARENT:
-            return N, self.data.albedo, 1.0
+        if self.data.type == MaterialType.TRANSPARENT:
+            return I, Color(0.0, 0.0, 0.0), 0.0
         
         # --- C. DIFFUSE (Lambertian) ---
-        if self.type == MaterialType.DIFFUSE:
-            # 1. Sample direction from Cosine-Weighted Hemisphere
-            # This automatically prefers directions close to the normal.
+        if self.data.type == MaterialType.DIFFUSE:
+            # 1. Sample direction from Cosine-Weighted Hemisphere, already biased towards the normal
             new_dir = sampler.sample_cosine_hemisphere(N)
             
             # 2. PDF calculation
-            # PDF of Cosine sample = Cos(theta) / PI
-            # For robustness, we calculate it, though it often cancels out.
             cos_theta = max(0.0, np.dot(new_dir, N))
             pdf = cos_theta / np.pi
             
             # 3. Throughput (The attenuation of light)
-            # Probability cancelation simplification:
-            # Weight = (BRDF * Cos) / PDF
-            # Weight = (Albedo/PI * Cos) / (Cos/PI) = Albedo
             return new_dir, self.data.albedo, pdf
         
         # --- D. SPECULAR (Metal/Mirror) ---
-        if self.type == MaterialType.SPECULAR:
+        if self.data.type == MaterialType.SPECULAR:
             # 1. Perfect Reflection Vector
-            reflected = I - 2.0 * np.dot(I, N) * N
+            reflected = reflect(I, N)
             
             # 2. Roughness (Fuzzy Reflection)
             if self.data.roughness > 0.0:
                 fuzz = sampler.sample_unit_sphere() * self.data.roughness
                 reflected = reflected + fuzz
                 # Renormalize to ensure consistent ray speed/length
-                reflected = reflected / np.linalg.norm(reflected)
+                reflected = unit(reflected)
                 
                 # If we reflected INTO the object (due to fuzz), absorb the ray
                 if np.dot(reflected, N) < 0:
-                    return N, Color(0,0,0), 0.0
+                    return N, Color(0.0, 0.0, 0.0), 0.0
 
             # 3. Throughput
             # Metals tint the reflection with their Albedo
-            return reflected, self.data.albedo, 1.0
+            return reflected, self.evaluate_metallic_component(), 0.0
         
         # --- E. GLASS (Dielectric) ---
-        if self.type == MaterialType.GLASS:
-            ior = self.data.ior
-            
-            # Determine Entering vs Exiting
-            I_normalized = unit(I)
-            dt = np.dot(I_normalized, N)
-
-            if dt > 0:
-                # Inside going out
-                outward_normal = -N
-                n1, n2 = ior, self.scene_ior
-                cosine = abs(dt)
-            else:
-                # Outside going in
-                outward_normal = N
-                n1, n2 = self.scene_ior, ior  # ← Fixed order
-                cosine = abs(dt)
-
-            ni_over_nt = n1 / n2
-
-            # 1. Calculate Fresnel (Reflection Probability)
-            # Schlick's approximation
-            r0 = (1 - ior) / (1 + ior)
-            r0 = r0**2
-            reflect_prob = r0 + (1 - r0) * ((1 - cosine) ** 5)
-            
-            # 2. Decide: Reflect or Refract?
-            # We treat Glass as a singular event (PDF=1.0) chosen randomly
-            if sampler.sample_roulette() < reflect_prob:
-                # Reflect
-                reflected = I - 2.0 * np.dot(I, N) * N
-                return reflected, Color(1,1,1), 1.0
-            else:
-                # Refract (Snell's Law)
-                # Inline implementation of refract logic for dependencies
-                uv = I
-                n = outward_normal
+        # skipped due to complexity, instead delegated to a seperate function sample_glass_contribution
                 
-                cos_theta_i = min(np.dot(-uv, n), 1.0)
-                perp = ni_over_nt * (uv + cos_theta_i * n)
-                parallel = -np.sqrt(abs(1.0 - np.dot(perp, perp))) * n
-                refracted = perp + parallel
-                
-                # Check for Total Internal Reflection (TIR)
-                # If discriminant was negative, we reflect instead
-                if np.isnan(refracted).any(): 
-                    reflected = I - 2.0 * np.dot(I, N) * N
-                    return reflected, Color(1,1,1), 1.0
-
-                return refracted, Color(1,1,1), 1.0
-                
-        return N, Color(0,0,0), 0.0
-
-    def evaluate_bsdf(self, incident_dir: np.ndarray, view_dir: np.ndarray, normal: np.ndarray) -> Color:
+        return N, Color(0.0, 0.0, 0.0), 0.0 # No contribution
+    
+    def sample_glass_contribution(
+            self,
+            incident_dir: np.ndarray,
+            surface_normal: np.ndarray,
+            sampler: Sampler,
+            other_ior: float
+        ) -> Tuple[np.ndarray, Color]:
         """
-        Returns the BSDF value (f_r) for a given set of vectors.
-        Used for Direct Light Sampling (Next Event Estimation).
+        Handles refraction and reflection for glass/dielectric materials using Fresnel equations.
+        Chooses between reflection and refraction probabilistically based on Schlick's Fresnel approximation.
+        Accounts for total internal reflection (TIR) when rays cannot refract.
         
-        incident_dir: Direction TO the light
-        view_dir: Direction TO the camera
+        :param incident_dir: Incoming ray direction
+        :type incident_dir: np.ndarray
+        :param surface_normal: Surface normal at intersection point
+        :type surface_normal: np.ndarray
+        :param sampler: Random number sampler for reflection/refraction decision
+        :type sampler: Sampler
+        :param other_ior: Index of refraction of the surrounding medium (typically 1.0 for air)
+        :type other_ior: float
+        :return: Tuple of (new ray direction, throughput color)
+        :rtype: Tuple[np.ndarray, Color]
         """
-        if self.type == MaterialType.DIFFUSE:
+        I = unit(incident_dir)
+        N = unit(surface_normal)
+
+        dt = np.dot(I, N)
+        
+        if dt > 0:
+            # Inside going out
+            n1, n2 = self.data.ior, other_ior
+        else:
+            # Outside going in
+            n1, n2 = other_ior, self.data.ior
+        
+        cos_theta = abs(dt)
+        
+        # 1. Calculate Fresnel (Reflection Probability)
+        reflect_prob = schlick_fresnel_refactive(cos_theta, n1, n2)
+        
+        # 2. Decide: Reflect or Refract?
+        # We treat Glass as a singular event (PDF=1.0) chosen randomly
+        # Pre-compute reflection for later
+        reflected = reflect(I, N)
+
+        if sampler.sample_roulette() < reflect_prob: # Reflect
+            return reflected, Color(1.0, 1.0, 1.0)
+        else: # Refract
+            refracted = refract(I, N, n1 / n2)
+            
+            # Check for Total Internal Reflection (TIR)
+            if refracted is None:
+                return reflected, Color(1.0, 1.0, 1.0)
+            
+            return refracted, Color(1.0, 1.0, 1.0)
+
+    def evaluate_bsdf(
+            self,
+            incident_dir: np.ndarray,
+            view_dir: np.ndarray,
+            normal: np.ndarray
+        ) -> Color:
+        """
+        Evaluates the Bidirectional Scattering Distribution Function (BSDF) for given ray directions.
+        Used for Next Event Estimation and direct light sampling.
+        Returns the reflectance/scattering value f_r for the ray configuration.
+        
+        :param incident_dir: Direction of incoming light
+        :type incident_dir: np.ndarray
+        :param view_dir: Direction toward observer/camera
+        :type view_dir: np.ndarray
+        :param normal: Surface normal at intersection
+        :type normal: np.ndarray
+        :return: BSDF value (color reflectance)
+        :rtype: Color
+        """
+        # Use your existing evaluate_specular_component logic
+        L = unit(incident_dir)
+        V = unit(view_dir)
+        N = unit(normal)
+
+        if self.data.type == MaterialType.DIFFUSE:
             return self.data.albedo / np.pi
         
         # Microfacet BRDF (GGX with roughness)
-        elif self.type == MaterialType.SPECULAR:
+        elif self.data.type == MaterialType.SPECULAR:
             # Only evaluate if roughness > 0 (otherwise it's a delta distribution)
             if self.data.roughness > 0.01:
-                # Use your existing get_specular_component logic
-                L = unit(incident_dir)
-                V = unit(view_dir)
-                N = unit(normal)
-                
                 # Calculate the microfacet BRDF
-                specular_brdf = calculate_microfacet_brdf(L, V, N)
+                specular_brdf = calculate_microfacet_brdf(self.data.roughness, self.data.specular_intensity,L, V, N, self.evaluate_metallic_component().to_np_array())
                 
                 # Add diffuse component (scaled by metallic)
                 diffuse_brdf = (self.data.albedo / np.pi) * (1.0 - self.data.metallic)
@@ -254,21 +304,32 @@ class PBRMaterial:
                 return Color(0.0, 0.0, 0.0)
         
         # Glass/Dielectric with microfacets
-        elif self.type == MaterialType.GLASS:
+        elif self.data.type == MaterialType.GLASS:
             if self.data.roughness > 0.01:
                 # Evaluate both reflection and refraction lobes
                 # This is complex - see below
-                return evaluate_glass_bsdf(incident_dir, view_dir, normal)
+                return evaluate_glass_bsdf(self.data.roughness, self.data.ior, L, V, N)
             else:
                 # Perfect glass - delta distribution
                 return Color(0.0, 0.0, 0.0)
 
         return Color(0.0, 0.0, 0.0)
 
-    def get_diffuse_component(self, light_dir: np.ndarray, surface_normal: np.ndarray) -> Color:
+    def evaluate_diffuse_component(
+            self,
+            light_dir: np.ndarray,
+            surface_normal: np.ndarray
+        ) -> Color:
         """
-        Get the diffuse component (Lambertian). 
-        Corrected to respect the Metallic workflow energy conservation.
+        Calculates Lambertian diffuse reflection component.
+        Applies energy conservation by reducing diffuse contribution for metallic surfaces.
+        
+        :param light_dir: Direction toward the light source
+        :type light_dir: np.ndarray
+        :param surface_normal: Surface normal at intersection point
+        :type surface_normal: np.ndarray
+        :return: Diffuse color contribution
+        :rtype: Color
         """
         NdotL = max(0.0, np.dot(surface_normal, light_dir))
         
@@ -281,15 +342,82 @@ class PBRMaterial:
         
         return diffuse
 
-    def get_specular_component(self, light_dir: np.ndarray, surface_normal: np.ndarray, view_dir: np.ndarray) -> Color:
-        """Get the specular component including the cosine term."""
-        brdf = self._calculate_microfacet_brdf(light_dir, view_dir, surface_normal)
-        NdotL = max(0.0, np.dot(surface_normal, light_dir))
-        return brdf * NdotL
-
-    def get_metallic_component(self, bias: float = 1e-4) -> Color:
+    def evaluate_specular_component(
+            self,
+            light_dir: np.ndarray,
+            surface_normal: np.ndarray,
+            view_dir: np.ndarray
+        ) -> Color:
         """
-        Calculates the F0 (Base Reflectivity) for Fresnel calculations.
+        Evaluates specular reflection using microfacet BRDF (GGX roughness model).
+        Incorporates Normal Distribution Function (NDF), Geometric Shadowing (GSF), and Fresnel equations.
+        Handles metallic and non-metallic specular highlights.
+        
+        :param light_dir: Direction toward the light source
+        :type light_dir: np.ndarray
+        :param surface_normal: Surface normal at intersection point
+        :type surface_normal: np.ndarray
+        :param view_dir: Direction from surface to viewer
+        :type view_dir: np.ndarray
+        :return: Specular color contribution
+        :rtype: Color
+        """
+        # --- 0. Pre-Calculations and Constants ---
+        safe_roughness = max(self.data.roughness, 1e-2)
+        alpha = safe_roughness ** 2
+        alpha_sq = alpha ** 2
+        
+        # Halfway Vector (H)
+        H = (light_dir + view_dir)
+        H = unit(H) 
+        
+        # Dot Products (must be clamped to avoid negative light/view angles)
+        NdotH = max(0.0, np.dot(surface_normal, H))
+        NdotL = max(0.0, np.dot(surface_normal, light_dir))
+        NdotV = max(0.0, np.dot(surface_normal, view_dir))
+        VdotH = max(0.0, np.dot(view_dir, H))
+
+        # --- 1. Normal Distribution Function (NDF - GGX) ---
+        denom_ndf = (NdotH * NdotH * (alpha_sq - 1.0) + 1.0)
+        NDF = alpha_sq / (np.pi * denom_ndf * denom_ndf)
+        
+        # --- 2. Geometric Shadowing Function (GSF - Schlick-GGX Approximation) ---
+        k = ((alpha + 1.0) ** 2) / 8.0 
+        
+        GS_Schlick = lambda n_dot_k: n_dot_k / (n_dot_k * (1.0 - k) + k)
+        GSF = GS_Schlick(NdotL) * GS_Schlick(NdotV)
+        
+        # --- 3. Fresnel Function (FF - Schlick Approximation) ---
+        F0 = self.evaluate_metallic_component()
+        
+        # F_schlick calculation (Color operations are handled correctly)
+        FF = schlick_fresnel_metalic(VdotH, F0.to_np_array())
+
+        # --- 4. Final BRDF Term (Fs) and Specular Contribution ---
+        # Denominator of the BRDF term
+        denom_fs = 4.0 * NdotL * NdotV 
+        
+        if denom_fs > 0:
+            # Fs is the specular BRDF (Fs = D * G * F / denominator)
+            Fs = (NDF * GSF * FF) * (1.0 / denom_fs) 
+        else:
+            Fs = Color(0.0, 0.0, 0.0) 
+
+        # Final Specular Color: Light Intensity * BRDF * Cosine Term
+        specular =  Fs * NdotL * self.data.specular_intensity
+        
+        return specular
+
+    def evaluate_metallic_component(self, bias: float = 1e-4) -> Color:
+        """
+        Calculates the base reflectivity (F0) for Fresnel calculations.
+        Blends between dielectric (0.04 grey) and metallic (albedo-based) reflectivity.
+        Supports specular tinting for non-metallic surfaces.
+        
+        :param bias: Small value to prevent division by zero in normalization
+        :type bias: float
+        :return: F0 base reflectivity color for Fresnel computation
+        :rtype: Color
         """
         # --- 1. Dielectric (Non-Metal) F0 ---
         # Base reflectivity for plastic/glass/water is approx 0.04 (Linear Grey)
@@ -320,38 +448,45 @@ class PBRMaterial:
         
         return final_F0
 
-    def get_fresnel_component(self, cos_theta: float) -> np.ndarray:
+    def evaluate_emissive_component(self) -> Color:
         """
-        Calculates the portion of light that is reflected (Specular) vs. absorbed/refracted (Diffuse).
+        Calculates self-illumination contribution for emissive materials.
+        Returns emission color modulated by emission intensity.
+        
+        :return: Emissive light color
+        :rtype: Color
         """
-        f0 = self.get_metallic_component().to_np_array()
-        return schlick_fresnel_metalic(cos_theta, f0)
-
-    def get_emissive_component(self) -> Color:
-        """Get the emissive color of the material."""
         return self.data.emission_color * self.data.emission_intensity
 
-    def get_volumetric_component(self, distance: float) -> Color:
+    def evaluate_volumetric_component(self, distance: float) -> Color:
         """
-        Calculates the volumetric attenuation of light passing through the material
+        Calculates light attenuation through volumetric absorption.
+        Models how light is absorbed over distance in translucent materials (fog, glass, water).
+        Uses exponential attenuation based on absorption color and density.
+        
+        :param distance: Distance light travels through the volume
+        :type distance: float
+        :return: Attenuation factor (1.0 = no absorption, 0.0 = fully absorbed)
+        :rtype: Color
         """
         sigma = Color(1.0, 1.0, 1.0) - self.data.absorption_color
         
-        # Calculate attenuation per channel
-        # e.g. If Red has high sigma, exp(-high * dist) -> 0.0 (Red is blocked)
+        # Calculate attenuation
         attenuation = sigma * attenuate_distance_exponential(distance, self.data.absorption_density)
         
         return attenuation
 
-    def get_transparency_component(self) -> Color:
+    def evaluate_ambient_color(self, ambient_color: Color, ambient_intensity: float) -> Color:
         """
-        Calculates the transparency color contribution of the material.
-        """
-        return self.data.albedo
-
-    def get_ambient_color(self, ambient_color: Color, ambient_intensity: float) -> Color:
-        """
-        Calculates the ambient color contribution of the material.
+        Calculates ambient lighting contribution.
+        Modulates ambient light by material albedo and intensity parameter.
+        
+        :param ambient_color: Global ambient light color
+        :type ambient_color: Color
+        :param ambient_intensity: Intensity/brightness of ambient light
+        :type ambient_intensity: float
+        :return: Ambient contribution to final color
+        :rtype: Color
         """
         ambient = ambient_color * ambient_intensity * self.data.albedo
         return ambient

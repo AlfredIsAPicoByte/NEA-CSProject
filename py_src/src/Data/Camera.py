@@ -6,11 +6,12 @@ from typing import List, Tuple, Optional
 from src.Data.Transform import Transform
 from src.Data.Ray import Ray, TracingRay
 from src.Data.Ratio import Ratio
-from .Sampling import Sampler
+from .Sampling.Core import Sampler
 
 class CameraType (Enum):
     """
     Enum for different camera projection types.
+
     PERSPECTIVE: Perspective projection.
     ORTHOGRAPHIC: Orthographic projection.
     """
@@ -20,6 +21,7 @@ class CameraType (Enum):
 class CameraMode (Enum):
     """
     Enum for different camera movement modes.
+
     FIRST_PERSON: First-person movement.
     PLANE: Plane movement (like an airplane).
     ORBIT: Orbit around a target.
@@ -34,7 +36,7 @@ class Camera:
     """
     def __init__(
         self,
-        transform: Transform = Transform.identity(),
+        transform: Transform = Transform.Identity(),
         resolution_width: int = 800,
         resolution_height: int = 600,
         fov: float = 60.0,
@@ -76,10 +78,16 @@ class Camera:
             raise ValueError("Width and Height must be provided (as 'resolution_width, resolution_height')")
 
     def get_view_matrix(self) -> np.ndarray:
+        """
+        Returns the view matrix for the camera.
+        """
         # The view matrix is typically the inverse of the camera's global transform
         return np.linalg.inv(np.array(self.transform.get_global_matrix()))
 
     def get_projection_matrix(self) -> np.ndarray:
+        """
+        Returns the projection matrix for the camera.
+        """
         import math
 
         tan_half_fov = math.tan(math.radians(self.fov) / 2.0)
@@ -117,11 +125,23 @@ class Camera:
         return np.identity(4)
     
     def resize(self, width: float, height: float):
+        """
+        Resize the camera resolution and update aspect ratio.
+
+        :param width: New width in pixels.
+        :param height: New height in pixels.
+        """
         self.resolution_width = width
         self.resolution_height = height
         self.aspect_ratio = Ratio(width, height)
 
     def resize_aspect(self, aspect: Ratio, scale: float = 1.0):
+        """
+        Resize the camera resolution based on a new aspect ratio and scale.
+        :param aspect: New aspect ratio.
+        :param scale: Scale factor to apply to the resolution.
+        """
+
         self.aspect_ratio = aspect
         self.resolution_width = int(aspect.width * scale)
         self.resolution_height = int(aspect.height * scale)
@@ -129,7 +149,10 @@ class Camera:
     def generate_ray(self, u: float, v: float) -> Ray:
         """
         Converts a pixel (x, y) into a World Space Ray.
-        Includes Depth of Field (DOF) or Anti-Aliasing jitter if needed.
+
+        :param u: Normalized horizontal coordinate [0,1].
+        :param v: Normalized vertical coordinate [0,1].
+        :return: Ray in world space.
         """
         tan_half_fov = math.tan(math.radians(self.fov) / 2.0)
 
@@ -180,6 +203,15 @@ class Camera:
         return Ray(self.transform.position + direction * self.near, direction)
     
     def generate_lens_ray(self, u: float, v: float, sampler: Sampler) -> Ray:
+        """
+        Generate a ray from the camera considering Depth of Field (DOF).
+        Uses the aperture radius and focal distance to simulate lens effects.
+
+        :param u: Normalized horizontal coordinate [0,1].
+        :param v: Normalized vertical coordinate [0,1].
+        :param sampler: Sampler object to provide random samples for lens jitter.
+        :return: Ray in world space with DOF applied.
+        """
         # 1. Calculate the standard "Perfect Pinhole" Direction
         #    (This part is the same as before)
         tan_half_fov = math.tan(math.radians(self.fov) / 2.0)
@@ -255,9 +287,10 @@ class Camera:
         ) -> List[TracingRay]:
         """
         Generate camera rays
-        - Iterates over the requested region.
-        - Ask the Sampler for (u,v) offsets for every pixel.
-        - Calculates the Ray Origin and Direction based on Camera Type.
+
+        :param sampler: Sampler object to provide pixel samples.
+        :param region: Optional region (x, y, width, height) to generate rays for.
+        :return: List of TracingRay objects for the specified region.
         """
 
         # 1. Resolve Region
@@ -299,6 +332,60 @@ class Camera:
                     )
                     rays.append(ray)
         return rays
+
+    def screen_to_world(self, screen_x: float, screen_y: float, depth: float) -> np.ndarray:
+        """
+        Convert normalized screen coordinates (0..1) and depth to world space position.
+
+        :param screen_x: Normalized horizontal coordinate [0,1].
+        :param screen_y: Normalized vertical coordinate [0,1].
+        :param depth: Depth value from near to far plane.
+        :return: World space position as a numpy array.
+        """
+        # 1. Convert screen coords to NDC
+        ndc_x = (2.0 * screen_x) - 1.0
+        ndc_y = 1.0 - (2.0 * screen_y)
+        ndc_z = (2.0 * depth) - 1.0  # Assuming depth is normalized [0,1]
+
+        # 2. Create clip space position
+        clip_space_pos = np.array([ndc_x, ndc_y, ndc_z, 1.0])
+
+        # 3. Inverse Projection to View Space
+        inv_proj = np.linalg.inv(self.get_projection_matrix())
+        view_space_pos = inv_proj @ clip_space_pos
+        view_space_pos /= view_space_pos[3]  # Perspective divide
+
+        # 4. Inverse View to World Space
+        inv_view = np.linalg.inv(self.get_view_matrix())
+        world_space_pos = inv_view @ np.array([view_space_pos[0], view_space_pos[1], view_space_pos[2], 1.0])
+        
+        return world_space_pos[:3]
+    
+    def world_to_screen(self, world_pos: np.ndarray) -> Tuple[float, float, float]:
+        """
+        Convert a world space position to normalized screen coordinates (0..1) and depth.
+
+        :param world_pos: World space position as a numpy array.
+        :return: Tuple of (screen_x, screen_y, depth) in normalized coordinates.
+        """
+        # 1. World to View Space
+        view_space_pos = self.get_view_matrix() @ np.array([world_pos[0], world_pos[1], world_pos[2], 1.0])
+
+        # 2. View to Clip Space
+        clip_space_pos = self.get_projection_matrix() @ view_space_pos
+
+        # 3. Perspective Divide to NDC
+        if clip_space_pos[3] == 0:
+            return (0.0, 0.0, 0.0)  # Avoid division by zero
+
+        ndc_pos = clip_space_pos / clip_space_pos[3]
+
+        # 4. NDC to Screen Space
+        screen_x = (ndc_pos[0] + 1.0) / 2.0
+        screen_y = (1.0 - ndc_pos[1]) / 2.0
+        depth = (ndc_pos[2] + 1.0) / 2.0  # Normalize depth to [0,1]
+
+        return (screen_x, screen_y, depth)
 
     # ==========================================================
     # Methods for OpenGL / Rasterization (Legacy Support)

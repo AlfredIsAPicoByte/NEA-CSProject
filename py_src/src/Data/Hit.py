@@ -1,9 +1,13 @@
+from __future__ import annotations
 from math import cos, sin, acos, gcd
 import numpy as np
-from typing import Optional, Any, List
+from typing import TYPE_CHECKING, Optional, Any, List
 from dataclasses import dataclass, field
 
 from src.Utilities.Common import unit
+
+if TYPE_CHECKING:
+    from src.Data.Scene import SceneNode
 
 @dataclass(slots=True)
 class HitInfo:
@@ -28,7 +32,7 @@ class HitInfo:
     direction: Optional[np.ndarray] = None
     
     # The object we hit (for material lookup)
-    obj: Optional[Any] = None
+    obj: Optional["SceneNode"] = None
     
     # Texture coordinates
     uv: Optional[np.ndarray] = None
@@ -41,7 +45,7 @@ class HitInfo:
         point: Optional[np.ndarray] = None,
         direction: Optional[np.ndarray] = None,
         normal: Optional[np.ndarray] = None,
-        obj: Optional[Any] = None,
+        obj: Optional["SceneNode"] = None,
         uv: Optional[np.ndarray] = None
     ):
         object.__setattr__(self, 'hit', bool(did_hit))

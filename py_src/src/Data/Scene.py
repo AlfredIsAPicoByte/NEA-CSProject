@@ -1,250 +1,399 @@
-from typing import Callable, List, Tuple, Optional, cast
 import numpy as np
-from math import atan2, asin, pi, floor
+from typing import List, Optional, Union, Any, Tuple
+from dataclasses import dataclass, field
 
-from src.Data.Transform import Transform
-from src.Data.Ray import Ray
-from src.Data.Color import Color
-from src.Data.Hit import HitInfo
-from src.Geometry.Core import Shape
-from src.Geometry.Primitive import Primitive
-from src.Lighting.Core import LightSource
+from .Transform import Transform
 from .Camera import Camera
+from src.Geometry.AABB import AABB
+
+@dataclass
+class SceneNode:
+    """
+    A node in the scene graph. 
+    Combines a position in 3D space and possibley some data.
+    Can act as a parent to other SceneNodes.
+    The data object contains the contents of the node (e.g., mesh, light, SDF, etc). This prevents inheritance explosion hell lol.
+    """
+    name: str = "Object"
+    context: Optional[Any] = None  # Generic data field; can be shapes, meshs or lights, etc.
+    transform: Transform = field(default_factory=Transform.Identity)
+
+    active: bool = True  # Whether this node is active in the scene
+
+    # Hierarchy
+    children: List['SceneNode'] = field(default_factory=list)
+    parent: Optional['SceneNode'] = field(default=None, repr=False)
+    
+    # Caching / Optimization
+    _world_matrix: Optional[np.ndarray] = None # 4x4 World Transformation Matrix
+    _inverse_world_matrix: Optional[np.ndarray] = None # Inverse of the world matrix
+    _cache_objects: Optional[List['SceneNode']] = None # A list of this and all descendants in a flat list
+    _aabb_bounds: Optional[AABB] = None # Axis-Aligned Bounding Box for this SceneNode
+
+    def __post_init__(self):
+        # Ensure children know their parent
+        for child in self.children:
+            child.parent = self
+        
+    def add_child(self, child: 'SceneNode'):
+        """Attaches a child node to this node."""
+        if child not in self.children:
+            self.children.append(child)
+            child.parent = self
+
+    def remove_child(self, child: 'SceneNode'):
+        """Detaches a child node."""
+        if child in self.children:
+            self.children.remove(child)
+            child.parent = None
+
+    def update_matrices(self, parent_matrix: Optional[np.ndarray] = None):
+        """
+        Recursive pass to update the world matrix of this node and all children.
+        Call this ONCE before rendering starts.
+        """
+        # 1. Get Local Matrix
+        # FIX: Use self.transform (Local), NOT self.world_transform (Computed Global)
+        local_mat = self.transform.to_matrix() 
+
+        # 2. Multiply by Parent (if exists)
+        if parent_matrix is not None:
+            self._world_matrix = parent_matrix @ local_mat
+        else:
+            self._world_matrix = local_mat
+            
+        # 3. Calculate Inverse (Needed for Ray Intersection: World -> Local)
+        try:
+            self._inverse_world_matrix = np.linalg.inv(self._world_matrix)
+        except np.linalg.LinAlgError:
+            self._inverse_world_matrix = np.eye(4)
+
+        # 4. Propagate down the tree
+        for child in self.children:
+            child.update_matrices(self._world_matrix)
+
+    def get_world_matrix(self):
+        return self._world_matrix
+    
+    def get_world_inverse_matrix(self):
+        return self._inverse_world_matrix
+
+    @property
+    def world_transform(self) -> Transform:
+        """Returns a `Transform` representing the object's world transform (position/rotation/scale).
+        Useful for APIs that expect a `Transform` object rather than raw matrices."""
+        # Ensure matrices are up-to-date
+        mat = self.get_world_matrix()
+        return Transform.from_matrix(mat)
+
+    def flatten_children(self, include_self: bool = True):
+        """
+        Returns a flat list of this object and all descendants.
+        Useful for building the global list of objects for the BVH or Renderer.
+        """
+        result = []
+        stack = [self] if include_self else list(reversed(self.children))
+        
+        while stack:
+            current = stack.pop()
+            result.append(current)
+            
+            # Add children in reversed order so they're popped in correct order
+            for child in reversed(current.children):
+                stack.append(child)
+
+        self._cache_objects = result
+
+    def get_scene_objects_flattened(self, include_self: bool = True):
+        if self._cache_objects is None:
+            self.flatten_children(include_self)
+        
+        return self._cache_objects
+    
+    def get_bounds(self) -> AABB:
+        """
+        Delegates the bounds calculation to the data object if it exists.
+        """
+        # Check if context exists and has the method we need
+        if self.context is None:
+            return AABB.empty()
+        
+        if hasattr(self.context, "bounding_box"):
+            return self.context.bounding_box
+        
+        return AABB.unit_cube()
+    
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        return self is other
+
+    def __repr__(self):
+        return f"SceneNode(name={self.name})"
 
 class Scene:
+    """
+    A container for Scene Node objects used in rendering algorithms.
+    """
     def __init__(self, name: str = "Scene", camera: Optional[Camera] = None, **kwargs):
         self.name = name
-        self.objects: List[Primitive] = []
-        self.lights: List[LightSource] = []
-        self.camera: Camera = camera if camera is not None else Camera(Transform.identity())
+        self.camera: Camera = camera or Camera()
+
+        self.objects: List[SceneNode] = []
+        
+        self._version: int = 1
+        self._cache_objects: Optional[List[SceneNode]] = None
 
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-    def set_camera(self, camera: Camera):
-        self.camera = camera
-    
-    def add_object(self, obj: Primitive):
+    @property
+    def version(self) -> int:
+        """
+        A counter for the amount of changes that have occured on the scene since initilization.
+        Starts at `1` when initialized.
+        
+        :return: Description
+        :rtype: int
+        """
+        return self._version
+
+    def add_object(self, obj: SceneNode):
+        """
+        Adds a new object to the scene and updates the version counter.
+        """
+        obj.update_matrices()
         self.objects.append(obj)
+        self.update_version()
 
-    def add_light(self, light: LightSource):
-        self.lights.append(light)
-
-    def get_lights(self):
-        return list(self.lights)
-
-    def distance_estimator(self, point: np.ndarray, exclude_obj: Optional[Primitive] = None) -> Tuple[Optional[Primitive], float]:
+    def add_object_by_context(self, context: Any, name: str = "Object", transform: Transform = Transform.Identity()) -> SceneNode:
         """
-        Evaluates the Scene SDF to find the closest object and the distance to it.
-        This relies on obj.shape.signed_distance() correctly handling World->Local conversion.
-        """
-        min_d = float("inf")
-        closest = None
+        Creates a new SceneNode with the given context and adds it to the scene.
         
-        all_object_flattened: set[Primitive] = get_all_objects_flattened(self.objects)
+        :param context: The context data to attach to the new SceneNode.
+        :param name: The name of the new SceneNode.
+        :return: The newly created SceneNode.
+        """
+        new_node = SceneNode(name=name, context=context, transform=transform)
+        self.add_object(new_node)
+        return new_node
 
-        for obj in all_object_flattened:
-            # 1. Skip exclusion (Self-Shadowing fix)
-            if exclude_obj is not None and obj is exclude_obj:
+    def get_object(self, name: str) -> Optional[SceneNode]:
+        pass
+
+    def get_object_by_id(self, id: int) -> Optional[SceneNode]:
+        for obj in self.get_scene_objects_flattened():
+            if hash(obj) == id:
+                return obj
+        
+        return None
+
+    @staticmethod
+    def _matches_context(context: Any, type_or_name: Union[type, str]) -> bool:
+        """Helper to check if a context matches a type (class) or name (str)."""
+        if isinstance(type_or_name, type):
+            return isinstance(context, type_or_name)
+        return type(context).__name__ == type_or_name
+
+    @staticmethod
+    def get_objects_by_type(objects: list[SceneNode], context_type: Union[type, str]) -> List[SceneNode]:
+        """
+        Returns a list of all scene objects that contain data of the specified context type.
+        """
+        result = []
+        for obj in objects:
+            if obj.context is not None:
+                if Scene._matches_context(obj.context, context_type):
+                    result.append(obj)
+        return result
+
+    @staticmethod
+    def get_objects_by_types(objects: list[SceneNode], context_types: List[Union[type, str]]) -> List[SceneNode]:
+        """
+        Returns a list of all scene objects that contain data of ANY of the specified context types.
+        """
+        result = []
+        
+        # Optimization: Separate real classes from string names once
+        real_types = tuple(t for t in context_types if isinstance(t, type))
+        type_names = {t for t in context_types if isinstance(t, str)}
+
+        for obj in objects:
+            if obj.context is None:
+                continue
+                
+            # Check 1: Is it an instance of the real classes? (Fast)
+            if real_types and isinstance(obj.context, real_types):
+                result.append(obj)
                 continue
             
-            # 2. Check for Shape
-            shape = getattr(obj, "shape", None)
-            if shape is None:
-                continue
-            shape = cast(Shape, shape)
-
-            # 3. Calculate Distance
-            # Use the WORLD transform so hierarchical/parented objects are handled properly
-            transform = getattr(obj, 'world_transform', obj.transform)
-            local_point = transform.inverse_transform_point(point)
-
-            try:
-                # 3. Get Local Distance (SDF assumes object is at 0,0,0)
-                d_local = float(shape.signed_distance(local_point))
+            # Check 2: Does the class name match one of the strings? (Slower fallback)
+            if type_names and type(obj.context).__name__ in type_names:
+                result.append(obj)
                 
-                # 4. Scale Distance back to World Space
-                # If the object is scaled down (0.1), a local distance of 1.0 is actually 0.1 in world space.
-                # We multiply by the smallest scale component to avoid overstepping (overshooting).
-                scale = transform.scale
-                min_scale = min(abs(scale[0]), abs(scale[1]), abs(scale[2]))
-                
-                d_world = d_local * min_scale
-            except Exception:
+        return result
+
+    @staticmethod
+    def get_objects_not_of_type(objects: list[SceneNode], context_type: Union[type, str]) -> List[SceneNode]:
+        """
+        Returns a list of all scene objects that do NOT contain data of the specified context type.
+        """
+        result = []
+        for obj in objects:
+            # If context is None, it definitely doesn't match the type, so we include it
+            if obj.context is None:
+                result.append(obj)
                 continue
 
-            if d_world < min_d:
-                min_d = d_world
-                closest = obj
+            if not Scene._matches_context(obj.context, context_type):
+                result.append(obj)
+        return result
+
+    @staticmethod
+    def get_objects_not_of_types(objects: list[SceneNode], context_types: List[Union[type, str]]) -> List[SceneNode]:
+        """
+        Returns a list of all scene objects that do NOT contain data of ANY of the specified context types.
+        """
+        result = []
         
-        return (closest, float(min_d))
+        real_types = tuple(t for t in context_types if isinstance(t, type))
+        type_names = {t for t in context_types if isinstance(t, str)}
+
+        for obj in objects:
+            if obj.context is None:
+                result.append(obj)
+                continue
+
+            # Check 1: If it matches a real type, EXCLUDE it
+            if real_types and isinstance(obj.context, real_types):
+                continue
+            
+            # Check 2: If it matches a string name, EXCLUDE it
+            if type_names and type(obj.context).__name__ in type_names:
+                continue
+
+            # If we reached here, it didn't match anything
+            result.append(obj)
+            
+        return result
     
-    def get_closest_intersection(self, ray: Ray) -> HitInfo:
+    def flatten_scene_objects(self):
         """
-        Analytical Intersection (Ray-Sphere, Ray-Box).
-        Returns a `HitInfo` describing the closest valid intersection.
+        Retruns a list of all objects in a flat list array and updated the cache for faster access
         """
-        closest_obj = None
-        closest_point = None
-        min_distance = float("inf")
+        flat_list = []
         
-        # Threshold to ignore self-intersections (Shadow Acne)
-        epsilon = 1e-4
+        # We store the ID (memory address) of visited objects
+        visited_ids = set() 
+        
+        # Initialize stack with the top-level objects
+        stack = list(self.objects)
 
-        # Iterate over all objects including children to ensure we test child shapes
-        for obj in get_all_objects_flattened(self.objects):
-            shape = getattr(obj, "shape", None)
-            if shape is None:
+        while stack:
+            current_obj = stack.pop()
+
+            # 1. Cycle Detection: Have we seen this specific object instance before?
+            if id(current_obj) in visited_ids:
                 continue
-
-            # Get all intersection points (World Space)
-            # The Shape class handles the Ray transformation (World->Local) internally
-            # and returns the points transformed back to World Space.
-            transform = obj.transform
-
-            # 1. Transform Ray -> Local Space using the WORLD transform
-            # "Shoot the ray as if the camera moved relative to the object"
-            local_ray = transform.inverse_transform_ray(ray)
-
-            # 2. Get Intersections in Local Space
-            # Shape returns points like (0, 0, 1) assuming it is centered at origin
-            local_hits = shape.get_ray_intersections(local_ray)
-            
-            if not local_hits:
-                continue
-
-            # 3. Transform Hits Local -> World
-            # Move the hit points to where the object actually is in the scene
-            world_hits = [transform.transform_point(p) for p in local_hits]
-
-            for hit_point in world_hits:
-                dist = np.linalg.norm(hit_point - ray.origin)
                 
-                if epsilon < dist < min_distance:
-                    min_distance = dist
-                    closest_obj = obj
-                    closest_point = hit_point
+            # 2. Mark as visited
+            visited_ids.add(id(current_obj))
+            
+            # 3. Add to our result list
+            flat_list.append(current_obj)
 
-        if closest_obj is None or closest_point is None:
-            return HitInfo.miss()
-
-        # Resolve Normal
-        normal = np.array([0.0, 1.0, 0.0])
+            # 4. Add children to the stack to be processed next
+            # (Check if the object actually has children first)
+            if hasattr(current_obj, 'children') and current_obj.children:
+                stack.extend(current_obj.children)
         
-        # Recalculate normal correctly using the object's transform logic
-        shape = getattr(closest_obj, "shape", None)
-        if shape is not None:
-            # We need to manually do the normal transform pipeline:
-            # World Point -> Local Point -> Local Gradient -> World Normal
-            
-            # Use the object's WORLD transform so the normal is transformed
-            # consistently with how the hit point was computed (handles parents)
-            transform = getattr(closest_obj, 'world_transform', Transform.identity())
-            local_pt = transform.inverse_transform_point(closest_point)
-            
-            # Calculate Local Normal (Gradient)
-            # Note: 'get_normal' usually expects a local point if it's a pure shape
-            local_normal = shape.get_normal(local_pt) 
-            
-            # Transform Normal to World (Inverse Transpose logic handles non-uniform scale)
-            normal = transform.transform_normal(local_normal)
-
-        return HitInfo(
-            did_hit=True, 
-            point=closest_point, 
-            direction=ray.orientation, 
-            normal=normal, 
-            distance=float(min_distance), 
-            obj=closest_obj 
-        )
+        # remove duplicate objects (with the same id)
+        self._cache_objects = list({id(obj): obj for obj in flat_list}.values())
     
-    def clear_objects(self):
+    def get_scene_objects_flattened(self) -> List[SceneNode]:
+        """
+        Returns a flat list of all objects in the scene, including children.
+        Caches the result for faster access on subsequent calls.
+        
+        :return: Description
+        :rtype: List[SceneNode]
+        """
+        if self._cache_objects is None:
+            self.flatten_scene_objects()
+
+        return self._cache_objects or self.objects
+
+    def remove_object(self, obj: SceneNode):
+        """
+        Removes an object from the scene and updates the version counter.
+        """
+        if obj in self.objects:
+            self.objects.remove(obj)
+            self.update_version()
+    
+    def set_camera(self, camera: Camera):
+        """
+        Change the current camera that is used.
+        Doesn't update the version counter.
+        """
+        self.camera = camera
+
+    def clear(self):
+        """
+        Removes all the objects and light sources from the scene, while updating the version counter.
+        """
         self.objects.clear()
-        self.lights.clear()
-        self.camera = Camera(Transform.identity())
+        self.update_version()
     
-    def is_occluded(self, point: np.ndarray, light_pos: np.ndarray, bias: float = 1e-4, epsilon: float = 1e-4, max_steps: int = 256, exclude_obj = None) -> bool:
+    def update_version(self):
         """
-        Return True if there's an occluder between `point` and `light_pos`.
-        Uses geometry intersection (get_closest_intersection) if available; otherwise
-        falls back to sampling with distance_estimator (SDF ray-march).
-
-        Args:
-            exclude_obj: Optional object instance to ignore during occlusion (useful to avoid self-shadowing).
+        Signal a change in the scene.
         """
-        dir_vec = np.array(light_pos, dtype=float) - np.array(point, dtype=float)
-        dist_to_light = np.linalg.norm(dir_vec)
-        if dist_to_light <= 0.0:
-            return False
-        dir_norm = dir_vec / dist_to_light
-
-        origin = np.array(point, dtype=float) + dir_norm * bias
-
-        # --- 1) Try geometry intersection path if available ---
-        try:
-            ray = Ray(origin, dir_norm)
-            hit_info = self.get_closest_intersection(ray)
-            v_object = getattr(hit_info, "obj", None)
-            if hit_info.hit and v_object is not None and hit_info.point is not None:
-                # Ignore hits on the excluded object to prevent self-shadowing
-                if v_object is not exclude_obj:
-                    hit_dist = np.linalg.norm(hit_info.point - origin)
-                    if hit_dist < (dist_to_light - epsilon):
-                        return True
-        except Exception:
-            # geometry intersection may not be supported; fall back to distance estimator below
-            pass
-
-        # --- 2) If SDF-based distance estimator exists, use ray-march ---
-        if hasattr(self, "distance_estimator") and callable(self.distance_estimator):
-            distance_traveled = 0.0
-            for _ in range(max_steps):
-                sample_point = origin + dir_norm * distance_traveled
-                v_object, dist = self.distance_estimator(sample_point)
-
-                if v_object is not None:
-                    if dist <= epsilon:
-                        # hit something before reaching the light -> occluded
-                        return True
-                    distance_traveled += dist
-                    if distance_traveled >= dist_to_light:
-                        # reached light without hitting anything
-                        return False
-            # exceeded max steps without reaching the light - treat as occluded
-            return True
-
-        # If no approach worked, conservatively say not occluded
-        return False
-
-def get_all_objects_flattened(root_objects: list[Primitive]) -> set[Primitive]:
-    """
-    Flattens a hierarchy of objects into a single list, 
-    preventing infinite loops from circular references.
-    """
-    flat_list = []
+        self._version += 1
     
-    # We store the ID (memory address) of visited objects
-    visited_ids = set() 
+
+def find_scene_extremes(
+    nodes: List['SceneNode'], 
+    target_point: np.ndarray,
+    ignore_empty: bool = True
+) -> Tuple[Optional[SceneNode], Optional[SceneNode]]:
+    """
+    Finds the (Closest Node, Furthest Node) relative to a target point.
     
-    # Initialize stack with the top-level objects
-    stack = list(root_objects)
+    :param nodes: A flat list of SceneNodes (use scene.get_objects_flat())
+    :param target_point: A numpy array [x, y, z]
+    :param ignore_empty: If True, skips nodes that have no 'data' (containers/folders)
+    :return: Tuple (closest_node, furthest_node)
+    """
+    closest_node = None
+    furthest_node = None
+    
+    # Initialize distances to infinity and negative infinity
+    min_dist_sq = float('inf')
+    max_dist_sq = float('-inf')
 
-    while stack:
-        current_obj = stack.pop()
-
-        # 1. Cycle Detection: Have we seen this specific object instance before?
-        if id(current_obj) in visited_ids:
+    for node in nodes:
+        # 1. Skip logic
+        if ignore_empty and node.context is None:
             continue
             
-        # 2. Mark as visited
-        visited_ids.add(id(current_obj))
+        # 2. Get Position
+        node_pos = node.get_world_matrix()[:3, 3]
         
-        # 3. Add to our result list
-        flat_list.append(current_obj)
-
-        # 4. Add children to the stack to be processed next
-        # (Check if the object actually has children first)
-        if hasattr(current_obj, 'children') and current_obj.children:
-            stack.extend(current_obj.children)
+        # 3. Calculate Squared Euclidean Distance
+        # (Square root is expensive, so we compare squared values for speed)
+        diff = node_pos - target_point
+        dist_sq = np.dot(diff, diff) 
+        
+        # 4. Check Closest
+        if dist_sq < min_dist_sq:
+            min_dist_sq = dist_sq
+            closest_node = node
             
-    return set(flat_list)
+        # 5. Check Furthest
+        if dist_sq > max_dist_sq:
+            max_dist_sq = dist_sq
+            furthest_node = node
+            
+    return closest_node, furthest_node

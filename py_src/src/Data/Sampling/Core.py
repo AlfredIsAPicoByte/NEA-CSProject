@@ -1,21 +1,28 @@
 from __future__ import annotations
 import math
 import numpy as np
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Tuple, Optional, List, Union
+from typing import Tuple, Optional, List, Union, Dict, Type, TypeVar
+
 
 class PixelFilter(Enum):
     BOX = 0
     TENT = 1
     GAUSSIAN = 2
+    NEAREST = 3
 
 @dataclass
 class SampleSettings:
     width: int = 800
     height: int = 600
+
     samples_per_pixel: int = 1
+    
+    # Adaptive Settings
+    min_samples: int = 4            # Minimum rays before checking variance
+    noise_threshold: float = 0.05   # Variance limit (lower = higher quality)
+
     filter_type: PixelFilter = PixelFilter.BOX
     filter_width: float = 2.0  # Radius in pixels for the filter
 
@@ -73,6 +80,11 @@ def evaluate_filter_weight(
         gx = np.exp(-alpha * dist_x[mask]**2) - shift
         gy = np.exp(-alpha * dist_y[mask]**2) - shift
         weights[mask] = np.maximum(0.0, gx * gy)
+
+    elif ftype == PixelFilter.NEAREST:
+        # All weight to the nearest pixel (0 distance)
+        near_mask = mask & (np.abs(dist_x) < 0.5) & (np.abs(dist_y) < 0.5)
+        weights[near_mask] = 1.0
 
     return weights
 
@@ -412,39 +424,59 @@ class HaltonSampler(Sampler):
         )  
 
 class AdaptiveSampler(Sampler):
-    """Placeholder for an adaptive sampler implementation."""
+    """
+    Adaptive Sampler.
+    
+    Acts as a Random Sampler but provides a method `has_converged()`
+    that the Integrator can call to stop sampling early if noise is low.
+    """
     def __init__(self, sample_settings: SampleSettings = SampleSettings(), seed: Optional[int] = None):
         super().__init__(sample_settings, seed)
-        # Implementation would go here
+        
+        # We use a simple random strategy for the coordinates themselves
+        # to avoid alignment artifacts if we stop early.
+        self._base_sampler = RandomSampler(sample_settings, seed)
 
-    def start_pixel(self, x: int, y: int) -> None:
-        pass
+    def sample_pixel(self, x: int, y: int, sample_idx: int) -> Tuple[float, float]:
+        # Delegate coordinate generation to Random Sampler
+        return self._base_sampler.sample_pixel(x, y, sample_idx)
 
-    def next_1d(self) -> float:
-        return np.random.random()
+    def has_converged(self, colors: List[np.ndarray]) -> bool:
+        """
+        Checks if the current batch of colors has sufficiently low variance.
+        Call this inside your rendering loop.
+        """
+        n = len(colors)
+        
+        # 1. Don't stop before the minimum
+        if n < self.settings.min_samples:
+            return False
+            
+        # 2. Compute Variance (Simplified for RGB: Luminance Variance)
+        # We check the standard error of the mean: sigma / sqrt(N)
+        # If the error interval is smaller than threshold, we are good.
+        
+        # Convert list to array for calculation (can be optimized to online algorithm later)
+        color_stack = np.stack(colors) # Shape (N, 3)
+        
+        # Calculate Luminance: R*0.2126 + G*0.7152 + B*0.0722
+        luminance = np.dot(color_stack, np.array([0.2126, 0.7152, 0.0722]))
+        
+        mean_lum = np.mean(luminance)
+        if mean_lum == 0.0:
+            return True # Pitch black converges instantly
 
-    def next_2d(self) -> Tuple[float, float]:
-        return (np.random.random(), np.random.random())
+        # Sample Variance
+        variance = np.var(luminance, ddof=1)
+        
+        # Heuristic: We want the noise relative to the brightness to be low.
+        # Metric: RMSE / Mean < Threshold
+        rmse = math.sqrt(variance / n) 
+        
+        # Avoid division by zero for very dark pixels
+        relative_error = rmse / (mean_lum + 1e-4)
 
-    def clone(self, seed: Optional[int] = None) -> "AdaptiveSampler":
-        return AdaptiveSampler(self.settings, seed)
-
-    def sample_pixel(self, x: int, y: int, sample_idx: int) -> tuple[float, float]:
-        return (np.random.random(), np.random.random())
-
-# Registry and factory
-_SAMPLER_REGISTRY: dict[str, type[Sampler]] = {
-    "random": RandomSampler,
-    "stratified": StratifiedSampler,
-    "halton": HaltonSampler,
-    "adaptive": AdaptiveSampler,
-}
-
-def create_sampler(name: str, sample_settings: SampleSettings = SampleSettings(), seed: Optional[int] = None) -> Sampler:
-    cls = _SAMPLER_REGISTRY.get(name.lower())
-    if cls is None:
-        raise ValueError(f"Unknown sampler: {name}")
-    return cls(sample_settings, seed)
+        return relative_error < self.settings.noise_threshold
 
 class SamplingManager:
     """Factory and Manager for sampling strategies."""
@@ -460,3 +492,45 @@ class SamplingManager:
     def get_samples_per_pixel(self, x: int, y: int) -> List[Sample]:
         # Delegate to the strategy
         return self.sampler.get_samples_per_pixel(x, y)
+
+
+T = TypeVar("T", bound=Sampler)
+
+_SAMPLER_REGISTRY: Dict[str, Type[Sampler]] = {
+    "random": RandomSampler,
+    "stratified": StratifiedSampler,
+    "halton": HaltonSampler,
+    "adaptive": AdaptiveSampler,
+}
+
+def register_sampler(name: str):
+    def _decorator(cls: Type[T]) -> Type[T]:
+        _SAMPLER_REGISTRY[name] = cls
+        return cls
+    return _decorator
+
+def create_sampler(name: str, sample_settings: SampleSettings = SampleSettings(), seed: Optional[int] = None) -> Sampler:
+    """
+    Instantiate a registered sampler by name.
+    Use this to avoid hard imports at call sites.
+    
+    :param name: Description
+    :type name: str
+    :param sample_settings: Description
+    :type sample_settings: SampleSettings
+    :param seed: Description
+    :type seed: Optional[int]
+    :return: Description
+    :rtype: Sampler
+    """
+    if name not in _SAMPLER_REGISTRY:
+        raise ValueError(
+            f"Unknown sampler '{name}'. Registered: {list(_SAMPLER_REGISTRY.keys())}"
+        )
+
+    cls = _SAMPLER_REGISTRY[name]
+
+    return cls(sample_settings, seed)
+
+def list_samplers() -> Dict[str, Type[Sampler]]:
+    return dict(_SAMPLER_REGISTRY)

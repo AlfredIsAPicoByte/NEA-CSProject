@@ -3,14 +3,21 @@ import numpy as np
 
 from src.Data.Color import Color
 from src.Data.Ray import TracingRay
-from src.Data.Sampling import Sampler
+from src.Data.Sampling.Core import Sampler
 from src.Lighting.Optics import reflect, refract, schlick_fresnel_refactive, schlick_fresnel_metalic
 from src.Utilities.Common import unit, orthonormal_basis
 
-def ggx_distribution(normal: np.ndarray, half_vector: np.ndarray, roughness: float) -> float:
-    """Calculates the GGX/Trowbridge-Reitz Normal Distribution Function (D)."""
+def ggx_distribution(roughness: float, N: np.ndarray, H: np.ndarray) -> float:
+    """
+    Calculates the GGX/Trowbridge-Reitz Normal Distribution Function (D).
+
+    :param roughness: The roughness of the surface.
+    :param N: Surface normal.
+    :param H: Half vector.
+    :return: The D value.
+    """
     alpha = max(roughness ** 2, 1e-4)
-    dot_n_h = np.dot(normal, half_vector)
+    dot_n_h = np.dot(N, H)
     
     # D is 0 if the half vector is below the geometric surface
     if dot_n_h <= 0:
@@ -19,7 +26,7 @@ def ggx_distribution(normal: np.ndarray, half_vector: np.ndarray, roughness: flo
     denominator = (dot_n_h ** 2) * (alpha ** 2 - 1.0) + 1.0
     return (alpha ** 2) / (np.pi * denominator * denominator)
 
-def smith_geometry(n: np.ndarray, v: np.ndarray, l: np.ndarray, roughness: float) -> float:
+def smith_geometry(roughness: float, N: np.ndarray, V: np.ndarray, L: np.ndarray) -> float:
     """
     Smith Geometry Shadowing-Masking function.
     Determines what percentage of microfacets are blocked by other microfacets.
@@ -30,8 +37,8 @@ def smith_geometry(n: np.ndarray, v: np.ndarray, l: np.ndarray, roughness: float
     alpha = roughness ** 2
     k = (alpha) / 2.0 
 
-    dot_n_v = np.abs(np.dot(n, v))
-    dot_n_l = np.abs(np.dot(n, l))
+    dot_n_v = np.abs(np.dot(N, V))
+    dot_n_l = np.abs(np.dot(N, L))
 
     g1_v = dot_n_v / (dot_n_v * (1.0 - k) + k)
     g1_l = dot_n_l / (dot_n_l * (1.0 - k) + k)
@@ -39,21 +46,38 @@ def smith_geometry(n: np.ndarray, v: np.ndarray, l: np.ndarray, roughness: float
     return g1_v * g1_l
 
 def calculate_microfacet_pdf(
-    incident_dir: np.ndarray,   # Direction light is coming FROM (World space)
-    outgoing_dir: np.ndarray,   # The sampled direction (Reflection or Refraction)
-    surface_normal: np.ndarray,
     roughness: float,
+    I: np.ndarray,
+    L: np.ndarray,
+    N: np.ndarray,
     ior_incident: float,
     ior_transmitted: float,
-    fresnel_probability: float  # The 'F' value calculated during sampling
+    fresnel_probability: float
 ) -> float:
     """
     Calculates the PDF for a specific reflection or refraction event.
+
+    :param roughness: Surface roughness [0,1]
+    :type roughness: float
+    :param I: Incident direction (pointing TOWARDS surface)
+    :type I: np.ndarray
+    :param L: Outgoing direction (pointing AWAY from surface)
+    :type L: np.ndarray
+    :param N: Surface normal
+    :type N: np.ndarray
+    :param ior_incident: Index of Refraction of the incident medium
+    :type ior_incident: float
+    :param ior_transmitted: Index of Refraction of the transmitted medium
+    :type ior_transmitted: float
+    :param fresnel_probability: Probability of reflection (Fresnel term)
+    :type fresnel_probability: float
+    :return: The PDF value for the given event
+    :rtype: float
     """
     # 1. Normalize Vectors
-    V = -unit(incident_dir) # View Vector (pointing to viewer)
-    L = unit(outgoing_dir)  # Light/Sample Vector
-    N = unit(surface_normal)
+    V = -unit(I) # View Vector (pointing to viewer)
+    L = unit(L)  # Light/Sample Vector
+    N = unit(N)
 
     # 2. Determine if this is Reflection or Refraction
     # We check if L and N are in the same hemisphere
@@ -71,7 +95,7 @@ def calculate_microfacet_pdf(
         dot_v_h = np.abs(np.dot(V, H))
         
         # Calculate D term
-        D = ggx_distribution(N, H, roughness)
+        D = ggx_distribution(roughness, N, H)
         
         # Jacobian for Reflection: 1 / (4 * (V.H))
         pdf_geometry = (D * dot_n_h) / (4.0 * dot_v_h + 1e-8)
@@ -95,7 +119,7 @@ def calculate_microfacet_pdf(
         
         # D term
         dot_n_h = np.abs(np.dot(N, H))
-        D = ggx_distribution(N, H, roughness)
+        D = ggx_distribution(roughness, N, H)
         
         # Calculate Terms for Jacobian
         dot_v_h = np.dot(V, H)
@@ -120,11 +144,11 @@ def calculate_microfacet_pdf(
         return pdf_geometry * (1.0 - fresnel_probability)
     
 def sample_microfacet_surface(
-        incident_dir: np.ndarray,
-        surface_normal: np.ndarray,
+        roughness: float,
+        I: np.ndarray,
+        N: np.ndarray,
         new_origin: np.ndarray,
         sampler: Sampler,
-        roughness: float,
         ior_1: float,
         ior_2: float,
         bias: float = 1e-4
@@ -132,12 +156,31 @@ def sample_microfacet_surface(
     """
     Unified Microfacet BSDF (Glass/Dielectric).
     Probabilistically samples Reflection or Refraction based on Fresnel term.
+
+    :param roughness: Surface roughness [0,1]
+    :type roughness: float
+    :param I: Incident direction (pointing TOWARDS surface)
+    :type I: np.ndarray
+    :param N: Surface normal
+    :type N: np.ndarray
+    :param new_origin: The origin point for the new ray
+    :type new_origin: np.ndarray
+    :param sampler: Sampler instance for random sampling
+    :type sampler: Sampler
+    :param ior_1: Index of Refraction of the incident medium
+    :type ior_1: float
+    :param ior_2: Index of Refraction of the transmitted medium
+    :type ior_2: float
+    :param bias: Small bias to offset ray origin to avoid self-intersection
+    :type bias: float
+    :return: The sampled TracingRay (either reflected or refracted)
+    :rtype: TracingRay
     """
     # 1. Setup & IOR
     # -------------------------
     # Direction vectors should be normalized
-    V = -unit(incident_dir) # Pointing towards viewer/light source
-    N = unit(surface_normal)
+    V = -unit(I) # Pointing towards viewer/light source
+    N = unit(N)
     
     # Determine if entering or exiting to set IOR
     dot_vn = np.dot(V, N)
@@ -182,30 +225,30 @@ def sample_microfacet_surface(
 
     if sampler.sample_roulette() < F:
         # --- REFLECTION ---
-        final_dir = reflect(incident_dir, H)
+        final_dir = reflect(I, H)
         
         # Push away from geometric normal
-        final_origin = new_origin + (surface_normal * bias)
+        final_origin = new_origin + (N * bias)
     else:
         # --- REFRACTION ---
-        final_dir = refract(incident_dir, H, eta_i / eta_t)
+        final_dir = refract(I, H, eta_i / eta_t)
         
         # Safety: If your module detects TIR (returning None), fallback to reflection.
         # (Though our F check above should catch this, floating point errors happen).
         if final_dir is None:
-            final_dir = reflect(incident_dir, H)
+            final_dir = reflect(I, H)
 
             # Push away from geometric normal
-            final_origin = new_origin + (surface_normal * bias)
+            final_origin = new_origin + (N * bias)
         else:
             # Origin Offset: Push into geometric normal
-            final_origin = new_origin - (surface_normal * bias)
+            final_origin = new_origin - (N * bias)
 
     return TracingRay(origin=final_origin, orientation=final_dir)
 
 def calculate_throughput_weight(
-        light_dir: np.ndarray,
-        surface_normal: np.ndarray,
+        L: np.ndarray,
+        N: np.ndarray,
         bsdf_value: np.ndarray,
         pdf: float,
         bias: float = 1e-6
@@ -213,14 +256,21 @@ def calculate_throughput_weight(
     """
     Calculates the weight (color contribution) of a specific ray sample 
     using the Monte Carlo estimator: (BSDF * CosTheta) / PDF.
-    
-    Args:
-        light_dir: The direction of the OUTGOING (sampled) ray.
-        surface_normal: The geometric surface normal.
-        bsdf_value: The RGB color returned by evaluate_bsdf().
-        pdf: The probability density calculated by calculate_pdf().
+
+    :param L: Light direction (pointing TO light)
+    :type L: np.ndarray
+    :param N: Surface normal
+    :type N: np.ndarray
+    :param bsdf_value: The RGB color returned by evaluate_bsdf().
+    :type bsdf_value: np.ndarray
+    :param pdf: The probability density calculated by calculate_pdf().
+    :type pdf: float
+    :param bias: Small bias to avoid division by zero.
+    :type bias: float
+    :return: The throughput weight (RGB color)
+    :rtype: np.ndarray
     """
-    
+
     # 1. Safety Check: Avoid division by zero
     if pdf < bias:
         return np.array([0.0, 0.0, 0.0])
@@ -230,7 +280,7 @@ def calculate_throughput_weight(
     # - Reflection: L is on the same side as N (positive).
     # - Refraction: L is on the opposite side of N (negative).
     # Both attenuate light based on the projected area.
-    cos_theta = np.abs(np.dot(surface_normal, light_dir))
+    cos_theta = np.abs(np.dot(N, L))
 
     # 3. Calculate Weight
     # Weight = (BSDF * CosTheta) / PDF
@@ -240,7 +290,22 @@ def calculate_throughput_weight(
 
 def calculate_microfacet_brdf(roughness: float, intensity: float, L: np.ndarray, V: np.ndarray, N: np.ndarray, F0: np.ndarray) -> Color:
     """
-    Pure BRDF evaluation - returns f_r WITHOUT the cosine term or light color.
+    Calculate the Microfacet BRDF using GGX NDF, Smith GSF, and Schlick Fresnel.
+
+    :param roughness: Surface roughness [0,1]
+    :type roughness: float
+    :param intensity: Intensity multiplier for the BRDF
+    :type roughness: float
+    :param L: Light direction (pointing TO light)
+    :type L: np.ndarray
+    :param V: View direction (pointing TO viewer)
+    :type V: np.ndarray
+    :param N: Surface normal
+    :type N: np.ndarray
+    :param F0: Base reflectivity at normal incidence (RGB)
+    :type F0: np.ndarray
+    :return: Evaluated BRDF color
+    :rtype: Color
     """
     safe_roughness = max(roughness, 1e-2)
     alpha = safe_roughness ** 2
@@ -259,7 +324,7 @@ def calculate_microfacet_brdf(roughness: float, intensity: float, L: np.ndarray,
     
     # GSF (Schlick-GGX)
     k = ((alpha + 1.0) ** 2) / 8.0
-    GS_Schlick: float = lambda n_dot_k: n_dot_k / (n_dot_k * (1.0 - k) + k)
+    GS_Schlick = lambda n_dot_k: n_dot_k / (n_dot_k * (1.0 - k) + k)
     GSF: float = GS_Schlick(NdotL) * GS_Schlick(NdotV)
     
     # Fresnel (Schlick's Approximation)
@@ -275,10 +340,23 @@ def calculate_microfacet_brdf(roughness: float, intensity: float, L: np.ndarray,
     
     return brdf
 
-def evaluate_glass_bsdf(self, L: np.ndarray, V: np.ndarray, N: np.ndarray) -> Color:
+def evaluate_glass_bsdf(roughness: float, ior: float, L: np.ndarray, V: np.ndarray, N: np.ndarray) -> Color:
     """
     Evaluate glass BSDF (both reflection and refraction lobes).
     This is tricky because we need to know which lobe the light direction is in.
+
+    :param roughness: Surface roughness [0,1]
+    :type roughness: float
+    :param ior: Index of Refraction of the material
+    :type ior: float
+    :param L: Light direction (pointing TO light)
+    :type L: np.ndarray
+    :param V: View direction (pointing TO viewer)
+    :type V: np.ndarray
+    :param N: Surface normal
+    :type N: np.ndarray
+    :return: Evaluated BSDF color
+    :rtype: Color
     """
     # Determine if L is a reflection or refraction of V
     is_reflection = np.dot(L, N) * np.dot(V, N) > 0  # Same hemisphere
@@ -286,11 +364,11 @@ def evaluate_glass_bsdf(self, L: np.ndarray, V: np.ndarray, N: np.ndarray) -> Co
     if is_reflection:
         # Evaluate reflection lobe using microfacet BRDF
         H = unit(L + V)
-        D = ggx_distribution(N, H, self.data.roughness)
-        G = smith_geometry(N, V, L, self.data.roughness)
+        D = ggx_distribution(roughness, N, H)
+        G = smith_geometry(roughness, N, V, L)
         
         VdotH = max(0.0, np.dot(V, H))
-        F = schlick_fresnel_refactive(VdotH, 1.0, self.data.ior)
+        F = schlick_fresnel_refactive(VdotH, 1.0, ior)
         
         denom = 4.0 * abs(np.dot(N, V)) * abs(np.dot(N, L))
         if denom > 1e-6:
@@ -300,21 +378,21 @@ def evaluate_glass_bsdf(self, L: np.ndarray, V: np.ndarray, N: np.ndarray) -> Co
     else:
         # Evaluate refraction lobe (BTDF)
         # This requires calculating the half-vector for refraction
-        eta = 1.0 / self.data.ior  # Assuming air->glass
+        eta = 1.0 / ior  # Assuming air->glass
         H = -unit(eta * V + L)  # Refraction half-vector
         
-        D = ggx_distribution(N, H, self.data.roughness)
-        G = smith_geometry(N, V, L, self.data.roughness)
+        D = ggx_distribution(roughness, N, H)
+        G = smith_geometry(roughness, N, V, L)
         
         VdotH = np.dot(V, H)
-        F = schlick_fresnel_refactive(abs(VdotH), 1.0, self.data.ior)
+        F = schlick_fresnel_refactive(abs(VdotH), 1.0, ior)
         
         # BTDF formula (see Walter et al. 2007)
         LdotH = np.dot(L, H)
         denom = (eta * VdotH + LdotH) ** 2
         
         if abs(denom) > 1e-6:
-            btdf = (1 - F) * D * G * abs(VdotH * LdotH) / (abs(np.dot(N,V)) * abs(np.dot(N,L)) * denom)
+            btdf = (1 - F) * D * G * abs(VdotH * LdotH) / (abs(np.dot(N, V)) * abs(np.dot(N, L)) * denom)
             # Glass is typically uncolored, but absorption can tint it
-            return Color(1,1,1) * btdf
-        return Color(0,0,0)
+            return Color(1.0, 1.0, 1.0) * btdf
+        return Color(0.0, 0.0, 0.0)

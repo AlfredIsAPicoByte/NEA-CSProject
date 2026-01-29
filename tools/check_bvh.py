@@ -3,7 +3,7 @@ from src.Rendering.Intersections import BVHIntersection
 
 s = get_minimal_scene(64,64)
 for obj in s.objects:
-    obj.update_world_matrices()
+    obj.update_matrices()
 
 bvh = BVHIntersection()
 root = bvh._build_bvh(list(s.objects))

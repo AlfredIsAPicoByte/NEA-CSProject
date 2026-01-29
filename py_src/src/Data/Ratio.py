@@ -18,20 +18,19 @@ class Ratio:
         self.width = width
         self.height = height
 
-    @classmethod
-    def simplify(cls):
+    def simplify(self):
         """Simplify this Ratio in-place and return self (e.g., 1920/1080 -> 16/9)."""
-        w_int = int(cls.width)
-        h_int = int(cls.height)
+        w_int = int(self.width)
+        h_int = int(self.height)
 
         divisor = gcd(w_int, h_int)
         if divisor == 0:
-            return cls
+            return self
 
         # Use integer division to keep them integral
-        cls.width = w_int // divisor
-        cls.height = h_int // divisor
-        return cls
+        self.width = w_int // divisor
+        self.height = h_int // divisor
+        return self
 
     def __add__(self, other):
         if not isinstance(other, Ratio):
