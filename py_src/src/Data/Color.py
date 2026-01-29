@@ -34,6 +34,23 @@ class Color:
         self.b = clamp(self.b)
         self.a = clamp(self.a)
 
+    # Backwards compatible attribute names used in some tests
+    @property
+    def red(self) -> float:
+        return self.r
+
+    @property
+    def green(self) -> float:
+        return self.g
+
+    @property
+    def blue(self) -> float:
+        return self.b
+
+    def to_np_ndarray(self) -> np.ndarray:
+        """Returns np.array([r,g,b,a]) compatible with legacy callers."""
+        return np.array([self.r, self.g, self.b, self.a])
+
     # =========================================================================
     # STATIC CONVERTERS (Color Spaces & Formats)
     # =========================================================================

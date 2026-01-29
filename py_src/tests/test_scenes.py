@@ -3,8 +3,11 @@ import os
 import numpy as np
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(current_dir, 'src'))
-
+py_src_root = os.path.abspath(os.path.join(current_dir, os.pardir))
+project_root = os.path.abspath(os.path.join(current_dir, os.pardir, os.pardir))
+sys.path.insert(0, py_src_root)
+sys.path.insert(0, project_root)
+# Ensure the tests directory is on sys.path so local test modules can be imported by name
 sys.path.insert(0, current_dir)
 
 from src.Data.Transform import Transform

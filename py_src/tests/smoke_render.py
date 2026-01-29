@@ -8,7 +8,7 @@ from tests.test_scenes import get_minimal_scene
 from src.Rendering.Raytracing import RayTracer, TracingStats
 from src.Rendering.Intersections import BVHIntersection
 from src.Rendering.Interactions import TerminalInteraction
-from src.Rendering.Shading import LambertShading, AmbienceSettings, ShadowSettings, BackgroundSettings
+from src.Rendering.RayTracing.Shading import LambertShading, AmbienceSettings, ShadowSettings, BackgroundSettings
 from src.Image.Film import Film
 from src.Data.Sampling.Core import SamplingManager, SampleSettings
 

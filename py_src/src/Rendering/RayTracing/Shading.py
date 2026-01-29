@@ -705,7 +705,7 @@ class LambertShading(PhysicalShadingStrategy):
 
         return final_color
 
-class RecursiveLabertShading(LambertShading):
+class RecursiveLambertShading(LambertShading):
     """
     Extends Lambertian shading with recursive reflections and refractions.
     """
