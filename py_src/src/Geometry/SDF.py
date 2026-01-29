@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional, Union, List, Tuple
 from dataclasses import dataclass, field
 
 from src.Data.Ray import Ray
+from .Operations import *
 
 from .AABB import AABB
 
@@ -320,7 +321,6 @@ class SignedDistanceShape3DExtrusion(SignedDistanceShape3D):
             points.append(np.array([p[0], -self.half_height, p[1]])) # Bottom cap
         return points
 
-
 class SignedDistanceShape3DRevolution(SignedDistanceShape3D):
     """
     A 3D shape created by revolving a 2D signed distance shape around the Y-axis.
@@ -390,6 +390,148 @@ class SignedDistanceShape3DRevolution(SignedDistanceShape3D):
     def get_convex_hull(self) -> Optional[List[np.ndarray]]:
         # Convex hull of a revolution is difficult to generalize (usually a cylinder or cone).
         return None
+
+class SignedDistanceShapeCombinations(SignedDistanceShape, CorrespondingBoundingBox):
+    """
+    Base class for binary operations between two SDF shapes (A and B).
+    Handles the logic for combining bounding boxes, mapping UVs, and 
+    ray-marching the combined field.
+    """
+    def __init__(self, shape_a: SignedDistanceShape, shape_b: SignedDistanceShape):
+        self.shape_a = shape_a
+        self.shape_b = shape_b
+
+    def get_gradient(self, point: np.ndarray) -> np.ndarray:
+        """
+        Computes the gradient (normal). 
+        For standard boolean ops (Union/Intersection), the gradient is exactly 
+        that of the shape defining the surface at this point.
+        """
+        dist_a = self.shape_a.get_distance(point)
+        dist_b = self.shape_b.get_distance(point)
+        
+        # For simple booleans, we just return the gradient of the closer surface.
+        # Note: For smooth blends, a numerical gradient (finite differences) 
+        # is often superior to this approximation.
+        if abs(dist_a) < abs(dist_b):
+            return self.shape_a.get_gradient(point)
+        else:
+            return self.shape_b.get_gradient(point)
+
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        """
+        Delegates UV mapping to the shape closest to the surface.
+        """
+        dist_a = self.shape_a.get_distance(point)
+        dist_b = self.shape_b.get_distance(point)
+        
+        if abs(dist_a) < abs(dist_b):
+            return self.shape_a.get_uv(point)
+        else:
+            return self.shape_b.get_uv(point)
+
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        """
+        Performs Sphere Tracing (Ray Marching) to find the intersection.
+        Unlike simple primitives, combined SDFs rarely have analytic solutions.
+        """
+        t = 0.0
+        MAX_STEPS = 128
+        EPSILON = 1e-4
+
+        for _ in range(MAX_STEPS):
+            p = ray.origin + ray.direction * t
+            dist = self.get_distance(p)
+            
+            if dist < EPSILON:
+                return [t]
+            
+            t += dist
+            if t > max_t:
+                return []
+        
+        return []
+
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+        """
+        Default AABB combination strategy (Union). 
+        Subclasses can override this (e.g., Intersection).
+        """
+        aabb_a = self.shape_a.get_transformed_aabb(transformation_matrix, padding)
+        aabb_b = self.shape_b.get_transformed_aabb(transformation_matrix, padding)
+        
+        min_p = np.minimum(aabb_a.min_point, aabb_b.min_point)
+        max_p = np.maximum(aabb_a.max_point, aabb_b.max_point)
+        
+        return AABB(min_p, max_p)
+
+class SDFUnion(SignedDistanceShapeCombinations):
+    """
+    Combines two shapes into one (Shape A OR Shape B).
+    """
+    def get_distance(self, point: np.ndarray) -> float:
+        return op_union(self.shape_a.get_distance(point),
+                        self.shape_b.get_distance(point))
+
+class SDFIntersection(SignedDistanceShapeCombinations):
+    """
+    The volume shared by both shapes (Shape A AND Shape B).
+    """
+    def get_distance(self, point: np.ndarray) -> float:
+        return op_intersect(self.shape_a.get_distance(point),
+                            self.shape_b.get_distance(point))
+    
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+        # Optimization: The intersection is strictly smaller than the smallest AABB.
+        # We can intersect the bounding boxes.
+        aabb_a = self.shape_a.get_transformed_aabb(transformation_matrix, padding)
+        aabb_b = self.shape_b.get_transformed_aabb(transformation_matrix, padding)
+        
+        min_p = np.maximum(aabb_a.min_point, aabb_b.min_point)
+        max_p = np.minimum(aabb_a.max_point, aabb_b.max_point)
+        
+        # Check if the boxes actually overlap; if not, return a degenerate box
+        if np.any(min_p > max_p):
+             return AABB(np.zeros(3), np.zeros(3)) # Effectively empty
+             
+        return AABB(min_p, max_p)
+
+class SDFSubtraction(SignedDistanceShapeCombinations):
+    """
+    Carves Shape B out of Shape A (Shape A MINUS Shape B).
+    """
+    def get_distance(self, point: np.ndarray) -> float:
+        # Note: Using op_addition (max(d1, -d2)) because 
+        # op_subtract is defined as max(-d1, d2) in the provided snippet.
+        # We want: A - B => max(distA, -distB)
+        return op_addition(self.shape_a.get_distance(point),
+                           self.shape_b.get_distance(point))
+
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+        # Optimization: The bounding box is just AABB(A). 
+        # Cutting a hole doesn't expand the outer bounds.
+        return self.shape_a.get_transformed_aabb(transformation_matrix, padding)
+
+class SDFSmoothUnion(SignedDistanceShapeCombinations):
+    """
+    Blends two shapes together smoothly, like liquid mercury.
+    """
+    k: float = 0.5 # Smoothing factor
+
+    def get_distance(self, point: np.ndarray) -> float:
+        return op_smooth_union(self.shape_a.get_distance(point),
+                               self.shape_b.get_distance(point),
+                               self.k)
+    
+    def get_gradient(self, point: np.ndarray) -> np.ndarray:
+        # For smooth unions, the 'closest shape' analytic approximation is inaccurate
+        # near the blend region. A finite difference approach is preferred here.
+        epsilon = 1e-4
+        d = self.get_distance(point)
+        dx = self.get_distance(point + np.array([epsilon, 0, 0])) - d
+        dy = self.get_distance(point + np.array([0, epsilon, 0])) - d
+        dz = self.get_distance(point + np.array([0, 0, epsilon])) - d
+        return np.array([dx, dy, dz]) / epsilon
 
 class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
     """

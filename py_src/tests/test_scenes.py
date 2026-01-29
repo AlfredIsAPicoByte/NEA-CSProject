@@ -13,6 +13,7 @@ from src.Data.Scene import Scene
 from src.Data.Camera import Camera, CameraType
 from src.Data.Context import Mesh_Material, SDF_Material
 from src.Geometry.SDF import *
+from src.Geometry.Operations import *
 from src.Geometry.Mesh import *
 from src.Lighting.Core import Light
 from src.Lighting.Optics import REFRACTIVE_INDICES
@@ -150,7 +151,7 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
 
     return scene
 
-def get_rgb_room_with_objects_scene(width: int = 126, height: int = 126) -> Scene:
+def get_rgb_cornell_box_scene(width: int = 126, height: int = 126) -> Scene:
     cam_transform = Transform(np.array([0.0, 2.5, -7.5]), np.array([0.0, 0.0, 0.0]))
     cam = Camera(
         cam_transform,
@@ -707,4 +708,242 @@ def get_industrial_shapes_scene(width: int = 150, height: int = 100) -> Scene:
     scene.add_object_by_context(l_side, "Side", Transform(np.array([3.0, 1.0, -3.0])))
 
     cam.transform.look_at(np.array([0, 0, 0]))
+    return scene
+
+def get_forest_clearing_scene(width: int = 140, height: int = 100) -> Scene:
+    """
+    A nature-inspired scene using primitives to approximate trees and foliage.
+    """
+    cam_transform = Transform(np.array([5.0, 3.0, 5.0]), np.array([-0.3, 0.8, 0.0]))
+    cam = Camera(
+        cam_transform, 
+        fov=65.0, near=0.1, far=150.0, 
+        resolution_width=width, resolution_height=height,
+        camera_type=CameraType.PERSPECTIVE
+    )
+    
+    # Sky gradient (Blue to pale yellow)
+    sky_colors = [Color.from_hex("#87CEEB"), Color.from_hex("#E0F7FA")]
+    scene = Scene("forest_clearing", cam, background_color=ColorGradient(sky_colors, np.array([0.0, 1.0])))
+
+    # Materials
+    mat_trunk = MaterialFactory.create_diffuse(Color.from_hex("#5C4033"), roughness=0.9)
+    mat_leaves_dark = MaterialFactory.create_diffuse(Color.from_hex("#228B22"), roughness=0.8)
+    mat_leaves_light = MaterialFactory.create_diffuse(Color.from_hex("#32CD32"), roughness=0.8)
+    mat_grass = MaterialFactory.create_diffuse(Color.from_hex("#4CAF50"), roughness=1.0)
+
+    # Ground
+    scene.add_object_by_context(
+        SDF_Material(Sphere(50.0), mat_grass), 
+        "GroundHill", 
+        Transform(np.array([0.0, -50.0, 0.0]))
+    )
+
+    # Trees Loop (Simple Cylinder + Sphere clusters)
+    # Positioning trees in a circle around the center
+    for i in range(6):
+        angle = (i / 6) * 2 * np.pi
+        x = np.cos(angle) * 3.5
+        z = np.sin(angle) * 3.5
+        
+        # Trunk
+        scene.add_object_by_context(
+            SDF_Material(Cylinder(), mat_trunk), 
+            f"Trunk_{i}", 
+            Transform(np.array([x, 1.0, z]), scale=np.array([0.3, 1.0, 0.3]))
+        )
+        
+        # Foliage (Cluster of 2 spheres)
+        foliage_mat = mat_leaves_light if i % 2 == 0 else mat_leaves_dark
+        scene.add_object_by_context(
+            SDF_Material(Sphere(), foliage_mat), 
+            f"LeavesBottom_{i}", 
+            Transform(np.array([x, 2.2, z]), scale=np.full(3, 0.9))
+        )
+        scene.add_object_by_context(
+            SDF_Material(Sphere(), foliage_mat), 
+            f"LeavesTop_{i}", 
+            Transform(np.array([x, 3.0, z]), scale=np.full(3, 0.7))
+        )
+
+    # Central Feature (Rock or Stump)
+    mat_stone = MaterialFactory.create_specular(Color.from_hex("#808080"), roughness=0.7, metallicness=0.2)
+    scene.add_object_by_context(
+        SDF_Material(Sphere(), mat_stone),
+        "CenterRock",
+        Transform(np.array([0.0, 0.3, 0.0]), scale=np.array([0.8, 0.5, 0.6]))
+    )
+
+    # Lighting
+    sun_light = Light(color=Color.from_hex("#FFFACD"), intensity=1200.0, radius=5.0)
+    scene.add_object_by_context(sun_light, "Sun", Transform(np.array([10.0, 15.0, 5.0])))
+
+    return scene
+
+
+def get_checkerboard_infinity_scene(width: int = 120, height: int = 120) -> Scene:
+    """
+    A surreal scene focusing on perspective and repetitive patterns.
+    """
+    cam_transform = Transform(np.array([0.0, 2.0, -6.0]), np.array([-0.2, 0.0, 0.0]))
+    cam = Camera(
+        cam_transform, 
+        fov=80.0, near=0.1, far=200.0, 
+        resolution_width=width, resolution_height=height,
+        camera_type=CameraType.PERSPECTIVE
+    )
+    
+    scene = Scene("checkerboard_infinity", cam, background_color=Color.from_hex("#000000"))
+
+    # Materials
+    mat_black = MaterialFactory.create_specular(Color.from_hex("#111111"), roughness=0.1, metallicness=0.5)
+    mat_white = MaterialFactory.create_specular(Color.from_hex("#EEEEEE"), roughness=0.1, metallicness=0.5)
+    mat_reflect_sphere = MaterialFactory.create_specular(Color.from_hex("#FF00FF"), roughness=0.0, metallicness=1.0)
+
+    # Grid Floor Generation
+    grid_range = 6
+    tile_size = 1.0
+    
+    for x in range(-grid_range, grid_range + 1):
+        for z in range(0, 12): # Extending deep into Z
+            # Checkerboard logic
+            mat = mat_white if (x + z) % 2 == 0 else mat_black
+            
+            # Using thin cubes as tiles
+            pos = np.array([x * tile_size, 0.0, z * tile_size])
+            scene.add_object_by_context(
+                SDF_Material(Cube(), mat), 
+                f"Tile_{x}_{z}", 
+                Transform(pos, scale=np.array([0.48, 0.1, 0.48])) # Slight gap between tiles
+            )
+
+    # Floating Mirror Sphere
+    scene.add_object_by_context(
+        SDF_Material(Sphere(), mat_reflect_sphere),
+        "HeroSphere",
+        Transform(np.array([0.0, 1.5, 4.0]), scale=np.full(3, 1.2))
+    )
+
+    # Lighting
+    # A low, dramatic light to cast long shadows on the tiles
+    scene.add_object_by_context(
+        Light(color=Color.from_hex("#FFFFFF"), intensity=800.0),
+        "LowLight",
+        Transform(np.array([5.0, 2.0, -2.0]))
+    )
+    
+    # Overhead fill
+    scene.add_object_by_context(
+        Light(color=Color.from_hex("#444455"), intensity=200.0),
+        "Fill",
+        Transform(np.array([0.0, 10.0, 5.0]))
+    )
+
+    return scene
+
+def get_orbital_dock_scene(width: int = 140, height: int = 100) -> Scene:
+    """
+    Sci-fi space scene with high contrast lighting, black background, and emissive elements.
+    """
+    cam_transform = Transform(np.array([-4.0, 2.0, -4.0]), np.array([-0.2, -0.78, 0.0]))
+    cam = Camera(
+        cam_transform, fov=60.0, resolution_width=width, resolution_height=height
+    )
+    cam.transform.look_at(np.array([0.0, 0.0, 0.0]))
+
+    # Starry background (solid black, assuming stars are too small to render or handled by skybox)
+    scene = Scene("orbital_dock", cam, background_color=Color.from_hex("#000000"))
+
+    # Materials
+    mat_hull = MaterialFactory.create_specular(Color.from_hex("#CCCCCC"), roughness=0.3, metallicness=0.8)
+    mat_solar = MaterialFactory.create_specular(Color.from_hex("#111133"), roughness=0.1, metallicness=0.9)
+    mat_engine_glow = MaterialFactory.create_emissive(Color.from_hex("#00CCFF"), 4.0)
+    mat_sensor_red = MaterialFactory.create_emissive(Color.from_hex("#FF0000"), 2.0)
+
+    # Main Ship Body (Cylinder + Cone/Pyramid approximation)
+    scene.add_object_by_context(
+        SDF_Material(Cylinder(), mat_hull),
+        "ShipCore",
+        Transform(np.array([0.0, 0.0, 0.0]), np.array([0, 0, np.deg2rad(90)]), scale=np.array([0.5, 2.0, 0.5]))
+    )
+
+    # Solar Panels (Thin Cubes)
+    panel_scale = np.array([0.1, 1.5, 0.8])
+    scene.add_object_by_context(
+        SDF_Material(Cube(), mat_solar),
+        "SolarLeft",
+        Transform(np.array([0.0, 0.0, 1.2]), scale=panel_scale)
+    )
+    scene.add_object_by_context(
+        SDF_Material(Cube(), mat_solar),
+        "SolarRight",
+        Transform(np.array([0.0, 0.0, -1.2]), scale=panel_scale)
+    )
+
+    # Engine (Rear)
+    scene.add_object_by_context(
+        SDF_Material(Sphere(), mat_engine_glow),
+        "Engine",
+        Transform(np.array([-2.1, 0.0, 0.0]), scale=np.full(3, 0.4))
+    )
+
+    # Docking Ring (Torus approximation using 4 Cylinders)
+    ring_rad = 1.5
+    for i in range(4):
+        scene.add_object_by_context(
+            SDF_Material(Cylinder(), mat_hull),
+            f"RingSeg_{i}",
+            Transform(np.array([1.0, np.cos(i*1.57)*ring_rad, np.sin(i*1.57)*ring_rad]), 
+                      scale=np.array([0.2, 0.2, 0.2]))
+        )
+
+    # Navigation Light
+    scene.add_object_by_context(
+        SDF_Material(Sphere(), mat_sensor_red),
+        "NavLight",
+        Transform(np.array([2.0, 0.6, 0.0]), scale=np.full(3, 0.1))
+    )
+
+    # Light Source (Distant Star - Sharp shadows)
+    sun = Light(color=Color.from_hex("#FFFFFF"), intensity=2000.0, radius=0.0) # Radius 0 for hard shadows in space
+    scene.add_object_by_context(sun, "Star", Transform(np.array([10.0, 5.0, 10.0])))
+
+    # Blue bounce light from a nearby planet (imagined)
+    planet_bounce = Light(color=Color.from_hex("#002244"), intensity=100.0, radius=10.0)
+    scene.add_object_by_context(planet_bounce, "PlanetFill", Transform(np.array([-5.0, -10.0, -5.0])))
+
+    return scene
+
+def get_sdf_boolean_scene(width: int = 120, height: int = 120) -> Scene:
+    """
+    Demonstrates SDF Boolean operations: Union, Subtraction, and Intersection.
+    """
+    cam_transform = Transform(np.array([0.0, 2.0, -6.0]), np.zeros(3))
+    cam = Camera(cam_transform, fov=60.0, resolution_width=width, resolution_height=height)
+    scene = Scene("sdf_boolean_lab", cam, background_color=Color.from_hex("#121212"))
+
+    # Materials
+    mat_sub = MaterialFactory.create_specular(Color.from_hex("#FF4444"), roughness=0.1) # Red for subtraction
+    mat_int = MaterialFactory.create_specular(Color.from_hex("#44FF44"), roughness=0.1) # Green for intersection
+    mat_floor = MaterialFactory.create_diffuse(Color.from_hex("#333333"), 0.9)
+
+    # 1. SUBTRACTION: Sphere minus a Cube
+    # Result: A sphere with a square chunk missing.
+    shape_a = Sphere(radius=1.0)
+    shape_b = Cube(size=1.2)
+    # logic: max(distA, -distB)
+    subtraction_shape = SDFSubtraction(shape_a, shape_b) 
+    scene.add_object_by_context(SDF_Material(subtraction_shape, mat_sub), "SubtractedObj", Transform(np.array([-2.0, 1.0, 0.0])))
+
+    # 2. INTERSECTION: Sphere and Cube overlap
+    # Result: A rounded cube / "spherified" box.
+    # logic: max(distA, distB)
+    intersection_shape = SDFIntersection(shape_a, shape_b)
+    scene.add_object_by_context(SDF_Material(intersection_shape, mat_int), "IntersectedObj", Transform(np.array([2.0, 1.0, 0.0])))
+
+    # Floor and Lighting
+    scene.add_object_by_context(SDF_Material(Cube(), mat_floor), "Floor", Transform(np.array([0.0, -0.5, 0.0]), scale=np.array([10, 0.1, 10])))
+    scene.add_object_by_context(Light(color=Color(1, 1, 1), intensity=1500.0, radius=2.0))
+
+    cam.transform.look_at(np.array([0, 1, 0]))
     return scene

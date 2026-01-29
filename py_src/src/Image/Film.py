@@ -42,7 +42,7 @@ class Film:
         # 2. Save
         img = Image.fromarray(final_pixels, 'RGB')
         img.save(filename)
-        print(f" > Saved to {filename}")
+        print(f" > Saved image to {filename}")
 
     def __repr__(self):
         return f"Film({self.width}x{self.height}, accum_pixels={self.accum_color.shape}, accum_weight={self.accum_weight.shape}, first_pixel={self.accum_color[0, 0]}, first_weight={self.accum_weight[0, 0]}, center_pixel={self.accum_color[self.height//2, self.width//2]}, center_weight={self.accum_weight[self.height//2, self.width//2]}, last_pixel={self.accum_color[-1, -1]}, last_weight={self.accum_weight[-1, -1]})"

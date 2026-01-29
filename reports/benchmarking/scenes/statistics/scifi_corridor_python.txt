@@ -1,9 +1,9 @@
 === Tracing Stats ===
-Time: 0.738s | Mem: 0.00MB
+Time: 0.999s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
-  - Total:       2,304
-  - Primary:     2,304      (100.0%)
+  - Total:       9,216
+  - Primary:     9,216      (100.0%)
   - Shadow:      0          (Lights used: 5)
   - Bounce:      0         
 -------------------------

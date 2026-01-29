@@ -72,16 +72,17 @@ if __name__ == "__main__":
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
-    img_width, img_height = 16 * 4, 9 * 4
+    img_width, img_height = 16 * 8, 9 * 8
 
     # 16 * 32, 9 * 32
 
     all_scenes = [
         get_minimal_scene(img_width, img_height),
+        get_sdf_boolean_scene(img_width, img_height),
         get_gradient_scene(img_width, img_height),
         get_emissive_scene(img_width, img_height),
         get_lit_studio_scene(img_width, img_height),
-        get_rgb_room_with_objects_scene(img_width, img_height),
+        get_rgb_cornell_box_scene(img_width, img_height),
         get_cyberpunk_scene(img_width, img_height),
         get_material_deck_scene(img_width, img_height),
         get_refraction_lab_scene(img_width, img_height),
@@ -95,6 +96,9 @@ if __name__ == "__main__":
         get_abstract_geometry_scene(img_width, img_height),
         get_industrial_shapes_scene(img_width, img_height),
         get_shape_showcase_scene(img_width, img_height),
+        get_forest_clearing_scene(img_width, img_height),
+        get_checkerboard_infinity_scene(img_width, img_height),
+        get_orbital_dock_scene(img_width, img_height),
     ]
 
     sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.NEAREST, filter_width=2)
@@ -102,8 +106,8 @@ if __name__ == "__main__":
 
     for scene in all_scenes:
         intersection = BVHIntersection(IntersectionSettings(
-            max_distance=250,
-            max_steps=64
+            max_distance=1000,
+            max_steps=256
         ))
         
         shading = FlatShading(PhysicalShadingSettings(
@@ -158,6 +162,7 @@ if __name__ == "__main__":
                 with open(stats_report_out_path, "w", encoding="utf-8") as f:
                     f.write(raytracer.stats.format_report())
                     print(" + Wrote rendering statistics")
+                    print(f" > Saved stats to {stats_report_out_path}")
             except Exception as e:
                 print(f" / Failed to write rendering statistics:\n{e}\n")
                 import traceback
@@ -166,6 +171,7 @@ if __name__ == "__main__":
                 with open(mem_report_out_path, "w", encoding="utf-8") as f:
                     f.write(mp.format_report())
                     print(" + Wrote memory report")
+                    print(f" > Saved report to {mem_report_out_path}")
             except Exception as e:
                 print(f" / Failed to write memory report:\n{e}\n")
                 import traceback
@@ -186,6 +192,7 @@ if __name__ == "__main__":
                         f.write("\n\nPostprocessing:\n")
                         f.write(mp.format_report())
                         print(" + Appended to memory report")
+                        print(f" > Saved report to {mem_report_out_path}")
                 except Exception as e:
                     print(f" / Failed to append to memory report:\n{e}\n")
                     import traceback
