@@ -1,6 +1,6 @@
-from dataclasses import dataclass, field
-from typing import List, Tuple, Optional
 import numpy as np
+from typing import List, Tuple, Optional
+from dataclasses import dataclass, field
 
 
 from .AABB import AABB
@@ -30,6 +30,7 @@ class Face:
     uv: Optional[Tuple[float, float]] = None
     normal: Optional[np.ndarray] = None
     tangent: Optional[np.ndarray] = None
+    bitangent: Optional[np.ndarray] = None
 
 class Mesh:
     """Handles large 3D meshes with efficient storage and operations."""

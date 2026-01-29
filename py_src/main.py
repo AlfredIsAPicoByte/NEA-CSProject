@@ -34,51 +34,6 @@ def render_process(scene: Scene, algorithm: Algorithm):
     if len(algorithm.settings.film.accum_color) * len(algorithm.settings.film.accum_color[1]) != width * height:
         print(f"Warning: Rendered pixel count ({len(algorithm.settings.film.accum_color) * len(algorithm.settings.film.accum_color[1])}) does not match Camera dimensions ({width}x{height}={width*height}).")
 
-def find_scene_extremes(
-    nodes: List['SceneNode'], 
-    target_point: np.ndarray,
-    ignore_empty: bool = True
-) -> Tuple[Optional['SceneNode'], Optional['SceneNode']]:
-    """
-    Finds the (Closest Node, Furthest Node) relative to a target point.
-    
-    :param nodes: A flat list of SceneNodes (use scene.get_objects_flat())
-    :param target_point: A numpy array [x, y, z]
-    :param ignore_empty: If True, skips nodes that have no 'data' (containers/folders)
-    :return: Tuple (closest_node, furthest_node)
-    """
-    closest_node = None
-    furthest_node = None
-    
-    # Initialize distances to infinity and negative infinity
-    min_dist_sq = float('inf')
-    max_dist_sq = float('-inf')
-
-    for node in nodes:
-        # 1. Skip logic
-        if ignore_empty and node.context is None:
-            continue
-            
-        # 2. Get Position
-        node_pos = node.get_world_matrix()[:3, 3]
-        
-        # 3. Calculate Squared Euclidean Distance
-        # (Square root is expensive, so we compare squared values for speed)
-        diff = node_pos - target_point
-        dist_sq = np.dot(diff, diff) 
-        
-        # 4. Check Closest
-        if dist_sq < min_dist_sq:
-            min_dist_sq = dist_sq
-            closest_node = node
-            
-        # 5. Check Furthest
-        if dist_sq > max_dist_sq:
-            max_dist_sq = dist_sq
-            furthest_node = node
-            
-    return closest_node, furthest_node
-
 def apply_post_processing(raw_img):
     """
     Apply post-processing pipeline to the raw image.
@@ -150,11 +105,7 @@ if __name__ == "__main__":
             max_distance=250,
             max_steps=64
         ))
-        #close, far = find_scene_extremes(scene.get_objects_by_types(scene.get_scene_objects_flattened(), ["SDF_Material", "Mesh_Material"]), scene.camera.transform.position)
-        #d1 = float(np.linalg.norm(scene.camera.transform.position - close.world_transform.position))
-        #d2 = float(np.linalg.norm(scene.camera.transform.position - far.world_transform.position))
-
-        #print(f"Distances: {d1:.3g}, {d2:.3g}")
+        
         shading = FlatShading(PhysicalShadingSettings(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
@@ -199,7 +150,8 @@ if __name__ == "__main__":
             print("Skipping Post Processing")
         
         try:
-            with MemoryProfiler(enable_tracemalloc=args.memory_trace, top=6) as mp: # Track only overall memory usage during rendering
+            with MemoryProfiler(enable_tracemalloc=args.memory_trace, top=6) as mp:
+                # Track only overall memory usage during rendering
                 render_process(scene, raytracer)
             
             try:

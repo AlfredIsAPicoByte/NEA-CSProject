@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Optional, Union, Any
+from typing import List, Optional, Union, Any, Tuple
 from dataclasses import dataclass, field
 
 from .Transform import Transform
@@ -351,3 +351,49 @@ class Scene:
         Signal a change in the scene.
         """
         self._version += 1
+    
+
+def find_scene_extremes(
+    nodes: List['SceneNode'], 
+    target_point: np.ndarray,
+    ignore_empty: bool = True
+) -> Tuple[Optional[SceneNode], Optional[SceneNode]]:
+    """
+    Finds the (Closest Node, Furthest Node) relative to a target point.
+    
+    :param nodes: A flat list of SceneNodes (use scene.get_objects_flat())
+    :param target_point: A numpy array [x, y, z]
+    :param ignore_empty: If True, skips nodes that have no 'data' (containers/folders)
+    :return: Tuple (closest_node, furthest_node)
+    """
+    closest_node = None
+    furthest_node = None
+    
+    # Initialize distances to infinity and negative infinity
+    min_dist_sq = float('inf')
+    max_dist_sq = float('-inf')
+
+    for node in nodes:
+        # 1. Skip logic
+        if ignore_empty and node.context is None:
+            continue
+            
+        # 2. Get Position
+        node_pos = node.get_world_matrix()[:3, 3]
+        
+        # 3. Calculate Squared Euclidean Distance
+        # (Square root is expensive, so we compare squared values for speed)
+        diff = node_pos - target_point
+        dist_sq = np.dot(diff, diff) 
+        
+        # 4. Check Closest
+        if dist_sq < min_dist_sq:
+            min_dist_sq = dist_sq
+            closest_node = node
+            
+        # 5. Check Furthest
+        if dist_sq > max_dist_sq:
+            max_dist_sq = dist_sq
+            furthest_node = node
+            
+    return closest_node, furthest_node
