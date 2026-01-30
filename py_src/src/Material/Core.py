@@ -119,6 +119,7 @@ class PBRMaterial:
             
             # Pre-calculate attenuation (distance-based).
             attenuation = attenuate_inv_sqr_distance(dist)
+            print(attenuation)
 
             # Final radiance
             incoming_radiance = light.get_radiance(light_node.world_transform.position, hit_point) * attenuation * visibility

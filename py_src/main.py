@@ -4,7 +4,7 @@ import gc
 
 from src.Data.Scene import Scene
 from src.Data.Color import Color
-from src.Data.Scene import Scene
+from src.Data.Scene import Scene, find_scene_extremes
 from src.Data.Sampling.Core import SamplingManager, SampleSettings, PixelFilter
 from src.Geometry.SDF import *
 from src.Geometry.Mesh import *
@@ -72,36 +72,36 @@ if __name__ == "__main__":
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
-    img_width, img_height = 16 * 8, 9 * 8
+    img_width, img_height = 16 * 4, 9 *4
 
     # 16 * 32, 9 * 32
 
     all_scenes = [
-        get_minimal_scene(img_width, img_height),
-        get_sdf_boolean_scene(img_width, img_height),
-        get_gradient_scene(img_width, img_height),
-        get_emissive_scene(img_width, img_height),
-        get_lit_studio_scene(img_width, img_height),
+        # get_minimal_scene(img_width, img_height),
+        # get_sdf_boolean_scene(img_width, img_height),
+        # get_gradient_scene(img_width, img_height),
+        # get_emissive_scene(img_width, img_height),
+        # get_lit_studio_scene(img_width, img_height),
         get_rgb_cornell_box_scene(img_width, img_height),
-        get_cyberpunk_scene(img_width, img_height),
-        get_material_deck_scene(img_width, img_height),
-        get_refraction_lab_scene(img_width, img_height),
-        get_scifi_corridor_scene(img_width, img_height),
-        get_sunset_monolith_scene(img_width, img_height),
-        get_pastel_blocks_scene(img_width, img_height),
-        get_glass_prism_scene(img_width, img_height),
-        get_glass_sculpture_scene(img_width, img_height),
-        get_100_spheres_grid_scene(img_width, img_height),
-        get_low_ior_scene(img_width, img_height),
-        get_abstract_geometry_scene(img_width, img_height),
-        get_industrial_shapes_scene(img_width, img_height),
-        get_shape_showcase_scene(img_width, img_height),
-        get_forest_clearing_scene(img_width, img_height),
-        get_checkerboard_infinity_scene(img_width, img_height),
-        get_orbital_dock_scene(img_width, img_height),
+        # get_cyberpunk_scene(img_width, img_height),
+        # get_material_deck_scene(img_width, img_height),
+        # get_refraction_lab_scene(img_width, img_height),
+        # get_scifi_corridor_scene(img_width, img_height),
+        # get_sunset_monolith_scene(img_width, img_height),
+        # get_pastel_blocks_scene(img_width, img_height),
+        # get_glass_prism_scene(img_width, img_height),
+        # get_glass_sculpture_scene(img_width, img_height),
+        # get_100_spheres_grid_scene(img_width, img_height),
+        # get_low_ior_scene(img_width, img_height),
+        # get_abstract_geometry_scene(img_width, img_height),
+        # get_industrial_shapes_scene(img_width, img_height),
+        # get_shape_showcase_scene(img_width, img_height),
+        # get_forest_clearing_scene(img_width, img_height),
+        # get_checkerboard_infinity_scene(img_width, img_height),
+        # get_orbital_dock_scene(img_width, img_height),
     ]
 
-    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.NEAREST, filter_width=2)
+    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.GAUSSIAN, filter_width=2)
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
@@ -109,11 +109,14 @@ if __name__ == "__main__":
             max_distance=1000,
             max_steps=256
         ))
-        
+        close, far = find_scene_extremes(scene.get_scene_objects_flattened(), scene.camera.transform.position)
+        d1 = float(np.linalg.norm(close.world_transform.position - scene.camera.transform.position))
+        d2 = float(np.linalg.norm(far.world_transform.position - scene.camera.transform.position))
+
         shading = FlatShading(PhysicalShadingSettings(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
-            background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None), False)
+            background_settings=BackgroundSettings(False, Color.from_hex("#282838"), getattr(scene, "background_color", None), False)
         ))
 
         raytracer = RayTracer(RayTracingSettings(

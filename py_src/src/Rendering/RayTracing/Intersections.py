@@ -35,6 +35,7 @@ class IntersectionSettings:
         if not (0.0 < self.step_relaxation <= 1.0):
             raise ValueError("Step relaxation must be in the range (0.0, 1.0].")    
     
+    use_aabb_bounding_box: bool = True
     always_rebuild_bvh: bool = False # If true, forces BVH to rebuild on next use
 
 class IntersectionStrategy(ABC):
@@ -112,14 +113,13 @@ class IntersectionStrategy(ABC):
 
         # 1. Transform Ray to Local Space
         # We assume world_transform is up to date
-        safe_transform = cast(Transform, getattr(obj, 'world_transform', obj.transform))
-        local_ray = safe_transform.inverse_transform_ray(ray)
+        local_ray = obj.world_transform.inverse_transform_ray(ray)
         local_ray.orientation = unit(local_ray.orientation)
 
         # 2. Safety for Non-Uniform Scales
         # Convert world max distance to local space
         # We divide by the SMALLEST scale to ensure we cover the full world distance
-        max_dist_local = self.settings.max_distance / min(*safe_transform.scale)
+        max_dist_local = self.settings.max_distance / min(*obj.world_transform.scale)
 
         t = 0.0
         sign_modifier = -1.0 if ray.is_inside else 1.0
@@ -135,10 +135,10 @@ class IntersectionStrategy(ABC):
             # Hit Condition
             if local_dist < self.settings.epsilon:
                 # A. Transform Local Point -> World Point
-                world_point = safe_transform.transform_point(local_point)
+                world_point = obj.world_transform.transform_point(local_point)
 
                 # B. Resolve Surface Normal
-                surface_normal = self._resolve_normal(world_point, safe_transform, safe_shape)
+                surface_normal = self._resolve_normal(world_point, obj.world_transform, safe_shape)
 
                 # C. True World Distance
                 distance_world = np.linalg.norm(world_point - ray.origin)
@@ -253,10 +253,7 @@ class RayMarchingIntersection(IntersectionStrategy):
 
                     if shape is not None:
                         safe_shape = cast(SignedDistanceShape, shape)
-                        safe_transform = getattr(closest_object, 'world_transform', closest_object.transform)
-
-                        # 3. Rotate normal back to world space
-                        surface_normal = self._resolve_normal(world_point, safe_transform, safe_shape)
+                        surface_normal = self._resolve_normal(world_point, closest_object.world_transform, safe_shape)
 
                 if stats is not None:
                     stats.triangle_tests += 1
@@ -275,7 +272,7 @@ class RayMarchingIntersection(IntersectionStrategy):
             
             # Frustum/Far Plane checks
             if scene.camera:
-                obj_pos = getattr(closest_object, 'world_transform', Transform.Identity()).position
+                obj_pos = closest_object.world_transform.position
                 far_plane_dist = np.linalg.norm(scene.camera.transform.position - obj_pos)
                 if distance_world >= self.settings.max_distance or far_plane_dist >= scene.camera.far:
                     break
@@ -285,7 +282,14 @@ class RayMarchingIntersection(IntersectionStrategy):
 
         return HitInfo.miss()
     
-    def _distance_estimator(self, objects: List[SceneNode], point: np.ndarray, ray: Optional[TracingRay] = None, exclude_obj: Optional[SceneNode] = None) -> Tuple[Optional[SceneNode], float]:
+    def _distance_estimator(
+            self,
+            objects: List[SceneNode],
+            point: np.ndarray,
+            ray: Optional[TracingRay] = None,
+            exclude_obj: Optional[SceneNode] = None,
+            stats: Optional["TracingStats"] = None
+        ) -> Tuple[Optional[SceneNode], float]:
         """
         Evaluates the Scene SDF to find the closest object and the distance to it.
         This relies on obj.context.shape.signed_distance() correctly handling Local->World conversion.
@@ -310,8 +314,7 @@ class RayMarchingIntersection(IntersectionStrategy):
             if exclude_obj is not None and obj is exclude_obj:
                 continue
 
-            # Skip lights
-            if isinstance(obj.context, Light):
+            if not obj.active:
                 continue
             
             # Skip meshes for now
@@ -323,6 +326,13 @@ class RayMarchingIntersection(IntersectionStrategy):
             if shape is None:
                 continue
             safe_shape = cast(SignedDistanceShape, shape)
+            
+            if self.settings.use_aabb_bounding_box:
+                box = obj.get_bounds()
+                t_box = box.intersect(ray, self.settings.max_distance)
+                if stats: stats.aabb_tests += 1
+                if t_box == float('inf'):
+                    continue
 
             # 3. Calculate Distance
             # Use the WORLD transform so hierarchical/parented objects are handled properly
@@ -349,10 +359,6 @@ class InverseSDFIntersection(IntersectionStrategy):
     the SDF defines a mathematical function that erturns a vector/point based on a distance.
     Inverting the SDF allows for the point to calculate the distance
     """
-    def __init__(self, settings: Optional[IntersectionSettings] = None, use_bounding_box: bool = True):
-        super().__init__(settings)
-        self.use_bounding_box = use_bounding_box
-
     def find_hit(
             self,
             scene: Scene,
@@ -362,8 +368,11 @@ class InverseSDFIntersection(IntersectionStrategy):
         closest_hit = HitInfo.miss()
         
         for obj in scene.get_scene_objects_flattened():
+            if not obj.active:
+                continue
+
             # Optional: AABB Culling
-            if self.use_bounding_box:
+            if self.settings.use_aabb_bounding_box:
                 box = obj.get_bounds()
                 t_box = box.intersect(ray, self.settings.max_distance)
                 if stats: stats.aabb_tests += 1
@@ -374,8 +383,15 @@ class InverseSDFIntersection(IntersectionStrategy):
             hit = self._intersect_sdf_object(obj, ray, stats)
 
             if hit.hit:
+                if scene.camera:
+                    obj_pos = hit.obj.world_transform.position
+                    far_plane_dist = np.linalg.norm(scene.camera.transform.position - obj_pos)
+                    if far_plane_dist >= scene.camera.far:
+                        break
+
                 if not closest_hit.hit or hit.distance < closest_hit.distance:
                     closest_hit = hit
+
 
         if not closest_hit.hit and stats:
             stats.rays_missed += 1
@@ -427,6 +443,12 @@ class BVHIntersection(IntersectionStrategy):
                 for obj in node.objects:
                     hit = self._intersect_sdf_object(obj, ray, stats)
                     if hit.hit:
+                        if scene.camera:
+                            obj_pos = hit.obj.world_transform.position
+                            far_plane_dist = np.linalg.norm(scene.camera.transform.position - obj_pos)
+                            if far_plane_dist >= scene.camera.far:
+                                break
+                            
                         if not closest_hit.hit or hit.distance < closest_hit.distance:
                             closest_hit = hit
                 continue
@@ -487,6 +509,9 @@ class BVHIntersection(IntersectionStrategy):
                     if obj is exclude_obj:
                         continue
                     
+                    if not obj.active:
+                        continue
+
                     # Use shared SDF intersection logic
                     hit = self._intersect_sdf_object(obj, shadow_ray)
                     

@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Optional, Union, Any, Tuple
+from typing import List, Optional, Union, Any, Tuple, Callable
 from dataclasses import dataclass, field
 
 from .Transform import Transform
@@ -178,12 +178,17 @@ class Scene:
         new_node = SceneNode(name=name, context=context, transform=transform)
         self.add_object(new_node)
         return new_node
+    
+    @staticmethod
+    def get_object(objects: list[SceneNode], name: str) -> Optional[SceneNode]:
+        for obj in objects:
+            if obj.name == name:
+                return obj
+        return None
 
-    def get_object(self, name: str) -> Optional[SceneNode]:
-        pass
-
-    def get_object_by_id(self, id: int) -> Optional[SceneNode]:
-        for obj in self.get_scene_objects_flattened():
+    @staticmethod
+    def get_object_by_id(objects: list[SceneNode], id: int) -> Optional[SceneNode]:
+        for obj in objects:
             if hash(obj) == id:
                 return obj
         
@@ -278,6 +283,64 @@ class Scene:
             
         return result
     
+    @staticmethod
+    def get_objects_subclass_of(objects: list[SceneNode], parent_class: type) -> List[SceneNode]:
+        """
+        Returns all objects whose context is a subclass of the given parent_class.
+        Useful for polymorphism (e.g., get all Light subclasses).
+        """
+        result = []
+        for obj in objects:
+            if obj.context is not None and isinstance(obj.context, parent_class):
+                result.append(obj)
+        return result
+
+    @staticmethod
+    def get_objects_with_attribute(objects: list[SceneNode], attribute_name: str) -> List[SceneNode]:
+        """
+        Returns all objects whose context has a specific attribute (variable/property).
+        Example: get_objects_with_attribute("intensity")
+        """
+        result = []
+        for obj in objects:
+            if obj.context is not None and hasattr(obj.context, attribute_name):
+                result.append(obj)
+        return result
+
+    @staticmethod
+    def get_objects_by_attribute_value(objects: list[SceneNode], attribute_name: str, value: Any) -> List[SceneNode]:
+        """
+        Returns all objects whose context has a specific attribute equal to a specific value.
+        Example: get_objects_by_attribute_value("is_visible", True)
+        """
+        result = []
+        for obj in objects:
+            if obj.context is not None:
+                # Check if attribute exists
+                if hasattr(obj.context, attribute_name):
+                    # Check if value matches
+                    attr_val = getattr(obj.context, attribute_name)
+                    if attr_val == value:
+                        result.append(obj)
+        return result
+
+    @staticmethod
+    def get_objects_by_condition(objects: list[SceneNode], condition_func: Callable[[SceneNode], bool]) -> List[SceneNode]:
+        """
+        Returns all objects that satisfy a custom lambda condition.
+        
+        Example: 
+            # Get all lights brighter than 500
+            scene.get_objects_by_condition(
+                lambda node: isinstance(node.context, Light) and node.context.intensity > 500
+            )
+        """
+        result = []
+        for obj in objects:
+            if condition_func(obj):
+                result.append(obj)
+        return result
+    
     def flatten_scene_objects(self):
         """
         Retruns a list of all objects in a flat list array and updated the cache for faster access
@@ -323,14 +386,86 @@ class Scene:
             self.flatten_scene_objects()
 
         return self._cache_objects or self.objects
+    
+    def remove_object(self, object_node: SceneNode) -> bool:
+        """
+        Removes a specific object node from the scene. 
+        Returns True if successful, False if the object was not found.
+        """
+        # 1. Check root level
+        if object_node in self.objects:
+            self.objects.remove(object_node)
+            return True
 
-    def remove_object(self, obj: SceneNode):
+        # 2. Check children (recursive search)
+        # Note: This is expensive for deep trees. 
+        # Better to store parent references in SceneNode if frequent removal is needed.
+        for parent in self.get_scene_objects_flattened():
+            if object_node in parent.children:
+                parent.children.remove(object_node)
+                return True
+        
+        return False
+
+    def remove_object_by_name(self, name: str) -> bool:
+        """Removes the first object found with the given name."""
+        obj = self.get_object(self.get_scene_objects_flattened(), name)
+        if obj:
+            return self.remove_object(obj)
+        return False
+
+    def reparent(self, object_node: SceneNode, new_parent: Optional[SceneNode]):
         """
-        Removes an object from the scene and updates the version counter.
+        Moves an object from its current parent (or root) to a new parent.
+        If new_parent is None, moves the object to the Scene root.
         """
-        if obj in self.objects:
-            self.objects.remove(obj)
-            self.update_version()
+        # 1. Remove from old location
+        removed = self.remove_object(object_node)
+        if not removed:
+            print(f"Warning: Object '{object_node.name}' not found in scene; cannot reparent.")
+            return
+
+        # 2. Add to new location
+        if new_parent is None:
+            self.objects.append(object_node)
+        else:
+            new_parent.add_child(object_node)
+
+
+    def print_hierarchy(self):
+        """Prints a visual tree structure of the scene to the console."""
+        print(f"Scene: {self.name}")
+        for obj in self.objects:
+            self._print_node_recursive(obj, prefix="", is_last=True)
+
+    def _print_node_recursive(self, node: SceneNode, prefix: str, is_last: bool):
+        # Visual connectors
+        connector = "└── " if is_last else "├── "
+        print(f"{prefix}{connector}{node.name} ({type(node.context).__name__ if node.context else 'Group'})")
+        
+        # Prepare prefix for children
+        child_prefix = prefix + ("    " if is_last else "│   ")
+        
+        count = len(node.children)
+        for i, child in enumerate(node.children):
+            is_last_child = (i == count - 1)
+            self._print_node_recursive(child, child_prefix, is_last_child)
+
+    def get_stats(self) -> dict:
+        """Returns a dictionary summary of the scene content."""
+        all_objs = self.get_scene_objects_flattened()
+        
+        # Count types
+        type_counts = {}
+        for obj in all_objs:
+            t_name = type(obj.context).__name__ if obj.context else "EmptyNode"
+            type_counts[t_name] = type_counts.get(t_name, 0) + 1
+
+        return {
+            "total_objects": len(all_objs),
+            "root_objects": len(self.objects),
+            "type_breakdown": type_counts
+        }
     
     def set_camera(self, camera: Camera):
         """

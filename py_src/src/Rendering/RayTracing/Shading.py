@@ -257,20 +257,25 @@ class DistanceShading(ShadingStrategy):
             settings: Optional[ShadingSettings] = None,
             min_distance: float = 0.0,
             max_distance: float = 20.0,
-            color_gradient: Optional[ColorGradient] = None
+            color_gradient: Optional[ColorGradient] = None,
+            interpolation_function: Callable[[float], float] = lambda x: x,
+            invert_colors: bool = False,
             ):
         super().__init__(settings)
         self.min_dist = min_distance
         self.max_dist = max_distance
 
         if color_gradient is None:
-            # Default: Black (0.0) -> White (1.0)
+            # Default: Black (0.0) -> White (1.0) with no inversion
             self.color_gradient = ColorGradient(
                 [Color(0, 0, 0), Color(1, 1, 1)], 
                 np.array([0.0, 1.0])
             )
         else:
             self.color_gradient = color_gradient
+        
+        self.interpolation_function = interpolation_function
+        self.invert_colors = invert_colors
 
     def shade(self, hit_info: HitInfo, *args, **kwargs) -> Color:
         dist = hit_info.distance
@@ -290,8 +295,10 @@ class DistanceShading(ShadingStrategy):
         # 3. Clamp between 0.0 and 1.0
         # (This handles both 'too close' and 'too far' cases)
         val = max(0.0, min(1.0, val))
+
+        val = 1 - val if self.invert_colors else val 
         
-        return self.color_gradient.get_color(val)
+        return self.color_gradient.get_color(val, self.interpolation_function)
 
 class FlatShading(ShadingStrategy):
     """
@@ -481,13 +488,13 @@ class PhysicalShadingStrategy(ShadingStrategy):
         if not self.shadow_settings.enabled:
             return 1.0
         
-        if not isinstance(light_node.context, "Light"):
+        if not isinstance(light_node.context, Light):
             return 1.0  # Non-light objects do not cast shadows
         
         light = cast(Light, light_node.context)
 
         radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
-        occluding_objects = Scene.get_objects_by_types(scene.get_scene_objects_flattened(), ["SDF_Material", "Mesh_Material"])
+        occluding_objects = Scene.get_objects_with_attribute(scene.get_scene_objects_flattened(), "material")
         
         # Case A: Point SceneNode (Hard Shadows)
         if radius <= 0.0 or self.shadow_settings.samples <= 1:
@@ -639,9 +646,7 @@ class LambertShading(PhysicalShadingStrategy):
         if not hit_info.hit:
             return Color(0.0, 0.0, 0.0)  # No hit, return black
         
-        hit_obj = cast(SceneNode, hit_info.obj)
-        
-        material: Optional[PBRMaterial] = getattr(hit_obj.context, 'material', None)
+        material: Optional[PBRMaterial] = getattr(cast(SceneNode, hit_info.obj).context, 'material', None)
         if material is None:
             return Color(1.0, 0.0, 1.0) # Material Error
 
@@ -682,7 +687,7 @@ class LambertShading(PhysicalShadingStrategy):
         # 4. Evaluate Direct Lighting
         # The material class already contains the logic to loop over lights
         # and apply the BRDF (Diffuse + Specular).
-        light_nodes = Scene.get_objects_by_type(scene.get_scene_objects_flattened(), "Light")
+        light_nodes = Scene.get_objects_by_type(scene.get_scene_objects_flattened(), Light)
         if light_nodes is None or len(light_nodes) == 0:
             return final_color  # No lights in scene
         

@@ -117,23 +117,17 @@ class Transform:
 
     def update_orientations(self):
         """Updates forward/right/up vectors based on current rotation."""
-        rx, ry, rz = self.rotation + self.local_rotation
-        cx, sx = np.cos(rx), np.sin(rx)
-        cy, sy = np.cos(ry), np.sin(ry)
-        cz, sz = np.cos(rz), np.sin(rz)
+        mat = self.get_global_matrix()
         
-        # Rotation Matrix (Z * Y * X)
-        R = np.array([
-            [cy*cz, cz*sx*sy - cx*sz, cx*cz*sy + sx*sz],
-            [cy*sz, cx*cz + sx*sy*sz, -cz*sx + cx*sy*sz],
-            [-sy,   cy*sx,            cx*cy]
-        ])
+        # Extract columns (Right, Up, Forward)
+        r = mat[:3, 0]
+        u = mat[:3, 1]
+        f = mat[:3, 2]
         
-        # Basis Vectors
-        # Assuming standard identity is Right=(1,0,0), Up=(0,1,0), Forward=(0,0,1)
-        self.right   = R @ np.array([1, 0, 0])
-        self.up      = R @ np.array([0, 1, 0])
-        self.forward = R @ np.array([0, 0, 1])
+        # Normalize to remove scale
+        self.right = unit(r)
+        self.up = unit(u)
+        self.forward = unit(f)
 
     def get_global_matrix(self) -> np.ndarray:
         """Returns the global transformation matrix: base @ local."""
@@ -195,9 +189,9 @@ class Transform:
         else: self.local_position += vector
         self.update_orientations()
 
-    def rotate(self, angle: float, axis: np.ndarray, space: str = "global"):
+    def rotate(self, angle: float, axis: np.ndarray, units: str = "degrees", space: str = "global"):
         axis = unit(axis)
-        angle_rad = angle
+        angle_rad = angle if units == "radians" or units == "rad" or units == "r" else (np.deg2rad(angle) if units == "degrees" or units == "deg" or units == "d" else 0)
         if space == "global":
             rot_matrix = self._rotation_matrix_from_euler(self.rotation)
             axis_local = rot_matrix.T @ axis

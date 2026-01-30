@@ -96,6 +96,11 @@
                 "name": ".venv",
                 "envManager": "ms-python.python:venv",
                 "packageManager": "ms-python.python:pip"
+            },
+            {
+                "path": "",
+                "envManager": "ms-python.python:venv",
+                "packageManager": "ms-python.python:pip"
             }
         ]
     }
