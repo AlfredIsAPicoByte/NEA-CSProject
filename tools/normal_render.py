@@ -6,7 +6,7 @@ from tests.test_scenes import get_minimal_scene
 from src.Rendering.Raytracing import RayTracer
 from src.Rendering.Intersections import BVHIntersection
 from src.Rendering.Interactions import TerminalInteraction
-from src.Rendering.Shading import NormalShading
+from src.Rendering.RayTracing.Shading import NormalShading
 from src.Utilities.Sampling import SampleSettings, RandomSampler
 from src.Image.Film import Film
 import numpy as np

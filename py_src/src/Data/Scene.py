@@ -34,7 +34,7 @@ class SceneNode:
         # Ensure children know their parent
         for child in self.children:
             child.parent = self
-
+        
     def add_child(self, child: 'SceneNode'):
         """Attaches a child node to this node."""
         if child not in self.children:
