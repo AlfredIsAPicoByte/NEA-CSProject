@@ -7,7 +7,6 @@ py_src_root = os.path.abspath(os.path.join(current_dir, os.pardir))
 project_root = os.path.abspath(os.path.join(current_dir, os.pardir, os.pardir))
 sys.path.insert(0, py_src_root)
 sys.path.insert(0, project_root)
-# Ensure the tests directory is on sys.path so local test modules can be imported by name
 sys.path.insert(0, current_dir)
 
 from src.Data.Transform import Transform
@@ -139,8 +138,8 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     scene.add_object_by_context(v_s2, "StudioBallB", Transform(np.array([0.8, 0.45, 0.2])))
 
     mat_plane = MaterialFactory.create_diffuse(Color.from_hex("#C1CBD0"), roughness=1.0)
-    v_plane = SDF_Material(Rectangle(np.array([7, 2])), mat_plane)
-    scene.add_object_by_context(v_plane, "StudioBack", Transform(np.array([0.0, 0.0, 4.0]), np.array([np.deg2rad(90), 0.0, 0.0])))
+    v_plane = SDF_Material(ShapeExtrusion(Rectangle(np.array([7, 10])), 0.1), mat_plane)
+    scene.add_object_by_context(v_plane, "StudioBack", Transform(np.array([0.0, 0.6, 7.0]), np.array([np.deg2rad(0), 0.0, 0.0])))
 
     # Lights
     key = Light(color=Color.from_hex("#EEE0BA"), intensity=2500.0, radius=100)
@@ -192,35 +191,35 @@ def get_rgb_cornell_box_scene(width: int = 126, height: int = 126) -> Scene:
     
     # Floor (XY Rect -> Rotated 90 X -> XZ Plane)
     scene.add_object_by_context(
-        SDF_Material(Rectangle(np.array([w, d])), mat_white), 
+        SDF_Material(ShapeExtrusion(Rectangle(np.array([w, d])), 0.1), mat_white), 
         "Floor", 
         Transform(np.array([0.0, room_y[0], 0.0]), np.array([np.deg2rad(90), 0.0, 0.0]))
     )
 
     # Ceiling (XY Rect -> Rotated 90 X -> XZ Plane)
     scene.add_object_by_context(
-        SDF_Material(Rectangle(np.array([w, d])), mat_white), 
+        SDF_Material(ShapeExtrusion(Rectangle(np.array([w, d])), 0.1), mat_white), 
         "Ceiling", 
         Transform(np.array([0.0, room_y[1], 0.0]), np.array([np.deg2rad(90), 0.0, 0.0]))
     )
 
     # Back Wall (XY Rect -> No Rotation -> XY Plane at back Z)
     scene.add_object_by_context(
-        SDF_Material(Rectangle(np.array([w, h])), mat_blue),
+        SDF_Material(ShapeExtrusion(Rectangle(np.array([w, h])), 0.1), mat_blue),
         "BackWall", 
         Transform(np.array([0.0, y_center, room_z[1]]), np.array([0.0, 0.0, 0.0]))
     )
 
     # Left Wall (XY Rect -> Rotated 90 Y -> YZ Plane)
     scene.add_object_by_context(
-        SDF_Material(Rectangle(np.array([d, h])), mat_red), 
+        SDF_Material(ShapeExtrusion(Rectangle(np.array([d, h])), 0.1), mat_red), 
         "LeftWall", 
         Transform(np.array([room_x[0], y_center, 0.0]), np.array([0.0, np.deg2rad(90), 0.0]))
     )
 
     # Right Wall (XY Rect -> Rotated 90 Y -> YZ Plane)
     scene.add_object_by_context(
-        SDF_Material(Rectangle(np.array([d, h])), mat_green), 
+        SDF_Material(ShapeExtrusion(Rectangle(np.array([d, h])), 0.1), mat_green), 
         "RightWall", 
         Transform(np.array([room_x[1], y_center, 0.0]), np.array([0.0, np.deg2rad(90), 0.0]))
     )

@@ -367,7 +367,7 @@ class InverseSDFIntersection(IntersectionStrategy):
         ) -> HitInfo:
         closest_hit = HitInfo.miss()
         
-        for obj in scene.get_scene_objects_flattened():
+        for obj in scene.cache_scene_nodes_flat():
             if not obj.active:
                 continue
 
@@ -413,11 +413,11 @@ class BVHIntersection(IntersectionStrategy):
             print(f" < Building Hierarchy for scene objects...")
             
             # Update world matrices for all root objects
-            for obj in scene.objects:
+            for obj in scene.cache_scene_nodes_flat():
                 obj.update_matrices()
             
             # Get all objects including children
-            all_objects = scene.get_scene_objects_flattened()
+            all_objects = scene.cache_scene_nodes_flat()
             
             self._cached_bvh_root = build_bvh_tree(all_objects)
             self._cached_scene_version = scene.version

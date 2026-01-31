@@ -1,5 +1,5 @@
 === Tracing Stats ===
-Time: 7.875s | Mem: 0.00MB
+Time: 2.740s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
   - Total:       9,216

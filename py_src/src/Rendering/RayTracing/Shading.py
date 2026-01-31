@@ -257,13 +257,16 @@ class DistanceShading(ShadingStrategy):
             settings: Optional[ShadingSettings] = None,
             min_distance: float = 0.0,
             max_distance: float = 20.0,
+            reference_point: np.ndarray = np.zeros(3),
             color_gradient: Optional[ColorGradient] = None,
-            interpolation_function: Callable[[float], float] = lambda x: x,
             invert_colors: bool = False,
+            interpolation_function: Callable[[float], float] = lambda x: x,
             ):
         super().__init__(settings)
-        self.min_dist = min_distance
-        self.max_dist = max_distance
+        self.min_dist = max(min_distance, 0)
+        self.max_dist = min(max_distance, np.inf)
+
+        self.reference_point = reference_point
 
         if color_gradient is None:
             # Default: Black (0.0) -> White (1.0) with no inversion
@@ -274,11 +277,11 @@ class DistanceShading(ShadingStrategy):
         else:
             self.color_gradient = color_gradient
         
-        self.interpolation_function = interpolation_function
         self.invert_colors = invert_colors
+        self.interpolation_function = interpolation_function
 
     def shade(self, hit_info: HitInfo, *args, **kwargs) -> Color:
-        dist = hit_info.distance
+        dist = float(np.linalg.norm(self.reference_point - hit_info.point))
 
         if dist < 0:
             return Color(0.0, 1.0, 0.0) # Debug: Negative Distance is usually an error
@@ -288,12 +291,9 @@ class DistanceShading(ShadingStrategy):
         if range_dist == 0: range_dist = 1.0
         
         # 2. Normalize and Invert in one step
-        # Original: normalized = (dist - min) / range; val = 1.0 - normalized
-        # Optimized: val = (max - dist) / range
         val = (self.max_dist - dist) / range_dist
         
         # 3. Clamp between 0.0 and 1.0
-        # (This handles both 'too close' and 'too far' cases)
         val = max(0.0, min(1.0, val))
 
         val = 1 - val if self.invert_colors else val 
@@ -494,7 +494,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
         light = cast(Light, light_node.context)
 
         radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
-        occluding_objects = Scene.get_objects_with_attribute(scene.get_scene_objects_flattened(), "material")
+        occluding_objects = Scene.get_objects_with_attribute(scene.cache_scene_nodes_flat(), "material")
         
         # Case A: Point SceneNode (Hard Shadows)
         if radius <= 0.0 or self.shadow_settings.samples <= 1:
@@ -543,7 +543,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
         light = cast(Light, light_node.context)
 
         radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
-        occluding_objects = Scene.get_objects_by_types(scene.get_scene_objects_flattened(), ["SDF_Material", "Mesh_Material"])
+        occluding_objects = Scene.get_objects_by_types(scene.cache_scene_nodes_flat(), ["SDF_Material", "Mesh_Material"])
         
         # Case A: Point SceneNode (Hard Shadows)
         if radius <= 0.0 or self.shadow_settings.samples <= 1:
@@ -607,7 +607,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
         height = scene.camera.height
 
         ao_map = np.zeros((height, width), dtype=float)
-        occluding_objects = Scene.get_objects_by_types(scene.get_scene_objects_flattened(), ["SDF_Material", "Mesh_Material"])
+        occluding_objects = Scene.get_objects_by_types(scene.cache_scene_nodes_flat(), ["SDF_Material", "Mesh_Material"])
 
         for y in range(height):
             for x in range(width):
@@ -687,7 +687,7 @@ class LambertShading(PhysicalShadingStrategy):
         # 4. Evaluate Direct Lighting
         # The material class already contains the logic to loop over lights
         # and apply the BRDF (Diffuse + Specular).
-        light_nodes = Scene.get_objects_by_type(scene.get_scene_objects_flattened(), Light)
+        light_nodes = Scene.get_objects_by_type(scene.cache_scene_nodes_flat(), Light)
         if light_nodes is None or len(light_nodes) == 0:
             return final_color  # No lights in scene
         

@@ -315,7 +315,7 @@ class RayTracer(Algorithm):
             self.render_tile(scene, sampler, region_x, region_y, region_width, region_height)
 
         self.stats.pixels_processed = pixels_processed
-        self.stats.lights_sampled = len(Scene.get_objects_by_type(scene.get_scene_objects_flattened(), "Light"))
+        self.stats.lights_sampled = len(Scene.get_nodes_by_type(scene.cache_scene_nodes_flat(), "Light"))
         self.stats.stop_timer()
 
         if self.settings.verbose_logging:

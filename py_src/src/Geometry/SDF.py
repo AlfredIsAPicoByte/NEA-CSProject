@@ -637,14 +637,23 @@ class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
         return point[:3] / dist
 
     def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Ray is in-plane, use 2D intersection
+        origin_2d = ray.origin[:2]
+        direction_2d = ray.direction[:2]
+
         # Ray-circle intersection in 2D
         origin_2d = ray.origin[:2]
+
         # Ensure direction is normalized
         direction_2d = ray.direction[:2] 
         dir_len = np.linalg.norm(direction_2d)
         if dir_len == 0: return []
-        direction_2d /= dir_len
 
+        direction_2d /= dir_len
         a = 1.0 # Since direction is normalized
         b = 2 * np.dot(origin_2d, direction_2d)
         c = np.dot(origin_2d, origin_2d) - self.radius ** 2
@@ -652,7 +661,7 @@ class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
         discriminant = b ** 2 - 4 * a * c
         if discriminant < 0:
             return []
-
+        
         sqrt_disc = np.sqrt(discriminant)
         t1 = (-b - sqrt_disc) / (2 * a)
         t2 = (-b + sqrt_disc) / (2 * a)
@@ -703,98 +712,6 @@ class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
             y = self.radius * np.sin(angle)
             points.append(np.array([x, y, 0]))
         return points
-    
-class Square(SignedDistanceShape2D, CorrespondingBoundingBox):
-    """
-    A simple 2D square shape defined by a signed distance function.
-    Centered at the origin with a given half-size.
-    """
-    def __init__(self, size: float = 1.0):
-        self.half_size = size / 2
-
-    def get_distance(self, point: np.ndarray) -> float:
-        dx = abs(point[0]) - self.half_size
-        dy = abs(point[1]) - self.half_size
-        outside_dist = np.maximum(dx, dy)
-        inside_dist = np.minimum(np.maximum(dx, dy), 0)
-        return outside_dist + inside_dist
-
-    def get_gradient(self, point: np.ndarray) -> np.ndarray:
-        # Gradient approximation for square
-        grad = np.zeros(2)
-        if abs(point[0]) > self.half_size:
-            grad[0] = np.sign(point[0])
-        if abs(point[1]) > self.half_size:
-            grad[1] = np.sign(point[1])
-        norm = np.linalg.norm(grad)
-        if norm > 0:
-            return grad / norm
-        return np.array([0.0, 0.0])
-    
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
-        origin_2d = ray.origin[:2]
-        direction_2d = ray.direction[:2]
-        
-        # Handle small direction components to avoid div by zero
-        inv_dir = np.zeros_like(direction_2d)
-        with np.errstate(divide='ignore'):
-            inv_dir = 1.0 / direction_2d
-        
-        tmin = (-self.half_size - origin_2d) * inv_dir
-        tmax = (self.half_size - origin_2d) * inv_dir
-
-        t1 = np.minimum(tmin, tmax)
-        t2 = np.maximum(tmin, tmax)
-
-        t_enter = np.max(t1)
-        t_exit = np.min(t2)
-
-        if t_exit >= t_enter and t_enter < max_t:
-            hits = []
-            if t_enter > 0: hits.append(t_enter)
-            if t_exit > 0: hits.append(t_exit)
-            return sorted(list(set(hits))) # remove duplicates if corner hit
-        
-        return []
-
-    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
-        u = (point[0] + self.half_size) / (2 * self.half_size)
-        v = (point[1] + self.half_size) / (2 * self.half_size)
-        return u, v
-    
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        r = self.half_size * 2 + padding
-
-        local_bounds = np.array([
-            [-r, -r, 0], [r, -r, 0],
-            [-r, r, 0],  [r, r, 0]
-        ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
-    
-    @property
-    def perimeter(self) -> float:
-        return 8 * self.half_size
-
-    @property
-    def area(self) -> float:
-        return (2 * self.half_size) ** 2
-
-    @property
-    def is_convex(self) -> bool:
-        return True
-    
-    def get_convex_hull(self) -> List[np.ndarray]:
-        points = [
-            np.array([-self.half_size, -self.half_size, 0]),
-            np.array([ self.half_size, -self.half_size, 0]),
-            np.array([ self.half_size,  self.half_size, 0]),
-            np.array([-self.half_size,  self.half_size, 0])
-        ]
-        return points
 
 class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
     """
@@ -824,6 +741,10 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
         return np.array([0.0, 1.0, 0.0])
     
     def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
         origin_2d = ray.origin[:2]
         direction_2d = ray.direction[:2]
         
@@ -888,6 +809,14 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
         ]
         return points
 
+class Square(Rectangle):
+    """
+    A simple 2D square shape defined by a signed distance function.
+    Centered at the origin with a given half-size.
+    """
+    def __init__(self, size: float = 1.0):
+        self.half_size = np.array([size / 2, size / 2])
+
 class Triangle(SignedDistanceShape2D, CorrespondingBoundingBox):
     """
     A simple 2D triangle shape defined by a signed distance function.
@@ -939,11 +868,28 @@ class Triangle(SignedDistanceShape2D, CorrespondingBoundingBox):
         return np.array([dx, dy, 0]) / (2*h)
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
-        # Simple barycentric placeholder: project onto plane and return normalized UV inside triangle bounds.
-        # This is sufficient to satisfy tests that only require the method to exist.
-        return 0.0, 0.0
+        # Barycentric coordinates for UV mapping
+        p = point[:2]
+        v0, v1, v2 = self.v0[:2], self.v1[:2], self.v2[:2]
+        
+        denom = (v1[1] - v2[1]) * (v0[0] - v2[0]) + (v2[0] - v1[0]) * (v0[1] - v2[1])
+        if denom == 0:
+            return 0.0, 0.0  # Degenerate triangle
+        
+        a = ((v1[1] - v2[1]) * (p[0] - v2[0]) + (v2[0] - v1[0]) * (p[1] - v2[1])) / denom
+        b = ((v2[1] - v0[1]) * (p[0] - v2[0]) + (v0[0] - v2[0]) * (p[1] - v2[1])) / denom
+        c = 1.0 - a - b
+        
+        # Map barycentric to UV space (simple linear mapping)
+        u = a * 0.0 + b * 1.0 + c * 0.5  # Example UV mapping
+        v = a * 0.0 + b * 0.0 + c * 1.0
+        return u, v
     
     def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
         # Möller–Trumbore intersection algorithm
         epsilon = 1e-8
         
@@ -1040,6 +986,10 @@ class Ellipse(SignedDistanceShape2D, CorrespondingBoundingBox):
         return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
 
     def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
         ox = ray.origin[0] / self.radius_x
         oy = ray.origin[1] / self.radius_y
         dx = ray.direction[0] / self.radius_x
@@ -1104,14 +1054,19 @@ class Plane(SignedDistanceShape3D, CorrespondingBoundingBox):
         return self.normal
 
     def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+
         denom = np.dot(self.normal, ray.direction)
+
+        if abs(denom) < 1e-6:
+            return []  # Parallel, no intersection
         
-        # Check if ray is not parallel to the plane
-        if abs(denom) > 1e-6:
-            t = -(np.dot(self.normal, ray.origin) + self.d) / denom
-            if 0 <= t < max_t:
-                return [t]
-                
+        t = -(np.dot(self.normal, ray.origin) + self.d) / denom
+        if 0 < t < max_t:
+            return [t]
+        
         return []
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
