@@ -3,8 +3,9 @@ from typing import List, Optional, Union, Any, Tuple, Callable
 from dataclasses import dataclass, field
 
 from .Transform import Transform
+from .Context import *
 from .Camera import Camera
-from src.Geometry.AABB import AABB
+from src.Geometry.AABB import AABB, transform_bounds
 
 @dataclass
 class SceneNode:
@@ -96,39 +97,21 @@ class SceneNode:
         return Transform.from_matrix(self.get_local_matrix())
     
     def get_local_bounds(self) -> Optional[np.ndarray]:
-        """
-        Docstring for get_local_bounds
-
-        :return: The local
-        :rtype: np.ndarray
-        """
-        if hasattr(self.context, "bounding_box"):
-            bounds = self.context.get_local_bounds() # shape (2,3)
-            
-            indicies = np.array([
-                [0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0],
-                [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]
-            ])
-            
-            corners = np.stack([
-                bounds[indicies[:,0], 0], # X coords
-                bounds[indicies[:,1], 1], # Y coords
-                bounds[indicies[:,2], 2]  # Z coords
-            ], axis=1)
-            return self.context.bounding_box
+        if self.context is None:
+            return None
+        
+        if isinstance(self.context, SDF_Material) and hasattr(self.context.shape, "get_local_corners") and callable(self.context.shape.get_local_corners):
+            return self.context.shape.get_local_corners(padding)
         
         return None
     
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float):
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray):
         local_bounds = self.get_local_bounds()
         if local_bounds is None:
-            return AABB.unit_cube()
+            return None
         
-        world_bounds = AABB.transform_local_bounds_to_world_bounds(transformation_matrix, local_bounds)
-
-        min_p = np.min(world_bounds, axis=0) - padding
-        max_p = np.max(world_bounds, axis=0) + padding
-        return AABB(min_p, max_p)
+        transformed_bounds = transform_bounds(transformation_matrix, local_bounds)
+        return transformed_bounds
     
     def __hash__(self):
         return id(self)

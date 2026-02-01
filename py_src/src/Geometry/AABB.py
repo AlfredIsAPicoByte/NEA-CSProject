@@ -3,7 +3,7 @@ from turtle import Shape
 import numpy as np
 from typing import Any
 
-from src.Data.Transform import Transform
+from src.Data.Transform import Transform, BOUNDING_INDICES
 from src.Data.Ray import Ray
 from .Operations import *
 
@@ -44,12 +44,6 @@ class AABB:
             return max(t_enter, 0.0)
         
         return float('inf')
-    
-    @staticmethod
-    def transform_local_bounds_to_world_bounds(transformation_matrix: np.ndarray, local_bounds: np.ndarray) -> np.ndarray:
-        corners_4d = np.hstack([local_bounds, np.ones((8, 1))])
-
-        return (transformation_matrix @ corners_4d.T).T[:, :3]
 
     @staticmethod
     def combine(box_a: 'AABB', box_b: 'AABB', operation: str) -> 'AABB':
@@ -98,3 +92,50 @@ class AABB:
     
     def __repr__(self) -> str:
         return f"AABB(min={self.min_point}, max={self.max_point})"
+
+def transform_corners(matrix: np.ndarray, corners: np.ndarray) -> np.ndarray:
+    """Helper function to transform a set of corners (8 points)."""
+    ones = np.ones((len(corners), 1))
+    corners_4d = np.hstack([corners, ones])
+    transformed_corners = (matrix @ corners_4d.T).T[:, :3]
+    return transformed_corners
+    
+BOUNDING_INDICES = np.array([
+    [0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0],
+    [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]
+])
+
+def transform_bounds(matrix: np.ndarray, bounds: np.ndarray) -> np.ndarray:
+    """Helper function to transform a bounding box"""
+    corners = np.stack([
+        bounds[BOUNDING_INDICES[:,0], 0], # X coords
+        bounds[BOUNDING_INDICES[:,1], 1], # Y coords
+        bounds[BOUNDING_INDICES[:,2], 2]  # Z coords
+    ], axis=1)
+    
+    transformed_corners = transform_corners(matrix, corners)
+    min_point = np.min(transformed_corners, axis=0)
+    max_point = np.max(transformed_corners, axis=0)
+    return np.array([min_point, max_point])
+
+def convert_bounds_to_corners(min_p: np.ndarray, max_p: np.ndarray) -> np.ndarray:
+    bounds = np.array([min_p, max_p])
+    corners = np.stack([
+        bounds[BOUNDING_INDICES[:,0], 0], # X coords
+        bounds[BOUNDING_INDICES[:,1], 1], # Y coords
+        bounds[BOUNDING_INDICES[:,2], 2]  # Z coords
+    ], axis=1)
+    return corners
+
+def convert_bounds_to_corners_2d(min_p: np.ndarray, max_p: np.ndarray) -> np.ndarray:
+    bounds = np.array([min_p, max_p])
+    corners = np.stack([
+        bounds[BOUNDING_INDICES[:,0], 0], # X coords
+        bounds[BOUNDING_INDICES[:,1], 1], # Y coords
+    ], axis=1)
+    return corners
+
+def convert_corners_to_bounds(corners: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    min_p = np.min(corners, axis=0)
+    max_p = np.max(corners, axis=0)
+    return min_p, max_p
