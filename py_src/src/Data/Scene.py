@@ -102,7 +102,20 @@ class SceneNode:
         :return: The local
         :rtype: np.ndarray
         """
-
+        if hasattr(self.context, "bounding_box"):
+            bounds = self.context.get_local_bounds() # shape (2,3)
+            
+            indicies = np.array([
+                [0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0],
+                [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]
+            ])
+            
+            corners = np.stack([
+                bounds[indicies[:,0], 0], # X coords
+                bounds[indicies[:,1], 1], # Y coords
+                bounds[indicies[:,2], 2]  # Z coords
+            ], axis=1)
+            return self.context.bounding_box
         
         return None
     
