@@ -47,8 +47,7 @@ class AABB:
     
     @staticmethod
     def transform_local_bounds(transformation_matrix: np.ndarray, local_bounds: np.ndarray) -> np.ndarray:
-        ones = np.ones((len(local_bounds), 1))
-        corners_4d = np.hstack([local_bounds, ones])
+        corners_4d = np.hstack([local_bounds, np.ones((8, 1))])
 
         return (transformation_matrix @ corners_4d.T).T[:, :3]
 
