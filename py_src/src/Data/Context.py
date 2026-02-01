@@ -24,11 +24,6 @@ class SDF_Material:
             raise TypeError("shape must be an instance of SignedDistanceShape")
         if not isinstance(self.material, PBRMaterial):
             raise TypeError("material must be an instance of Material")
-    
-        if isinstance(self.shape, CorrespondingBoundingBox):
-            self.bounding_box = self.shape.get_transformed_aabb(np.eye(4))
-        else:
-            self.bounding_box = AABB.unit_cube()
 
 @dataclass
 class Mesh_Material:
@@ -43,6 +38,4 @@ class Mesh_Material:
             raise TypeError("mesh must be an instance of Mesh")
         if not isinstance(self.material, PBRMaterial):
             raise TypeError("material must be an instance of Material")
-    
-        self.bounding_box = self.mesh.get_transformed_aabb(np.eye(4))
     

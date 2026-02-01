@@ -72,9 +72,7 @@ if __name__ == "__main__":
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
-    img_width, img_height = 16 * 8, 9 * 8
-
-    # 16 * 32, 9 * 32
+    img_width, img_height = 480, 270
 
     all_scenes = [
         get_minimal_scene(img_width, img_height),
@@ -102,18 +100,18 @@ if __name__ == "__main__":
     ]
 
     sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.GAUSSIAN, filter_width=2)
-    sampling_manager = SamplingManager(sample_settings, "halton")
+    sampling_manager = SamplingManager(sample_settings, "adaptive")
 
     for scene in all_scenes:
         intersection = BVHIntersection(IntersectionSettings(
             max_distance=1000,
             max_steps=256
         ))
-        
-        shading = FlatShading(PhysicalShadingSettings(
-            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
+
+        shading = NormalShading(PhysicalShadingSettings(
+            ambience_settings=AmbienceSettings(False, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
-            background_settings=BackgroundSettings(True, Color.from_hex("#282838"), getattr(scene, "background_color", None), False)
+            background_settings=BackgroundSettings(False, Color.from_hex("#283848"), getattr(scene, "background_color", None), False)
         ))
 
         raytracer = RayTracer(RayTracingSettings(
@@ -124,7 +122,7 @@ if __name__ == "__main__":
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,
-            tile_size=64,
+            tile_size=32,
             debug_mode=args.debug,
             verbose_logging=args.verbose
         ))

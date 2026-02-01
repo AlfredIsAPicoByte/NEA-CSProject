@@ -95,18 +95,27 @@ class SceneNode:
         # Ensure matrices are up-to-date
         return Transform.from_matrix(self.get_local_matrix())
     
-    def get_bounds(self) -> AABB:
+    def get_local_bounds(self) -> Optional[np.ndarray]:
         """
-        Delegates the bounds calculation to the data object if it exists.
+        Docstring for get_local_bounds
+
+        :return: The local
+        :rtype: np.ndarray
         """
-        # Check if context exists and has the method we need
-        if self.context is None:
-            return AABB.empty()
+
         
-        if hasattr(self.context, "bounding_box"):
-            return self.context.bounding_box
+        return None
+    
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float):
+        local_bounds = self.get_local_bounds()
+        if local_bounds is None:
+            return AABB.unit_cube()
         
-        return AABB.unit_cube()
+        world_bounds = AABB.transform_local_bounds_to_world_bounds(transformation_matrix, local_bounds)
+
+        min_p = np.min(world_bounds, axis=0) - padding
+        max_p = np.max(world_bounds, axis=0) + padding
+        return AABB(min_p, max_p)
     
     def __hash__(self):
         return id(self)
@@ -179,7 +188,7 @@ class Scene:
         return None
 
     @staticmethod
-    def get_object_by_id(nodes: list[SceneNode], id: int) -> Optional[SceneNode]:
+    def get_node_by_id(nodes: list[SceneNode], id: int) -> Optional[SceneNode]:
         for node in nodes:
             if hash(node) == id:
                 return node
@@ -393,7 +402,7 @@ class Scene:
         # 2. Check children (recursive search)
         # Note: This is expensive for deep trees. 
         # Better to store parent references in SceneNode if frequent removal is needed.
-        for parent in self.get_scene_nodes_flattened():
+        for parent in self.cache_scene_nodes_flat():
             if object_node in parent.children:
                 parent.children.remove(object_node)
                 return True
@@ -402,7 +411,7 @@ class Scene:
 
     def remove_object_by_name(self, name: str) -> bool:
         """Removes the first object found with the given name."""
-        node = self.get_node(self.get_scene_nodes_flattened(), name)
+        node = self.get_node(self.cache_scene_nodes_flat(), name)
         if node:
             return self.remove_node(node)
         return False
@@ -445,7 +454,7 @@ class Scene:
 
     def get_scene_summary(self) -> dict:
         """Returns a dictionary summary of the scene content."""
-        all_objs = self.get_scene_nodes_flattened()
+        all_objs = self.cache_scene_nodes_flat()
         
         # Count types
         type_counts = {}

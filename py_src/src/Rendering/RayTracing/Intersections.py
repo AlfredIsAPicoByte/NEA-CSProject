@@ -441,6 +441,13 @@ class BVHIntersection(IntersectionStrategy):
             # LEAF: Test Objects
             if node.objects:
                 for obj in node.objects:
+                    if self.settings.use_aabb_bounding_box:
+                        box = obj._aabb_bounds()
+                        t_box = box.intersect(ray, self.settings.max_distance)
+                        if stats: stats.aabb_tests += 1
+                        if t_box == float('inf'):
+                            continue
+
                     hit = self._intersect_sdf_object(obj, ray, stats)
                     if hit.hit:
                         if scene.camera:
@@ -565,7 +572,7 @@ class AnalyticalIntersection(IntersectionStrategy):
         closest_point = None
         min_dist = float("inf")
         
-        safe_objects = scene._cache_objects or scene.objects
+        safe_objects = scene.cache_scene_nodes_flat()
         sign_modifier = -1.0 if ray.is_inside else 1.0
 
         for obj in safe_objects:

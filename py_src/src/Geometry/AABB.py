@@ -15,8 +15,8 @@ class AABB:
     __slots__ = ['min_point', 'max_point']
 
     def __init__(self, min_point: np.ndarray, max_point: np.ndarray):
-        self.min_point = min_point
-        self.max_point = max_point
+        self.min_point = np.minimum(min_point, max_point)
+        self.max_point = np.maximum(max_point, min_point)
 
     def intersect(self, ray: Ray, max_t: float =  1e30, bias: float = 1e-9) -> float:
         """
@@ -46,64 +46,11 @@ class AABB:
         return float('inf')
     
     @staticmethod
-    def transform_local_bounds(transformation_matrix: np.ndarray, local_bounds: np.ndarray) -> np.ndarray:
+    def transform_local_bounds_to_world_bounds(transformation_matrix: np.ndarray, local_bounds: np.ndarray) -> np.ndarray:
         ones = np.ones((len(local_bounds), 1))
         corners_4d = np.hstack([local_bounds, ones])
 
         return (transformation_matrix @ corners_4d.T).T[:, :3]
-
-    @staticmethod
-    def from_transform_data_object(world_Transform: Transform, data: Any, padding: float = 1e-2) -> 'AABB':
-        """
-        Calculates the world-space AABB for a given object.
-        """
-        if data is None:
-            return AABB(np.zeros(3), np.zeros(3))
-        
-        # 1. Get Transform Matrix
-        matrix = world_Transform.get_global_matrix()
-        
-        # 2. Define the 8 corners of a cube localy
-        local_bounds = None
-        
-        if data is not None:
-            # Try to get local bounds from data object
-            if hasattr(data, "get_local_bounds"):
-                local_bounds = data.get_local_bounds()
-
-            # Try to get convex hull points if available
-            if hasattr(data, "convex_hull"):
-                hull = data.convex_hull()
-                if isinstance(hull, list) and len(hull) > 0:
-                    local_bounds = np.array(hull)
-            
-            # Try to get vertex/point array if available
-            if hasattr(data, "vertices"):
-                verts = data.get_vertex_array()
-                if verts is not None and len(verts) > 0:
-                    local_bounds = verts
-            elif hasattr(data, "points"):
-                pts = data.get_point_array()
-                if pts is not None and len(pts) > 0:
-                    local_bounds = pts
-
-        # Fallback: Unit Cube (-0.5 to 0.5)
-        if local_bounds is None:
-            local_bounds = np.array([
-                [-0.5, -0.5, -0.5], [0.5, -0.5, -0.5], 
-                [-0.5, 0.5, -0.5], [0.5, 0.5, -0.5],
-                [-0.5, -0.5, 0.5],  [0.5, -0.5, 0.5],  
-                [-0.5, 0.5, 0.5],  [0.5, 0.5, 0.5]
-            ])
-        
-        # Apply Matrix (Scale, Rotate, Translate)
-        world_corners = AABB.transform_local_bounds(matrix, local_bounds)
-
-        # 3. Find min/max of transformed corners
-        min_p = np.min(world_corners, axis=0) - padding # Small padding
-        max_p = np.max(world_corners, axis=0) + padding
-        
-        return AABB(min_p, max_p)
 
     @staticmethod
     def combine(box_a: 'AABB', box_b: 'AABB', operation: str) -> 'AABB':

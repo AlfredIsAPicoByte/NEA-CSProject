@@ -84,15 +84,11 @@ class CorrespondingBoundingBox(ABC):
         pass
 
     @abstractmethod
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
         """
-        Compute the axis-aligned bounding box (AABB) of the shape after applying a transformation matrix.
-        
-        :param transformation_matrix: A 4x4 transformation matrix as a numpy array.
-        :param padding: A small padding value to expand the AABB.
-        :return: An AABB instance representing the transformed bounding box.
+        Compute the points that encapsulates an object
         """
-        raise NotImplementedError("AABB transformation not implemented for this shape.")
+        raise NotImplementedError("Local bounds not implemented for this shape.")
 
 class SignedDistanceShape(SignedDistanceFunction, SignedDistanceGradient):
     """
@@ -179,22 +175,6 @@ class SignedDistanceShape(SignedDistanceFunction, SignedDistanceGradient):
         :return: 2 for 2D shapes, 3 for 3D shapes.
         """
         return 3
-
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        """
-        Default AABB computation for SDF shapes.
-        """
-        r = 0.5 + padding
-
-        local_bounds = np.array([
-            [-r, -r, 0], [r, -r, 0],
-            [-r, r, 0],  [r, r, 0]
-        ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
 
 class SignedDistanceShape2D(SignedDistanceShape):
     """
@@ -309,41 +289,33 @@ class ShapeExtrusion(SignedDistanceShape3D, CorrespondingBoundingBox):
         v = (point[2] + self.half_height) / self.height
         return u, v
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
         """
         Calculates the 3D AABB by transforming the 2D shape's AABB (XY) + Height (Z).
         """
         # 1. Get the 2D bounding box (which lies on Z=0 in local 2D space)
-        # We pass an identity matrix because we want the LOCAL 2D bounds first
-        local_2d_aabb = self.shape_2d.get_transformed_aabb(np.identity(4), padding=0)
-        
-        min_2d = local_2d_aabb.min_point # [min_x, min_y, 0]
-        max_2d = local_2d_aabb.max_point # [max_x, max_y, 0]
+        local_bounds_2d = self.shape_2d.get_local_bounds()
         
         # 2. Construct the 3D Local Bounds
         # The 2D shape is XY. The Extrusion is Z.
-        
-        min_x = min_2d[0] - padding
-        max_x = max_2d[0] + padding
-        
-        min_y = min_2d[1] - padding
-        max_y = max_2d[1] + padding
-        
-        min_z = -self.half_height - padding
-        max_z =  self.half_height + padding
+        min_x = local_bounds_2d[0]
+        max_x = local_bounds_2d[0]
+
+        min_y = local_bounds_2d[1]
+        max_y = local_bounds_2d[1]
+
+        min_z = -self.half_height
+        max_z =  self.half_height
         
         # Create the 8 corners of the 3D box
-        local_corners = np.array([
+        local_bounds = np.array([
             [min_x, min_y, min_z], [max_x, min_y, min_z],
             [min_x, max_y, min_z], [max_x, max_y, min_z],
             [min_x, min_y, max_z], [max_x, min_y, max_z],
             [min_x, max_y, max_z], [max_x, max_y, max_z]
         ])
         
-        # 3. Transform these corners to World Space
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_corners)
-        
-        return AABB(np.min(world_bounds, axis=0), np.max(world_bounds, axis=0))
+        return local_bounds
 
     @property
     def volume(self) -> float:
@@ -421,10 +393,10 @@ class ShapeRevolution(SignedDistanceShape3D, CorrespondingBoundingBox):
         
         return u, v_profile
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
         # 1. Get the 2D bounding box
         # We pass identity because we want the local profile bounds first
-        local_2d_aabb = self.shape_2d.get_transformed_aabb(np.identity(4), padding=0)
+        local_2d_aabb = self.shape_2d.get_local_bounds()
         
         min_2d = local_2d_aabb.min_point
         max_2d = local_2d_aabb.max_point
@@ -440,7 +412,7 @@ class ShapeRevolution(SignedDistanceShape3D, CorrespondingBoundingBox):
         max_y = max_2d[1] + padding
         
         # X and Z bounds are determined by the revolution radius
-        local_corners = np.array([
+        local_bounds = np.array([
             [-max_radius, min_y, -max_radius],
             [ max_radius, min_y, -max_radius],
             [-max_radius, max_y, -max_radius],
@@ -450,11 +422,8 @@ class ShapeRevolution(SignedDistanceShape3D, CorrespondingBoundingBox):
             [-max_radius, max_y,  max_radius],
             [ max_radius, max_y,  max_radius],
         ])
-
-        # 4. Transform to World Space
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_corners)
         
-        return AABB(np.min(world_bounds, axis=0), np.max(world_bounds, axis=0))
+        return local_bounds
 
     @property
     def volume(self) -> float:
@@ -480,6 +449,9 @@ class ShapeCombination(SignedDistanceShape, CorrespondingBoundingBox):
     ray-marching the combined field.
     """
     def __init__(self, shape_a: SignedDistanceShape, shape_b: SignedDistanceShape):
+        if not (isinstance(shape_a, CorrespondingBoundingBox) or isinstance(shape_b, CorrespondingBoundingBox)):
+            raise NotImplementedError("Either shape doesnot inherit the bounding box logic")
+        
         self.shape_a = shape_a
         self.shape_b = shape_b
 
@@ -534,18 +506,17 @@ class ShapeCombination(SignedDistanceShape, CorrespondingBoundingBox):
         
         return []
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
         """
         Default AABB combination strategy (Union). 
         Subclasses can override this (e.g., Intersection).
         """
-        aabb_a = self.shape_a.get_transformed_aabb(transformation_matrix, padding)
-        aabb_b = self.shape_b.get_transformed_aabb(transformation_matrix, padding)
+        aabb_a = self.shape_a.get_local_bounds()
+        aabb_b = self.shape_b.get_local_bounds()
         
-        min_p = np.minimum(aabb_a.min_point, aabb_b.min_point)
-        max_p = np.maximum(aabb_a.max_point, aabb_b.max_point)
+        local_bounds = []
         
-        return AABB(min_p, max_p)
+        return local_bounds
 
 class ShapeUnion(ShapeCombination):
     """
@@ -563,20 +534,17 @@ class ShapeIntersection(ShapeCombination):
         return op_intersect(self.shape_a.get_distance(point),
                             self.shape_b.get_distance(point))
     
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        # Optimization: The intersection is strictly smaller than the smallest AABB.
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
+        # Optimization: The intersection is strictly smaller than the smallest bounds.
         # We can intersect the bounding boxes.
-        aabb_a = self.shape_a.get_transformed_aabb(transformation_matrix, padding)
-        aabb_b = self.shape_b.get_transformed_aabb(transformation_matrix, padding)
-        
-        min_p = np.maximum(aabb_a.min_point, aabb_b.min_point)
-        max_p = np.minimum(aabb_a.max_point, aabb_b.max_point)
+        aabb_a = self.shape_a.get_local_bounds()
+        aabb_b = self.shape_b.get_local_bounds()
         
         # Check if the boxes actually overlap; if not, return a degenerate box
-        if np.any(min_p > max_p):
-             return AABB.empty()
-             
-        return AABB(min_p, max_p)
+        
+        local_bounds = []
+        
+        return local_bounds
 
 class ShapeSubtraction(ShapeCombination):
     """
@@ -589,10 +557,15 @@ class ShapeSubtraction(ShapeCombination):
         return op_addition(self.shape_a.get_distance(point),
                            self.shape_b.get_distance(point))
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        # Optimization: The bounding box is just AABB(A). 
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
+        # Optimization: The bounding box is just the bounds of the first shape. 
         # Cutting a hole doesn't expand the outer bounds.
-        return self.shape_a.get_transformed_aabb(transformation_matrix, padding)
+        aabb_a = self.shape_a.get_local_bounds()
+        aabb_b = self.shape_b.get_local_bounds()
+
+        local_bounds = []
+
+        return local_bounds
 
 class ShapeSmoothUnion(ShapeCombination):
     """
@@ -678,18 +651,14 @@ class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
         v = 0.5  # Circle has no height variation
         return u, v
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
         r = self.radius + padding
 
         local_bounds = np.array([
             [-r, -r, 0], [r, -r, 0],
             [-r, r, 0],  [r, r, 0]
         ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+        return local_bounds
 
     @property
     def perimeter(self) -> float:
@@ -706,6 +675,7 @@ class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
     def get_convex_hull(self, resolution: int = 16) -> List[np.ndarray]:
         # Approximate the convex hull with a polygon (e.g., 16 points)
         points = []
+
         for i in range(resolution):
             angle = (i / resolution) * 2 * np.pi
             x = self.radius * np.cos(angle)
@@ -775,18 +745,14 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
         v = (point[1] + self.half_size[1]) / (2 * self.half_size[1])
         return u, v
     
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
         r = self.half_size * 2 + padding
 
         local_bounds = np.array([
             [-r[0], -r[1], 0], [r[0], -r[1], 0],
             [-r[0], r[1], 0],  [r[0], r[1], 0]
         ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+        return local_bounds
     
     @property
     def perimeter(self) -> float:
@@ -921,14 +887,8 @@ class Triangle(SignedDistanceShape2D, CorrespondingBoundingBox):
             
         return []
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        # Transform the three vertices
-        local_bounds = np.array([self.v0, self.v1, self.v2])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-
-        min_p = np.min(world_bounds, axis=0) - padding
-        max_p = np.max(world_bounds, axis=0) + padding
-        return AABB(min_p, max_p)
+    def get_local_bounds(self, padding: float = 1e-4) -> np.ndarray:
+        return np.array([self.v0, self.v1, self.v2])
     
     @property
     def area(self) -> float:
@@ -1019,16 +979,15 @@ class Ellipse(SignedDistanceShape2D, CorrespondingBoundingBox):
         v = 0.5
         return u, v
     
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
         rx, ry = self.radius_x + padding, self.radius_y + padding
+
         local_bounds = np.array([
             [-rx, -ry, 0], [rx, -ry, 0],
             [-rx, ry, 0],  [rx, ry, 0]
         ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+
+        return local_bounds
 
     @property
     def perimeter(self) -> float:
@@ -1079,20 +1038,15 @@ class Plane(SignedDistanceShape3D, CorrespondingBoundingBox):
         else:
             return point[0], point[1]
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        # A plane is infinite, returning a very large AABB
-        r = 1e10 + padding
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
+        r = np.inf + padding
 
         local_bounds = np.array([
             [-r, -r, 0], [r, -r, 0],
             [-r, r, 0],  [r, r, 0]
         ])
-        
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+
+        return local_bounds
     
 class Sphere(SignedDistanceShape3D, CorrespondingBoundingBox):
     def __init__(self, radius: float = 0.5):
@@ -1133,7 +1087,7 @@ class Sphere(SignedDistanceShape3D, CorrespondingBoundingBox):
         v = 0.5 - (np.arcsin(p[1])) / np.pi
         return u, v
     
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
         # Efficient sphere AABB transformation: Center translates, radius scales by max scale
         # Extract scale from matrix columns
         r = self.radius + padding
@@ -1144,11 +1098,8 @@ class Sphere(SignedDistanceShape3D, CorrespondingBoundingBox):
             [-r, -r, r],  [r, -r, r],
             [-r, r, r],   [r, r, r]
         ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+
+        return local_bounds
 
     @property
     def volume(self) -> float:
@@ -1207,18 +1158,16 @@ class Cube(SignedDistanceShape3D, CorrespondingBoundingBox):
         else:
              return (p[0]/self.half_size + 1)/2, (p[1]/self.half_size + 1)/2
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
         # Transform all 8 corners
         r = self.half_size + padding
+
         local_bounds = np.array([
             [-r,-r,-r], [r,-r,-r], [-r,r,-r], [r,r,-r],
             [-r,-r,r],  [r,-r,r],  [-r,r,r],  [r,r,r]
         ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
 
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+        return local_bounds
 
     @property
     def volume(self) -> float:
@@ -1293,7 +1242,7 @@ class Cylinder(SignedDistanceShape3D, CorrespondingBoundingBox):
         v = (point[1] + self.height/2) / self.height
         return u, v
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
         r = self.radius + padding
         h = self.height / 2 + padding
         
@@ -1303,10 +1252,7 @@ class Cylinder(SignedDistanceShape3D, CorrespondingBoundingBox):
             [-r, -h, r],  [r, -h, r],  [-r, h, r],  [r, h, r]
         ])
         
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+        return local_bounds
 
     @property
     def volume(self) -> float:
@@ -1435,7 +1381,7 @@ class Pyramid(SignedDistanceShape3D, CorrespondingBoundingBox):
         v = (point[2] / (2 * self.base_half_size)) + 0.5
         return u, v
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
         bs = self.base_half_size + padding
         h = self.height / 2 + padding
         
@@ -1447,11 +1393,8 @@ class Pyramid(SignedDistanceShape3D, CorrespondingBoundingBox):
             [ bs, -h,  bs],     # Base BR
             [-bs, -h,  bs]      # Base BL
         ])
-        
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+
+        return local_bounds
 
     @property
     def volume(self) -> float:
@@ -1586,7 +1529,7 @@ class Cone(SignedDistanceShape3D, CorrespondingBoundingBox):
         v = (point[1] + self.height/2) / self.height
         return u, v
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_bounds(self, padding: float = 1e-2) -> np.ndarray:
         r = self.base_radius + padding
         h = self.height / 2 + padding
         
@@ -1596,10 +1539,7 @@ class Cone(SignedDistanceShape3D, CorrespondingBoundingBox):
             [-r, -h, r],  [r, -h, r],  [-r, h, r],  [r, h, r]
         ])
         
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+        return local_bounds
 
     @property
     def volume(self) -> float:
