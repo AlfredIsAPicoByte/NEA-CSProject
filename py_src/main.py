@@ -72,7 +72,7 @@ if __name__ == "__main__":
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
-    img_width, img_height = 480, 270
+    img_width, img_height = 64, 64
 
     all_scenes = [
         get_minimal_scene(img_width, img_height),
@@ -81,9 +81,6 @@ if __name__ == "__main__":
         get_emissive_scene(img_width, img_height),
         get_lit_studio_scene(img_width, img_height),
         get_rgb_cornell_box_scene(img_width, img_height),
-        get_cyberpunk_scene(img_width, img_height),
-        get_material_deck_scene(img_width, img_height),
-        get_refraction_lab_scene(img_width, img_height),
         get_scifi_corridor_scene(img_width, img_height),
         get_sunset_monolith_scene(img_width, img_height),
         get_pastel_blocks_scene(img_width, img_height),
@@ -99,30 +96,32 @@ if __name__ == "__main__":
         get_orbital_dock_scene(img_width, img_height),
     ]
 
-    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.GAUSSIAN, filter_width=2)
+    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=8, filter_type=PixelFilter.GAUSSIAN, filter_width=1.5)
     sampling_manager = SamplingManager(sample_settings, "adaptive")
 
     for scene in all_scenes:
         intersection = BVHIntersection(IntersectionSettings(
-            max_distance=1000,
-            max_steps=256
+            max_distance=2500,
+            max_steps=512,
+            step_relaxation=0.99,
+            epsilon=1e-4
         ))
 
-        shading = NormalShading(PhysicalShadingSettings(
-            ambience_settings=AmbienceSettings(False, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
-            shadow_settings=ShadowSettings(True, 8, 1e-3),
-            background_settings=BackgroundSettings(False, Color.from_hex("#283848"), getattr(scene, "background_color", None), False)
+        shading = RecursiveLambertShading(PhysicalShadingSettings(
+            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.1)),
+            shadow_settings=ShadowSettings(True, 8, 1e-2),
+            background_settings=BackgroundSettings(True, Color.from_hex("#283848"), getattr(scene, "background_color", None), True)
         ))
 
         raytracer = RayTracer(RayTracingSettings(
             image_width=img_width,
             image_height=img_height,
             sampling_manager=sampling_manager,
-            max_recursions=0, 
+            max_recursions=4, 
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,
-            tile_size=32,
+            tile_size=16,
             debug_mode=args.debug,
             verbose_logging=args.verbose
         ))

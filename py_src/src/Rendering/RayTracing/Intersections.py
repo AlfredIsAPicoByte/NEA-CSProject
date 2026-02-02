@@ -78,13 +78,13 @@ class IntersectionStrategy(ABC):
         :rtype: np.ndarray
         """
         # 1. World Point -> Local Point
-        local_point = world_transform.inverse_transform_point(world_point)
+        local_point = world_transform.local_transform_point(world_point)
         
         # 2. Local Point -> Local Normal
         local_normal = local_shape.get_normal(local_point)
         
         # 3. Local Normal -> World Normal (Inverse Transpose)
-        world_normal = world_transform.transform_normal(local_normal)
+        world_normal = world_transform.world_transform_normal(local_normal)
         
         return unit(world_normal)
 
@@ -113,7 +113,7 @@ class IntersectionStrategy(ABC):
 
         # 1. Transform Ray to Local Space
         # We assume world_transform is up to date
-        local_ray = obj.world_transform.inverse_transform_ray(ray)
+        local_ray = obj.world_transform.local_transform_ray(ray)
         local_ray.orientation = unit(local_ray.orientation)
 
         # 2. Safety for Non-Uniform Scales
@@ -135,7 +135,7 @@ class IntersectionStrategy(ABC):
             # Hit Condition
             if local_dist < self.settings.epsilon:
                 # A. Transform Local Point -> World Point
-                world_point = obj.world_transform.transform_point(local_point)
+                world_point = obj.world_transform.world_transform_point(local_point)
 
                 # B. Resolve Surface Normal
                 surface_normal = self._resolve_normal(world_point, obj.world_transform, safe_shape)
@@ -337,7 +337,7 @@ class RayMarchingIntersection(IntersectionStrategy):
             # 3. Calculate Distance
             # Use the WORLD transform so hierarchical/parented objects are handled properly
             safe_transform = getattr(obj, 'world_transform', obj.transform)
-            local_point = safe_transform.inverse_transform_point(point)
+            local_point = safe_transform.local_transform_point(point)
 
             try:
                 local_dist = float(safe_shape.get_distance(local_point))
@@ -442,7 +442,11 @@ class BVHIntersection(IntersectionStrategy):
             if node.objects:
                 for obj in node.objects:
                     if self.settings.use_aabb_bounding_box:
-                        box = obj._aabb_bounds()
+                        box = obj.get_transformed_aabb()
+                        
+                        if box is None: # Empty node, skip
+                            continue
+
                         t_box = box.intersect(ray, self.settings.max_distance)
                         if stats: stats.aabb_tests += 1
                         if t_box == float('inf'):
@@ -584,7 +588,7 @@ class AnalyticalIntersection(IntersectionStrategy):
             # --- 1. Transform Ray to Local Space ---
             # We use the cached 'world_transform' if available, otherwise calculate it
             transform = getattr(obj, 'world_transform', obj.transform)
-            local_ray = transform.inverse_transform_ray(ray)
+            local_ray = transform.local_transform_ray(ray)
 
             # --- 2. Get Intersections (Analytical) ---
             # SignedDistanceShape returns local points (e.g., (0,0,1) for a unit sphere)
@@ -598,7 +602,7 @@ class AnalyticalIntersection(IntersectionStrategy):
             # --- 3. Transform Hits to World Space & Check Distance ---
             # We transform points back to world space to compare distances correctly
             for local_p in local_hits:
-                world_p = transform.transform_point(local_p)
+                world_p = transform.world_transform_point(local_p)
                 dist = np.linalg.norm(world_p - ray.origin)
                 
                 # Respect is_inside flag: for internal rays, invert sign of distance

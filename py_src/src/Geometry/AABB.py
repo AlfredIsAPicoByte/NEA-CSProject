@@ -18,6 +18,16 @@ class AABB:
         self.min_point = np.minimum(min_point, max_point)
         self.max_point = np.maximum(max_point, min_point)
 
+    @classmethod
+    def from_corners(cls, corners: np.ndarray) -> AABB:
+        min_point = np.min(corners, axis=0)
+        max_point = np.max(corners, axis=0)
+        return cls(min_point, max_point)
+    
+    @classmethod
+    def from_bounds(cls, bounds: np.ndarray) -> AABB:
+        return cls(bounds[0], bounds[1])
+    
     def intersect(self, ray: Ray, max_t: float =  1e30, bias: float = 1e-9) -> float:
         """
         Slab Method for Ray/AABB intersection.
@@ -61,7 +71,7 @@ class AABB:
 
             # Ensure valid AABB
             if np.any(min_point > max_point):
-                return AABB(np.zeros(3), np.zeros(3))  # Empty AABB
+                return AABB.empty()  # Empty AABB
         else:
             raise ValueError(f"Unsupported operation '{operation}' for AABB combination.")
         
@@ -107,10 +117,11 @@ BOUNDING_INDICES = np.array([
 
 def transform_bounds(matrix: np.ndarray, bounds: np.ndarray) -> np.ndarray:
     """Helper function to transform a bounding box"""
+    bounds_arr = np.array(bounds)
     corners = np.stack([
-        bounds[BOUNDING_INDICES[:,0], 0], # X coords
-        bounds[BOUNDING_INDICES[:,1], 1], # Y coords
-        bounds[BOUNDING_INDICES[:,2], 2]  # Z coords
+        bounds_arr[BOUNDING_INDICES[:,0], 0], # X coords
+        bounds_arr[BOUNDING_INDICES[:,1], 1], # Y coords
+        bounds_arr[BOUNDING_INDICES[:,2], 2]  # Z coords
     ], axis=1)
     
     transformed_corners = transform_corners(matrix, corners)

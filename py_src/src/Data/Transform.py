@@ -285,20 +285,25 @@ class Transform:
     
 def transform_point(matrix: np.ndarray, point: np.ndarray) -> np.ndarray:
     """Helper function to transform a point"""
-    return matrix @ np.append(point, 1.0)[:3]
+    point_h = np.append(point, 1.0)  # Homogeneous coordinate
+    transformed = matrix @ point_h
+    return transformed[:3] / transformed[3]
 
 def transform_direction(matrix: np.ndarray, direction: np.ndarray, normalize: bool = False) -> np.ndarray:
     """Helper function to transform a direction"""
-    transformed = matrix[:3, :3] @ direction
-    return unit(transformed) if normalize else transformed
+    direction_h = np.append(direction, 0.0)  # Homogeneous coordinate for direction
+    transformed = matrix @ direction_h
+    result = transformed[:3]
+    if normalize:
+        result = unit(result)
+    return result
 
 def transform_normal(matrix: np.ndarray, normal: np.ndarray) -> np.ndarray:
     """Helper function to transform a normal"""
-    try:
-        norm_matrix = np.linalg.inv(matrix[:3, :3]).T
-    except np.linalg.LinAlgError:
-        norm_matrix = matrix[:3, :3]
-    return unit(norm_matrix @ normal)
+    inv_matrix = np.linalg.inv(matrix)
+    normal_h = np.append(normal, 0.0)  # Homogeneous coordinate for normal
+    transformed = inv_matrix.T @ normal_h
+    return unit(transformed[:3])
 
 def transform_ray(matrix: np.ndarray, ray: Ray, normalize: bool = False) -> Ray:
     """Helper function to transform a ray"""

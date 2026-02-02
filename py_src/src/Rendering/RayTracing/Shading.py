@@ -494,7 +494,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
         light = cast(Light, light_node.context)
 
         radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
-        occluding_objects = Scene.get_objects_with_attribute(scene.cache_scene_nodes_flat(), "material")
+        occluding_objects = Scene.get_nodes_with_attribute(scene.cache_scene_nodes_flat(), "material")
         
         # Case A: Point SceneNode (Hard Shadows)
         if radius <= 0.0 or self.shadow_settings.samples <= 1:
@@ -543,7 +543,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
         light = cast(Light, light_node.context)
 
         radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
-        occluding_objects = Scene.get_objects_by_types(scene.cache_scene_nodes_flat(), ["SDF_Material", "Mesh_Material"])
+        occluding_objects = Scene.get_nodes_by_types(scene.cache_scene_nodes_flat(), ["SDF_Material", "Mesh_Material"])
         
         # Case A: Point SceneNode (Hard Shadows)
         if radius <= 0.0 or self.shadow_settings.samples <= 1:
@@ -607,7 +607,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
         height = scene.camera.height
 
         ao_map = np.zeros((height, width), dtype=float)
-        occluding_objects = Scene.get_objects_by_types(scene.cache_scene_nodes_flat(), ["SDF_Material", "Mesh_Material"])
+        occluding_objects = Scene.get_nodes_by_types(scene.cache_scene_nodes_flat(), ["SDF_Material", "Mesh_Material"])
 
         for y in range(height):
             for x in range(width):
@@ -687,7 +687,7 @@ class LambertShading(PhysicalShadingStrategy):
         # 4. Evaluate Direct Lighting
         # The material class already contains the logic to loop over lights
         # and apply the BRDF (Diffuse + Specular).
-        light_nodes = Scene.get_objects_by_type(scene.cache_scene_nodes_flat(), Light)
+        light_nodes = Scene.get_nodes_by_type(scene.cache_scene_nodes_flat(), Light)
         if light_nodes is None or len(light_nodes) == 0:
             return final_color  # No lights in scene
         

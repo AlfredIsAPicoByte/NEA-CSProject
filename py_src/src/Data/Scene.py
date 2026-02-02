@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 from .Transform import Transform
 from .Camera import Camera
-from src.Geometry.AABB import AABB, convert_bounds_to_corners, transform_bounds
+from src.Geometry.AABB import AABB, convert_corners_to_bounds, transform_bounds
 
 @dataclass
 class SceneNode:
@@ -88,7 +88,7 @@ class SceneNode:
         return Transform.from_matrix(self.get_world_matrix())
 
     @property
-    def local_transfrom(self) -> Transform:
+    def local_transform(self) -> Transform:
         """
         Returns a `Transform` representing the object's world transform (position/rotation/scale).
         Useful for APIs that expect a `Transform` object rather than raw matrices.
@@ -96,37 +96,56 @@ class SceneNode:
         # Ensure matrices are up-to-date
         return Transform.from_matrix(self.get_local_matrix())
     
-    def get_local_bounds(self) -> Optional[np.ndarray]:
+    def get_local_bounds(self, padding: float = 1e-2) -> Optional[np.ndarray]:
         if self.context is None:
             return None
         
         if hasattr(self.context, "local_corners") and callable(self.context.local_corners):
-            corners = self.context.local_corners()
+            corners = self.context.local_corners(padding)
             
             if corners is None:
                 return None
-
-            if np.shape(corners) == (4, 3): # 2D corners
-                return convert_bounds_to_corners_2d(corners)
             
-            return convert_bounds_to_corners(self.context.local_corners(padding))
+            return convert_corners_to_bounds(corners)
         
         if hasattr(self.context, "world_corners") and self.context.mesh is not None:
-            corners = self.context.world_corners()
+            corners = self.context.world_corners(padding)
             if corners is None:
                 return None
             
-            return convert_bounds_to_corners(corners)
+            return transform_bounds(self.get_world_matrix(), convert_corners_to_bounds(corners))
         
+        if hasattr(self.context, "local_bounds") and callable(self.context.local_bounds):
+            bounds = self.context.local_bounds(padding)
+            if bounds is None:
+                return None
+            
+            return bounds
+        
+        if hasattr(self.context, "world_bounds") and callable(self.context.world_bounds):
+            bounds = self.context.world_bounds(padding)
+            if bounds is None:
+                return None
+            
+            return transform_bounds(self.get_world_matrix(), bounds)
+
         return None
     
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray) -> AABB:
-        local_bounds = self.get_local_bounds()
+    def get_global_bounds(self, padding: float = 1e-2) -> Optional[np.ndarray]:
+        local_bounds = self.get_local_bounds(padding)
         if local_bounds is None:
-            return AABB.empty()
+            return None
         
-        transformed_bounds = transform_bounds(transformation_matrix, local_bounds)
-        return AABB(transformed_bounds[0], transformed_bounds[1])
+        return transform_bounds(self.get_world_matrix(), local_bounds)
+    
+    def get_transformed_aabb(self) -> AABB:
+        bounds = self.get_global_bounds()
+        if bounds is None:
+            self._aabb_bounds = AABB.empty()
+            return self._aabb_bounds
+        
+        self._aabb_bounds = AABB.from_bounds(bounds)
+        return self._aabb_bounds
     
     def __hash__(self):
         return id(self)
