@@ -1,11 +1,11 @@
+from re import A
 import numpy as np
 from typing import List, Optional, Union, Any, Tuple, Callable
 from dataclasses import dataclass, field
 
 from .Transform import Transform
-from .Context import *
 from .Camera import Camera
-from src.Geometry.AABB import AABB, transform_bounds
+from src.Geometry.AABB import AABB, convert_bounds_to_corners, transform_bounds
 
 @dataclass
 class SceneNode:
@@ -100,18 +100,33 @@ class SceneNode:
         if self.context is None:
             return None
         
-        if isinstance(self.context, SDF_Material) and hasattr(self.context.shape, "get_local_corners") and callable(self.context.shape.get_local_corners):
-            return self.context.shape.get_local_corners(padding)
+        if hasattr(self.context, "local_corners") and callable(self.context.local_corners):
+            corners = self.context.local_corners()
+            
+            if corners is None:
+                return None
+
+            if np.shape(corners) == (4, 3): # 2D corners
+                return convert_bounds_to_corners_2d(corners)
+            
+            return convert_bounds_to_corners(self.context.local_corners(padding))
+        
+        if hasattr(self.context, "world_corners") and self.context.mesh is not None:
+            corners = self.context.world_corners()
+            if corners is None:
+                return None
+            
+            return convert_bounds_to_corners(corners)
         
         return None
     
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray):
+    def get_transformed_aabb(self, transformation_matrix: np.ndarray) -> AABB:
         local_bounds = self.get_local_bounds()
         if local_bounds is None:
-            return None
+            return AABB.empty()
         
         transformed_bounds = transform_bounds(transformation_matrix, local_bounds)
-        return transformed_bounds
+        return AABB(transformed_bounds[0], transformed_bounds[1])
     
     def __hash__(self):
         return id(self)

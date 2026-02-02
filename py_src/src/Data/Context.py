@@ -61,23 +61,6 @@ class SDF_Material:
         c = self.world_corners(padding)
         return c.min(axis=0), c.max(axis=0)
 
-    # ──────────────────────────────
-    # Ray interaction
-    # ──────────────────────────────
-
-    def intersect_ray(self, ray: Ray, max_steps: int = 256, epsilon: float = 1e-4) -> Optional[RayHit]:
-        """Raymarch against this SDF."""
-        return self.shape.intersect_ray(ray, max_steps=max_steps, epsilon=epsilon)
-
-    def intersects_aabb(self, min_pt: np.ndarray, max_pt: np.ndarray, padding: float = 1e-2) -> bool:
-        """Broad-phase AABB overlap test."""
-        my_min, my_max = self.world_bounds(padding)
-        return not (
-            my_max[0] < min_pt[0] or my_min[0] > max_pt[0] or
-            my_max[1] < min_pt[1] or my_min[1] > max_pt[1] or
-            my_max[2] < min_pt[2] or my_min[2] > max_pt[2]
-        )
-
 @dataclass
 class Mesh_Material:
     """
@@ -121,18 +104,3 @@ class Mesh_Material:
     def world_bounds(self) -> tuple[np.ndarray, np.ndarray]:
         c = self.world_corners()
         return c.min(axis=0), c.max(axis=0)
-
-    # ──────────────────────────────
-    # Ray interaction
-    # ──────────────────────────────
-
-    def intersect_ray(self, ray: Ray) -> Optional[RayHit]:
-        return self.mesh.intersect_ray(ray, material=self.material)
-
-    def intersects_aabb(self, min_pt: np.ndarray, max_pt: np.ndarray) -> bool:
-        my_min, my_max = self.world_bounds()
-        return not (
-            my_max[0] < min_pt[0] or my_min[0] > max_pt[0] or
-            my_max[1] < min_pt[1] or my_min[1] > max_pt[1] or
-            my_max[2] < min_pt[2] or my_min[2] > max_pt[2]
-        )

@@ -3,7 +3,7 @@ from turtle import Shape
 import numpy as np
 from typing import Any
 
-from src.Data.Transform import Transform, BOUNDING_INDICES
+from src.Data.Transform import Transform
 from src.Data.Ray import Ray
 from .Operations import *
 
