@@ -43,7 +43,17 @@ class SDF_Material:
 
     def local_corners(self, padding: float = 1e-2) -> np.ndarray:
         """Local-space bounding corners."""
-        return self.shape.get_local_corners(padding)
+        if hasattr(self.shape, 'get_local_corners'):
+            return self.shape.get_local_corners(padding)
+        
+        if callable(getattr(self.shape, 'get_convex_hull')):
+            hull = self.shape.get_convex_hull()
+            min_pt = hull.min(axis=0) - padding
+            max_pt = hull.max(axis=0) + padding
+            return convert_bounds_to_corners(min_pt, max_pt)
+        
+        else:
+            raise AttributeError("Shape does not support local corners computation")
     
     @property
     def is_2d(self) -> bool:

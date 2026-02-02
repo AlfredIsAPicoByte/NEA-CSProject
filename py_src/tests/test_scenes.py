@@ -119,8 +119,7 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
     scene.add_object_by_context(v_mirror, "MirrorSphere", Transform(np.array([-0.5, 1.0, 0.5])))
 
     matg = MaterialFactory.create_diffuse(Color.from_hex("#202020"), roughness=0.8)
-    v_ground = SDF_Material(Sphere(100), matg)
-    scene.add_object_by_context(v_ground, "Ground", Transform(np.array([0.0, -100.0, 0.0])))
+    scene.add_object_by_context(SDF_Material(Sphere(100), matg), "Ground", Transform(np.array([0.0, -101, 0.0]), scale=np.full(3, 100)))
 
     # Lights - Darker fill to emphasize emission
     fill = Light(color=Color.from_hex("#333344"), intensity=200.0, radius=10.0)
@@ -249,6 +248,162 @@ def get_rgb_cornell_box_scene(width: int = 126, height: int = 126) -> Scene:
 
     cam.transform.look_at(np.array([0, 2, 0]))
 
+    return scene
+
+def get_cyberpunk_scene(width: int = 140, height: int = 100) -> Scene:
+    """
+    A dark, wet street scene with neon lights, verticality, and fog.
+    """
+    # Low angle camera looking up/down the street
+    cam_transform = Transform(np.array([0.0, 1.0, -8.0]), np.array([-0.1, 0.0, 0.0]))
+    cam = Camera(cam_transform, fov=70.0, resolution_width=width, resolution_height=height)
+    
+    # Dark purple/black background (Smoggy night)
+    scene = Scene("cyberpunk_street", cam, background_color=Color.from_hex("#05000a"))
+
+    # Materials
+    mat_asphalt_wet = MaterialFactory.create_specular(Color.from_hex("#111111"), roughness=0.2, metallicness=0.1)
+    mat_concrete_dark = MaterialFactory.create_diffuse(Color.from_hex("#222222"), roughness=0.9)
+    mat_neon_pink = MaterialFactory.create_emissive(Color.from_hex("#FF0099"), 3.0)
+    mat_neon_cyan = MaterialFactory.create_emissive(Color.from_hex("#00FFFF"), 3.0)
+
+    # Floor (Wet Road)
+    scene.add_object_by_context(
+        SDF_Material(Cube(), mat_asphalt_wet), 
+        "Road", 
+        Transform(np.array([0.0, -1.0, 0.0]), scale=np.array([4.0, 0.1, 20.0]))
+    )
+
+    # Building Loop
+    num_buildings = 5
+    spacing = 4.0
+    
+    for i in range(num_buildings):
+        z_pos = (i * spacing) - 5.0
+        
+        # Left Buildings (Cyan Theme)
+        h_left = 3.0 + np.sin(i) # Varied height
+        scene.add_object_by_context(
+            SDF_Material(Cube(), mat_concrete_dark), 
+            f"BuildL_{i}", 
+            Transform(np.array([-4.5, h_left/2, z_pos]), scale=np.array([2.0, h_left, 1.5]))
+        )
+        # Left Neon Sign
+        scene.add_object_by_context(
+            SDF_Material(Cube(), mat_neon_cyan),
+            f"SignL_{i}",
+            Transform(np.array([-2.6, 1.5, z_pos]), scale=np.array([0.1, 1.0, 0.1]))
+        )
+
+        # Right Buildings (Pink Theme)
+        h_right = 4.0 + np.cos(i)
+        scene.add_object_by_context(
+            SDF_Material(Cube(), mat_concrete_dark), 
+            f"BuildR_{i}", 
+            Transform(np.array([4.5, h_right/2, z_pos]), scale=np.array([2.0, h_right, 1.5]))
+        )
+        # Right Neon Sign (Horizontal bar)
+        scene.add_object_by_context(
+            SDF_Material(Cube(), mat_neon_pink),
+            f"SignR_{i}",
+            Transform(np.array([2.6, 2.5, z_pos]), scale=np.array([0.1, 0.1, 1.2]))
+        )
+
+    # Lighting
+    # Pink light source on right
+    scene.add_object_by_context(
+        Light(color=Color.from_hex("#FF0099"), intensity=200.0, radius=4.0),
+        "PinkLight", Transform(np.array([3.0, 2.0, 0.0]))
+    )
+    # Cyan light source on left
+    scene.add_object_by_context(
+        Light(color=Color.from_hex("#00FFFF"), intensity=200.0, radius=4.0),
+        "CyanLight", Transform(np.array([-3.0, 2.0, 5.0]))
+    )
+
+    return scene
+
+def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
+    cam_transform = Transform(np.array([0.0, 1.5, -5.0]), np.array([0.2, 0.0, 0.0]))
+    cam = Camera(
+        cam_transform,
+        fov=70.0, near=0.1, far=86.0,
+        resolution_width=width, resolution_height=height,
+        camera_type=CameraType.PERSPECTIVE
+    )
+    scene = Scene("material_deck", cam, background_color=Color.from_hex("#000000"))
+
+    # Floor
+    mat_floor = MaterialFactory.create_diffuse(Color.from_hex("#CCCCCC"), roughness=1.0)
+    scene.add_object_by_context(SDF_Material(Cube(), mat_floor), "Floor", Transform(np.array([0.0, -1.0, 0.0])))
+
+    base_col = Color.from_hex("#D4AF37")
+    
+    # Material Variations
+    mat_s1 = MaterialFactory.create_specular(base_col, roughness=0.0)
+    scene.add_object_by_context(SDF_Material(Sphere(), mat_s1), "S_Mirror", Transform(np.array([-3.0, 0.5, 0.0])))
+
+    mat_s2 = MaterialFactory.create_specular(base_col, roughness=0.25)
+    scene.add_object_by_context(SDF_Material(Sphere(), mat_s2), "S_Brushed", Transform(np.array([-1.5, 0.5, 0.0])))
+    mat_s3 = MaterialFactory.create_specular(base_col, roughness=0.5)
+    scene.add_object_by_context(SDF_Material(Sphere(), mat_s3), "S_Rough", Transform(np.array([0.0, 0.5, 0.0])))
+
+    mat_s4 = MaterialFactory.create_specular(base_col, roughness=0.75)
+    scene.add_object_by_context(SDF_Material(Sphere(), mat_s4), "S_Matte", Transform(np.array([1.5, 0.5, 0.0])))
+    
+    mat_s5 = MaterialFactory.create_diffuse(Color.from_hex("#FF0000"), roughness=0.1)
+    scene.add_object_by_context(SDF_Material(Sphere(), mat_s5), "S_Plastic", Transform(np.array([3.0, 0.5, 0.0])))
+
+    mat_c1 = MaterialFactory.create_specular(Color.from_hex("#FFD700"), roughness=0.0, metallicness=1.0)
+    scene.add_object_by_context(SDF_Material(Cylinder(), mat_c1), "C_Mirror", Transform(np.array([-4.5, 0.6, 0.0])))
+
+    mat_c2 = MaterialFactory.create_specular(Color.from_hex("#FFD700"), roughness=0.5, metallicness=0.5)
+    scene.add_object_by_context(SDF_Material(Cylinder(), mat_c2), "C_Matte", Transform(np.array([4.5, 0.6, 0.0])))
+
+    # Lights
+    l_main = Light(color=Color(1.0, 1.0, 1.0), intensity=150.0)
+    scene.add_object_by_context(l_main, "Main", Transform(np.array([0.0, 5.0, -5.0])))
+    
+    l_fill = Light(color=Color(0.8, 0.8, 1.0), intensity=500.0, radius=5)
+    scene.add_object_by_context(l_fill, "Fill", Transform(np.array([5.0, 2.0, -2.0])))
+
+    cam.transform.look_at(np.array([0.0, 0.5, 0.0]))
+    return scene
+
+def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
+    cam_transform = Transform(np.array([0.0, 2.0, -4.0]), np.array([0.0, 0.0, 0.0]))
+    cam = Camera(
+        cam_transform,
+        fov=70.0, near=0.1, far=100.0,
+        resolution_width=width, resolution_height=height,
+        camera_type=CameraType.PERSPECTIVE
+    )
+    scene = Scene("refraction_lab", cam, background_color=Color(0.05, 0.05, 0.05))
+
+    # Background
+    mat_wall = MaterialFactory.create_emissive(Color(1.0, 1.0, 1.0), 1.0)
+    scene.add_object_by_context(SDF_Material(Cube(), mat_wall), "BackWall", Transform(np.array([0.0, 2.0, -4.0])))
+
+    # Bars
+    mat_bar = MaterialFactory.create_diffuse(Color(0.0, 0.0, 0.0), 1.0)
+    for i in range(-6, 7):
+        scene.add_object_by_context(SDF_Material(Cube(), mat_bar), f"Bar_{6 + i}", Transform(np.array([i, 2.0, -3.5])))
+
+    # Spheres
+    mat_acrylic = MaterialFactory.create_glass(Color.from_hex("#FFFFFF"), Color(1.0, 1.0, 1.0), 0.0, 0.0, REFRACTIVE_INDICES["acrylic"], 0)
+    scene.add_object_by_context(SDF_Material(Sphere(), mat_acrylic), "AcrylicSphere", Transform(np.array([-1.2, 0.5, 0.0])))
+
+    mat_diamond = MaterialFactory.create_glass(Color.from_hex("#B9D3E3"), Color(0.9, 0.9, 1.0), 0.0, 0.0, REFRACTIVE_INDICES["diamond"], 0.2)
+    scene.add_object_by_context(SDF_Material(Sphere(), mat_diamond), "DiamondSphere", Transform(np.array([0.0, 0.5, 0.0])))
+
+    mat_water = MaterialFactory.create_glass(Color.from_hex("#A6ADD5"), Color.from_hex("#1F1FFF"), 0.0, 0.0, REFRACTIVE_INDICES["water"], 0.1)
+    scene.add_object_by_context(SDF_Material(Sphere(), mat_water), "WaterSphere", Transform(np.array([1.2, 0.5, 0.0])))
+
+    # Lights
+    l_front = Light(color=Color(1.0, 1.0, 1.0), intensity=150.0)
+    scene.add_object_by_context(l_front, "FrontLight", Transform(np.array([2.0, 3.0, -3.0])))
+    
+    cam.transform.look_at(np.array([0, 0.5, 0]))
     return scene
 
 def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
