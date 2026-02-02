@@ -367,7 +367,7 @@ class InverseSDFIntersection(IntersectionStrategy):
         ) -> HitInfo:
         closest_hit = HitInfo.miss()
         
-        for obj in scene.get_scene_objects_flattened():
+        for obj in scene.cache_scene_nodes_flat():
             if not obj.active:
                 continue
 
@@ -413,11 +413,11 @@ class BVHIntersection(IntersectionStrategy):
             print(f" < Building Hierarchy for scene objects...")
             
             # Update world matrices for all root objects
-            for obj in scene.objects:
+            for obj in scene.cache_scene_nodes_flat():
                 obj.update_matrices()
             
             # Get all objects including children
-            all_objects = scene.get_scene_objects_flattened()
+            all_objects = scene.cache_scene_nodes_flat()
             
             self._cached_bvh_root = build_bvh_tree(all_objects)
             self._cached_scene_version = scene.version
@@ -441,6 +441,13 @@ class BVHIntersection(IntersectionStrategy):
             # LEAF: Test Objects
             if node.objects:
                 for obj in node.objects:
+                    if self.settings.use_aabb_bounding_box:
+                        box = obj._aabb_bounds()
+                        t_box = box.intersect(ray, self.settings.max_distance)
+                        if stats: stats.aabb_tests += 1
+                        if t_box == float('inf'):
+                            continue
+
                     hit = self._intersect_sdf_object(obj, ray, stats)
                     if hit.hit:
                         if scene.camera:
@@ -565,7 +572,7 @@ class AnalyticalIntersection(IntersectionStrategy):
         closest_point = None
         min_dist = float("inf")
         
-        safe_objects = scene._cache_objects or scene.objects
+        safe_objects = scene.cache_scene_nodes_flat()
         sign_modifier = -1.0 if ray.is_inside else 1.0
 
         for obj in safe_objects:

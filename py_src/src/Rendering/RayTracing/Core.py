@@ -1,6 +1,6 @@
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 from src.Data.Ray import TracingRay, RayPool
 from src.Data.Color import Color
@@ -273,7 +273,7 @@ class RayTracer(Algorithm):
         self,
         scene: Scene,
         sampler: Optional[Sampler] = None,
-        region: Optional[Tuple[int, int, int, int]] = None
+        region: Optional[Tuple[int, int, int, int]] = None,
     ):
         self.stats.reset_ray_counter()
         self.stats.start_timer()
@@ -311,11 +311,12 @@ class RayTracer(Algorithm):
                     tile_count += 1
                     if self.settings.verbose_logging:
                         print(f" * Rendered tile {tile_count}/{total_tiles}")
+                    Film.save(self.settings.film.get_image(), "_temp.png")
         else:
             self.render_tile(scene, sampler, region_x, region_y, region_width, region_height)
 
         self.stats.pixels_processed = pixels_processed
-        self.stats.lights_sampled = len(Scene.get_objects_by_type(scene.get_scene_objects_flattened(), "Light"))
+        self.stats.lights_sampled = len(Scene.get_nodes_by_type(scene.cache_scene_nodes_flat(), "Light"))
         self.stats.stop_timer()
 
         if self.settings.verbose_logging:
