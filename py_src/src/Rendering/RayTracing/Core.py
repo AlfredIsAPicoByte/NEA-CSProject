@@ -31,7 +31,7 @@ class TracingStats(RenderStats):
     rays_transparency: int = 0
     rays_missed: int = 0
     pixels_processed: int = 0
-    tiles_proccesed: int = 0
+    tiles_processed: int = 0
     
     # --- Intersection Performance (BVH Health) ---
     aabb_tests: int = 0         # Box hits
@@ -42,6 +42,8 @@ class TracingStats(RenderStats):
     max_recursions: int = 0
     roulette_kills: int = 0
     lights_sampled: int = 0
+
+    _settings: Any = field(default=None, repr=False)
 
     @property
     def total_rays(self) -> int:
@@ -120,7 +122,17 @@ class TracingStats(RenderStats):
         lines.append(f"  - NaN Errors:      {self.nan_errors}")
         na_rate = (self.nan_errors / max(1, self.total_rays)) * 1000.0
         lines.append(f"  - NaN Rate:        {na_rate:.2f} per 1000 rays")
-        
+        lines.append(f"-------------------------")
+        lines.append(f"Totals:")
+        lines.append(f"Pixels Processed: {self.pixels_processed:,}")
+        lines.append(f"Tiles Processed:  {self.tiles_processed:,}")
+        if self._settings is not None:
+            lines.append(f"-------------------------")
+            lines.append(f"Settings:")
+            for field_name in self._settings.__dataclass_fields__:
+                value = getattr(self._settings, field_name)
+                lines.append(f"  - {field_name}: {value}")
+        lines.append(f"=========================")
         return "\n".join(lines)
 
 @dataclass(slots=True)
@@ -138,6 +150,27 @@ class RayTracingSettings(AlgorithmSettings):
     debug_mode: bool = False
     verbose_logging: bool = False
 
+    def __post_init__(self):
+        if self.sampling_manager is None:
+            self.sampling_manager = SamplingManager(SampleSettings(), "random")
+
+    @classmethod
+    def clone(cls, self) -> 'RayTracingSettings':
+        # Create a deep copy of the settings
+        return cls(**{field: getattr(self, field) for field in self.__dataclass_fields__})
+    
+    def validate(self) -> bool:
+        # Basic validation of settings
+        if self.max_recursions < 0:
+            raise ValueError("max_recursions must be non-negative")
+        if self.tile_size <= 0:
+            raise ValueError("tile_size must be positive")
+        if self.intersection_strategy is None:
+            raise ValueError("intersection_strategy must be set")
+        if self.shading_strategy is None:
+            raise ValueError("shading_strategy must be set")
+        return True
+
 # RayTracer using strategies
 @register_algorithm("ray-tracer")
 class RayTracer(Algorithm):
@@ -149,6 +182,7 @@ class RayTracer(Algorithm):
         self.stats: TracingStats = TracingStats()
         self.stats.intersection_type = type(self.settings.intersection_strategy).__name__
         self.stats.shading_type = type(self.settings.shading_strategy).__name__
+        self.stats._settings = settings
 
     def _trace_ray(self, scene: Scene, ray: TracingRay, recursions_left: int, sampler: Sampler) -> Color:
         # 1. Base Case
@@ -286,7 +320,7 @@ class RayTracer(Algorithm):
                     final_color.to_np_array(),
                     1.0
                 )
-        self.stats.tiles_proccesed += 1
+        self.stats.tiles_processed += 1
 
     def generate_film(
         self,

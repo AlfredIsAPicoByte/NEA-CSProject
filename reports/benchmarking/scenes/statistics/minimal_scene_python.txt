@@ -2,20 +2,20 @@
 Render Type: Ray Tracing
 Intersection: BVHIntersection
 Shading: LambertShading
-Time: 828.421s | Mem: 0.00MB
+Time: 11.817s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
-  - Total:       851,136
-  - Primary:     129,600    (15.2%)
-  - Shadow:      721,536    (Lights used: 2)
+  - Total:       14,688
+  - Primary:     2,048      (13.9%)
+  - Shadow:      12,640     (Lights used: 2)
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      518,400
-  - Tri Tests:       2,791,949
+  - AABB Tests:      8,192
+  - Tri Tests:       41,459
   - Nodes Visited:   0
-  - Cost/Ray:        3.89 (Target: < 50)
-  - Culling Ratio:   0.19 (Target: > 2.0)
+  - Cost/Ray:        3.38 (Target: < 50)
+  - Culling Ratio:   0.20 (Target: > 2.0)
 -------------------------
 Diagnostics:
   - Max Depth Hit:   0
