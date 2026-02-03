@@ -288,8 +288,9 @@ class PBRMaterial:
             # Only evaluate if roughness > 0 (otherwise it's a delta distribution)
             if self.data.roughness > 0.01:
                 # Calculate the microfacet BRDF
-                specular_brdf = calculate_microfacet_brdf(self.data.roughness, self.data.specular_intensity,L, V, N, self.evaluate_metallic_component().to_np_array())
-                
+                spec_arr = calculate_microfacet_brdf(self.data.roughness, self.data.specular_intensity,L, V, N, self.evaluate_metallic_component().to_np_array())
+                specular_brdf = Color.from_np(spec_arr)
+
                 # Add diffuse component (scaled by metallic)
                 diffuse_brdf = (self.data.albedo / np.pi) * (1.0 - self.data.metallic)
                 
@@ -303,7 +304,8 @@ class PBRMaterial:
             if self.data.roughness > 0.01:
                 # Evaluate both reflection and refraction lobes
                 # This is complex - see below
-                return evaluate_glass_bsdf(self.data.roughness, self.data.ior, L, V, N)
+                glass_arr = evaluate_glass_bsdf(self.data.roughness, self.data.ior, L, V, N)
+                return Color.from_np(glass_arr)
             else:
                 # Perfect glass - delta distribution
                 return Color(0.0, 0.0, 0.0)
@@ -386,7 +388,8 @@ class PBRMaterial:
         F0 = self.evaluate_metallic_component()
         
         # F_schlick calculation (Color operations are handled correctly)
-        FF = schlick_fresnel_metalic(VdotH, F0.to_np_array())
+        FF_arr = schlick_fresnel_metalic(VdotH, F0.to_np_array())
+        FF = Color.from_np(FF_arr)
 
         # --- 4. Final BRDF Term (Fs) and Specular Contribution ---
         # Denominator of the BRDF term

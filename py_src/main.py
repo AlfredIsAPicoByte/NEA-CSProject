@@ -69,7 +69,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     img_width, img_height = 240, 135
-    args.samples = 4
+    args.samples = 2
 
     # Quick mode overrides
     if args.quick:
@@ -113,7 +113,7 @@ if __name__ == "__main__":
         height=img_height, 
         samples_per_pixel=args.samples,
         filter_type=PixelFilter.GAUSSIAN, 
-        filter_width=4,
+        filter_width=2,
     )
     sampling_manager = SamplingManager(sample_settings, "adaptive")
 
@@ -135,7 +135,7 @@ if __name__ == "__main__":
             image_width=img_width,
             image_height=img_height,
             sampling_manager=sampling_manager,
-            max_recursions=4, 
+            max_recursions=2, 
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,
