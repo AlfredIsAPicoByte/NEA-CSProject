@@ -79,7 +79,9 @@ class AABB:
     
     @property
     def center(self) -> np.ndarray:
-        return (self.min_point + self.max_point) * 0.5
+        center = (self.min_point + self.max_point) * 0.5
+        center = np.nan_to_num(center)
+        return center
     
     @property
     def size(self) -> np.ndarray:

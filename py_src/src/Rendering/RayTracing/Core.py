@@ -19,6 +19,10 @@ from src.Data.Scene import Scene
 # Stats for ray tracing
 @dataclass(slots=True)
 class TracingStats(RenderStats):
+    render_type: str = "Ray Tracing"
+    intersection_type: str = "N/A"
+    shading_type: str = "N/A"
+
     # --- Basic Counters ---
     rays_primary: int = 0
     rays_shadow: int = 0
@@ -92,6 +96,9 @@ class TracingStats(RenderStats):
         """
         lines = []
         lines.append(f"=== Tracing Stats ===")
+        lines.append(f"Render Type: {self.render_type}")
+        lines.append(f"Intersection: {self.intersection_type}")
+        lines.append(f"Shading: {self.shading_type}")
         lines.append(f"Time: {self.time_taken_seconds:.3f}s | Mem: {self.memory_usage:.2f}MB")
         lines.append(f"-------------------------")
         lines.append(f"Ray Traffic:")
@@ -140,6 +147,8 @@ class RayTracer(Algorithm):
         super().__init__(settings)
         self.settings = settings
         self.stats: TracingStats = TracingStats()
+        self.stats.intersection_type = type(self.settings.intersection_strategy).__name__
+        self.stats.shading_type = type(self.settings.shading_strategy).__name__
 
     def _trace_ray(self, scene: Scene, ray: TracingRay, recursions_left: int, sampler: Sampler) -> Color:
         # 1. Base Case
@@ -229,7 +238,7 @@ class RayTracer(Algorithm):
                 self.settings.max_recursions,
                 sampler
             )
-            pixle_color = self._sanitize_color(pixle_color)
+            pixle_color = Color(*self._sanitize_color(pixle_color))
 
             image_w = self.settings.sampling_manager.settings.width
             image_h = self.settings.sampling_manager.settings.height
@@ -336,19 +345,15 @@ class RayTracer(Algorithm):
         if self.settings.verbose_logging:
             print(" * Rendering complete.")
     
-    def _sanitize_color(self, color) -> Color:
-        """Turn arbitrary shader output into a finite Color and record NaN events if needed."""
-        # 1. Handle None or Invalid types quickly
-        if color is None: 
-            return np.array([0.0, 0.0, 0.0])
-            
-        # 2. Extract values
-        # Accessing slots directly (c.r) is faster than methods
-        vals = np.array([color.r, color.g, color.b], dtype=np.float32)
-        
-        # 3. Check Finite (Vectorized)
-        if not np.isfinite(vals).all():
-            self.stats.nan_errors += 1
-            return Color(*np.nan_to_num(vals, nan=0.0, posinf=1.0))
-            
-        return Color(*vals)
+    def _sanitize_color(self, color):
+        if color is None:
+            return np.zeros(3, dtype=np.float32)
+
+        # If already a numpy RGB array
+        if isinstance(color, np.ndarray):
+            vals = color.astype(np.float32)
+        else:
+            vals = np.array([color.r, color.g, color.b], dtype=np.float32)
+
+        vals = np.nan_to_num(vals, nan=0.0, posinf=0.0, neginf=0.0)
+        return np.clip(vals, 0.0, 1.0)

@@ -113,7 +113,7 @@ if __name__ == "__main__":
         height=img_height, 
         samples_per_pixel=args.samples,
         filter_type=PixelFilter.GAUSSIAN, 
-        filter_width=8,
+        filter_width=4,
     )
     sampling_manager = SamplingManager(sample_settings, "adaptive")
 
@@ -135,11 +135,11 @@ if __name__ == "__main__":
             image_width=img_width,
             image_height=img_height,
             sampling_manager=sampling_manager,
-            max_recursions=0, 
+            max_recursions=4, 
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,
-            tile_size=64,
+            tile_size=32,
             debug_mode=args.debug,
             verbose_logging=args.verbose
         ))

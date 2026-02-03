@@ -43,7 +43,10 @@ def build_bvh_tree(
             continue
         
         # Get local bounds for objects within BoundingSceneNode
-        box = obj.get_transformed_aabb() # Handles None internally
+        box = obj.get_transformed_aabb()
+        if box is None:
+            continue
+        
         item_cache.append((obj, box))
 
     return _build_bvh_recursive(

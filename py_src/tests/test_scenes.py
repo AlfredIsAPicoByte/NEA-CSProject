@@ -40,10 +40,13 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
     matg = MaterialFactory.create_diffuse(Color.from_hex("#3F3F3F"), 0.9)
     scene.add_object_by_context(SDF_Material(Sphere(100), matg), "Ground Min", Transform(np.array([0.0, -101, 0.0]), scale=np.full(3, 100)))
 
-    # lights - Adjusted position for better shadow casting
-    light = Light(color=Color.from_hex("#FFFFFF"), intensity=350.0, radius=3)
-    scene.add_object_by_context(light, "Sun Min", Transform(np.array([3.0, 4.0, -2.0])))
-    scene.add_object_by_context(light, "Sun Min", Transform(np.array([2.0, 3.0, -1.0])))
+    # Key light – warm, elevated, primary shadow caster
+    key_light = Light(color=Color.from_hex("#FFF0D0"), intensity=280.0, radius=2.0)
+    scene.add_object_by_context(key_light, "KeyLight", Transform(np.array([3.0, 4.0, -2.0])))
+
+    # Fill light – cool, opposite side, softer falloff
+    fill_light = Light(color=Color.from_hex("#C0D8FF"), intensity=100.0, radius=5.0)
+    scene.add_object_by_context(fill_light, "FillLight", Transform(np.array([-3.0, 2.5, -1.0])))
 
     return scene
 
@@ -90,10 +93,10 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     scene.add_object_by_context(pyr_1, "Wooden Pyramid", Transform(np.array([-1.0, 0.5, 1.5]), rotation=np.array([0, np.deg2rad(45), 0])))
 
     # Lights
-    key_light = Light(color=Color.from_hex("#FFEDC7"), intensity=200.0, radius=0.5)
+    key_light = Light(color=Color.from_hex("#FFEDC7"), intensity=320.0, radius=2.0)
     scene.add_object_by_context(key_light, "Key Light", Transform(np.array([4.0, 5.0, -3.0])))
 
-    fill_light = Light(color=Color.from_hex("#C7E5FF"), intensity=300.0, radius=4)
+    fill_light = Light(color=Color.from_hex("#C7E5FF"), intensity=120.0, radius=4.0)
     scene.add_object_by_context(fill_light, "Fill Light", Transform(np.array([-5.0, 2.0, -5.0])))
 
     cam.transform.look_at(np.array([0, 1, 0]), np.array([0, 1, 0]))
@@ -122,8 +125,12 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
     matg = MaterialFactory.create_diffuse(Color.from_hex("#202020"), roughness=0.8)
     scene.add_object_by_context(SDF_Material(Sphere(100), matg), "Ground", Transform(np.array([0.0, -101, 0.0]), scale=np.full(3, 100)))
 
-    # Lights - Darker fill to emphasize emission
-    fill = Light(color=Color.from_hex("#333344"), intensity=200.0, radius=10.0)
+    # Lights – weak key so the mirror has something to reflect;
+    # dim tinted fill preserved to keep the emissive glow as the hero.
+    key = Light(color=Color.from_hex("#FFFFFF"), intensity=80.0, radius=1.5)
+    scene.add_object_by_context(key, "KeyEmiss", Transform(np.array([2.0, 3.0, -2.0])))
+
+    fill = Light(color=Color.from_hex("#333344"), intensity=60.0, radius=10.0)
     scene.add_object_by_context(fill, "FillEmiss", Transform(np.array([-4.0, 2.0, -3.0])))
     
     cam.transform.look_at(np.array([0, 0.5, 0]))
@@ -154,14 +161,14 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     v_plane = SDF_Material(ShapeExtrusion(Rectangle(np.array([10, 10])), 0.1), mat_plane)
     scene.add_object_by_context(v_plane, "StudioBack", Transform(np.array([0.0, 0.0, 3.0])))
 
-    # Lights
-    key = Light(color=Color.from_hex("#EEE0BA"), intensity=1500.0, radius=10)
+    # Lights – balanced three-point studio rig
+    key = Light(color=Color.from_hex("#EEE0BA"), intensity=400.0, radius=3.0)
     scene.add_object_by_context(key, "StudioKey", Transform(np.array([2.5, 2.5, -2.0])))
 
-    rim = Light(color=Color.from_hex("#DC97C5"), intensity=100.0, radius=0.75)
+    rim = Light(color=Color.from_hex("#DC97C5"), intensity=150.0, radius=1.5)
     scene.add_object_by_context(rim, "StudioRim", Transform(np.array([-3.0, 1.0, 1.0])))
 
-    fill = Light(color=Color.from_hex("#C7DBD8"), intensity=150.0, radius=2)
+    fill = Light(color=Color.from_hex("#C7DBD8"), intensity=180.0, radius=3.0)
     scene.add_object_by_context(fill, "StudioFill", Transform(np.array([0.0, -2.5, -2.0])))
 
     cam.transform.look_at(np.array([0, 0.4, 0]))
@@ -243,9 +250,12 @@ def get_rgb_cornell_box_scene(width: int = 126, height: int = 126) -> Scene:
         Transform(np.array([1.5, floor_y + 0.6, -1.5]), rotation=np.array([0, np.deg2rad(45), 0]), scale=np.array([0.6, 0.6, 0.6]))
     )
 
-    # 6. Lights
-    ceiling_light = Light(color=Color.from_hex("#FFECDE"), intensity=8000.0, radius=5)
+    # 6. Lights – area ceiling panel + subtle floor bounce
+    ceiling_light = Light(color=Color.from_hex("#FFECDE"), intensity=1200.0, radius=3.0)
     scene.add_object_by_context(ceiling_light, "CeilingLight", Transform(np.array([0.0, room_y[1] - 0.5, 0.0])))
+
+    floor_bounce = Light(color=Color.from_hex("#FFE8CC"), intensity=80.0, radius=4.0)
+    scene.add_object_by_context(floor_bounce, "FloorBounce", Transform(np.array([0.0, floor_y + 0.1, 0.0])))
 
     cam.transform.look_at(np.array([0, 2, 0]))
 
@@ -310,16 +320,19 @@ def get_cyberpunk_scene(width: int = 140, height: int = 100) -> Scene:
             Transform(np.array([2.6, 2.5, z_pos]), scale=np.array([0.1, 0.1, 1.2]))
         )
 
-    # Lighting
-    # Pink light source on right
+    # Lighting – pink hero sign slightly brighter; dim ground fill for wet-road reflections
     scene.add_object_by_context(
-        Light(color=Color.from_hex("#FF0099"), intensity=200.0, radius=4.0),
+        Light(color=Color.from_hex("#FF0099"), intensity=280.0, radius=4.0),
         "PinkLight", Transform(np.array([3.0, 2.0, 0.0]))
     )
-    # Cyan light source on left
     scene.add_object_by_context(
-        Light(color=Color.from_hex("#00FFFF"), intensity=200.0, radius=4.0),
+        Light(color=Color.from_hex("#00FFFF"), intensity=180.0, radius=4.0),
         "CyanLight", Transform(np.array([-3.0, 2.0, 5.0]))
+    )
+    # Low fill so the road surface picks up colour
+    scene.add_object_by_context(
+        Light(color=Color.from_hex("#1A0A2E"), intensity=60.0, radius=8.0),
+        "GroundFill", Transform(np.array([0.0, 0.5, 2.0]))
     )
 
     return scene
@@ -361,11 +374,11 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
     mat_c2 = MaterialFactory.create_specular(Color.from_hex("#FFD700"), roughness=0.5, metallicness=0.5)
     scene.add_object_by_context(SDF_Material(Cylinder(), mat_c2), "C_Matte", Transform(np.array([4.5, 0.6, 0.0])))
 
-    # Lights
-    l_main = Light(color=Color(1.0, 1.0, 1.0), intensity=150.0)
+    # Lights – main is the dominant key; fill lifts shadows from the side
+    l_main = Light(color=Color(1.0, 1.0, 1.0), intensity=400.0, radius=3.0)
     scene.add_object_by_context(l_main, "Main", Transform(np.array([0.0, 5.0, -5.0])))
     
-    l_fill = Light(color=Color(0.8, 0.8, 1.0), intensity=500.0, radius=5)
+    l_fill = Light(color=Color(0.8, 0.8, 1.0), intensity=150.0, radius=5.0)
     scene.add_object_by_context(l_fill, "Fill", Transform(np.array([5.0, 2.0, -2.0])))
 
     cam.transform.look_at(np.array([0.0, 0.5, 0.0]))
@@ -400,8 +413,12 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
     mat_water = MaterialFactory.create_glass(Color.from_hex("#A6ADD5"), Color.from_hex("#1F1FFF"), 0.0, 0.0, REFRACTIVE_INDICES["water"], 0.1)
     scene.add_object_by_context(SDF_Material(Sphere(), mat_water), "WaterSphere", Transform(np.array([1.2, 0.5, 0.0])))
 
-    # Lights
-    l_front = Light(color=Color(1.0, 1.0, 1.0), intensity=150.0)
+    # Lights – backlight illuminates the striped bars seen through glass;
+    # front fill prevents the camera-facing hemispheres from going dead black.
+    l_back = Light(color=Color(1.0, 1.0, 1.0), intensity=300.0, radius=4.0)
+    scene.add_object_by_context(l_back, "BackLight", Transform(np.array([0.0, 2.0, 4.0])))
+
+    l_front = Light(color=Color(0.9, 0.9, 1.0), intensity=120.0, radius=3.0)
     scene.add_object_by_context(l_front, "FrontLight", Transform(np.array([2.0, 3.0, -3.0])))
     
     cam.transform.look_at(np.array([0, 0.5, 0]))
@@ -459,16 +476,15 @@ def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
 
     # Lighting
     # Backlight (Rim lighting for the monolith)
-    # We place a strong light near the sun's position
     scene.add_object_by_context(
         Light(color=Color.from_hex("#FF6600"), intensity=800.0, radius=10.0),
         "BackLight",
         Transform(np.array([0.0, 4.0, 10.0]))
     )
 
-    # Faint purple fill from the front so the monolith isn't 100% black silhouette
+    # Purple fill – lifted so the monolith front face reads purple, not pure black
     scene.add_object_by_context(
-        Light(color=Color.from_hex("#5500AA"), intensity=50.0, radius=10.0),
+        Light(color=Color.from_hex("#5500AA"), intensity=120.0, radius=10.0),
         "FrontFill",
         Transform(np.array([-5.0, 2.0, -10.0]))
     )
@@ -547,16 +563,16 @@ def get_scifi_corridor_scene(width: int = 160, height: int = 120) -> Scene:
         )
 
     # Lighting
-    # Point light following the camera to light up immediate geometry
+    # Near point light – lifts the immediate pillars and floor strips
     scene.add_object_by_context(
-        Light(color=Color(1.0, 1.0, 1.0), intensity=100.0, radius=5.0),
+        Light(color=Color(1.0, 1.0, 1.0), intensity=300.0, radius=3.0),
         "PlayerLight",
         Transform(np.array([0.0, 2.0, -8.0]))
     )
 
-    # Blue fill light from the end of the tunnel
+    # Distant blue – atmospheric pull toward the tunnel end
     scene.add_object_by_context(
-        Light(color=Color(0.0, 0.5, 1.0), intensity=500.0, radius=20.0),
+        Light(color=Color(0.0, 0.5, 1.0), intensity=400.0, radius=20.0),
         "EndLight",
         Transform(np.array([0.0, 2.0, 30.0]))
     )
@@ -591,11 +607,11 @@ def get_pastel_blocks_scene(width: int = 120, height: int = 120) -> Scene:
     # Top cube balancing on the sphere, tilted
     scene.add_object_by_context(SDF_Material(Cube(0.8), mat_purple), "TopObj", Transform(np.array([0.2, 3.5, 0.2]), np.array([np.deg2rad(30), np.deg2rad(45), np.deg2rad(10)])))
 
-    # Lights
-    key = Light(color=Color.from_hex("#FFFBEB"), intensity=200.0, radius=5.0)
+    # Lights – boosted so pastels stay bright and airy
+    key = Light(color=Color.from_hex("#FFFBEB"), intensity=320.0, radius=5.0)
     scene.add_object_by_context(key, "Key", Transform(np.array([4.0, 6.0, -4.0])))
 
-    fill = Light(color=Color.from_hex("#E6E6FA"), intensity=120.0, radius=5.0)
+    fill = Light(color=Color.from_hex("#E6E6FA"), intensity=180.0, radius=5.0)
     scene.add_object_by_context(fill, "Fill", Transform(np.array([-4.0, 2.0, -4.0])))
 
     cam.transform.look_at(np.array([0, 1.5, 0]))
@@ -642,9 +658,13 @@ def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
         mat_bar = MaterialFactory.create_emissive(col, 3.0)
         scene.add_object_by_context(SDF_Material(Cube(), mat_bar), f"Bar_{i}", Transform(np.array([i * 1.2, 2.0, 4.0]), scale=np.array([0.5, 5.0, 0.5])))
 
-    # Light
-    light = Light(color=Color(1.0, 1.0, 1.0), intensity=150.0)
-    scene.add_object_by_context(light, "TopLight", Transform(np.array([2.0, 5.0, -4.0])))
+    # Light – key from the front-top with area radius; backlight to illuminate
+    # the striped wall visible through the refracting objects.
+    key = Light(color=Color(1.0, 1.0, 1.0), intensity=250.0, radius=3.0)
+    scene.add_object_by_context(key, "TopLight", Transform(np.array([2.0, 5.0, -4.0])))
+
+    back = Light(color=Color(1.0, 0.95, 0.9), intensity=200.0, radius=5.0)
+    scene.add_object_by_context(back, "BackLight", Transform(np.array([0.0, 2.0, 6.0])))
 
     cam.transform.look_at(np.array([0, 0.5, 0]))
     return scene
@@ -675,11 +695,11 @@ def get_glass_sculpture_scene(width: int = 120, height: int = 120) -> Scene:
     mat_mirror = MaterialFactory.create_specular(Color(1.0, 1.0, 1.0), roughness=0.0, metallicness=1.0)
     scene.add_object_by_context(SDF_Material(Cube(), mat_mirror), "MirrorBack", Transform(np.array([-2.0, 1.0, 4.0]), np.array([0, np.deg2rad(-20), 0]), scale=np.array([5, 5, 0.1])))
 
-    # Lights
-    l_cyan = Light(color=Color.from_hex("#00FFFF"), intensity=200.0)
+    # Lights – area radii added; rim lifted to illuminate cube edges
+    l_cyan = Light(color=Color.from_hex("#00FFFF"), intensity=200.0, radius=2.5)
     scene.add_object_by_context(l_cyan, "CyanKey", Transform(np.array([4.0, 4.0, -4.0])))
     
-    l_rim = Light(color=Color.from_hex("#FFFFFF"), intensity=80.0)
+    l_rim = Light(color=Color.from_hex("#FFFFFF"), intensity=150.0, radius=2.0)
     scene.add_object_by_context(l_rim, "Rim", Transform(np.array([-4.0, 0.0, -2.0])))
 
     cam.transform.look_at(np.array([0, 0, 0]))
@@ -719,9 +739,12 @@ def get_100_spheres_grid_scene(width: int = 128, height: int = 128) -> Scene:
     mat_floor = MaterialFactory.create_diffuse(Color.from_hex("#333333"), roughness=0.5)
     scene.add_object_by_context(SDF_Material(Cube(), mat_floor), "Floor", Transform(np.array([0.0, -2.5, 0.0]), scale=np.array([20, 1, 20])))
 
-    # Light
-    sun = Light(color=Color(1.0, 1.0, 0.9), intensity=1500.0)
+    # Light – sun + cool sky fill so back-facing spheres aren't totally dark
+    sun = Light(color=Color(1.0, 1.0, 0.9), intensity=1200.0, radius=3.0)
     scene.add_object_by_context(sun, "Sun", Transform(np.array([10.0, 20.0, -10.0])))
+
+    sky_fill = Light(color=Color(0.5, 0.6, 0.8), intensity=200.0, radius=15.0)
+    scene.add_object_by_context(sky_fill, "SkyFill", Transform(np.array([-10.0, 15.0, 10.0])))
     
     cam.transform.look_at(np.array([0, 0, 0]))
     return scene
@@ -750,9 +773,12 @@ def get_low_ior_scene(width: int = 120, height: int = 120) -> Scene:
             # Placed further back so they are clearly visible through the sphere
             scene.add_object_by_context(SDF_Material(tile_shape, mat), f"Tile_{x}_{y}", Transform(np.array([x * 1.5, y * 1.5, 3.0]), scale=np.array([0.6, 0.6, 0.1])))
 
-    # Light
-    front_light = Light(color=Color(1.0, 1.0, 1.0), intensity=1000.0)
+    # Light – front key with radius + back fill to illuminate the grid tiles
+    front_light = Light(color=Color(1.0, 1.0, 1.0), intensity=600.0, radius=3.0)
     scene.add_object_by_context(front_light, "Front", Transform(np.array([2.0, 2.0, -5.0])))
+
+    back_fill = Light(color=Color(0.8, 0.8, 1.0), intensity=250.0, radius=4.0)
+    scene.add_object_by_context(back_fill, "BackFill", Transform(np.array([-2.0, 0.0, 5.0])))
 
     return scene
 
@@ -788,9 +814,12 @@ def get_shape_showcase_scene(width: int = 160, height: int = 120) -> Scene:
 
     scene.add_object_by_context(SDF_Material(Cube(), MaterialFactory.create_diffuse(Color.from_hex("#333333"), 0.8)), "Floor", Transform(np.array([0.0, -2.0, 0.0]), scale=np.array([10, 1, 10])))
 
-    # Lights
-    l_main = Light(color=Color(1.0, 1.0, 1.0), intensity=2000.0)
+    # Lights – key + cool fill so all three rows are readable
+    l_main = Light(color=Color(1.0, 1.0, 1.0), intensity=800.0, radius=4.0)
     scene.add_object_by_context(l_main, "Main", Transform(np.array([5.0, 8.0, -5.0])))
+
+    l_fill = Light(color=Color(0.6, 0.7, 1.0), intensity=250.0, radius=6.0)
+    scene.add_object_by_context(l_fill, "Fill", Transform(np.array([-5.0, 4.0, 4.0])))
     
     cam.transform.look_at(np.array([0, 0, 0]))
     return scene
@@ -821,10 +850,10 @@ def get_abstract_geometry_scene(width: int = 140, height: int = 100) -> Scene:
     scene.add_object_by_context(SDF_Material(Pyramid(), mat_transparent), "TopPyramid", Transform(np.array([0.0, 1.5, 0.0]), scale=np.array([0.5, 0.5, 0.5])))
 
     # Lights
-    l_key = Light(color=Color(1.0, 1.0, 1.0), intensity=500.0)
+    l_key = Light(color=Color(1.0, 1.0, 1.0), intensity=500.0, radius=2.5)
     scene.add_object_by_context(l_key, "Key", Transform(np.array([3.0, 3.0, -3.0])))
     
-    l_fill = Light(color=Color(0.5, 0.7, 1.0), intensity=120.0, radius=2)
+    l_fill = Light(color=Color(0.5, 0.7, 1.0), intensity=120.0, radius=3.0)
     scene.add_object_by_context(l_fill, "Fill", Transform(np.array([-3.0, -1.0, 3.0])))
 
     cam.transform.look_at(np.array([0, 0, 0]))
@@ -872,9 +901,12 @@ def get_industrial_shapes_scene(width: int = 150, height: int = 100) -> Scene:
     scene.add_object_by_context(SDF_Material(Cube(), mat_e_red), "Button1", Transform(np.array([-0.5, 0.6, 2.2]), scale=np.array([0.1, 0.1, 0.1])))
     scene.add_object_by_context(SDF_Material(Cube(), mat_e_blue), "Button2", Transform(np.array([0.5, 0.6, 2.2]), scale=np.array([0.1, 0.1, 0.1])))
 
-    # Lighting
-    l_overhead = Light(color=Color(1.0, 1.0, 0.9), intensity=300.0)
+    # Lighting – overhead key with area radius + warm side fill for the panel face
+    l_overhead = Light(color=Color(1.0, 1.0, 0.9), intensity=350.0, radius=3.0)
     scene.add_object_by_context(l_overhead, "Overhead", Transform(np.array([2.0, 5.0, 2.0])))
+
+    l_side = Light(color=Color(1.0, 0.9, 0.7), intensity=150.0, radius=4.0)
+    scene.add_object_by_context(l_side, "SideFill", Transform(np.array([-4.0, 2.0, -2.0])))
     
     cam.transform.look_at(np.array([0, 0.5, 0]))
     return scene
@@ -945,9 +977,12 @@ def get_forest_clearing_scene(width: int = 140, height: int = 100) -> Scene:
         Transform(np.array([0.0, 0.3, 0.0]), scale=np.array([0.8, 0.5, 0.6]))
     )
 
-    # Lighting
-    sun_light = Light(color=Color.from_hex("#FFFACD"), intensity=1200.0, radius=5.0)
+    # Lighting – sun + sky bounce to fill shadows under the canopy
+    sun_light = Light(color=Color.from_hex("#FFFACD"), intensity=1000.0, radius=5.0)
     scene.add_object_by_context(sun_light, "Sun", Transform(np.array([10.0, 15.0, 5.0])))
+
+    sky_fill = Light(color=Color.from_hex("#87CEEB"), intensity=200.0, radius=12.0)
+    scene.add_object_by_context(sky_fill, "SkyFill", Transform(np.array([-8.0, 10.0, -8.0])))
 
     return scene
 
@@ -1004,9 +1039,9 @@ def get_checkerboard_infinity_scene(width: int = 120, height: int = 120) -> Scen
         Transform(np.array([5.0, 2.0, -2.0]))
     )
     
-    # Overhead fill
+    # Overhead fill – neutral cool white
     scene.add_object_by_context(
-        Light(color=Color.from_hex("#444455"), intensity=200.0),
+        Light(color=Color.from_hex("#CCCCDD"), intensity=200.0),
         "Fill",
         Transform(np.array([0.0, 10.0, 5.0]))
     )
@@ -1076,12 +1111,12 @@ def get_orbital_dock_scene(width: int = 140, height: int = 100) -> Scene:
         Transform(np.array([2.0, 0.6, 0.0]), scale=np.full(3, 0.1))
     )
 
-    # Light Source (Distant Star - Sharp shadows)
-    sun = Light(color=Color.from_hex("#FFFFFF"), intensity=2000.0, radius=0.0) 
+    # Light Source (Distant Star – small area radius for softer shadow edges)
+    sun = Light(color=Color.from_hex("#FFFFFF"), intensity=1800.0, radius=1.5) 
     scene.add_object_by_context(sun, "Star", Transform(np.array([10.0, 5.0, 10.0])))
 
-    # Blue bounce light from a nearby planet
-    planet_bounce = Light(color=Color.from_hex("#002244"), intensity=100.0, radius=10.0)
+    # Blue bounce light from a nearby planet – raised so the dark hull side is readable
+    planet_bounce = Light(color=Color.from_hex("#002244"), intensity=300.0, radius=10.0)
     scene.add_object_by_context(planet_bounce, "PlanetFill", Transform(np.array([-5.0, -10.0, -5.0])))
 
     return scene
@@ -1118,9 +1153,12 @@ def get_sdf_boolean_scene(width: int = 120, height: int = 120) -> Scene:
     # Floor
     scene.add_object_by_context(SDF_Material(Cube(), mat_floor), "Floor", Transform(np.array([0.0, -0.5, 0.0]), scale=np.array([10, 0.1, 10])))
     
-    # Lighting
-    main_light = Light(color=Color(1, 1, 1), intensity=1500.0, radius=2.0)
+    # Lighting – key + fill so the carved interior surfaces on both objects are readable
+    main_light = Light(color=Color(1, 1, 1), intensity=800.0, radius=2.5)
     scene.add_object_by_context(main_light, "MainLight", Transform(np.array([0.0, 5.0, -5.0])))
+
+    fill_light = Light(color=Color(0.7, 0.7, 0.9), intensity=250.0, radius=4.0)
+    scene.add_object_by_context(fill_light, "FillLight", Transform(np.array([0.0, 2.0, 3.0])))
 
     cam.transform.look_at(np.array([0, 1, 0]))
     return scene

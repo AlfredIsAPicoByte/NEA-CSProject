@@ -48,6 +48,9 @@ class SDF_Material:
         
         if callable(getattr(self.shape, 'get_convex_hull')):
             hull = self.shape.get_convex_hull()
+            if hull is None or len(hull) == 0:
+                raise ValueError("Convex hull is empty or None")
+            
             min_pt = hull.min(axis=0) - padding
             max_pt = hull.max(axis=0) + padding
             return convert_bounds_to_corners(min_pt, max_pt)
