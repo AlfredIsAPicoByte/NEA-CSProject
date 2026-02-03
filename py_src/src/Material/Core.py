@@ -93,16 +93,10 @@ class PBRMaterial:
         
         if self.data.type == MaterialType.EMISSIVE:
             return self.evaluate_emissive_component()
-        
-        if light_nodes is None or len(light_nodes) == 0:
-            return accumulated_light
 
         for light_node in light_nodes:
             # --- Light Setup (World Space) ---
-            light_context = light_node.context
-            light = getattr(light_context, "light", None)
-            if light is None:
-                continue
+            light = light_node.context
 
             light = cast(Light, light)
 
@@ -119,7 +113,6 @@ class PBRMaterial:
             
             # Pre-calculate attenuation (distance-based).
             attenuation = attenuate_inv_sqr_distance(dist)
-            print(attenuation)
 
             # Final radiance
             incoming_radiance = light.get_radiance(light_node.world_transform.position, hit_point) * attenuation * visibility
@@ -178,7 +171,8 @@ class PBRMaterial:
             pdf = cos_theta / np.pi
             
             # 3. Throughput (The attenuation of light)
-            return new_dir, self.data.albedo, pdf
+            bsdf = self.data.albedo * (1.0 / np.pi)   # Lambertian BRDF
+            return new_dir, bsdf, pdf
         
         # --- D. SPECULAR (Metal/Mirror) ---
         if self.data.type == MaterialType.SPECULAR:

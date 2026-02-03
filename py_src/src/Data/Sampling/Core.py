@@ -169,6 +169,7 @@ class Sampler:
 
     def get_samples_per_pixel(self, x: int, y: int) -> List[Sample]:
         self.start_pixel(x, y)
+        
         out = []
         for i in range(self.settings.samples_per_pixel):
             u, v = self.sample_pixel(x, y, i)
@@ -232,24 +233,15 @@ class Sampler:
         Returns a random normalized vector on the surface of a unit sphere.
         Uses the standard Spherical Coordinate method.
         """
-        # 1. Pick two random numbers
         u1 = np.random.random()
         u2 = np.random.random()
 
-        # 2. Calculate spherical coordinates
-        # z goes from -1 to 1
-        z = 1.0 - 2.0 * u1 
-        
-        # r is the radius of the slice at height z
+        z = 1.0 - 2.0 * u1
         r = math.sqrt(max(0.0, 1.0 - z * z))
-        
-        # phi is the angle around the Z axis
         phi = 2.0 * math.pi * u2
 
-        # 3. Convert to Cartesian (x, y, z)
         x = r * math.cos(phi)
         y = r * math.sin(phi)
-
         return np.array([x, y, z], dtype=np.float32)
 
     def sample_cosine_hemisphere(self, normal: np.ndarray) -> np.ndarray:
@@ -267,21 +259,14 @@ class Sampler:
         u1 = np.random.random()
         u2 = np.random.random()
         
-        # r = sqrt(u1) ensures area-preserving mapping on the disk
         r = math.sqrt(u1)
         theta = 2.0 * math.pi * u2
-        
-        # Local coordinates (on the disk)
+
         local_x = r * math.cos(theta)
         local_y = r * math.sin(theta)
-        
-        # Project up to the hemisphere surface
-        # z = sqrt(1 - x^2 - y^2) = sqrt(1 - r^2) = sqrt(1 - u1)
         local_z = math.sqrt(max(0.0, 1.0 - u1))
 
         local_vector = np.array([local_x, local_y, local_z], dtype=np.float32)
-
-        # 2. Transform Local Space -> World Space (Align with actual Normal)
         return self._align_to_normal(local_vector, normal)
 
     def _align_to_normal(self, sample_dir: np.ndarray, normal: np.ndarray) -> np.ndarray:

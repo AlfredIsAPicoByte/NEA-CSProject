@@ -675,6 +675,7 @@ class LambertShading(PhysicalShadingStrategy):
                         occlusion_function,
                         stats
                     )
+                
                 screen_coords = scene.camera.world_to_screen(hit_info.point)
                 x_idx = int(round(screen_coords[0]))
                 y_idx = int(round(screen_coords[1]))
@@ -763,16 +764,39 @@ class RecursiveLambertShading(LambertShading):
         indirect_color = Color(0.0, 0.0, 0.0)
 
         # Sample indirect lighting contribution
-        if material.data.type == MaterialType.GLASS:
-            if self.settings.enable_bidirectional_scattering:
-                direction, throughput = material.sample_glass_contribution(hit_info.direction, hit_info.normal, sampler, 1.0003)
-                pdf = 1.0
-            else:
-                direction = hit_info.normal
-                throughput = material.data.albedo
-                pdf = 0.0
+        if material.data.type == MaterialType.GLASS:    
+            direction, throughput = material.sample_glass_contribution(
+                hit_info.direction, hit_info.normal, sampler, 1.0003
+            )
+            # Glass is a singular event: trace directly, no pdf division needed
+            new_origin = hit_info.point + direction * bias
+            indirect_ray = TracingRay(new_origin, direction, is_inside=ray.is_inside)
+            bounced_color = trace_function(scene, indirect_ray, recursions_left - 1, sampler)
+            indirect_color += throughput * bounced_color
+
+        elif material.data.type == MaterialType.SPECULAR and material.data.roughness < 0.01:
+            # Perfect mirror: also singular, same treatment
+            direction, throughput, _ = material.sample_indirect_contribution(
+                hit_info.direction, hit_info.normal, sampler
+            )
+            new_origin = hit_info.point + direction * bias
+            indirect_ray = TracingRay(new_origin, direction, is_inside=ray.is_inside)
+            bounced_color = trace_function(scene, indirect_ray, recursions_left - 1, sampler)
+            indirect_color += throughput * bounced_color
+
         else:
-            direction, throughput, pdf = material.sample_indirect_contribution(hit_info.direction, hit_info.normal, sampler)
+            # Everything else (diffuse, rough specular): normal pdf-weighted path
+            direction, throughput, pdf = material.sample_indirect_contribution(
+                hit_info.direction, hit_info.normal, sampler
+            )
+            if pdf > 1e-6 and np.linalg.norm(throughput.to_np_array()[:3]) > 1e-6:
+                weighted_throughput = Color(*calculate_throughput_weight(
+                    direction, hit_info.normal, throughput, pdf
+                ))
+                new_origin = hit_info.point + direction * bias
+                indirect_ray = TracingRay(new_origin, direction, is_inside=ray.is_inside)
+                bounced_color = trace_function(scene, indirect_ray, recursions_left - 1, sampler)
+                indirect_color += weighted_throughput * bounced_color
         
         if pdf > 1e-6 and np.linalg.norm(throughput.to_np_array()[:3]) > 1e-6:
             weighted_throughput = Color(*calculate_throughput_weight(direction, hit_info.normal, throughput, pdf))

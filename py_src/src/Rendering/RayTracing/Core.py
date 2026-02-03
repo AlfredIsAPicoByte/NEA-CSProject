@@ -1,3 +1,5 @@
+from random import sample
+from xmlrpc.client import Boolean
 import numpy as np
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, Tuple
@@ -9,7 +11,7 @@ from ..Core import Algorithm, RenderStats, AlgorithmSettings
 from . import Intersections
 from . import Shading
 from src.Image.Film import Film
-from src.Data.Sampling.Core import SamplingManager, SampleSettings, Sampler, Sample, reconstruct_pixel
+from src.Data.Sampling.Core import SamplingManager, SampleSettings, Sampler, Sample, reconstruct_pixel, AdaptiveSampler
 from src.Data.Scene import Scene
 
 # TODO: Pool tracing rays and hit info to reduce memory useage at runtime
@@ -138,7 +140,7 @@ class RayTracer(Algorithm):
         super().__init__(settings)
         self.settings = settings
         self.stats: TracingStats = TracingStats()
-    
+
     def _trace_ray(self, scene: Scene, ray: TracingRay, recursions_left: int, sampler: Sampler) -> Color:
         # 1. Base Case
         if recursions_left < 0:
@@ -229,12 +231,20 @@ class RayTracer(Algorithm):
             )
             pixle_color = self._sanitize_color(pixle_color)
 
-            s_u = getattr(ray, "sample_u", (px + 0.5) / width)
-            s_v = getattr(ray, "sample_v", (py + 0.5) / height)
+            image_w = self.settings.sampling_manager.settings.width
+            image_h = self.settings.sampling_manager.settings.height
+            s_u = getattr(ray, "sample_u", (px + 0.5) / image_w)
+            s_v = getattr(ray, "sample_v", (py + 0.5) / image_h)
             sample = Sample(s_u, s_v, 1.0)
             
             local_idx = local_y * width + local_x
             tile_samples[local_idx].append((sample, pixle_color))
+
+            if isinstance(sampler, AdaptiveSampler):
+                pixel_colors_so_far = [sc[1].to_np_array(include_alpha=False) for sc in tile_samples[local_idx]]
+                if len(pixel_colors_so_far) >= sampler.settings.min_samples:
+                    if sampler.has_converged(pixel_colors_so_far):
+                        continue  # skip remaining samples for this pixel
 
             self.stats.pixels_processed += 1
 
@@ -244,30 +254,30 @@ class RayTracer(Algorithm):
                 
                 if not samples_and_colors: continue
                 # Calculate Global Pixel Index
-                local_y_in_tile = i // width
-                local_x_in_tile = i % width
+                ty = i // width
+                tx = i % width
                     
-                global_x = tile_x + local_x_in_tile
-                global_y = tile_y + local_y_in_tile
+                px = tile_x + tx
+                py = tile_y + ty
                     
                 # Reconstruct
                 samples = [sc[0] for sc in samples_and_colors]
+                
                 # Convert Color objects to RGBA arrays
                 colors = []
                 for sc in samples_and_colors:
                     color_obj: Color = sc[1]
-                    color_array = color_obj.to_np_array(include_alpha=True)
-                    colors.append(color_array)
+                    colors.append(color_obj.to_np_array(include_alpha=False))
                 
-                rec_rgb = reconstruct_pixel(global_x, global_y, samples, colors, self.settings.sampling_manager.settings)
-                final_color = Color(*rec_rgb)
+                rec_rgb = reconstruct_pixel(px, py, samples, colors, self.settings.sampling_manager.settings)
+                final_color = Color(*rec_rgb[:3])
                 
                 self.settings.film.add_pixel_batch(
-                    global_x,
-                    global_y,
+                    px, py,
                     final_color.to_np_array(),
                     1.0
                 )
+        self.stats.tiles_proccesed += 1
 
     def generate_film(
         self,
@@ -303,15 +313,19 @@ class RayTracer(Algorithm):
         if self.settings.use_tiling:
             for tile_y in range(region_y, region_y + region_height, self.settings.tile_size):
                 for tile_x in range(region_x, region_x + region_width, self.settings.tile_size):
+
                     tile_w = min(self.settings.tile_size, region_x + region_width - tile_x)
                     tile_h = min(self.settings.tile_size, region_y + region_height - tile_y)
-                    
+
                     self.render_tile(scene, sampler, tile_x, tile_y, tile_w, tile_h)
-                    
                     tile_count += 1
+                    
                     if self.settings.verbose_logging:
                         print(f" * Rendered tile {tile_count}/{total_tiles}")
-                    Film.save(self.settings.film.get_image(), "_temp.png")
+                    
+                    if self.settings.debug_mode:
+                        # Save intermediate image for debugging
+                        Film.save(self.settings.film.get_image(), "_temp.png")
         else:
             self.render_tile(scene, sampler, region_x, region_y, region_width, region_height)
 
@@ -322,7 +336,7 @@ class RayTracer(Algorithm):
         if self.settings.verbose_logging:
             print(" * Rendering complete.")
     
-    def _sanitize_color(self, color: Color) -> Color:
+    def _sanitize_color(self, color) -> Color:
         """Turn arbitrary shader output into a finite Color and record NaN events if needed."""
         # 1. Handle None or Invalid types quickly
         if color is None: 

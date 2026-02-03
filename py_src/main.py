@@ -51,8 +51,8 @@ def apply_post_processing(raw_img):
     pipeline = ImagePipeline()
     pipeline.add_pass(AutoExposure())
     pipeline.add_pass(Bloom(1, 25, 0.67, 0.75))
-    pipeline.add_pass(ChromaticAberration())
-    pipeline.add_pass(Vignette(0.15, 0.6))
+    # pipeline.add_pass(ChromaticAberration())
+    # pipeline.add_pass(Vignette(0.15, 0.6))
     pipeline.add_pass(ACESFilmicToneMapping())
     pipeline.add_pass(GammaCorrection(2.2))
     
@@ -61,18 +61,27 @@ def apply_post_processing(raw_img):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RayTracer CLI")
     parser.add_argument("--post", dest="postprocessing", action="store_true", help="Enable post-processing")
-    parser.add_argument("--verbose", dest="verbose", action="store_true", help="Enable verbose logging during rendering")
-    parser.add_argument("--debug", dest="debug", action="store_true", help="Enable debug mode during rendering")
-    parser.add_argument("--mem-trace", dest="memory_trace", action="store_true", help="Enable memory tracing during rendering")
+    parser.add_argument("--verbose", dest="verbose", action="store_true", help="Enable verbose logging")
+    parser.add_argument("--debug", dest="debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("--mem-trace", dest="memory_trace", action="store_true", help="Enable memory tracing")
+    parser.add_argument("--samples", type=int, default=1, help="Samples per pixel (1=fast, 16=quality)")
+    parser.add_argument("--quick", action="store_true", help="Quick preview mode (1spp, no tile test, no post)")
     args = parser.parse_args()
+    
+    img_width, img_height = 240, 135
+    args.samples = 4
+
+    # Quick mode overrides
+    if args.quick:
+        args.samples = 1
+        args.postprocessing = False
+        img_width, img_height = 180, 144
 
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     IMG_OUT_DIR = os.path.join(PROJECT_ROOT, "images", "benchmarking", "scenes")
     REP_OUT_DIR = os.path.join(PROJECT_ROOT, "reports", "benchmarking", "scenes")
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
-
-    img_width, img_height = 100, 100
 
     all_scenes = [
         get_minimal_scene(img_width, img_height),
@@ -99,21 +108,27 @@ if __name__ == "__main__":
         get_orbital_dock_scene(img_width, img_height),
     ]
 
-    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.GAUSSIAN, filter_width=1.5)
+    sample_settings = SampleSettings(
+        width=img_width, 
+        height=img_height, 
+        samples_per_pixel=args.samples,
+        filter_type=PixelFilter.GAUSSIAN, 
+        filter_width=8,
+    )
     sampling_manager = SamplingManager(sample_settings, "adaptive")
 
     for scene in all_scenes:
         intersection = BVHIntersection(IntersectionSettings(
-            max_distance=500,
+            max_distance=1000,
             max_steps=256,
             step_relaxation=0.99,
             epsilon=1e-4
         ))
 
-        shading = FlatShading(PhysicalShadingSettings(
+        shading = LambertShading(PhysicalShadingSettings(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.1)),
-            shadow_settings=ShadowSettings(True, 8, 1e-2),
-            background_settings=BackgroundSettings(False, Color.from_hex("#283848"), getattr(scene, "background_color", None), True)
+            shadow_settings=ShadowSettings(True, 8, 1e-3),
+            background_settings=BackgroundSettings(True, Color.from_hex("#283848"), getattr(scene, "background_color", None), True)
         ))
 
         raytracer = RayTracer(RayTracingSettings(
@@ -124,7 +139,7 @@ if __name__ == "__main__":
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,
-            tile_size=16,
+            tile_size=64,
             debug_mode=args.debug,
             verbose_logging=args.verbose
         ))

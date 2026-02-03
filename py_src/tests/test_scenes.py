@@ -40,9 +40,10 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
     matg = MaterialFactory.create_diffuse(Color.from_hex("#3F3F3F"), 0.9)
     scene.add_object_by_context(SDF_Material(Sphere(100), matg), "Ground Min", Transform(np.array([0.0, -101, 0.0]), scale=np.full(3, 100)))
 
-    # Single light - Adjusted position for better shadow casting
+    # lights - Adjusted position for better shadow casting
     light = Light(color=Color.from_hex("#FFFFFF"), intensity=350.0, radius=3)
     scene.add_object_by_context(light, "Sun Min", Transform(np.array([3.0, 4.0, -2.0])))
+    scene.add_object_by_context(light, "Sun Min", Transform(np.array([2.0, 3.0, -1.0])))
 
     return scene
 
