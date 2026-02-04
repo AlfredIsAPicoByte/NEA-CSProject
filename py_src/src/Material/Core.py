@@ -396,13 +396,19 @@ class PBRMaterial:
         denom_fs = 4.0 * NdotL * NdotV 
         
         if denom_fs > 0:
+            # Clamp NDF to prevent fireflies on mirror-like surfaces
+            clamped_NDF = min(NDF, 1.0 / (np.pi * 1e-4))
             # Fs is the specular BRDF (Fs = D * G * F / denominator)
-            Fs = (NDF * GSF * FF) * (1.0 / denom_fs) 
+            Fs = (clamped_NDF * GSF * FF) * (1.0 / denom_fs) 
         else:
             Fs = Color(0.0, 0.0, 0.0) 
 
-        # Final Specular Color: Light Intensity * BRDF * Cosine Term
-        specular =  Fs * NdotL * self.data.specular_intensity
+        # Final Specular Color: Light Intensity * BRDF * Cosine Term        # Final Specular Color: Light Intensity * BRDF * Cosine Term
+        # For metals (metallic ≈ 1), specular_intensity should NOT dim the reflection
+        # since F0 already encodes the metal's reflectivity via albedo.
+        # For dielectrics (metallic ≈ 0), specular_intensity controls highlight strength.
+        specular_scale = lerp(self.data.specular_intensity, 1.0, self.data.metallic)
+        specular =  Fs * NdotL * specular_scale
         
         return specular
 

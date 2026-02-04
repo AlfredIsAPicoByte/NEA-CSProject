@@ -1,21 +1,42 @@
 === Tracing Stats ===
-Time: 17.559s | Mem: 0.00MB
+Render Type: Ray Tracing
+Intersection: BVHIntersection
+Shading: RecursiveLambertShading
+Time: 44.396s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
-  - Total:       32,400
-  - Primary:     32,400     (100.0%)
-  - Shadow:      0          (Lights used: 1)
+  - Total:       103,680
+  - Primary:     103,680    (100.0%)
+  - Shadow:      0          (Lights used: 2)
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      79,574
-  - Tri Tests:       93,601
+  - AABB Tests:      251,476
+  - Tri Tests:       309,040
   - Nodes Visited:   0
-  - Cost/Ray:        5.34 (Target: < 50)
-  - Culling Ratio:   0.85 (Target: > 2.0)
+  - Cost/Ray:        5.41 (Target: < 50)
+  - Culling Ratio:   0.81 (Target: > 2.0)
 -------------------------
 Diagnostics:
   - Max Depth Hit:   0
   - Roulette Kills:  0
   - NaN Errors:      0
   - NaN Rate:        0.00 per 1000 rays
+-------------------------
+Totals:
+Pixels Processed: 0
+Tiles Processed:  30
+-------------------------
+Settings:
+  - image_width: 180
+  - image_height: 144
+  - film: Film(180x144, accum_pixels=(144, 180, 3), accum_weight=(144, 180), first_pixel=[0.81438756 0.9391241  0.96959823], first_weight=1.0, center_pixel=[0.754748  0.9116497 0.9595466], center_weight=1.0, last_pixel=[0.6656697  0.87061363 0.94453347], last_weight=1.0)
+  - sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x0000022A4DB95A90>
+  - max_recursions: 2
+  - intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x0000022A5D7B6310>
+  - shading_strategy: <src.Rendering.RayTracing.Shading.RecursiveLambertShading object at 0x0000022A5D7B7450>
+  - use_tiling: True
+  - tile_size: 32
+  - debug_mode: True
+  - verbose_logging: False
+=========================

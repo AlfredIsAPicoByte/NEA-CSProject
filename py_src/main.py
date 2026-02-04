@@ -68,8 +68,8 @@ if __name__ == "__main__":
     parser.add_argument("--quick", action="store_true", help="Quick preview mode (1spp, no tile test, no post)")
     args = parser.parse_args()
     
-    img_width, img_height = 32, 32
-    args.samples = 1
+    img_width, img_height = 180, 144
+    args.samples = 4
 
     # Quick mode overrides
     if args.quick:
@@ -84,11 +84,11 @@ if __name__ == "__main__":
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
     all_scenes = [
-        # get_minimal_scene(img_width, img_height),
-        # get_gradient_scene(img_width, img_height),
-        # get_emissive_scene(img_width, img_height),
-        # get_lit_studio_scene(img_width, img_height),
-        # get_rgb_cornell_box_scene(img_width, img_height),
+        get_minimal_scene(img_width, img_height),
+        get_gradient_scene(img_width, img_height),
+        get_emissive_scene(img_width, img_height),
+        get_lit_studio_scene(img_width, img_height),
+        get_rgb_cornell_box_scene(img_width, img_height),
         get_cyberpunk_scene(img_width, img_height),
         get_material_deck_scene(img_width, img_height),
         get_refraction_lab_scene(img_width, img_height),
@@ -125,7 +125,7 @@ if __name__ == "__main__":
             epsilon=1e-4
         ))
 
-        shading = LambertShading(PhysicalShadingSettings(
+        shading = RecursiveLambertShading(PhysicalShadingSettings(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.1)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
             background_settings=BackgroundSettings(True, Color.from_hex("#283848"), getattr(scene, "background_color", None), True, 0.5)
@@ -139,7 +139,7 @@ if __name__ == "__main__":
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,
-            tile_size=8,
+            tile_size=32,
             debug_mode=args.debug,
             verbose_logging=args.verbose
         ))

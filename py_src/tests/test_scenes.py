@@ -41,11 +41,11 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
     scene.add_object_by_context(SDF_Material(Sphere(100), matg), "Ground Min", Transform(np.array([0.0, -101, 0.0]), scale=np.full(3, 100)))
 
     # Key light – warm, elevated, primary shadow caster
-    key_light = Light(color=Color.from_hex("#FFF0D0"), intensity=300.0, radius=2.0)
+    key_light = Light(color=Color.from_hex("#FFF0D0"), intensity=280.0, radius=2.0)
     scene.add_object_by_context(key_light, "KeyLight", Transform(np.array([3.0, 4.0, -2.0])))
 
     # Fill light – cool, opposite side, softer falloff
-    fill_light = Light(color=Color.from_hex("#C0D8FF"), intensity=128.0, radius=5.0)
+    fill_light = Light(color=Color.from_hex("#C0D8FF"), intensity=100.0, radius=5.0)
     scene.add_object_by_context(fill_light, "FillLight", Transform(np.array([-3.0, 2.5, -1.0])))
 
     return scene
@@ -93,10 +93,10 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     scene.add_object_by_context(pyr_1, "Wooden Pyramid", Transform(np.array([-1.0, 0.5, 1.5]), rotation=np.array([0, np.deg2rad(45), 0])))
 
     # Lights
-    key_light = Light(color=Color.from_hex("#FFEDC7"), intensity=500.0, radius=2.0)
+    key_light = Light(color=Color.from_hex("#FFEDC7"), intensity=320.0, radius=2.0)
     scene.add_object_by_context(key_light, "Key Light", Transform(np.array([4.0, 5.0, -3.0])))
 
-    fill_light = Light(color=Color.from_hex("#C7E5FF"), intensity=250.0, radius=4.0)
+    fill_light = Light(color=Color.from_hex("#C7E5FF"), intensity=120.0, radius=4.0)
     scene.add_object_by_context(fill_light, "Fill Light", Transform(np.array([-5.0, 2.0, -5.0])))
 
     cam.transform.look_at(np.array([0, 1, 0]), np.array([0, 1, 0]))
@@ -114,7 +114,7 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
 
     # Objects
     # Moved glowing sphere to be clearly reflected in the mirror sphere
-    mat_glow = MaterialFactory.create_emissive(Color.from_hex("#FFEA62"), 6.7)
+    mat_glow = MaterialFactory.create_emissive(Color.from_hex("#FFEA62"), 5.0)
     v_emissive = SDF_Material(Sphere(0.3), mat_glow)
     scene.add_object_by_context(v_emissive, "GlowingSphere", Transform(np.array([1.2, 0.5, -0.5])))
 
@@ -122,15 +122,15 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
     v_mirror = SDF_Material(Sphere(1.0), mat_reflect)
     scene.add_object_by_context(v_mirror, "MirrorSphere", Transform(np.array([-0.5, 1.0, 0.5])))
 
-    matg = MaterialFactory.create_diffuse(Color.from_hex("#5C5C5C"), roughness=0.8)
+    matg = MaterialFactory.create_diffuse(Color.from_hex("#202020"), roughness=0.8)
     scene.add_object_by_context(SDF_Material(Sphere(100), matg), "Ground", Transform(np.array([0.0, -101, 0.0]), scale=np.full(3, 100)))
 
     # Lights – weak key so the mirror has something to reflect;
     # dim tinted fill preserved to keep the emissive glow as the hero.
-    key = Light(color=Color.from_hex("#FFFFFF"), intensity=200.0, radius=1.5)
+    key = Light(color=Color.from_hex("#FFFFFF"), intensity=80.0, radius=1.5)
     scene.add_object_by_context(key, "KeyEmiss", Transform(np.array([2.0, 3.0, -2.0])))
 
-    fill = Light(color=Color.from_hex("#333344"), intensity=120.0, radius=10.0)
+    fill = Light(color=Color.from_hex("#333344"), intensity=60.0, radius=10.0)
     scene.add_object_by_context(fill, "FillEmiss", Transform(np.array([-4.0, 2.0, -3.0])))
     
     cam.transform.look_at(np.array([0, 0.5, 0]))
@@ -168,7 +168,7 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     rim = Light(color=Color.from_hex("#DC97C5"), intensity=150.0, radius=1.5)
     scene.add_object_by_context(rim, "StudioRim", Transform(np.array([-3.0, 1.0, 1.0])))
 
-    fill = Light(color=Color.from_hex("#C7DBD8"), intensity=220.0, radius=3.0)
+    fill = Light(color=Color.from_hex("#C7DBD8"), intensity=180.0, radius=3.0)
     scene.add_object_by_context(fill, "StudioFill", Transform(np.array([0.0, -2.5, -2.0])))
 
     cam.transform.look_at(np.array([0, 0.4, 0]))
@@ -251,7 +251,7 @@ def get_rgb_cornell_box_scene(width: int = 126, height: int = 126) -> Scene:
     )
 
     # 6. Lights – area ceiling panel + subtle floor bounce
-    ceiling_light = Light(color=Color.from_hex("#FFECDE"), intensity=1000.0, radius=3.0)
+    ceiling_light = Light(color=Color.from_hex("#FFECDE"), intensity=1200.0, radius=3.0)
     scene.add_object_by_context(ceiling_light, "CeilingLight", Transform(np.array([0.0, room_y[1] - 0.5, 0.0])))
 
     floor_bounce = Light(color=Color.from_hex("#FFE8CC"), intensity=80.0, radius=4.0)
@@ -270,7 +270,7 @@ def get_cyberpunk_scene(width: int = 140, height: int = 100) -> Scene:
     cam = Camera(cam_transform, fov=70.0, resolution_width=width, resolution_height=height)
     
     # Dark purple/black background (Smoggy night)
-    scene = Scene("cyberpunk_street", cam, background_color=Color.from_hex("#11001A"))
+    scene = Scene("cyberpunk_street", cam, background_color=Color.from_hex("#05000a"))
 
     # Materials
     mat_asphalt_wet = MaterialFactory.create_specular(Color.from_hex("#111111"), roughness=0.2, metallicness=0.1)
@@ -280,7 +280,7 @@ def get_cyberpunk_scene(width: int = 140, height: int = 100) -> Scene:
 
     # Floor (Wet Road)
     scene.add_object_by_context(
-        SDF_Material(ShapeExtrusion(Rectangle(np.array([4.0, 20.0])), 0.1), mat_asphalt_wet), 
+        SDF_Material(Cube(), mat_asphalt_wet), 
         "Road", 
         Transform(np.array([0.0, -1.0, 0.0]), scale=np.array([4.0, 0.1, 20.0]))
     )
@@ -322,16 +322,16 @@ def get_cyberpunk_scene(width: int = 140, height: int = 100) -> Scene:
 
     # Lighting – pink hero sign slightly brighter; dim ground fill for wet-road reflections
     scene.add_object_by_context(
-        Light(color=Color.from_hex("#FF0099"), intensity=520.0, radius=4.0),
+        Light(color=Color.from_hex("#FF0099"), intensity=280.0, radius=4.0),
         "PinkLight", Transform(np.array([3.0, 2.0, 0.0]))
     )
     scene.add_object_by_context(
-        Light(color=Color.from_hex("#00FFFF"), intensity=300.0, radius=4.0),
+        Light(color=Color.from_hex("#00FFFF"), intensity=180.0, radius=4.0),
         "CyanLight", Transform(np.array([-3.0, 2.0, 5.0]))
     )
     # Low fill so the road surface picks up colour
     scene.add_object_by_context(
-        Light(color=Color.from_hex("#1A0A2E"), intensity=100.0, radius=8.0),
+        Light(color=Color.from_hex("#1A0A2E"), intensity=60.0, radius=8.0),
         "GroundFill", Transform(np.array([0.0, 0.5, 2.0]))
     )
 
@@ -349,7 +349,7 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
 
     # Floor
     mat_floor = MaterialFactory.create_diffuse(Color.from_hex("#CCCCCC"), roughness=1.0)
-    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Rectangle(np.array([10.0, 10.0])), 0.1), mat_floor), "Floor", Transform(np.array([0.0, -1.0, 0.0])))
+    scene.add_object_by_context(SDF_Material(Cube(), mat_floor), "Floor", Transform(np.array([0.0, -1.0, 0.0])))
 
     base_col = Color.from_hex("#D4AF37")
     
@@ -375,7 +375,7 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
     scene.add_object_by_context(SDF_Material(Cylinder(), mat_c2), "C_Matte", Transform(np.array([4.5, 0.6, 0.0])))
 
     # Lights – main is the dominant key; fill lifts shadows from the side
-    l_main = Light(color=Color(1.0, 1.0, 1.0), intensity=600.0, radius=3.0)
+    l_main = Light(color=Color(1.0, 1.0, 1.0), intensity=400.0, radius=3.0)
     scene.add_object_by_context(l_main, "Main", Transform(np.array([0.0, 5.0, -5.0])))
     
     l_fill = Light(color=Color(0.8, 0.8, 1.0), intensity=150.0, radius=5.0)
@@ -1154,10 +1154,10 @@ def get_sdf_boolean_scene(width: int = 120, height: int = 120) -> Scene:
     scene.add_object_by_context(SDF_Material(Cube(), mat_floor), "Floor", Transform(np.array([0.0, -0.5, 0.0]), scale=np.array([10, 0.1, 10])))
     
     # Lighting – key + fill so the carved interior surfaces on both objects are readable
-    main_light = Light(color=Color(1, 1, 1), intensity=8000.0, radius=2.5)
+    main_light = Light(color=Color(1, 1, 1), intensity=800.0, radius=2.5)
     scene.add_object_by_context(main_light, "MainLight", Transform(np.array([0.0, 5.0, -5.0])))
 
-    fill_light = Light(color=Color(0.7, 0.7, 0.9), intensity=2500.0, radius=4.0)
+    fill_light = Light(color=Color(0.7, 0.7, 0.9), intensity=250.0, radius=4.0)
     scene.add_object_by_context(fill_light, "FillLight", Transform(np.array([0.0, 2.0, 3.0])))
 
     cam.transform.look_at(np.array([0, 1, 0]))
