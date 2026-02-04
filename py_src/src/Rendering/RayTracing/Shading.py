@@ -260,7 +260,6 @@ class DistanceShading(ShadingStrategy):
             reference_point: np.ndarray = np.zeros(3),
             color_gradient: Optional[ColorGradient] = None,
             invert_colors: bool = False,
-            interpolation_function: Callable[[float], float] = lambda x: x,
             ):
         super().__init__(settings)
         self.min_dist = max(min_distance, 0)
@@ -278,7 +277,6 @@ class DistanceShading(ShadingStrategy):
             self.color_gradient = color_gradient
         
         self.invert_colors = invert_colors
-        self.interpolation_function = interpolation_function
 
     def shade(self, hit_info: HitInfo, *args, **kwargs) -> Color:
         dist = float(np.linalg.norm(self.reference_point - hit_info.point))
@@ -298,7 +296,7 @@ class DistanceShading(ShadingStrategy):
 
         val = 1 - val if self.invert_colors else val 
         
-        return self.color_gradient.get_color(val, self.interpolation_function)
+        return self.color_gradient.get_color(val)
 
 class FlatShading(ShadingStrategy):
     """

@@ -50,7 +50,7 @@ def apply_post_processing(raw_img):
     
     pipeline = ImagePipeline()
     pipeline.add_pass(AutoExposure())
-    pipeline.add_pass(Bloom(1, 25, 0.67, 0.75))
+    pipeline.add_pass(Bloom(1, 5, 0.25, 0.75))
     # pipeline.add_pass(ChromaticAberration())
     # pipeline.add_pass(Vignette(0.15, 0.6))
     pipeline.add_pass(ACESFilmicToneMapping())
@@ -68,8 +68,8 @@ if __name__ == "__main__":
     parser.add_argument("--quick", action="store_true", help="Quick preview mode (1spp, no tile test, no post)")
     args = parser.parse_args()
     
-    img_width, img_height = 180, 144
-    args.samples = 4
+    img_width, img_height = 64, 64
+    args.samples = 1
 
     # Quick mode overrides
     if args.quick:
@@ -84,27 +84,27 @@ if __name__ == "__main__":
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
     all_scenes = [
-        get_minimal_scene(img_width, img_height),
-        get_gradient_scene(img_width, img_height),
-        get_emissive_scene(img_width, img_height),
-        get_lit_studio_scene(img_width, img_height),
-        get_rgb_cornell_box_scene(img_width, img_height),
-        get_cyberpunk_scene(img_width, img_height),
-        get_material_deck_scene(img_width, img_height),
-        get_refraction_lab_scene(img_width, img_height),
-        get_scifi_corridor_scene(img_width, img_height),
-        get_sunset_monolith_scene(img_width, img_height),
-        get_pastel_blocks_scene(img_width, img_height),
-        get_glass_prism_scene(img_width, img_height),
-        get_glass_sculpture_scene(img_width, img_height),
-        get_100_spheres_grid_scene(img_width, img_height),
-        get_low_ior_scene(img_width, img_height),
-        get_abstract_geometry_scene(img_width, img_height),
-        get_industrial_shapes_scene(img_width, img_height),
-        get_shape_showcase_scene(img_width, img_height),
-        get_forest_clearing_scene(img_width, img_height),
-        get_checkerboard_infinity_scene(img_width, img_height),
-        get_orbital_dock_scene(img_width, img_height),
+        # get_minimal_scene(img_width, img_height),
+        # get_gradient_scene(img_width, img_height),
+        # get_emissive_scene(img_width, img_height),
+        # get_lit_studio_scene(img_width, img_height),
+        # get_rgb_cornell_box_scene(img_width, img_height),
+        # get_cyberpunk_scene(img_width, img_height),
+        # get_material_deck_scene(img_width, img_height),
+        # get_refraction_lab_scene(img_width, img_height),
+        # get_scifi_corridor_scene(img_width, img_height),
+        # get_sunset_monolith_scene(img_width, img_height),
+        # get_pastel_blocks_scene(img_width, img_height),
+        # get_glass_prism_scene(img_width, img_height),
+        # get_glass_sculpture_scene(img_width, img_height),
+        # get_100_spheres_grid_scene(img_width, img_height),
+        # get_low_ior_scene(img_width, img_height),
+        # get_abstract_geometry_scene(img_width, img_height),
+        # get_industrial_shapes_scene(img_width, img_height),
+        # get_shape_showcase_scene(img_width, img_height),
+        # get_forest_clearing_scene(img_width, img_height),
+        # get_checkerboard_infinity_scene(img_width, img_height),
+        # get_orbital_dock_scene(img_width, img_height),
         get_sdf_boolean_scene(img_width, img_height),
     ]
 
@@ -125,17 +125,17 @@ if __name__ == "__main__":
             epsilon=1e-4
         ))
 
-        shading = RecursiveLambertShading(PhysicalShadingSettings(
-            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.1)),
+        shading = FlatShading(PhysicalShadingSettings(
+            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.25)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
-            background_settings=BackgroundSettings(True, Color.from_hex("#283848"), getattr(scene, "background_color", None), True, 0.5)
+            background_settings=BackgroundSettings(True, Color.from_hex("#283848"), getattr(scene, "background_color", None), True, 0.25)
         ))
 
         raytracer = RayTracer(RayTracingSettings(
             image_width=img_width,
             image_height=img_height,
             sampling_manager=sampling_manager,
-            max_recursions=2, 
+            max_recursions=0,
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,

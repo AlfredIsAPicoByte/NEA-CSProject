@@ -456,6 +456,7 @@ class Color:
 class ColorGradient:
     colors: List[Color]
     positions: np.ndarray
+    interpolation: Callable[[float], float] = lambda x: x  # Linear by default
 
     def __post_init__(self):
         """
@@ -473,8 +474,7 @@ class ColorGradient:
 
     def get_color(
         self, 
-        t: float, 
-        interpolation_function: Callable[[float], float] = lambda x: x
+        t: float,
     ) -> Color:
         """
         Get interpolated color at position t in [0.0, 1.0].
@@ -504,7 +504,7 @@ class ColorGradient:
             return c1
             
         local_t = (t - t0) / denom
-        factor = interpolation_function(local_t)
+        factor = self.interpolation(local_t)
 
         # 5. Vectorized Linear Interpolation (Lerp)
         # Calculates R, G, B, A simultaneously
