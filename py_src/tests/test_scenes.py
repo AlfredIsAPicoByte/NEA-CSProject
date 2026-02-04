@@ -30,7 +30,7 @@ def get_minimal_scene(width: int = 64, height: int = 64) -> Scene:
         resolution_width=width, resolution_height=height,
         camera_type=CameraType.PERSPECTIVE
     )
-    scene = Scene("minimal_scene", cam, background_color=Color.from_hex("#3A4655"))
+    scene = Scene("minimal_scene", cam, background_color=Color.from_hex("#9BB0CA"))
 
     # Sphere at origin
     mat = MaterialFactory.create_diffuse(Color.from_hex("#227DD7"), 0.2)
@@ -121,7 +121,7 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
     v_mirror = SDF_Material(Sphere(1.0), mat_reflect)
     scene.add_object_by_context(v_mirror, "MirrorSphere", Transform(np.array([-0.5, 1.0, 0.5])))
 
-    matg = MaterialFactory.create_diffuse(Color.from_hex("#202020"), roughness=0.4)
+    matg = MaterialFactory.create_diffuse(Color.from_hex("#D8D8D8"), roughness=0.8)
     scene.add_object_by_context(SDF_Material(Sphere(100), matg), "Ground", Transform(np.array([0.0, -101, 0.0]), scale=np.full(3, 100)))
 
     # Lights – weak key so the mirror has something to reflect;
@@ -606,10 +606,10 @@ def get_pastel_blocks_scene(width: int = 120, height: int = 120) -> Scene:
     scene.add_object_by_context(SDF_Material(Cube(0.8), mat_purple), "TopObj", Transform(np.array([0.2, 3.5, 0.2]), np.array([np.deg2rad(30), np.deg2rad(45), np.deg2rad(10)])))
 
     # Lights – boosted so pastels stay bright and airy
-    key = Light(color=Color.from_hex("#FFFBEB"), intensity=320.0, radius=5.0)
+    key = Light(color=Color.from_hex("#FFFBEB"), intensity=700.0, radius=5.0)
     scene.add_object_by_context(key, "Key", Transform(np.array([4.0, 6.0, -4.0])))
 
-    fill = Light(color=Color.from_hex("#E6E6FA"), intensity=180.0, radius=5.0)
+    fill = Light(color=Color.from_hex("#E6E6FA"), intensity=320.0, radius=5.0)
     scene.add_object_by_context(fill, "Fill", Transform(np.array([-4.0, 2.0, -4.0])))
 
     cam.transform.look_at(np.array([0, 1.5, 0]))
