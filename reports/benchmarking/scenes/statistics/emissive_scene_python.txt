@@ -1,20 +1,20 @@
 === Tracing Stats ===
 Render Type: Ray Tracing
 Intersection: BVHIntersection
-Shading: RecursiveLambertShading
-Time: 596.926s | Mem: 0.00MB
+Shading: FlatShading
+Time: 2842.098s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
-  - Total:       551,792
-  - Primary:     259,200    (47.0%)
-  - Shadow:      292,592    (Lights used: 2)
+  - Total:       518,400
+  - Primary:     518,400    (100.0%)
+  - Shadow:      0          (Lights used: 2)
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      1,296,000
-  - Tri Tests:       6,439,516
+  - AABB Tests:      2,592,000
+  - Tri Tests:       12,879,013
   - Nodes Visited:   0
-  - Cost/Ray:        14.02 (Target: < 50)
+  - Cost/Ray:        29.84 (Target: < 50)
   - Culling Ratio:   0.20 (Target: > 2.0)
 -------------------------
 Diagnostics:
@@ -30,11 +30,11 @@ Tiles Processed:  40
 Settings:
   - image_width: 480
   - image_height: 270
-  - film: Film(480x270, accum_pixels=(270, 480, 3), accum_weight=(270, 480), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0.00611221 0.00582659 0.00582659], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
-  - sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x0000024BE6C35A90>
-  - max_recursions: 2
-  - intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x0000024BE775AF10>
-  - shading_strategy: <src.Rendering.RayTracing.Shading.RecursiveLambertShading object at 0x0000024BE7512F90>
+  - film: Film(480x270, accum_pixels=(270, 480, 3), accum_weight=(270, 480), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0.41960785 0.4        0.4       ], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
+  - sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x000001B359D619D0>
+  - max_recursions: 0
+  - intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x000001B35B34CF10>
+  - shading_strategy: <src.Rendering.RayTracing.Shading.FlatShading object at 0x000001B35D7D7150>
   - use_tiling: True
   - tile_size: 64
   - debug_mode: True

@@ -69,7 +69,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     img_width, img_height = 480, 270
-    args.samples = 2
+    args.samples = 4
 
     # Quick mode overrides
     if args.quick:
@@ -84,27 +84,27 @@ if __name__ == "__main__":
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
     all_scenes = [
-        # get_minimal_scene(img_width, img_height),
-        # get_gradient_scene(img_width, img_height),
-        # get_emissive_scene(img_width, img_height),
-        # get_lit_studio_scene(img_width, img_height),
-        # get_rgb_cornell_box_scene(img_width, img_height),
-        # get_cyberpunk_scene(img_width, img_height),
-        # get_material_deck_scene(img_width, img_height),
-        # get_refraction_lab_scene(img_width, img_height),
-        # get_scifi_corridor_scene(img_width, img_height),
-        # get_sunset_monolith_scene(img_width, img_height),
-        # get_pastel_blocks_scene(img_width, img_height),
-        # get_glass_prism_scene(img_width, img_height),
-        # get_glass_sculpture_scene(img_width, img_height),
-        # get_100_spheres_grid_scene(img_width, img_height),
-        # get_low_ior_scene(img_width, img_height),
-        # get_abstract_geometry_scene(img_width, img_height),
-        # get_industrial_shapes_scene(img_width, img_height),
-        # get_shape_showcase_scene(img_width, img_height),
-        # get_forest_clearing_scene(img_width, img_height),
-        # get_checkerboard_infinity_scene(img_width, img_height),
-        # get_orbital_dock_scene(img_width, img_height),
+        get_minimal_scene(img_width, img_height),
+        get_gradient_scene(img_width, img_height),
+        get_emissive_scene(img_width, img_height),
+        get_lit_studio_scene(img_width, img_height),
+        get_rgb_cornell_box_scene(img_width, img_height),
+        get_cyberpunk_scene(img_width, img_height),
+        get_material_deck_scene(img_width, img_height),
+        get_refraction_lab_scene(img_width, img_height),
+        get_scifi_corridor_scene(img_width, img_height),
+        get_sunset_monolith_scene(img_width, img_height),
+        get_pastel_blocks_scene(img_width, img_height),
+        get_glass_prism_scene(img_width, img_height),
+        get_glass_sculpture_scene(img_width, img_height),
+        get_100_spheres_grid_scene(img_width, img_height),
+        get_low_ior_scene(img_width, img_height),
+        get_abstract_geometry_scene(img_width, img_height),
+        get_industrial_shapes_scene(img_width, img_height),
+        get_shape_showcase_scene(img_width, img_height),
+        get_forest_clearing_scene(img_width, img_height),
+        get_checkerboard_infinity_scene(img_width, img_height),
+        get_orbital_dock_scene(img_width, img_height),
         get_sdf_boolean_scene(img_width, img_height),
     ]
 

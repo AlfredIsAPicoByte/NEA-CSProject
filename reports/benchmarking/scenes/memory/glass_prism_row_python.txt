@@ -1,8 +1,22 @@
-Time: 103.2397s | RSS Δ: -4.977 MB
-RSS start: 43.082 MB | RSS end: 38.105 MB
-tracemalloc current: 0.00 KB | peak: 0.00 KB
+Time: 5037.1279s | RSS Δ: 14.309 MB
+RSS start: 92.383 MB | RSS end: 106.691 MB
+tracemalloc current: 2759.87 KB | peak: 18017.14 KB
+Top allocations (most recent frame):
+  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:11 | 1518.84 KB (2 allocs)
+  2. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:12 | 506.34 KB (2 allocs)
+  3. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Geometry\AABB.py:19 | 113.45 KB (1937 allocs)
+  4. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Geometry\AABB.py:18 | 113.44 KB (1936 allocs)
+  5. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Rendering\RayTracing\Core.py:284 | 107.68 KB (1969 allocs)
+  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Data\Transform.py:136 | 99.97 KB (914 allocs)
 
 Postprocessing:
-Time: 0.0455s | RSS Δ: -0.438 MB
-RSS start: 38.320 MB | RSS end: 37.883 MB
-tracemalloc current: 0.00 KB | peak: 0.00 KB
+Time: 0.0387s | RSS Δ: 2.801 MB
+RSS start: 107.551 MB | RSS end: 110.352 MB
+tracemalloc current: 3038.33 KB | peak: 18227.57 KB
+Top allocations (most recent frame):
+  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\PostProcessing\Passes.py:40 | 3037.59 KB (2 allocs)
+  2. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\scipy\ndimage\_ni_support.py:83 | 0.17 KB (3 allocs)
+  3. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\psutil\_pswindows.py:666 | 0.12 KB (1 allocs)
+  4. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:57 | 0.12 KB (1 allocs)
+  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:46 | 0.12 KB (1 allocs)
+  6. C:\Python311\Lib\tracemalloc.py:560 | 0.09 KB (2 allocs)

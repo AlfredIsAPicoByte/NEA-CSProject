@@ -237,16 +237,16 @@ def get_rgb_cornell_box_scene(width: int = 126, height: int = 126) -> Scene:
 
     # Glass Cube - Scale 0.7
     scene.add_object_by_context(
-        SDF_Material(Cube(), mat_glass), 
+        SDF_Material(Cube(0.7), mat_glass), 
         "GlassCube", 
         Transform(np.array([0.0, floor_y + 0.7, -1.0]), np.array([0.0, np.deg2rad(-15), 0.0]), np.full(3, 0.7))
     )
     
     # Gold Cylinder
     scene.add_object_by_context(
-        SDF_Material(Cylinder(), mat_cyl), 
+        SDF_Material(Cylinder(.5, 1.6), mat_cyl), 
         "CylinderObj", 
-        Transform(np.array([1.5, floor_y + 0.6, -1.5]), rotation=np.array([0, np.deg2rad(45), 0]), scale=np.array([0.6, 0.6, 0.6]))
+        Transform(np.array([1.5, floor_y + 1.6, -1.5]), rotation=np.array([0, np.deg2rad(45), 0]), scale=np.array([0.6, 0.6, 0.6]))
     )
 
     # 6. Lights – area ceiling panel + subtle floor bounce
@@ -282,7 +282,7 @@ def get_cyberpunk_scene(width: int = 140, height: int = 100) -> Scene:
     scene.add_object_by_context(
         SDF_Material(ShapeExtrusion(Rectangle(np.array([10.0, 20.0]))), mat_asphalt_wet), 
         "Road", 
-        Transform(np.array([0.0, -1.0, 0.0]), scale=np.array([4.0, 0.1, 20.0]))
+        Transform(np.array([0.0, -1.0, 0.0]), np.array([np.deg2rad(90), 0.0, 0.0]))
     )
 
     # Building Loop
@@ -295,29 +295,29 @@ def get_cyberpunk_scene(width: int = 140, height: int = 100) -> Scene:
         # Left Buildings
         h_left = 3.0 + np.sin(i) # Varied height
         scene.add_object_by_context(
-            SDF_Material(Cube(), mat_concrete_dark), 
+            SDF_Material(ShapeExtrusion(Square(2), h_left), mat_concrete_dark), 
             f"BuildL_{i}", 
-            Transform(np.array([-4.5, h_left/2, z_pos]), scale=np.array([2.0, h_left, 1.5]))
+            Transform(np.array([-4.5, h_left/2, z_pos]), np.array([np.deg2rad(90), 0.0, 0.0]))
         )
         # Left Neon Sign
         scene.add_object_by_context(
-            SDF_Material(Cube(), mat_neon_cyan if i % 2 == 0 else mat_neon_pink),
+            SDF_Material(ShapeExtrusion(Square(), 0.1), mat_neon_cyan if i % 2 == 0 else mat_neon_pink),
             f"SignL_{i}",
-            Transform(np.array([-2.6, 1.5, z_pos]), scale=np.array([0.1, 1.0, 0.1]))
+            Transform(np.array([-2.6, 1.5, z_pos]), np.array([np.deg2rad(90), 0.0, 0.0]))
         )
 
         # Right Buildings
         h_right = 4.0 + np.cos(i)
         scene.add_object_by_context(
-            SDF_Material(Cube(), mat_concrete_dark), 
+            SDF_Material(ShapeExtrusion(Square(2), h_right), mat_concrete_dark), 
             f"BuildR_{i}", 
-            Transform(np.array([4.5, h_right/2, z_pos]), scale=np.array([2.0, h_right, 1.5]))
+            Transform(np.array([4.5, h_right/2, z_pos]), np.array([np.deg2rad(90), 0.0, 0.0]))
         )
         # Right Neon Sign (Horizontal bar)
         scene.add_object_by_context(
             SDF_Material(Cube(), mat_neon_pink if i % 2 == 0 else mat_neon_cyan),
             f"SignR_{i}",
-            Transform(np.array([2.6, 2.5, z_pos]), scale=np.array([0.1, 0.1, 1.2]))
+            Transform(np.array([2.6, 2.5, z_pos]), np.array([np.deg2rad(90), 0.0, 0.0]))
         )
 
     # Lighting – pink hero sign slightly brighter; dim ground fill for wet-road reflections
@@ -453,7 +453,7 @@ def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
 
     # 1. The Monolith (Tall, thin rectangular extrusion)
     scene.add_object_by_context(
-        SDF_Material(ShapeExtrusion(Rectangle(np.array([1.0, 4.0])), height=9), mat_obsidian),
+        SDF_Material(ShapeExtrusion(Rectangle(np.array([1.0, 4.0])), height=8), mat_obsidian),
         "Monolith",
         Transform(np.array([0.0, 2.0, 0.0]), scale=np.array([1.0, 4.0, 0.5]))
     )
@@ -471,7 +471,7 @@ def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
     scene.add_object_by_context(
         SDF_Material(ShapeExtrusion(Rectangle(np.array([20.0, 20.0])), height=1.0), mat_sand),
         "DesertFloor",
-        Transform(np.array([0.0, -3.0, 0.0]), scale=np.array([1.0, 1.0, 1.0]))
+        Transform(np.array([0.0, -3.0, 0.0]))
     )
 
     # Lighting
@@ -515,12 +515,12 @@ def get_scifi_corridor_scene(width: int = 160, height: int = 120) -> Scene:
     scene.add_object_by_context(
         SDF_Material(ShapeExtrusion(Rectangle(np.array([5.0, 40.0])), height=0.1), mat_floor), 
         "Floor", 
-        Transform(np.array([0.0, -1.0, 20.0]))
+        Transform(np.array([0.0, -1.0, 20.0]), np.array([np.deg2rad(90), 0.0, 0.0]))
     )
     scene.add_object_by_context(
         SDF_Material(ShapeExtrusion(Rectangle(np.array([5.0, 40.0])), height=0.1), mat_wall), 
         "Ceiling", 
-        Transform(np.array([0.0, 4.0, 20.0]))
+        Transform(np.array([0.0, 4.0, 20.0]), np.array([np.deg2rad(90), 0.0, 0.0]))
     )
 
     # Repeating Ribs/Pillars
@@ -534,30 +534,30 @@ def get_scifi_corridor_scene(width: int = 160, height: int = 120) -> Scene:
         
         # Left Pillar
         scene.add_object_by_context(
-            SDF_Material(Cylinder(), mat_pillar), 
+            SDF_Material(Cylinder(0.4, 2.5), mat_pillar), 
             f"PillarL_{i}", 
-            Transform(np.array([-3.0, 1.5, z_pos]), scale=np.array([0.4, 2.5, 0.4]))
+            Transform(np.array([-3.0, 1.5, z_pos]))
         )
         
         # Right Pillar
         scene.add_object_by_context(
-            SDF_Material(Cylinder(), mat_pillar), 
+            SDF_Material(Cylinder(0.4, 2.5), mat_pillar), 
             f"PillarR_{i}", 
-            Transform(np.array([3.0, 1.5, z_pos]), scale=np.array([0.4, 2.5, 0.4]))
+            Transform(np.array([3.0, 1.5, z_pos]))
         )
 
         # Overhead Beam
         scene.add_object_by_context(
             SDF_Material(ShapeExtrusion(Rectangle(np.array([3.2, 0.3])), height=0.3), mat_pillar),
             f"Beam_{i}",
-            Transform(np.array([0.0, 3.5, z_pos]))
+            Transform(np.array([0.0, 3.5, z_pos]), np.array([np.deg2rad(90), 0.0, 0.0]))
         )
 
         # Emissive Light Strips (Floor markers)
         scene.add_object_by_context(
             SDF_Material(ShapeExtrusion(Rectangle(np.array([2.5, 0.1])), height=0.05), mat_light_strip),
             f"LightStrip_{i}",
-            Transform(np.array([0.0, -0.85, z_pos]))
+            Transform(np.array([0.0, -0.85, z_pos]), np.array([np.deg2rad(90), 0.0, 0.0]))
         )
 
     # Lighting
@@ -585,7 +585,7 @@ def get_pastel_blocks_scene(width: int = 120, height: int = 120) -> Scene:
         resolution_width=width, resolution_height=height,
         camera_type=CameraType.PERSPECTIVE
     )
-    scene = Scene("pastel_blocks", cam, background_color=Color.from_hex("#F0F4F8"))
+    scene = Scene("pastel_blocks", cam, background_color=Color.from_hex("#949494"))
 
     # Materials
     mat_pink = MaterialFactory.create_specular(Color.from_hex("#FFA29C"), roughness=0.6, metallicness=0.0, specular_intensity=0.5, specular_tint_amount=0.1)

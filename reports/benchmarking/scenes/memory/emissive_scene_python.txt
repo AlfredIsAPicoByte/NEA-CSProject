@@ -1,8 +1,22 @@
-Time: 596.9263s | RSS Δ: 2.293 MB
-RSS start: 59.965 MB | RSS end: 62.258 MB
-tracemalloc current: 0.00 KB | peak: 0.00 KB
+Time: 2842.0998s | RSS Δ: 9.688 MB
+RSS start: 74.457 MB | RSS end: 84.145 MB
+tracemalloc current: 2190.35 KB | peak: 17447.44 KB
+Top allocations (most recent frame):
+  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:11 | 1518.84 KB (2 allocs)
+  2. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:12 | 506.34 KB (2 allocs)
+  3. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Rendering\RayTracing\Core.py:284 | 107.95 KB (1974 allocs)
+  4. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\linalg\_linalg.py:2432 | 26.21 KB (488 allocs)
+  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:57 | 9.14 KB (78 allocs)
+  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Data\Ray.py:118 | 4.05 KB (74 allocs)
 
 Postprocessing:
-Time: 0.0961s | RSS Δ: 2.809 MB
-RSS start: 63.742 MB | RSS end: 66.551 MB
-tracemalloc current: 0.00 KB | peak: 0.00 KB
+Time: 0.0329s | RSS Δ: 5.473 MB
+RSS start: 83.043 MB | RSS end: 88.516 MB
+tracemalloc current: 3038.51 KB | peak: 18228.13 KB
+Top allocations (most recent frame):
+  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\PostProcessing\Passes.py:40 | 3037.59 KB (2 allocs)
+  2. C:\Python311\Lib\tracemalloc.py:560 | 0.23 KB (2 allocs)
+  3. C:\Python311\Lib\tracemalloc.py:423 | 0.23 KB (2 allocs)
+  4. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\psutil\_pswindows.py:666 | 0.12 KB (1 allocs)
+  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:57 | 0.12 KB (1 allocs)
+  6. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:46 | 0.12 KB (1 allocs)
