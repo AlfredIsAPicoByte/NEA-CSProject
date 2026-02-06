@@ -1,22 +1,8 @@
-Time: 3232.1645s | RSS Δ: 10.457 MB
-RSS start: 82.613 MB | RSS end: 93.070 MB
-tracemalloc current: 2191.13 KB | peak: 17448.15 KB
-Top allocations (most recent frame):
-  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:11 | 1518.84 KB (2 allocs)
-  2. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:12 | 506.34 KB (2 allocs)
-  3. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Rendering\RayTracing\Core.py:284 | 107.95 KB (1974 allocs)
-  4. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\linalg\_linalg.py:2432 | 26.10 KB (486 allocs)
-  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:57 | 9.14 KB (78 allocs)
-  6. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Data\Ray.py:118 | 4.10 KB (75 allocs)
+Time: 892.4531s | RSS Δ: 0.965 MB
+RSS start: 68.090 MB | RSS end: 69.055 MB
+tracemalloc current: 0.00 KB | peak: 0.00 KB
 
 Postprocessing:
-Time: 0.0593s | RSS Δ: 3.488 MB
-RSS start: 87.457 MB | RSS end: 90.945 MB
-tracemalloc current: 3038.56 KB | peak: 18228.15 KB
-Top allocations (most recent frame):
-  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\PostProcessing\Passes.py:40 | 3037.59 KB (2 allocs)
-  2. C:\Python311\Lib\tracemalloc.py:560 | 0.20 KB (2 allocs)
-  3. C:\Python311\Lib\tracemalloc.py:423 | 0.20 KB (2 allocs)
-  4. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\scipy\ndimage\_ni_support.py:83 | 0.17 KB (3 allocs)
-  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\psutil\_pswindows.py:666 | 0.12 KB (1 allocs)
-  6. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\_core\fromnumeric.py:57 | 0.12 KB (1 allocs)
+Time: 0.0237s | RSS Δ: -0.230 MB
+RSS start: 69.527 MB | RSS end: 69.297 MB
+tracemalloc current: 0.00 KB | peak: 0.00 KB

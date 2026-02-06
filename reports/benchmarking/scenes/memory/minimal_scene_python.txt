@@ -1,22 +1,8 @@
-Time: 2396.9293s | RSS Δ: 9.562 MB
-RSS start: 46.312 MB | RSS end: 55.875 MB
-tracemalloc current: 3024.87 KB | peak: 18282.77 KB
-Top allocations (most recent frame):
-  1. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:11 | 1518.89 KB (3 allocs)
-  2. <frozen importlib._bootstrap_external>:729 | 543.07 KB (4463 allocs)
-  3. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\Film.py:12 | 506.34 KB (2 allocs)
-  4. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Rendering\RayTracing\Core.py:284 | 108.17 KB (1978 allocs)
-  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\numpy\linalg\_linalg.py:2432 | 24.49 KB (456 allocs)
-  6. <frozen importlib._bootstrap>:241 | 19.57 KB (174 allocs)
+Time: 263.2786s | RSS Δ: 2.969 MB
+RSS start: 46.129 MB | RSS end: 49.098 MB
+tracemalloc current: 0.00 KB | peak: 0.00 KB
 
 Postprocessing:
-Time: 3.7925s | RSS Δ: 27.051 MB
-RSS start: 47.887 MB | RSS end: 74.938 MB
-tracemalloc current: 15793.42 KB | peak: 30982.56 KB
-Top allocations (most recent frame):
-  1. <frozen importlib._bootstrap_external>:729 | 7429.27 KB (37438 allocs)
-  2. c:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\py_src\src\Image\PostProcessing\Passes.py:40 | 3037.59 KB (2 allocs)
-  3. <frozen importlib._bootstrap>:241 | 1458.72 KB (16237 allocs)
-  4. <frozen abc>:106 | 231.54 KB (710 allocs)
-  5. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\scipy\_lib\_util.py:1269 | 168.38 KB (68 allocs)
-  6. C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Lib\site-packages\scipy\_lib\doccer.py:79 | 144.19 KB (33 allocs)
+Time: 0.7599s | RSS Δ: 19.664 MB
+RSS start: 50.852 MB | RSS end: 70.516 MB
+tracemalloc current: 0.00 KB | peak: 0.00 KB

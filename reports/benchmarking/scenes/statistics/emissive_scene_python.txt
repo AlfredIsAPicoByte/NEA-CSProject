@@ -1,20 +1,20 @@
 === Tracing Stats ===
 Render Type: Ray Tracing
 Intersection: BVHIntersection
-Shading: FlatShading
-Time: 2842.098s | Mem: 0.00MB
+Shading: LambertShading
+Time: 132.896s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
-  - Total:       518,400
-  - Primary:     518,400    (100.0%)
-  - Shadow:      0          (Lights used: 2)
+  - Total:       122,416
+  - Primary:     57,600     (47.1%)
+  - Shadow:      64,816     (Lights used: 2)
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      2,592,000
-  - Tri Tests:       12,879,013
+  - AABB Tests:      288,000
+  - Tri Tests:       1,425,687
   - Nodes Visited:   0
-  - Cost/Ray:        29.84 (Target: < 50)
+  - Cost/Ray:        14.00 (Target: < 50)
   - Culling Ratio:   0.20 (Target: > 2.0)
 -------------------------
 Diagnostics:
@@ -25,18 +25,18 @@ Diagnostics:
 -------------------------
 Totals:
 Pixels Processed: 0
-Tiles Processed:  40
+Tiles Processed:  240
 -------------------------
 Settings:
-  - image_width: 480
-  - image_height: 270
-  - film: Film(480x270, accum_pixels=(270, 480, 3), accum_weight=(270, 480), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0.41960785 0.4        0.4       ], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
-  - sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x000001B359D619D0>
-  - max_recursions: 0
-  - intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x000001B35B34CF10>
-  - shading_strategy: <src.Rendering.RayTracing.Shading.FlatShading object at 0x000001B35D7D7150>
-  - use_tiling: True
-  - tile_size: 64
-  - debug_mode: True
-  - verbose_logging: False
+  - Image_width: 320
+  - Image_height: 180
+  - Film: Film(320x180, accum_pixels=(180, 320, 3), accum_weight=(180, 320), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0.00417312 0.00397811 0.00397811], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
+  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x000002468B3E5B50>
+  - Max_recursions: 0
+  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x0000024688E99510>
+  - Shading_strategy: <src.Rendering.RayTracing.Shading.LambertShading object at 0x000002469AA6EA50>
+  - Use_tiling: True
+  - Tile_size: 16
+  - Debug_mode: True
+  - Verbose_logging: False
 =========================

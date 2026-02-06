@@ -131,7 +131,7 @@ class TracingStats(RenderStats):
             lines.append(f"Settings:")
             for field_name in self._settings.__dataclass_fields__:
                 value = getattr(self._settings, field_name)
-                lines.append(f"  - {field_name}: {value}")
+                lines.append(f"  - {str(field_name).capitalize()}: {value}")
         lines.append(f"=========================")
         return "\n".join(lines)
 
