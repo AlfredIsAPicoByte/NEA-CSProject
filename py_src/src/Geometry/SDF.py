@@ -565,11 +565,6 @@ class ShapeCombination(SignedDistanceShape, CorrespondingBoxCorners):
         
         return []
 
-
-# -----------------------------------------------------------------------------
-# Subclasses
-# -----------------------------------------------------------------------------
-
 class ShapeUnion(ShapeCombination):
     def _combine_distances(self, dist_a: float, dist_b: float) -> float:
         return op_union(dist_a, dist_b)
@@ -1093,7 +1088,7 @@ class Moon(SignedDistanceShape2D):
         # Simplified moon shape (two circles)
         d1 = np.linalg.norm(point - np.array([self.offset, 0])) - self.radius_a
         d2 = np.linalg.norm(point - np.array([-self.offset, 0])) - self.radius_b
-        return max(d1, d2)
+        return max(float(d1), float(d2))
 
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
         # Numerical approximation
@@ -1103,6 +1098,32 @@ class Moon(SignedDistanceShape2D):
         res = np.array([dx, dy, 0])
         norm = np.linalg.norm(res)
         return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
+    
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Standard sphere tracing
+        t = 0.0
+        MAX_STEPS = 128
+        EPSILON = 1e-4
+
+        for _ in range(MAX_STEPS):
+            p = ray.origin + ray.direction * t
+            dist = self.get_distance(p)
+            
+            if dist < EPSILON:
+                return [t]
+            
+            t += dist
+            if t > max_t:
+                return []
+        
+        return []
+        
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        return 0, 0
 
 class Cross(SignedDistanceShape2D):
     def __init__(self, size: float = 0.5, thickness: float = 0.2):
@@ -1125,6 +1146,32 @@ class Cross(SignedDistanceShape2D):
         res = np.array([dx, dy, 0])
         norm = np.linalg.norm(res)
         return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
+    
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Standard sphere tracing
+        t = 0.0
+        MAX_STEPS = 128
+        EPSILON = 1e-4
+
+        for _ in range(MAX_STEPS):
+            p = ray.origin + ray.direction * t
+            dist = self.get_distance(p)
+            
+            if dist < EPSILON:
+                return [t]
+            
+            t += dist
+            if t > max_t:
+                return []
+        
+        return []
+    
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        return 0, 0
 
 class Gear(SignedDistanceShape2D):
     def __init__(self, radius: float = 0.5, teeth: int = 8, tooth_depth: float = 0.1):
@@ -1149,6 +1196,32 @@ class Gear(SignedDistanceShape2D):
         res = np.array([dx, dy, 0])
         norm = np.linalg.norm(res)
         return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
+    
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Standard sphere tracing
+        t = 0.0
+        MAX_STEPS = 128
+        EPSILON = 1e-4
+
+        for _ in range(MAX_STEPS):
+            p = ray.origin + ray.direction * t
+            dist = self.get_distance(p)
+            
+            if dist < EPSILON:
+                return [t]
+            
+            t += dist
+            if t > max_t:
+                return []
+        
+        return []
+    
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        return 0, 0
 
 class Star(SignedDistanceShape2D):
     def __init__(self, points: int = 5, inner_radius: float = 0.2, outer_radius: float = 0.5):
@@ -1167,7 +1240,7 @@ class Star(SignedDistanceShape2D):
         # Calculate distance to nearest edge of the star's point
         d1 = r - self.outer_radius
         d2 = r - self.inner_radius
-        return min(d1, d2)
+        return min(float(d1), float(d2))
 
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
         # Numerical approximation
@@ -1177,6 +1250,32 @@ class Star(SignedDistanceShape2D):
         res = np.array([dx, dy, 0])
         norm = np.linalg.norm(res)
         return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
+    
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Standard sphere tracing
+        t = 0.0
+        MAX_STEPS = 128
+        EPSILON = 1e-4
+
+        for _ in range(MAX_STEPS):
+            p = ray.origin + ray.direction * t
+            dist = self.get_distance(p)
+            
+            if dist < EPSILON:
+                return [t]
+            
+            t += dist
+            if t > max_t:
+                return []
+        
+        return []
+    
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        return 0, 0
 
 class RegularPolygon(SignedDistanceShape2D):
     def __init__(self, sides: int = 6, radius: float = 0.5):
@@ -1203,6 +1302,32 @@ class RegularPolygon(SignedDistanceShape2D):
         res = np.array([dx, dy, 0])
         norm = np.linalg.norm(res)
         return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
+    
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Standard sphere tracing
+        t = 0.0
+        MAX_STEPS = 128
+        EPSILON = 1e-4
+
+        for _ in range(MAX_STEPS):
+            p = ray.origin + ray.direction * t
+            dist = self.get_distance(p)
+            
+            if dist < EPSILON:
+                return [t]
+            
+            t += dist
+            if t > max_t:
+                return []
+        
+        return []
+    
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        return 0, 0
 
 class Polygon(SignedDistanceShape2D):
     pass
@@ -1225,6 +1350,32 @@ class Heart(SignedDistanceShape2D):
         res = np.array([dx, dy, 0])
         norm = np.linalg.norm(res)
         return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
+    
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Standard sphere tracing
+        t = 0.0
+        MAX_STEPS = 128
+        EPSILON = 1e-4
+
+        for _ in range(MAX_STEPS):
+            p = ray.origin + ray.direction * t
+            dist = self.get_distance(p)
+            
+            if dist < EPSILON:
+                return [t]
+            
+            t += dist
+            if t > max_t:
+                return []
+        
+        return []
+    
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        return 0, 0
 
 class Sphere(SignedDistanceShape3D, CorrespondingBoxCorners):
     def __init__(self, radius: float = 0.5):
@@ -1875,3 +2026,5 @@ class EllipticSphere(SignedDistanceShape3D, CorrespondingBoxCorners):
         sqrt_disc = np.sqrt(disc)
         t1 = (-b - sqrt_disc) / (2*a)
         t2 = (-b + sqrt_disc) / (2*a)
+
+        return []

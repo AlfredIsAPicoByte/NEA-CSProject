@@ -766,6 +766,7 @@ class RecursiveLambertShading(LambertShading):
             direction, throughput = material.sample_glass_contribution(
                 hit_info.direction, hit_info.normal, sampler, 1.0003
             )
+
             # Glass is a singular event: trace directly, no pdf division needed
             new_origin = hit_info.point + direction * bias
             indirect_ray = TracingRay(new_origin, direction, is_inside=ray.is_inside)
@@ -787,6 +788,7 @@ class RecursiveLambertShading(LambertShading):
             direction, throughput, pdf = material.sample_indirect_contribution(
                 hit_info.direction, hit_info.normal, sampler
             )
+
             if pdf > 1e-6 and np.linalg.norm(throughput.to_np_array()[:3]) > 1e-6:
                 weighted_throughput = Color(*calculate_throughput_weight(
                     direction, hit_info.normal, throughput, pdf
@@ -795,19 +797,6 @@ class RecursiveLambertShading(LambertShading):
                 indirect_ray = TracingRay(new_origin, direction, is_inside=ray.is_inside)
                 bounced_color = trace_function(scene, indirect_ray, recursions_left - 1, sampler)
                 indirect_color += weighted_throughput * bounced_color
-        
-        if pdf > 1e-6 and np.linalg.norm(throughput.to_np_array()[:3]) > 1e-6:
-            weighted_throughput = Color(*calculate_throughput_weight(direction, hit_info.normal, throughput, pdf))
-            attenuation = attenuate_distance_coefficents(hit_info.distance, self.a, self.b, self.c)
-            # Create new ray for indirect bounce
-            new_origin = hit_info.point + direction * bias
-            indirect_ray = TracingRay(new_origin, direction, is_inside=ray.is_inside)
-
-            # Trace the indirect ray
-            bounced_color = trace_function(scene, indirect_ray, recursions_left - 1, sampler)
-
-            # Accumulate indirect contribution
-            indirect_color += weighted_throughput * bounced_color
         
         final_color += indirect_color
         return final_color

@@ -84,10 +84,10 @@ if __name__ == "__main__":
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
     all_scenes = [
-        get_minimal_scene(img_width, img_height),
-        get_gradient_scene(img_width, img_height),
-        get_emissive_scene(img_width, img_height),
-        get_lit_studio_scene(img_width, img_height),
+        # get_minimal_scene(img_width, img_height),
+        # get_gradient_scene(img_width, img_height),
+        # get_emissive_scene(img_width, img_height),
+        # get_lit_studio_scene(img_width, img_height),
         get_rgb_cornell_box_scene(img_width, img_height),
         get_cyberpunk_scene(img_width, img_height),
         get_material_deck_scene(img_width, img_height),
@@ -115,7 +115,7 @@ if __name__ == "__main__":
         filter_type=PixelFilter.GAUSSIAN, 
         filter_width=1.5,
     )
-    sampling_manager = SamplingManager(sample_settings, "adaptive")
+    sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
         intersection = BVHIntersection(IntersectionSettings(
@@ -125,7 +125,7 @@ if __name__ == "__main__":
             epsilon=1e-4
         ))
 
-        shading = LambertShading(PhysicalShadingSettings(
+        shading = RecursiveLambertShading(PhysicalShadingSettings(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.25)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
             background_settings=BackgroundSettings(True, Color.from_hex("#283848"), getattr(scene, "background_color", None), True, 0.67)
@@ -135,11 +135,11 @@ if __name__ == "__main__":
             image_width=img_width,
             image_height=img_height,
             sampling_manager=sampling_manager,
-            max_recursions=0,
+            max_recursions=2,
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,
-            tile_size=16,
+            tile_size=32,
             debug_mode=args.debug,
             verbose_logging=args.verbose
         ))

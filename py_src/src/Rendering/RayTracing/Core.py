@@ -272,7 +272,7 @@ class RayTracer(Algorithm):
                 self.settings.max_recursions,
                 sampler
             )
-            pixle_color = Color(*self._sanitize_color(pixle_color))
+            pixle_color = Color.from_np(self._sanitize_color(pixle_color))
 
             image_w = self.settings.sampling_manager.settings.width
             image_h = self.settings.sampling_manager.settings.height
