@@ -50,7 +50,7 @@ def apply_post_processing(raw_img):
     
     pipeline = ImagePipeline()
     pipeline.add_pass(AutoExposure())
-    pipeline.add_pass(Bloom(1, 5, 0.25, 0.75))
+    pipeline.add_pass(Bloom(1.5, 5, 0.25, 0.75))
     # pipeline.add_pass(ChromaticAberration())
     # pipeline.add_pass(Vignette(0.15, 0.6))
     pipeline.add_pass(ACESFilmicToneMapping())
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     img_width, img_height = 320, 180
-    args.samples = 1
+    args.samples = 4
 
     # Quick mode overrides
     if args.quick:
@@ -84,10 +84,10 @@ if __name__ == "__main__":
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
     all_scenes = [
-        # get_minimal_scene(img_width, img_height),
-        # get_gradient_scene(img_width, img_height),
-        # get_emissive_scene(img_width, img_height),
-        # get_lit_studio_scene(img_width, img_height),
+        get_minimal_scene(img_width, img_height),
+        get_gradient_scene(img_width, img_height),
+        get_emissive_scene(img_width, img_height),
+        get_lit_studio_scene(img_width, img_height),
         get_rgb_cornell_box_scene(img_width, img_height),
         get_cyberpunk_scene(img_width, img_height),
         get_material_deck_scene(img_width, img_height),

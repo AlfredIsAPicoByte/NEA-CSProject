@@ -63,33 +63,31 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     sky_colors = [Color.from_hex("#2D2515"), Color.from_hex("#42424E"), Color.from_hex("#5B6791"), Color.from_hex("#87BFC6")]
     sky_positions = np.array([0.0, 0.4, 0.45, 1.0])
     scene = Scene("gradient_scene", cam, background_color=ColorGradient(sky_colors, sky_positions))
-
-    # --- Objects Rearranged into a tight composition ---
     
     # Central Reflective Sphere
-    mat_metal = MaterialFactory.create_specular(Color.from_hex("#4F58D4"), 0.2, 0.9, 1.0, 1.0)
+    mat_metal = MaterialFactory.create_specular(Color.from_hex("#4F58D4"), 0.25, 0.65, 1.0, 1.0)
     sph_1 = SDF_Material(Sphere(1.0), mat_metal)
     scene.add_object_by_context(sph_1, "Reflective Sphere", Transform(np.array([0.0, 1.0, 0.0])))
 
     # Matte Box (Left)
-    mat_matte = MaterialFactory.create_diffuse(Color.from_hex("#A09A92"), 0.8)
-    bx_1 = SDF_Material(Cube(), mat_matte)
-    scene.add_object_by_context(bx_1, "Matte Box", Transform(np.array([-1.8, 0.7, -0.5]), np.array([0.0, np.deg2rad(35), 0.0]), np.full(3, 0.7)))
+    mat_matte = MaterialFactory.create_diffuse(Color.from_hex("#8EFFE7"), 0.8)
+    bx_1 = SDF_Material(Cube(1.25), mat_matte)
+    scene.add_object_by_context(bx_1, "Matte Box", Transform(np.array([-1.8, 0.7, -0.5]), np.array([0.0, np.deg2rad(35), 0.0])))
 
     # Floating Emissive Orb (Above/Right)
-    mat_glow = MaterialFactory.create_emissive(Color.from_hex("#00CCFF"), 4.0)
+    mat_glow = MaterialFactory.create_emissive(Color.from_wavelength(670), 4.0)
     sph_2 = SDF_Material(Sphere(0.3), mat_glow)
-    scene.add_object_by_context(sph_2, "Emissive Orb", Transform(np.array([0.8, 4.0, 0.5])))
+    scene.add_object_by_context(sph_2, "Emissive Orb", Transform(np.array([0.8, 4.0, -0.5])))
 
-    # Golden Cylinder (Right)
-    mat_cylinder = MaterialFactory.create_specular(Color.from_hex("#EEBC32"), 0.5, 0.8, 0.9, 0.5)
+    # Metal Cylinder (Right)
+    mat_cylinder = MaterialFactory.create_specular(Color.from_hex("#81919B"), 0.5, 0.8, 0.9, 0.5)
     cyl_1 = SDF_Material(Cylinder(), mat_cylinder)
-    scene.add_object_by_context(cyl_1, "Golden Cylinder", Transform(np.array([1.8, 0.8, -0.2]), np.array([0.0, np.deg2rad(-20), np.deg2rad(10)]), np.array([0.5, 0.8, 0.5])))
+    scene.add_object_by_context(cyl_1, "Golden Cylinder", Transform(np.array([1.8, 0.8, -0.2]), np.array([0.0, np.deg2rad(-20), np.deg2rad(20)])))
 
-    # Wooden Pyramid (Back Left)
-    mat_pyramid = MaterialFactory.create_diffuse(Color.from_hex("#8B4513"), 0.7)
-    pyr_1 = SDF_Material(Pyramid(), mat_pyramid)
-    scene.add_object_by_context(pyr_1, "Wooden Pyramid", Transform(np.array([-1.0, 0.5, 1.5]), rotation=np.array([0, np.deg2rad(45), 0])))
+    # Wooden Pyramid (Left)
+    mat_pyramid = MaterialFactory.create_diffuse(Color.from_hex("#6B462B"), 0.7)
+    pyr_1 = SDF_Material(Pyramid(), mat_pyramid)    
+    scene.add_object_by_context(pyr_1, "Wooden Pyramid", Transform(np.array([-1.0, 0.5, -2.5]), np.array([0, np.deg2rad(45), 0])))
 
     # Lights
     key_light = Light(color=Color.from_hex("#FFDA89"), intensity=320.0, radius=2.0)
@@ -113,11 +111,11 @@ def get_emissive_scene(width: int = 100, height: int = 100) -> Scene:
 
     # Objects
     # Moved glowing sphere to be clearly reflected in the mirror sphere
-    mat_glow = MaterialFactory.create_emissive(Color.from_hex("#95FF7A"), 2.0)
+    mat_glow = MaterialFactory.create_emissive(Color.from_hex("#3EFF0E"), 2.0)
     v_emissive = SDF_Material(Sphere(0.3), mat_glow)
     scene.add_object_by_context(v_emissive, "GlowingSphere", Transform(np.array([1.2, 0.5, -0.5])))
 
-    mat_reflect = MaterialFactory.create_specular(Color.from_hex("#6B6666"), roughness=0.2, metallicness=0.85, specular_intensity=0.5)
+    mat_reflect = MaterialFactory.create_specular(Color.from_hex("#837272"), 0.2, 0.85, specular_intensity=0.5)
     v_mirror = SDF_Material(Sphere(1.0), mat_reflect)
     scene.add_object_by_context(v_mirror, "MirrorSphere", Transform(np.array([-0.5, 1.0, 0.5])))
 
@@ -143,12 +141,12 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     )
     scene = Scene("lit_studio", cam, background_color=Color.from_hex("#BEC2CF"))
 
-    # Objects - Center them better
-    mat1 = MaterialFactory.create_specular(Color.from_hex("#FFB86B"), 0.2, 0.1, 0.75, 0.0)
+    # Objects
+    mat1 = MaterialFactory.create_specular(Color.from_hex("#FFB86B"), 0.2, 0.1, 0.75, 0.2)
     v_s1 = SDF_Material(Sphere(0.4), mat1)
     scene.add_object_by_context(v_s1, "StudioBallA", Transform(np.array([-0.4, 0.4, 0.0])))
 
-    mat2 = MaterialFactory.create_specular(Color.from_hex("#6B9BFF"), 0.2, 0.4, 0.9, 0.0)
+    mat2 = MaterialFactory.create_specular(Color.from_hex("#6B9BFF"), 0.2, 0.4, 0.9, 0.1)
     v_s2 = SDF_Material(Sphere(0.45), mat2)
     scene.add_object_by_context(v_s2, "StudioBallB", Transform(np.array([0.4, 0.45, 0.2])))
 
@@ -158,13 +156,13 @@ def get_lit_studio_scene(width: int = 100, height: int = 100) -> Scene:
     scene.add_object_by_context(v_plane, "StudioBack", Transform(np.array([0.0, 0.0, 3.0])))
 
     # Lights – balanced three-point studio rig
-    key = Light(color=Color.from_hex("#F5E1AB"), intensity=400.0, radius=3.0)
+    key = Light(color=Color.from_hex("#FFF8E7"), intensity=400.0, radius=3.0)
     scene.add_object_by_context(key, "StudioKey", Transform(np.array([2.5, 2.5, -2.0])))
 
-    rim = Light(color=Color.from_hex("#FF9BDE"), intensity=150.0, radius=1.5)
+    rim = Light(color=Color.from_hex("#FFCAED"), intensity=50.0, radius=0.75)
     scene.add_object_by_context(rim, "StudioRim", Transform(np.array([-3.0, 1.0, 1.0])))
 
-    fill = Light(color=Color.from_hex("#C0FFE7"), intensity=180.0, radius=3.0)
+    fill = Light(color=Color.from_hex("#A9FFDE"), intensity=180.0, radius=3.0)
     scene.add_object_by_context(fill, "StudioFill", Transform(np.array([0.0, -2.5, -2.0])))
 
     cam.transform.look_at(np.array([0, 0.4, 0]))
@@ -188,9 +186,8 @@ def get_rgb_cornell_box_scene(width: int = 126, height: int = 126) -> Scene:
     mat_red   = MaterialFactory.create_diffuse(Color.from_hex("#B03030"), 1.0)
     mat_green = MaterialFactory.create_diffuse(Color.from_hex("#30B030"), 1.0)
     mat_blue  = MaterialFactory.create_diffuse(Color.from_hex("#3036B0"), 1.0)
-    mat_mirror= MaterialFactory.create_specular(Color.from_hex("#FFFFFF"), 0.1, 1.0, 1.0, 1.0)
+    mat_mirror= MaterialFactory.create_specular(Color.from_hex("#FFFFFF"), 0.01, 1.0, 1.0, 1.0)
     mat_glass = MaterialFactory.create_glass(Color.from_hex("#FFFFFF"), Color(1.0, 1.0, 1.0), 0.0, 0.0, REFRACTIVE_INDICES["glass"], 0)
-    mat_cyl   = MaterialFactory.create_specular(Color.from_hex("#FFC219"), 0.2, 0.7, 0.9, 0.5)
 
     # 3. Room Dimensions
     room_x = (-3.0, 3.0)
@@ -216,12 +213,11 @@ def get_rgb_cornell_box_scene(width: int = 126, height: int = 126) -> Scene:
 
     # Tall Box (Rotated) - Scale 1.5 in Height -> Total Height 3. Center at floor + 1.5
     scene.add_object_by_context(
-        SDF_Material(ShapeExtrusion(Rectangle(np.array([1.0, 1.0])), 1.5), mat_white), 
+        SDF_Material(ShapeExtrusion(Rectangle(np.array([1.0, 1.5])), 1.0), mat_white), 
         "TallBox", 
         Transform(
-            np.array([-1.5, floor_y + 1.5, 0.5]), 
-            np.array([0.0, np.deg2rad(20), 0.0]), 
-            np.array([0.8, 1.5, 0.8])
+            np.array([-0.8, floor_y + 1.5, 0.5]), 
+            np.array([0.0, np.deg2rad(20), 0.0]),
         )
     )
 
@@ -236,22 +232,12 @@ def get_rgb_cornell_box_scene(width: int = 126, height: int = 126) -> Scene:
     scene.add_object_by_context(
         SDF_Material(Cube(0.7), mat_glass), 
         "GlassCube", 
-        Transform(np.array([0.0, floor_y + 0.7, -1.0]), np.array([0.0, np.deg2rad(-15), 0.0]), np.full(3, 0.7))
-    )
-    
-    # Gold Cylinder
-    scene.add_object_by_context(
-        SDF_Material(Cylinder(.5, 1.6), mat_cyl), 
-        "CylinderObj", 
-        Transform(np.array([1.5, floor_y + 1.6, -1.5]), rotation=np.array([0, np.deg2rad(45), 0]), scale=np.array([0.6, 0.6, 0.6]))
+        Transform(np.array([0.0, floor_y + 0.7, 0.5]), np.array([0.0, np.deg2rad(-15), 0.0]))
     )
 
-    # 6. Lights – area ceiling panel + subtle floor bounce
-    ceiling_light = Light(color=Color.from_hex("#FFC9A2"), intensity=520.0, radius=5.0)
+    # 6. Lights – area ceiling panel
+    ceiling_light = Light(color=Color.from_hex("#FAEABD"), intensity=520.0, radius=5.0)
     scene.add_object_by_context(ceiling_light, "CeilingLight", Transform(np.array([0.0, room_y[1] - 0.5, 0.0])))
-
-    floor_bounce = Light(color=Color.from_hex("#FCE9AA"), intensity=80.0, radius=4.0)
-    scene.add_object_by_context(floor_bounce, "FloorBounce", Transform(np.array([0.0, floor_y + 0.1, 0.0])))
 
     cam.transform.look_at(np.array([0, 2, 0]))
 
@@ -277,7 +263,7 @@ def get_cyberpunk_scene(width: int = 140, height: int = 100) -> Scene:
 
     # Floor (Wet Road)
     scene.add_object_by_context(
-        SDF_Material(ShapeExtrusion(Rectangle(np.array([10.0, 20.0]))), mat_asphalt_wet), 
+        SDF_Material(ShapeExtrusion(Rectangle(np.array([20.0, 40.0]))), mat_asphalt_wet), 
         "Road", 
         Transform(np.array([0.0, -1.0, 0.0]), np.array([np.deg2rad(90), 0.0, 0.0]))
     )
@@ -294,13 +280,13 @@ def get_cyberpunk_scene(width: int = 140, height: int = 100) -> Scene:
         scene.add_object_by_context(
             SDF_Material(ShapeExtrusion(Square(2), h_left), mat_concrete_dark), 
             f"BuildL_{i}", 
-            Transform(np.array([-4.5, h_left/2, z_pos]), np.array([np.deg2rad(90), np.deg2rad(90), 0.0]))
+            Transform(np.array([-4.5, h_left / 2, z_pos]), np.array([np.deg2rad(90), 0.0, 0.0]))
         )
         # Left Neon Sign
         scene.add_object_by_context(
             SDF_Material(ShapeExtrusion(Square(2), 0.1), mat_neon_cyan if i % 2 == 0 else mat_neon_pink),
             f"SignL_{i}",
-            Transform(np.array([-2.6, 1.5, z_pos]), np.array([np.deg2rad(90), np.deg2rad(90), 0.0]))
+            Transform(np.array([-2.6, 1.5, z_pos]), np.array([0.0, np.deg2rad(90), 0.0]))
         )
 
         # Right Buildings
@@ -308,13 +294,13 @@ def get_cyberpunk_scene(width: int = 140, height: int = 100) -> Scene:
         scene.add_object_by_context(
             SDF_Material(ShapeExtrusion(Square(2), h_right), mat_concrete_dark), 
             f"BuildR_{i}", 
-            Transform(np.array([4.5, h_right/2, z_pos]), np.array([np.deg2rad(90), 0.0, 0.0]))
+            Transform(np.array([4.5, h_right / 2, z_pos]), np.array([np.deg2rad(90), 0.0, 0.0]))
         )
         # Right Neon Sign (Horizontal bar)
         scene.add_object_by_context(
-            SDF_Material(Cube(), mat_neon_pink if i % 2 == 0 else mat_neon_cyan),
+            SDF_Material(ShapeExtrusion(Square(2), 0.1), mat_neon_pink if i % 2 == 0 else mat_neon_cyan),
             f"SignR_{i}",
-            Transform(np.array([2.6, 2.5, z_pos]), np.array([np.deg2rad(90), 0.0, 0.0]))
+            Transform(np.array([2.6, 2.5, z_pos]), np.array([0.0, np.deg2rad(90), 0.0]))
         )
 
     # Lighting – pink hero sign slightly brighter; dim ground fill for wet-road reflections
@@ -328,7 +314,7 @@ def get_cyberpunk_scene(width: int = 140, height: int = 100) -> Scene:
     )
     # Low fill so the road surface picks up colour
     scene.add_object_by_context(
-        Light(color=Color.from_hex("#EBDAFF"), intensity=100.0, radius=10.0),
+        Light(color=Color.from_hex("#EBDAFF"), intensity=200.0, radius=100.0),
         "GroundFill", Transform(np.array([0.0, 0.5, 2.0]))
     )
 
@@ -346,7 +332,7 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
 
     # Floor
     mat_floor = MaterialFactory.create_diffuse(Color.from_hex("#CCCCCC"), roughness=1.0)
-    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Rectangle(np.array([7.0, 5.0])), height=0.2), mat_floor), "Floor", Transform(np.array([0.0, -1.0, 0.0])))
+    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Rectangle(np.array([15.0, 7.0])), height=0.2), mat_floor), "Floor", Transform(np.array([0.0, -1.0, 0.0]), np.array([np.deg2rad(90), 0.0, 0.0])))
 
     base_col = Color.from_hex("#D4AF37")
     
@@ -362,13 +348,13 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
     mat_s4 = MaterialFactory.create_specular(base_col, roughness=0.75)
     scene.add_object_by_context(SDF_Material(Sphere(), mat_s4), "S_Matte", Transform(np.array([1.5, 0.5, 0.0])))
     
-    mat_s5 = MaterialFactory.create_diffuse(Color.from_hex("#FF0000"), roughness=0.1)
+    mat_s5 = MaterialFactory.create_diffuse(Color.from_hex("#FF0000"), roughness=0.5)
     scene.add_object_by_context(SDF_Material(Sphere(), mat_s5), "S_Plastic", Transform(np.array([3.0, 0.5, 0.0])))
 
-    mat_c1 = MaterialFactory.create_specular(Color.from_hex("#FFD700"), roughness=0.0, metallicness=1.0)
+    mat_c1 = MaterialFactory.create_specular(Color.from_hex("#8A8A8A"), roughness=0.0, metallicness=1.0)
     scene.add_object_by_context(SDF_Material(Cylinder(), mat_c1), "C_Mirror", Transform(np.array([-4.5, 0.6, 0.0])))
 
-    mat_c2 = MaterialFactory.create_specular(Color.from_hex("#FFD700"), roughness=0.5, metallicness=0.5)
+    mat_c2 = MaterialFactory.create_specular(Color.from_hex("#8A8A8A"), roughness=0.5, metallicness=0.5)
     scene.add_object_by_context(SDF_Material(Cylinder(), mat_c2), "C_Matte", Transform(np.array([4.5, 0.6, 0.0])))
 
     # Lights – main is the dominant key; fill lifts shadows from the side
@@ -382,32 +368,32 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
     return scene
 
 def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
-    cam_transform = Transform(np.array([0.0, 2.0, -4.0]), np.array([0.0, 0.0, 0.0]))
+    cam_transform = Transform(np.array([0.0, 2.0, -4.0]))
     cam = Camera(
         cam_transform,
         fov=70.0, near=0.1, far=100.0,
         resolution_width=width, resolution_height=height,
         camera_type=CameraType.PERSPECTIVE
     )
-    scene = Scene("refraction_lab", cam, background_color=Color(0.05, 0.05, 0.05))
+    scene = Scene("refraction_lab", cam, background_color=Color(0.5, 0.5, 0.5))
 
     # Background
     mat_wall = MaterialFactory.create_emissive(Color(1.0, 1.0, 1.0), 1.0)
-    scene.add_object_by_context(SDF_Material(Cube(), mat_wall), "BackWall", Transform(np.array([0.0, 2.0, -4.0])))
+    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(10), 0.5), mat_wall), "BackWall", Transform(np.array([0.0, 2.0, 4.0]), np.array([0.0, 0.0, 0.0])))
 
     # Bars
     mat_bar = MaterialFactory.create_diffuse(Color(0.0, 0.0, 0.0), 1.0)
     for i in range(-6, 7):
-        scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(0.67)), mat_bar), f"Bar_{6 + i}", Transform(np.array([i, 2.0, -3.5])))
+        scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(0.25), 5), mat_bar), f"Bar_{6 + i}", Transform(np.array([i * 1.1, 2.0, 3.5]), np.array([np.deg2rad(90), 0.0, 0.0])))
 
     # Spheres
-    mat_acrylic = MaterialFactory.create_glass(Color.from_hex("#DEFFF0"), Color.from_hex("#FFFFFF"), 0.0, 0.0, REFRACTIVE_INDICES["acrylic"], 0.1, 1.0)
+    mat_acrylic = MaterialFactory.create_glass(Color.from_hex("#FFFFFF"), Color.from_hex("#FFFFFF"), 0.0, 0.0, REFRACTIVE_INDICES["acrylic"], 0.1, 1.0)
     scene.add_object_by_context(SDF_Material(Sphere(), mat_acrylic), "AcrylicSphere", Transform(np.array([-1.2, 0.5, 0.0])))
 
-    mat_diamond = MaterialFactory.create_glass(Color.from_hex("#B9D3E3"), Color.from_hex("#FFFFFF"), 0.0, 0.0, REFRACTIVE_INDICES["diamond"], 0.2, 1.0)
-    scene.add_object_by_context(SDF_Material(Sphere(), mat_diamond), "DiamondSphere", Transform(np.array([0.0, 0.5, 0.0])))
+    mat_diamond = MaterialFactory.create_glass(Color.from_hex("#FFFFFF"), Color.from_hex("#FFFFFF"), 0.0, 0.0, REFRACTIVE_INDICES["diamond"], 0.2, 1.0)
+    n = scene.add_object_by_context(SDF_Material(Sphere(), mat_diamond), "DiamondSphere", Transform(np.array([0.0, 0.5, 0.0])))
 
-    mat_water = MaterialFactory.create_glass(Color.from_hex("#FFFFFF"), Color.from_hex("#1F1FFF"), 0.1, 0.0, REFRACTIVE_INDICES["water"], 0.1, 1.0)
+    mat_water = MaterialFactory.create_glass(Color.from_hex("#FFFFFF"), Color.from_hex("#FFFFFF"), 0.1, 0.0, REFRACTIVE_INDICES["water"], 0.1, 1.0)
     scene.add_object_by_context(SDF_Material(Sphere(), mat_water), "WaterSphere", Transform(np.array([1.2, 0.5, 0.0])))
 
     # Lights – backlight illuminates the striped bars seen through glass;
@@ -418,7 +404,7 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
     l_front = Light(color=Color(0.9, 0.9, 1.0), intensity=120.0, radius=3.0)
     scene.add_object_by_context(l_front, "FrontLight", Transform(np.array([2.0, 3.0, -3.0])))
     
-    cam.transform.look_at(np.array([0, 0.5, 0]))
+    cam.transform.look_at(n.world_transform.position)
     return scene
 
 def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
@@ -443,10 +429,10 @@ def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
     )
     
     # The Sun: Glowing warm sphere
-    mat_sun = MaterialFactory.create_emissive(Color.from_hex("#FF9900"), 4.0)
+    mat_sun = MaterialFactory.create_emissive(Color.from_kelvin(3400), 3.0)
     
     # The Ground: Dark, rocky/sandy
-    mat_sand = MaterialFactory.create_diffuse(Color.from_hex("#272523"), roughness=0.9)
+    mat_sand = MaterialFactory.create_diffuse(Color.from_hex("#D6BE99"), roughness=0.9)
 
     # 1. The Monolith (Tall, thin rectangular extrusion)
     scene.add_object_by_context(
@@ -458,9 +444,9 @@ def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
     # 2. The "Sun" (Sphere behind the monolith)
     # Placed far back to silhouette the monolith
     scene.add_object_by_context(
-        SDF_Material(Sphere(), mat_sun),
+        SDF_Material(Sphere(4.5), mat_sun),
         "RetroSun",
-        Transform(np.array([0.0, 3.0, 15.0]), scale=np.full(3, 4.0))
+        Transform(np.array([0.0, 4.5, 15.0]), scale=np.full(3, 4.0))
     )
 
     # 3. Ground Terrain
@@ -468,7 +454,7 @@ def get_sunset_monolith_scene(width: int = 120, height: int = 120) -> Scene:
     scene.add_object_by_context(
         SDF_Material(ShapeExtrusion(Rectangle(np.array([20.0, 20.0])), height=1.0), mat_sand),
         "DesertFloor",
-        Transform(np.array([0.0, -3.0, 0.0]))
+        Transform(np.array([0.0, -3.0, 0.0]), np.array([np.deg2rad(90), 0.0, 0.0]))
     )
 
     # Lighting
@@ -510,12 +496,12 @@ def get_scifi_corridor_scene(width: int = 160, height: int = 120) -> Scene:
 
     # Floor and Ceiling (Long flattened cubes)
     scene.add_object_by_context(
-        SDF_Material(ShapeExtrusion(Rectangle(np.array([10.0, 50.0])), height=0.1), mat_floor), 
+        SDF_Material(ShapeExtrusion(Rectangle(np.array([20.0, 100.0])), height=0.25), mat_floor), 
         "Floor", 
         Transform(np.array([0.0, -1.0, 20.0]), np.array([np.deg2rad(90), 0.0, 0.0]))
     )
     scene.add_object_by_context(
-        SDF_Material(ShapeExtrusion(Rectangle(np.array([5.0, 50.0])), height=0.1), mat_wall), 
+        SDF_Material(ShapeExtrusion(Rectangle(np.array([20.0, 100.0])), height=0.25), mat_wall), 
         "Ceiling", 
         Transform(np.array([0.0, 4.0, 20.0]), np.array([np.deg2rad(90), 0.0, 0.0]))
     )
@@ -545,7 +531,7 @@ def get_scifi_corridor_scene(width: int = 160, height: int = 120) -> Scene:
 
         # Overhead Beam
         scene.add_object_by_context(
-            SDF_Material(ShapeExtrusion(Rectangle(np.array([3.2, 0.3])), height=0.3), mat_pillar),
+            SDF_Material(ShapeExtrusion(Rectangle(np.array([3.2, 1])), height=0.3), mat_pillar),
             f"Beam_{i}",
             Transform(np.array([0.0, 3.5, z_pos]), np.array([np.deg2rad(90), 0.0, 0.0]))
         )
@@ -582,16 +568,16 @@ def get_pastel_blocks_scene(width: int = 120, height: int = 120) -> Scene:
         resolution_width=width, resolution_height=height,
         camera_type=CameraType.PERSPECTIVE
     )
-    scene = Scene("pastel_blocks", cam, background_color=Color.from_hex("#949494"))
+    scene = Scene("pastel_blocks", cam, background_color=Color.from_hex("#E3FFFA"))
 
     # Materials
-    mat_pink = MaterialFactory.create_specular(Color.from_hex("#FFA29C"), roughness=0.6, metallicness=0.0, specular_intensity=0.5, specular_tint_amount=0.1)
-    mat_mint = MaterialFactory.create_specular(Color.from_hex("#ADFCDF"), roughness=0.6, metallicness=0.0, specular_intensity=0.5, specular_tint_amount=0.1)
-    mat_purple = MaterialFactory.create_specular(Color.from_hex("#E5FFBC"), roughness=0.6, metallicness=0.0, specular_intensity=0.5, specular_tint_amount=0.1)
-    mat_white = MaterialFactory.create_specular(Color.from_hex("#FFFFFF"), roughness=0.9, metallicness=0.0, specular_intensity=0.5, specular_tint_amount=0.1)
+    mat_pink = MaterialFactory.create_specular(Color.from_hex("#F3B9B5"), roughness=0.6, metallicness=0.0, specular_intensity=0.5, specular_tint_amount=0.1)
+    mat_mint = MaterialFactory.create_specular(Color.from_hex("#B3DDCE"), roughness=0.6, metallicness=0.0, specular_intensity=0.5, specular_tint_amount=0.1)
+    mat_purple = MaterialFactory.create_specular(Color.from_hex("#D3E4B9"), roughness=0.6, metallicness=0.0, specular_intensity=0.5, specular_tint_amount=0.1)
+    mat_white = MaterialFactory.create_specular(Color.from_hex("#D3D3D3"), roughness=0.9, metallicness=0.0, specular_intensity=0.5, specular_tint_amount=0.1)
 
     # Objects - Tighter stacking
-    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(10.0), height=0.2), mat_white), "Floor", Transform(np.array([0.0, -1.2, 0.0])))
+    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(10.0), height=0.2), mat_white), "Floor", Transform(np.array([0.0, -1.2, 0.0]), np.array([np.deg2rad(90), 0.0, 0.0])))
     
     # Base rotated slightly
     scene.add_object_by_context(SDF_Material(Cube(), mat_mint), "BaseObj", Transform(np.array([0.0, 0.0, 0.0]), np.array([0.0, np.deg2rad(25), 0.0])))
@@ -649,7 +635,7 @@ def get_glass_prism_scene(width: int = 120, height: int = 120) -> Scene:
     for x in range(-10, 11):
         for z in range(-10, 11):
             mat = mat_floor1 if (x + z) % 2 == 0 else mat_floor2
-            scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(1.0), height=0.1), mat), f"Floor_{x}_{z}", Transform(np.array([x, -1.0, z])))
+            scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(1.0), height=0.5), mat), f"Floor_{x}_{z}", Transform(np.array([x, -1.0, z]), np.array([np.deg2rad(90), 0.0, 0.0])))
 
     # Striped Wall - Brought closer to be more visible through refraction
     for i in range(-5, 6):
@@ -677,7 +663,7 @@ def get_glass_sculpture_scene(width: int = 120, height: int = 120) -> Scene:
     # Central Red Glass Sphere
     # Reduced radius to 0.75 so it sits visibly INSIDE the cube (radius 1.0) without touching walls
     mat_red_glass = MaterialFactory.create_glass(
-        Color.from_hex("#444444"), Color.from_hex("#FF4444"),
+        Color.from_hex("#CC000033"), Color.from_hex("#447FFF"),
         roughness=0.02, metallicness=0.0, ior=REFRACTIVE_INDICES["glass"], transmission=1.0, absorption_density=0.05
     )
     scene.add_object_by_context(SDF_Material(Sphere(0.75), mat_red_glass), "RedOrb", Transform(np.array([0.0, 0.0, 0.0])))
@@ -736,7 +722,7 @@ def get_100_spheres_grid_scene(width: int = 128, height: int = 128) -> Scene:
 
     # Floor
     mat_floor = MaterialFactory.create_diffuse(Color.from_hex("#333333"), roughness=0.5)
-    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(20), height=0.5), mat_floor), "Floor", Transform(np.array([0.0, -2.5, 0.0])))
+    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(20), height=0.5), mat_floor), "Floor", Transform(np.array([0.0, -2.5, 0.0]), np.array([np.deg2rad(90), 0.0, 0.0])))
 
     # Light – sun + cool sky fill so back-facing spheres aren't totally dark
     sun = Light(color=Color(1.0, 1.0, 0.9), intensity=1200.0, radius=3.0)
@@ -756,7 +742,7 @@ def get_low_ior_scene(width: int = 120, height: int = 120) -> Scene:
 
     # The Low IOR Sphere
     mat_low_ior = MaterialFactory.create_glass(
-        Color.from_hex("#FFFFFF"), Color.from_hex("#CCFFFF"),
+        Color.from_hex("#FFFFFF"), Color.from_hex("#FFFFFF"),
         roughness=0.0, ior=0.9
     )
     scene.add_object_by_context(SDF_Material(Sphere(), mat_low_ior), "AnomalyObj", Transform.Identity())
@@ -783,7 +769,7 @@ def get_low_ior_scene(width: int = 120, height: int = 120) -> Scene:
 
 def get_shape_showcase_scene(width: int = 160, height: int = 120) -> Scene:
     # Moved camera back and up for a better overview of the grid
-    cam_transform = Transform(np.array([0.0, 6.0, -9.0]), np.array([-0.5, 0.0, 0.0]))
+    cam_transform = Transform(np.array([0.0, 6.0, -9.0]))
     cam = Camera(cam_transform, fov=60.0, near=0.1, far=120.0, resolution_width=width, resolution_height=height)
     scene = Scene("shape_showcase", cam, background_color=Color.from_hex("#404096"))
 
@@ -811,7 +797,7 @@ def get_shape_showcase_scene(width: int = 160, height: int = 120) -> Scene:
     scene.add_object_by_context(SDF_Material(Capsule(), mat_glass), "Capsule1", Transform(np.array([0.0, 0.0, 2.0])))
     scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square()), mat_emiss), "Prism2", Transform(np.array([2.0, 0.0, 2.0])))
 
-    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Rectangle(np.array([5.0, 2.0]))), MaterialFactory.create_diffuse(Color.from_hex("#333333"), 0.8)), "Floor", Transform(np.array([0.0, -2.0, 0.0])))
+    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Rectangle(np.array([15.0, 20.0]))), MaterialFactory.create_diffuse(Color.from_hex("#333333"), 0.8)), "Floor", Transform(np.array([0.0, -2.0, 0.0]), np.array([np.deg2rad(90), 0.0, 0.0])))
 
     # Lights – key + cool fill so all three rows are readable
     l_main = Light(color=Color(1.0, 1.0, 1.0), intensity=800.0, radius=4.0)
@@ -820,19 +806,19 @@ def get_shape_showcase_scene(width: int = 160, height: int = 120) -> Scene:
     l_fill = Light(color=Color(0.6, 0.7, 1.0), intensity=250.0, radius=6.0)
     scene.add_object_by_context(l_fill, "Fill", Transform(np.array([-5.0, 4.0, 4.0])))
     
-    cam.transform.look_at(np.array([0, 0, 0]))
+    scene.camera.transform.look_at(np.array([0.0, 0.0, 0.0]))
     return scene
 
 def get_abstract_geometry_scene(width: int = 140, height: int = 100) -> Scene:
     cam_transform = Transform(np.array([3.0, 3.0, -5.0]), np.array([-0.3, 0.3, 0.0]))
     cam = Camera(cam_transform, fov=65.0, near=0.1, far=120.0, resolution_width=width, resolution_height=height)
-    scene = Scene("abstract_geometry", cam, background_color=Color.from_hex("#000000"))
+    scene = Scene("abstract_geometry", cam, background_color=Color.from_hex("#D6A780"))
 
     # Materials
-    mat_transparent = MaterialFactory.create_glass(Color.from_hex("#FFFFFF"), Color.from_hex("#CCFFFF"), 0.1, 0.1, 1.4, 0.8, 0.02)
+    mat_transparent = MaterialFactory.create_glass(Color.from_hex("#FFFFFF"), Color.from_hex("#FFF020"), 0.1, 0.1, 1.4, 0.8, 0.02)
     mat_mirror = MaterialFactory.create_specular(Color.from_hex("#FFFFFF"), 0.1, 0.9, 1.0, 0.1)
-    mat_emiss_red = MaterialFactory.create_emissive(Color.from_hex("#FF1744"), 2.0)
-    mat_emiss_blue = MaterialFactory.create_emissive(Color.from_hex("#2979FF"), 2.0)
+    mat_emiss_red = MaterialFactory.create_emissive(Color.from_hex("#FF1744"), 1.2)
+    mat_emiss_blue = MaterialFactory.create_emissive(Color.from_hex("#2979FF"), 1.2)
 
     # Objects clustered to look like one sculpture
     scene.add_object_by_context(SDF_Material(Sphere(), mat_transparent), "LargeSphere", Transform(np.array([0.0, 0.0, 0.0])))
@@ -865,48 +851,46 @@ def get_industrial_shapes_scene(width: int = 150, height: int = 100) -> Scene:
     scene = Scene("industrial_shapes", cam, background_color=Color.from_hex("#2c2c2c"))
 
     # Materials
-    mat_rusty = MaterialFactory.create_specular(Color.from_hex("#8B4513"), 0.4, 0.8, 0.7, 0.3)
+    mat_rusty = MaterialFactory.create_specular(Color.from_hex("#A0541E"), 0.4, 0.8, 0.7, 0.3)
     mat_steel = MaterialFactory.create_specular(Color.from_hex("#C0C0C0"), 0.1, 0.9, 0.9, 0.1)
     mat_brass = MaterialFactory.create_specular(Color.from_hex("#B87333"), 0.2, 0.7, 0.8, 0.4)
     mat_concrete = MaterialFactory.create_diffuse(Color.from_hex("#696969"), 0.9)
 
-    mat_e_red = MaterialFactory.create_emissive(Color.from_hex("#FF3B3B"), 3.0)
+    mat_e_green = MaterialFactory.create_emissive(Color.from_hex("#4BFF3B"), 3.0)
     mat_e_blue = MaterialFactory.create_emissive(Color.from_hex("#3B7AFF"), 3.0)
 
     # Base Structure
-    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(10)), mat_concrete), "ConcreteFloor", Transform(np.array([0.0, -2.1, 0.0]), scale=np.array([10, 1, 10])))
-    scene.add_object_by_context(SDF_Material(Cube(), mat_steel), "BaseStructure", Transform(np.array([0.0, -0.6, 0.0]), scale=np.array([2, 0.5, 1.5])))
+    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(10)), mat_concrete), "ConcreteFloor", Transform(np.array([0.0, -2.1, 0.0]), np.array([np.deg2rad(90), 0.0, 0.0])))
+    scene.add_object_by_context(SDF_Material(Cube(), mat_steel), "BaseStructure", Transform(np.array([0.0, -0.6, 0.0])))
 
-    # Pipes (Rotated Cylinders) connecting to base
-    t_pipe1 = Transform(np.array([-1.5, -0.6, 0.0]))
-    t_pipe1.rotate(np.deg2rad(90), np.array([0, 0, 1]))
-    scene.add_object_by_context(SDF_Material(Cylinder(1.5), mat_brass), "Pipe1", t_pipe1)
-    
-    t_pipe2 = Transform(np.array([1.5, -0.6, 0.5]))
-    t_pipe2.rotate(np.deg2rad(90), np.array([1, 0, 0]))
-    scene.add_object_by_context(SDF_Material(Cylinder(5), mat_rusty), "Pipe2", t_pipe2)
+    # Pipes
+    pipe_rotation = np.array([np.deg2rad(20), np.deg2rad(10), 0.0])
+    pipe_distance = 1.5
+    t_pipe1 = Transform(np.array([-pipe_distance, -0.3, 0.6]), pipe_rotation)
+    scene.add_object_by_context(SDF_Material(Cylinder(0.2, 2), mat_brass), "Pipe1", t_pipe1)
+
+    t_pipe2 = Transform(np.array([pipe_distance, -0.3, 0.6]), pipe_rotation)
+    scene.add_object_by_context(SDF_Material(Cylinder(0.2, 2), mat_rusty), "Pipe2", t_pipe2)
 
     # Gears
-    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Circle(), 0.5), mat_steel), "Gear1", Transform(np.array([-0.5, 1.0, 0.5]), rotation=np.array([np.deg2rad(90), 0, 0]), scale=np.array([0.8, 0.2, 0.8])))
-    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Circle(), 0.5), mat_brass), "Gear2", Transform(np.array([0.5, 1.0, -0.2]), rotation=np.array([np.deg2rad(90), 0, 0]), scale=np.array([0.6, 0.2, 0.6])))
+    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Circle(0.7), 0.25), mat_steel), "Gear1", Transform(np.array([-0.6, 1.1, 1.5]), np.array([0.0, np.deg2rad(90), 0.0])))
+    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Circle(0.5), 0.25), mat_brass), "Gear2", Transform(np.array([0.6, 1.1, 1.5]), np.array([0.0, np.deg2rad(90), 0.0])))
 
-    # Beams
-    t_beam1 = Transform(np.array([-2.5, 1.5, 2.0]))
-    t_beam1.rotate(np.deg2rad(15), np.array([0, 1, 0]))
-    t_beam1.rotate(np.deg2rad(15), np.array([1, 0, 0]))
-    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square()), mat_rusty), "Beam1", t_beam1)
+    # Support Beam
+    t_beam1 = Transform(np.array([0.0, 0.3, 0.61]), np.array([0.0, np.deg2rad(90), 0.0]))
+    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(0.2), pipe_distance * 2), mat_rusty), "Beam1", t_beam1)
 
-    # Panel with buttons
-    scene.add_object_by_context(SDF_Material(Cube(), mat_steel), "PanelBase", Transform(np.array([0.0, 0.5, 2.0]), scale=np.array([1, 0.5, 0.2])))
-    scene.add_object_by_context(SDF_Material(Cube(), mat_e_red), "Button1", Transform(np.array([-0.5, 0.6, 2.2]), scale=np.array([0.1, 0.1, 0.1])))
-    scene.add_object_by_context(SDF_Material(Cube(), mat_e_blue), "Button2", Transform(np.array([0.5, 0.6, 2.2]), scale=np.array([0.1, 0.1, 0.1])))
+    # Panel with buttons — centered and pulled slightly forward for accessibility
+    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Rectangle(np.array([1.0, 0.5])), 0.2), mat_steel), "PanelBase", Transform(np.array([0.0, 0.45, -1.6])))
+    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Rectangle(np.array([0.1, 0.1])), 0.1), mat_e_green), "Button1", Transform(np.array([-0.25, 0.55, -1.55])))
+    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Rectangle(np.array([0.1, 0.1])), 0.1), mat_e_blue), "Button2", Transform(np.array([0.25, 0.55, -1.55])))
 
-    # Lighting – overhead key with area radius + warm side fill for the panel face
-    l_overhead = Light(color=Color(1.0, 1.0, 0.9), intensity=350.0, radius=3.0)
-    scene.add_object_by_context(l_overhead, "Overhead", Transform(np.array([2.0, 5.0, 2.0])))
+    # Lighting – overhead key centered above the scene + warm side fill for the panel face
+    l_overhead = Light(color=Color(1.0, 1.0, 0.9), intensity=400.0, radius=3.5)
+    scene.add_object_by_context(l_overhead, "Overhead", Transform(np.array([0.0, 5.0, 0.0])))
 
     l_side = Light(color=Color(1.0, 0.9, 0.7), intensity=150.0, radius=4.0)
-    scene.add_object_by_context(l_side, "SideFill", Transform(np.array([-4.0, 2.0, -2.0])))
+    scene.add_object_by_context(l_side, "SideFill", Transform(np.array([-3.0, 2.0, -2.0])))
     
     cam.transform.look_at(np.array([0, 0.5, 0]))
     return scene
@@ -948,33 +932,33 @@ def get_forest_clearing_scene(width: int = 140, height: int = 100) -> Scene:
         angle = (i / 6) * 2 * np.pi
         x = np.cos(angle) * 3.5
         z = np.sin(angle) * 3.5
-        
+
         # Trunk
         scene.add_object_by_context(
-            SDF_Material(Cylinder(), mat_trunk), 
+            SDF_Material(Cylinder(0.5, 2.2), mat_trunk), 
             f"Trunk_{i}", 
-            Transform(np.array([x, 1.0, z]), scale=np.array([0.3, 1.0, 0.3]))
+            Transform(np.array([x, 1.1, z]))
         )
         
         # Foliage (Cluster of 2 spheres)
         foliage_mat = mat_leaves_light if i % 2 == 0 else mat_leaves_dark
         
         scene.add_object_by_context(
-            SDF_Material(Sphere(), foliage_mat), 
+            SDF_Material(Sphere(1), foliage_mat), 
             f"LeavesBottom_{i}", 
-            Transform(np.array([x, 2.2, z]), scale=np.full(3, 0.9))
+            Transform(np.array([x, 2.2, z]))
         )
         scene.add_object_by_context(
-            SDF_Material(Sphere(), foliage_mat), 
+            SDF_Material(Sphere(0.8), foliage_mat), 
             f"LeavesTop_{i}", 
-            Transform(np.array([x, 3.0, z]), scale=np.full(3, 0.7))
+            Transform(np.array([x, 3.0, z]))
         )
 
     # Central Feature (Rock)
     rock = scene.add_object_by_context(
         SDF_Material(Sphere(), mat_stone),
         "CenterRock",
-        Transform(np.array([0.0, 0.3, 0.0]), scale=np.array([0.8, 0.5, 0.6]))
+        Transform(np.array([0.0, 0.3, 0.0]))
     )
 
     cam.transform.look_at(rock.world_transform.position)
@@ -993,7 +977,7 @@ def get_checkerboard_infinity_scene(width: int = 120, height: int = 120) -> Scen
     """
     A surreal scene focusing on perspective and repetitive patterns.
     """
-    cam_transform = Transform(np.array([0.0, 2.0, -6.0]), np.array([-0.2, 0.0, 0.0]))
+    cam_transform = Transform(np.array([0.0, 4.0, -6.0]), np.array([-0.2, 0.0, 0.0]))
     cam = Camera(
         cam_transform, 
         fov=80.0, near=0.1, far=200.0, 
@@ -1009,9 +993,9 @@ def get_checkerboard_infinity_scene(width: int = 120, height: int = 120) -> Scen
     mat_reflect_sphere = MaterialFactory.create_specular(Color.from_hex("#6A7374"), roughness=0.1, metallicness=1.0, specular_intensity=1.0, specular_tint_amount=0.5)
 
     # Grid Floor Generation
-    grid_range_x = 12
-    grid_range_z = 20
-    tile_size = 1.0
+    grid_range_x = 100
+    grid_range_z = 100
+    tile_size = 0.5
     
     for x in range(-grid_range_x, grid_range_x + 1):
         for z in range(0, grid_range_z): # Extending deep into Z
@@ -1019,20 +1003,20 @@ def get_checkerboard_infinity_scene(width: int = 120, height: int = 120) -> Scen
             mat = mat_white if (x + z) % 2 == 0 else mat_black
             
             # Using thin cubes as tiles
-            pos = np.array([x * tile_size, 0.0, z * tile_size - cam_transform.position[2]])
+            pos = np.array([x * tile_size, 0.0, z * tile_size + cam_transform.position[2]])
             scene.add_object_by_context(
                 SDF_Material(ShapeExtrusion(Square(tile_size), 0.1), mat), 
                 f"Tile_{x}_{z}", 
-                Transform(pos) # Slight gap between tiles
+                Transform(pos, np.array([np.deg2rad(90), 0.0, 0.0])) # Slight gap between tiles
             )
 
     # Floating Mirror Sphere
-    scene.add_object_by_context(
+    n = scene.add_object_by_context(
         SDF_Material(Sphere(), mat_reflect_sphere),
         "HeroSphere",
         Transform(np.array([0.0, 1.5, 4.0]))
     )
-    scene.camera.transform.look_at(np.array([0.0, 1.5, 4.0]))
+    scene.camera.transform.look_at(n.world_transform.position)
 
     # Lighting
     # A low, dramatic light to cast long shadows on the tiles
@@ -1065,62 +1049,78 @@ def get_orbital_dock_scene(width: int = 140, height: int = 100) -> Scene:
     scene = Scene("orbital_dock", cam, background_color=Color.from_hex("#000000"))
 
     # Materials
-    mat_hull = MaterialFactory.create_specular(Color.from_hex("#CCCCCC"), roughness=0.3, metallicness=0.8)
-    mat_solar = MaterialFactory.create_specular(Color.from_hex("#111133"), roughness=0.1, metallicness=0.9)
-    mat_engine_glow = MaterialFactory.create_emissive(Color.from_hex("#00CCFF"), 4.0)
-    mat_sensor_red = MaterialFactory.create_emissive(Color.from_hex("#FF0000"), 2.0)
+    mat_hull = MaterialFactory.create_specular(Color.from_hex("#6C7177"), roughness=0.3, metallicness=0.8)
+    mat_solar = MaterialFactory.create_specular(Color.from_hex("#5D4092"), roughness=0.1, metallicness=0.9)
+    mat_engine_glow = MaterialFactory.create_emissive(Color.from_hex("#00CCFF"), 2.0)
+    mat_sensor_red = MaterialFactory.create_emissive(Color.from_hex("#FF0000"), 1.25)
 
-    # Main Ship Body (Cylinder + Cone/Pyramid approximation)
+    hull_radius = 1
+    hull_length = 2
+
+    # Main Ship Body
     scene.add_object_by_context(
-        SDF_Material(Cylinder(), mat_hull),
+        SDF_Material(Cylinder(hull_radius, hull_length), mat_hull),
         "ShipCore",
-        Transform(np.array([0.0, 0.0, 0.0]), np.array([0, 0, np.deg2rad(90)]), scale=np.array([0.5, 2.0, 0.5]))
+        Transform(np.array([0.0, 0.0, 0.0]), np.array([0, 0, np.deg2rad(90)]))
     )
+
+    pannel_width = 1.8
+    pannel_height = 1.2
+    pannel_offset = np.array([-0.4, 0.0])
+    pannel_distance = 2.4
+    pannel_target = np.array([-300.0, 100.0, -125.0])
 
     # Solar Panels (Thin Cubes)
-    panel_scale = np.array([0.1, 1.5, 0.8])
-    scene.add_object_by_context(
-        SDF_Material(ShapeExtrusion(Rectangle(np.array([0.8, 0.8])), height=0.1), mat_solar),
+    left_pannel = scene.add_object_by_context(
+        SDF_Material(ShapeExtrusion(Rectangle(np.array([pannel_width, pannel_height])), height=0.1), mat_solar),
         "SolarLeft",
-        Transform(np.array([0.0, 0.0, 1.2]), scale=panel_scale)
+        Transform(np.array([pannel_offset[0], pannel_offset[1], pannel_distance]))
     )
-    scene.add_object_by_context(
-        SDF_Material(ShapeExtrusion(Rectangle(np.array([0.8, 0.8])), height=0.1), mat_solar),
+    left_pannel.transform.look_at(pannel_target)
+    right_pannel = scene.add_object_by_context(
+        SDF_Material(ShapeExtrusion(Rectangle(np.array([pannel_width, pannel_height])), height=0.1), mat_solar),
         "SolarRight",
-        Transform(np.array([0.0, 0.0, -1.2]), scale=panel_scale)
+        Transform(np.array([pannel_offset[0], pannel_offset[1], -pannel_distance]))
     )
+    right_pannel.transform.look_at(pannel_target)
 
     # Engine (Rear)
+    engine_radius = hull_radius * 0.75
     scene.add_object_by_context(
-        SDF_Material(Sphere(), mat_engine_glow),
+        SDF_Material(Sphere(engine_radius), mat_engine_glow),
         "Engine",
-        Transform(np.array([-2.1, 0.0, 0.0]), scale=np.full(3, 0.4))
+        Transform(np.array([-((hull_length / 2) + engine_radius), 0.0, 0.0]))
     )
 
-    # Docking Ring (Torus approximation using 4 Cylinders)
-    ring_rad = 1.5
-    for i in range(4):
+    # Docking Ring
+    ring_radius = 2.5
+    ring_res = 16
+    for i in range(ring_res):
+        angle = (i / ring_res) * 2 * np.pi
+        y = ring_radius * np.cos(angle)
+        z = ring_radius * np.sin(angle)
         scene.add_object_by_context(
-            SDF_Material(Cylinder(), mat_hull),
+            SDF_Material(Cylinder(0.2, 2 * np.pi * (ring_radius /  ring_res)), mat_hull),
             f"RingSeg_{i}",
-            Transform(np.array([1.0, np.cos(i*1.57)*ring_rad, np.sin(i*1.57)*ring_rad]), 
-                      scale=np.array([0.2, 0.2, 0.2]))
+            Transform(np.array([1.0, y, z]), np.array([angle + np.deg2rad(90), 0.0, 0.0]))
         )
 
     # Navigation Light
+    nav_radius = hull_radius * 0.5
+    nav_height = 0.6
     scene.add_object_by_context(
-        SDF_Material(Sphere(), mat_sensor_red),
+        SDF_Material(Sphere(nav_radius), mat_sensor_red),
         "NavLight",
-        Transform(np.array([2.0, 0.6, 0.0]), scale=np.full(3, 0.1))
+        Transform(np.array([(hull_length / 2) + nav_radius, nav_height, 0.0]))
     )
 
     # Light Source (Distant Star – small area radius for softer shadow edges)
-    sun = Light(color=Color.from_hex("#FFFFFF"), intensity=1800.0, radius=1.5) 
-    scene.add_object_by_context(sun, "Star", Transform(np.array([10.0, 5.0, 10.0])))
+    sun = Light(color=Color.from_kelvin(10000), intensity=180000.0, radius=5.0) 
+    scene.add_object_by_context(sun, "Star", Transform(np.array(pannel_target)))
 
     # Blue bounce light from a nearby planet – raised so the dark hull side is readable
-    planet_bounce = Light(color=Color.from_hex("#002244"), intensity=300.0, radius=10.0)
-    scene.add_object_by_context(planet_bounce, "PlanetFill", Transform(np.array([-5.0, -10.0, -5.0])))
+    planet_bounce = Light(color=Color.from_hex("#63B1FF"), intensity=30000.0, radius=1.0)
+    scene.add_object_by_context(planet_bounce, "PlanetFill", Transform(np.array([-50.0, -20.0, 145.67])))
 
     return scene
 
@@ -1140,8 +1140,8 @@ def get_sdf_boolean_scene(width: int = 120, height: int = 120) -> Scene:
     # Subtraction: Large Sphere minus smaller Cube
     sphere_sub = Sphere(1.0)
     cube_sub = Cube(1.2)
-    transform_sphere_sub = Transform(np.zeros(3))
-    transform_cube_sub = Transform(np.array([0.0, 1.0, 0.0]), rotation=np.array([0, np.deg2rad(30), 0]))
+    transform_sphere_sub = Transform.Identity()
+    transform_cube_sub = Transform(np.array([0.0, 0.5, 0.0]), rotation=np.array([0, np.deg2rad(30), 0]))
     scene.add_object_by_context(
         SDF_Material(ShapeSubtraction(sphere_sub, transform_sphere_sub, cube_sub, transform_cube_sub), mat_sub),
         "SubtractionObj",
@@ -1150,9 +1150,9 @@ def get_sdf_boolean_scene(width: int = 120, height: int = 120) -> Scene:
 
     # Intersection: Large Cube intersecting with Cylinder
     cube_int = Cube(1.5)
-    cylinder_int = Cylinder(1.0, 2.0)
+    cylinder_int = Cylinder(0.5, 2.0)
     transform_cube_int = Transform(np.zeros(3), rotation=np.array([0, np.deg2rad(45), 0]))
-    transform_cyl_int = Transform(np.array([0.0, 1.0, 0.0]))
+    transform_cyl_int = Transform(np.array([0.0, 0.3, 0.0]))
     scene.add_object_by_context(
         SDF_Material(ShapeIntersection(cube_int, transform_cube_int, cylinder_int, transform_cyl_int), mat_int),
         "IntersectionObj",

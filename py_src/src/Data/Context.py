@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Any
+from typing import Any, Optional
 from dataclasses import dataclass, field
 
 from src.Geometry.SDF import SignedDistanceShape
@@ -41,7 +41,7 @@ class SDF_Material:
     # Bounds & corners
     # ──────────────────────────────
 
-    def local_corners(self, padding: float = 1e-2) -> np.ndarray:
+    def local_corners(self, padding: float = 1e-2) -> Optional[np.ndarray]:
         """Local-space bounding corners."""
         if hasattr(self.shape, 'get_local_corners'):
             return self.shape.get_local_corners(padding)
@@ -49,14 +49,14 @@ class SDF_Material:
         if callable(getattr(self.shape, 'get_convex_hull')):
             hull = self.shape.get_convex_hull()
             if hull is None or len(hull) == 0:
-                raise ValueError("Convex hull is empty or None")
+                return None
             
             min_pt = hull.min(axis=0) - padding
             max_pt = hull.max(axis=0) + padding
             return convert_bounds_to_corners(min_pt, max_pt)
         
         else:
-            raise AttributeError("Shape does not support local corners computation")
+            return None
     
     @property
     def is_2d(self) -> bool:

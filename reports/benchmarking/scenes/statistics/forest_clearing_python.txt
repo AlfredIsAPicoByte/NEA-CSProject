@@ -1,21 +1,21 @@
 === Tracing Stats ===
 Render Type: Ray Tracing
 Intersection: BVHIntersection
-Shading: LambertShading
-Time: 748.202s | Mem: 0.00MB
+Shading: FlatShading
+Time: 8.147s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
-  - Total:       654,432
-  - Primary:     57,600     (8.8%)
-  - Shadow:      596,832    (Lights used: 2)
+  - Total:       4,096
+  - Primary:     4,096      (100.0%)
+  - Shadow:      0          (Lights used: 2)
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      213,160
-  - Tri Tests:       1,096,039
+  - AABB Tests:      18,581
+  - Tri Tests:       102,627
   - Nodes Visited:   0
-  - Cost/Ray:        2.00 (Target: < 50)
-  - Culling Ratio:   0.19 (Target: > 2.0)
+  - Cost/Ray:        29.59 (Target: < 50)
+  - Culling Ratio:   0.18 (Target: > 2.0)
 -------------------------
 Diagnostics:
   - Max Depth Hit:   0
@@ -25,16 +25,16 @@ Diagnostics:
 -------------------------
 Totals:
 Pixels Processed: 0
-Tiles Processed:  240
+Tiles Processed:  16
 -------------------------
 Settings:
-  - Image_width: 320
-  - Image_height: 180
-  - Film: Film(320x180, accum_pixels=(180, 320, 3), accum_weight=(180, 320), first_pixel=[0.72929853 0.8999258  0.9552574 ], first_weight=1.0, center_pixel=[0.00662616 0.00657006 0.00606509], center_weight=1.0, last_pixel=[0.00442275 0.01015209 0.00425655], last_weight=1.0)
-  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x000002468B3E5B50>
+  - Image_width: 64
+  - Image_height: 64
+  - Film: Film(64x64, accum_pixels=(64, 64, 3), accum_weight=(64, 64), first_pixel=[0.7348259  0.90247214 0.956189  ], first_weight=1.0, center_pixel=[0.5019608 0.5019608 0.5019608], center_weight=1.0, last_pixel=[0.29803923 0.6862745  0.3137255 ], last_weight=1.0)
+  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x0000021E1E9B60D0>
   - Max_recursions: 0
-  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x00000246860CFBD0>
-  - Shading_strategy: <src.Rendering.RayTracing.Shading.LambertShading object at 0x000002468B4C8550>
+  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x0000021E1EA3D450>
+  - Shading_strategy: <src.Rendering.RayTracing.Shading.FlatShading object at 0x0000021E1EAC60D0>
   - Use_tiling: True
   - Tile_size: 16
   - Debug_mode: True

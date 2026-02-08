@@ -1,21 +1,21 @@
 === Tracing Stats ===
 Render Type: Ray Tracing
 Intersection: BVHIntersection
-Shading: LambertShading
-Time: 85.880s | Mem: 0.00MB
+Shading: FlatShading
+Time: 5.572s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
-  - Total:       90,144
-  - Primary:     57,600     (63.9%)
-  - Shadow:      32,544     (Lights used: 2)
+  - Total:       4,096
+  - Primary:     4,096      (100.0%)
+  - Shadow:      0          (Lights used: 2)
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      181,068
-  - Tri Tests:       47,788
+  - AABB Tests:      16,310
+  - Tri Tests:       39,423
   - Nodes Visited:   0
-  - Cost/Ray:        2.54 (Target: < 50)
-  - Culling Ratio:   3.79 (Target: > 2.0)
+  - Cost/Ray:        13.61 (Target: < 50)
+  - Culling Ratio:   0.41 (Target: > 2.0)
 -------------------------
 Diagnostics:
   - Max Depth Hit:   0
@@ -25,16 +25,16 @@ Diagnostics:
 -------------------------
 Totals:
 Pixels Processed: 0
-Tiles Processed:  240
+Tiles Processed:  16
 -------------------------
 Settings:
-  - Image_width: 320
-  - Image_height: 180
-  - Film: Film(320x180, accum_pixels=(180, 320, 3), accum_weight=(180, 320), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0.006 0.006 0.006], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
-  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x000002468B3E5B50>
+  - Image_width: 64
+  - Image_height: 64
+  - Film: Film(64x64, accum_pixels=(64, 64, 3), accum_weight=(64, 64), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0.42352942 0.44313726 0.46666667], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
+  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x0000029DE14CAD50>
   - Max_recursions: 0
-  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x000002469ABBD410>
-  - Shading_strategy: <src.Rendering.RayTracing.Shading.LambertShading object at 0x000002469AA96E10>
+  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x0000029DE14C00D0>
+  - Shading_strategy: <src.Rendering.RayTracing.Shading.FlatShading object at 0x0000029DE14C0250>
   - Use_tiling: True
   - Tile_size: 16
   - Debug_mode: True
