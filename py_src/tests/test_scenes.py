@@ -84,11 +84,6 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
     cyl_1 = SDF_Material(Cylinder(), mat_cylinder)
     scene.add_object_by_context(cyl_1, "Golden Cylinder", Transform(np.array([1.8, 0.8, -0.2]), np.array([0.0, np.deg2rad(-20), np.deg2rad(20)])))
 
-    # Wooden Pyramid (Left)
-    mat_pyramid = MaterialFactory.create_diffuse(Color.from_hex("#6B462B"), 0.7)
-    pyr_1 = SDF_Material(Pyramid(), mat_pyramid)    
-    scene.add_object_by_context(pyr_1, "Wooden Pyramid", Transform(np.array([-1.0, 0.5, -2.5]), np.array([0, np.deg2rad(45), 0])))
-
     # Lights
     key_light = Light(color=Color.from_hex("#FFDA89"), intensity=320.0, radius=2.0)
     scene.add_object_by_context(key_light, "Key Light", Transform(np.array([4.0, 5.0, -3.0])))
@@ -332,30 +327,28 @@ def get_material_deck_scene(width: int = 160, height: int = 80) -> Scene:
 
     # Floor
     mat_floor = MaterialFactory.create_diffuse(Color.from_hex("#CCCCCC"), roughness=1.0)
-    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Rectangle(np.array([15.0, 7.0])), height=0.2), mat_floor), "Floor", Transform(np.array([0.0, -1.0, 0.0]), np.array([np.deg2rad(90), 0.0, 0.0])))
+    scene.add_object_by_context(SDF_Material(ShapeExtrusion(Rectangle(np.array([15.0, 7.0])), height=0.2), mat_floor), "Floor", Transform(np.array([0.0, 0.0, 0.0]), np.array([np.deg2rad(90), 0.0, 0.0])))
 
     base_col = Color.from_hex("#D4AF37")
     
     # Material Variations
     mat_s1 = MaterialFactory.create_specular(base_col, roughness=0.0)
-    scene.add_object_by_context(SDF_Material(Sphere(), mat_s1), "S_Mirror", Transform(np.array([-3.0, 0.5, 0.0])))
+    scene.add_object_by_context(SDF_Material(Sphere(), mat_s1), "S_Mirror", Transform(np.array([-2.5, 0.5, 0.0])))
 
     mat_s2 = MaterialFactory.create_specular(base_col, roughness=0.25)
-    scene.add_object_by_context(SDF_Material(Sphere(), mat_s2), "S_Brushed", Transform(np.array([-1.5, 0.5, 0.0])))
+    scene.add_object_by_context(SDF_Material(Sphere(), mat_s2), "S_Brushed", Transform(np.array([-1.0, 0.5, 0.0])))
+
     mat_s3 = MaterialFactory.create_specular(base_col, roughness=0.5)
-    scene.add_object_by_context(SDF_Material(Sphere(), mat_s3), "S_Rough", Transform(np.array([0.0, 0.5, 0.0])))
+    scene.add_object_by_context(SDF_Material(Sphere(), mat_s3), "S_Rough", Transform(np.array([1.0, 0.5, 0.0])))
 
     mat_s4 = MaterialFactory.create_specular(base_col, roughness=0.75)
-    scene.add_object_by_context(SDF_Material(Sphere(), mat_s4), "S_Matte", Transform(np.array([1.5, 0.5, 0.0])))
-    
-    mat_s5 = MaterialFactory.create_diffuse(Color.from_hex("#FF0000"), roughness=0.5)
-    scene.add_object_by_context(SDF_Material(Sphere(), mat_s5), "S_Plastic", Transform(np.array([3.0, 0.5, 0.0])))
+    scene.add_object_by_context(SDF_Material(Sphere(), mat_s4), "S_Matte", Transform(np.array([2.5, 0.5, 0.0])))
 
     mat_c1 = MaterialFactory.create_specular(Color.from_hex("#8A8A8A"), roughness=0.0, metallicness=1.0)
-    scene.add_object_by_context(SDF_Material(Cylinder(), mat_c1), "C_Mirror", Transform(np.array([-4.5, 0.6, 0.0])))
+    scene.add_object_by_context(SDF_Material(Cylinder(), mat_c1), "C_Mirror", Transform(np.array([-4.0, 0.5, 0.0])))
 
     mat_c2 = MaterialFactory.create_specular(Color.from_hex("#8A8A8A"), roughness=0.5, metallicness=0.5)
-    scene.add_object_by_context(SDF_Material(Cylinder(), mat_c2), "C_Matte", Transform(np.array([4.5, 0.6, 0.0])))
+    scene.add_object_by_context(SDF_Material(Cylinder(), mat_c2), "C_Matte", Transform(np.array([4.0, 0.5, 0.0])))
 
     # Lights – main is the dominant key; fill lifts shadows from the side
     l_main = Light(color=Color(1.0, 1.0, 1.0), intensity=400.0, radius=3.0)
@@ -384,7 +377,7 @@ def get_refraction_lab_scene(width: int = 100, height: int = 100) -> Scene:
     # Bars
     mat_bar = MaterialFactory.create_diffuse(Color(0.0, 0.0, 0.0), 1.0)
     for i in range(-6, 7):
-        scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(0.25), 5), mat_bar), f"Bar_{6 + i}", Transform(np.array([i * 1.1, 2.0, 3.5]), np.array([np.deg2rad(90), 0.0, 0.0])))
+        scene.add_object_by_context(SDF_Material(ShapeExtrusion(Square(1), 5), mat_bar), f"Bar_{6 + i}", Transform(np.array([i * 1.1, 2.0, 3.5]), np.array([np.deg2rad(90), 0.0, 0.0])))
 
     # Spheres
     mat_acrylic = MaterialFactory.create_glass(Color.from_hex("#FFFFFF"), Color.from_hex("#FFFFFF"), 0.0, 0.0, REFRACTIVE_INDICES["acrylic"], 0.1, 1.0)

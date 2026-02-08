@@ -1,20 +1,20 @@
 === Tracing Stats ===
 Render Type: Ray Tracing
 Intersection: BVHIntersection
-Shading: FlatShading
-Time: 5.572s | Mem: 0.00MB
+Shading: NormalShading
+Time: 68.782s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
-  - Total:       4,096
-  - Primary:     4,096      (100.0%)
+  - Total:       65,536
+  - Primary:     65,536     (100.0%)
   - Shadow:      0          (Lights used: 2)
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      16,310
-  - Tri Tests:       39,423
+  - AABB Tests:      262,263
+  - Tri Tests:       641,839
   - Nodes Visited:   0
-  - Cost/Ray:        13.61 (Target: < 50)
+  - Cost/Ray:        13.80 (Target: < 50)
   - Culling Ratio:   0.41 (Target: > 2.0)
 -------------------------
 Diagnostics:
@@ -25,18 +25,18 @@ Diagnostics:
 -------------------------
 Totals:
 Pixels Processed: 0
-Tiles Processed:  16
+Tiles Processed:  64
 -------------------------
 Settings:
-  - Image_width: 64
-  - Image_height: 64
-  - Film: Film(64x64, accum_pixels=(64, 64, 3), accum_weight=(64, 64), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0.42352942 0.44313726 0.46666667], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
-  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x0000029DE14CAD50>
-  - Max_recursions: 0
-  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x0000029DE14C00D0>
-  - Shading_strategy: <src.Rendering.RayTracing.Shading.FlatShading object at 0x0000029DE14C0250>
+  - Image_width: 256
+  - Image_height: 256
+  - Film: Film(256x256, accum_pixels=(256, 256, 3), accum_weight=(256, 256), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0.5        0.71761024 0.04983804], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
+  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x000001FF62A89210>
+  - Max_recursions: 2
+  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x000001FF5B1C95D0>
+  - Shading_strategy: <src.Rendering.RayTracing.Shading.NormalShading object at 0x000001FF62B1A290>
   - Use_tiling: True
-  - Tile_size: 16
+  - Tile_size: 32
   - Debug_mode: True
   - Verbose_logging: False
 =========================

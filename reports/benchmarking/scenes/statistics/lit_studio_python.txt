@@ -1,21 +1,21 @@
 === Tracing Stats ===
 Render Type: Ray Tracing
 Intersection: BVHIntersection
-Shading: LambertShading
-Time: 3285.404s | Mem: 0.00MB
+Shading: NormalShading
+Time: 110.376s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
-  - Total:       3,918,720
-  - Primary:     230,400    (5.9%)
-  - Shadow:      3,688,320  (Lights used: 3)
+  - Total:       65,536
+  - Primary:     65,536     (100.0%)
+  - Shadow:      0          (Lights used: 3)
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      1,158,334
-  - Tri Tests:       1,383,897
+  - AABB Tests:      330,888
+  - Tri Tests:       579,141
   - Nodes Visited:   0
-  - Cost/Ray:        0.65 (Target: < 50)
-  - Culling Ratio:   0.84 (Target: > 2.0)
+  - Cost/Ray:        13.89 (Target: < 50)
+  - Culling Ratio:   0.57 (Target: > 2.0)
 -------------------------
 Diagnostics:
   - Max Depth Hit:   0
@@ -25,16 +25,16 @@ Diagnostics:
 -------------------------
 Totals:
 Pixels Processed: 0
-Tiles Processed:  60
+Tiles Processed:  64
 -------------------------
 Settings:
-  - Image_width: 320
-  - Image_height: 180
-  - Film: Film(320x180, accum_pixels=(180, 320, 3), accum_weight=(180, 320), first_pixel=[0.74509805 0.7607843  0.8117647 ], first_weight=1.0, center_pixel=[0.0308049  0.06501073 0.09408103], center_weight=1.0, last_pixel=[0.74509805 0.7607843  0.8117647 ], last_weight=1.0)
-  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x000001E72C84E550>
-  - Max_recursions: 0
-  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x000001E7147E9890>
-  - Shading_strategy: <src.Rendering.RayTracing.Shading.LambertShading object at 0x000001E73B2CB110>
+  - Image_width: 256
+  - Image_height: 256
+  - Film: Film(256x256, accum_pixels=(256, 256, 3), accum_weight=(256, 256), first_pixel=[5.e-01 5.e-01 5.e-09], first_weight=1.0, center_pixel=[0.06482407 0.43729714 0.26190284], center_weight=1.0, last_pixel=[5.e-01 5.e-01 5.e-09], last_weight=1.0)
+  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x000001FF62A89210>
+  - Max_recursions: 2
+  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x000001FF5E592890>
+  - Shading_strategy: <src.Rendering.RayTracing.Shading.NormalShading object at 0x000001FF62B57110>
   - Use_tiling: True
   - Tile_size: 32
   - Debug_mode: True
