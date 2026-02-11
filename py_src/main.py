@@ -68,8 +68,8 @@ if __name__ == "__main__":
     parser.add_argument("--quick", action="store_true", help="Quick preview mode (1spp, no tile test, no post)")
     args = parser.parse_args()
     
-    img_width, img_height = 640, 320
-    args.samples = 4
+    img_width, img_height = 320, 180
+    args.samples = 2
 
     # Quick mode overrides
     if args.quick:
@@ -135,7 +135,7 @@ if __name__ == "__main__":
             image_width=img_width,
             image_height=img_height,
             sampling_manager=sampling_manager,
-            max_recursions=2,
+            max_recursions=4,
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,
