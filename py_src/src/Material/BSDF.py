@@ -151,7 +151,7 @@ def sample_microfacet_surface(
         sampler: Sampler,
         ior_1: float,
         ior_2: float,
-        bias: float = 1e-4
+        bias: float = 1e-6
     ) -> TracingRay:
     """
     Unified Microfacet BSDF (Glass/Dielectric).

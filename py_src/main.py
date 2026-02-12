@@ -55,8 +55,40 @@ def apply_post_processing(raw_img):
     # pipeline.add_pass(Vignette(0.15, 0.6))
     pipeline.add_pass(ACESFilmicToneMapping())
     pipeline.add_pass(GammaCorrection(2.2))
-    
+
     return pipeline.execute(raw_img)
+
+class TypeShading(ShadingStrategy):
+    """
+    Renders objects depending on their object type
+    """
+    def __init__(self, settings: ShadingSettings | None = None):
+        super().__init__(settings)
+        self.settings.background_settings.enabled = False
+
+    def shade(self, hit_info: HitInfo, *args, **kwargs) -> Color:
+        if not hit_info.hit:
+            return Color(0.0, 0.0, 0.0)  # No hit, return black
+        
+        hit_obj = cast(SceneNode, hit_info.obj)
+
+        if isinstance(hit_obj.context, Light):
+            return Color(1.0, 1.0, 1.0)
+        
+        if isinstance(hit_obj.context, SignedDistanceShape):
+            return Color(1.0, 0.0, 0.0)
+        
+        if isinstance(hit_obj.context, SDF_Material):
+            return Color(1.0, 0.5, 0.0)
+        
+        if isinstance(hit_obj.context, Mesh):
+            return Color(0.0, 1.0, 0.0)
+        
+        if isinstance(hit_obj.context, Mesh_Material):
+            return Color(0.5, 1.0, 0.0)
+        
+        # Just return the base color (Albedo)
+        return Color(0.0, 0.0, 0.0)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RayTracer CLI")
@@ -65,11 +97,11 @@ if __name__ == "__main__":
     parser.add_argument("--debug", dest="debug", action="store_true", help="Enable debug mode")
     parser.add_argument("--mem-trace", dest="memory_trace", action="store_true", help="Enable memory tracing")
     parser.add_argument("--samples", type=int, default=1, help="Samples per pixel (1=fast, 16=quality)")
-    parser.add_argument("--quick", action="store_true", help="Quick preview mode (1spp, no tile test, no post)")
+    parser.add_argument("--quick", action="store_true", help="Quick preview mode (1spp, no post, etc)")
     args = parser.parse_args()
     
-    img_width, img_height = 320, 180
-    args.samples = 2
+    img_width, img_height = 80, 45
+    args.samples = 4
 
     # Quick mode overrides
     if args.quick:
@@ -113,19 +145,19 @@ if __name__ == "__main__":
         height=img_height, 
         samples_per_pixel=args.samples,
         filter_type=PixelFilter.GAUSSIAN, 
-        filter_width=1.5,
+        filter_width=3,
     )
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
         intersection = BVHIntersection(IntersectionSettings(
-            max_distance=1000,
+            max_distance=2000,
             max_steps=256,
             step_relaxation=0.99,
             epsilon=1e-4
         ))
 
-        shading = RecursiveLambertShading(PhysicalShadingSettings(
+        shading = FlatShading(PhysicalShadingSettings(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.25)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
             background_settings=BackgroundSettings(True, Color.from_hex("#283848"), getattr(scene, "background_color", None), True, 0.67)
@@ -139,7 +171,7 @@ if __name__ == "__main__":
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,
-            tile_size=32,
+            tile_size=16,
             debug_mode=args.debug,
             verbose_logging=args.verbose
         ))
