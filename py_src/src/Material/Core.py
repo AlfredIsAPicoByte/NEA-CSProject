@@ -60,7 +60,7 @@ class PBRMaterial:
         hit_info: HitInfo,
         view_dir: np.ndarray,
         visibility_function: Callable[[np.ndarray, SceneNode], float],
-        bias: float = 1e-4
+        bias: float = 1e-8
     ) -> Color:
         """
         Calculates direct lighting contribution from all light sources in the scene.
@@ -412,7 +412,7 @@ class PBRMaterial:
         
         return specular
 
-    def evaluate_metallic_component(self, bias: float = 1e-4) -> Color:
+    def evaluate_metallic_component(self, bias: float = 1e-8) -> Color:
         """
         Calculates the base reflectivity (F0) for Fresnel calculations.
         Blends between dielectric (0.04 grey) and metallic (albedo-based) reflectivity.

@@ -36,6 +36,7 @@ class IntersectionSettings:
             raise ValueError("Step relaxation must be in the range (0.0, 1.0].")    
     
     use_aabb_bounding_box: bool = True
+    bounding_box_bias = 1e-7
     always_rebuild_bvh: bool = False # If true, forces BVH to rebuild on next use
 
 class IntersectionStrategy(ABC):
@@ -269,13 +270,6 @@ class RayMarchingIntersection(IntersectionStrategy):
             
             # Advance
             distance_world += distance_to_closest * self.settings.step_relaxation
-            
-            # Frustum/Far Plane checks
-            if scene.camera:
-                obj_pos = closest_object.world_transform.position
-                far_plane_dist = np.linalg.norm(scene.camera.transform.position - obj_pos)
-                if distance_world >= self.settings.max_distance or far_plane_dist >= scene.camera.far:
-                    break
 
         if stats is not None:
             stats.rays_missed += 1
@@ -329,7 +323,7 @@ class RayMarchingIntersection(IntersectionStrategy):
             
             if self.settings.use_aabb_bounding_box:
                 box = obj.get_bounds()
-                t_box = box.intersect(ray, self.settings.max_distance)
+                t_box = box.intersect(ray, self.settings.max_distance, self.settings.bounding_box_bias)
                 if stats: stats.aabb_tests += 1
                 if t_box == float('inf'):
                     continue
@@ -374,7 +368,7 @@ class InverseSDFIntersection(IntersectionStrategy):
             # Optional: AABB Culling
             if self.settings.use_aabb_bounding_box:
                 box = obj.get_bounds()
-                t_box = box.intersect(ray, self.settings.max_distance)
+                t_box = box.intersect(ray, self.settings.max_distance, self.settings.bounding_box_bias)
                 if stats: stats.aabb_tests += 1
                 if t_box == float('inf'):
                     continue
@@ -383,12 +377,6 @@ class InverseSDFIntersection(IntersectionStrategy):
             hit = self._intersect_sdf_object(obj, ray, stats)
 
             if hit.hit:
-                if scene.camera:
-                    obj_pos = hit.obj.world_transform.position
-                    far_plane_dist = np.linalg.norm(scene.camera.transform.position - obj_pos)
-                    if far_plane_dist >= scene.camera.far:
-                        break
-
                 if not closest_hit.hit or hit.distance < closest_hit.distance:
                     closest_hit = hit
 
@@ -447,7 +435,7 @@ class BVHIntersection(IntersectionStrategy):
                         if box is None: # Empty node, skip
                             continue
 
-                        t_box = box.intersect(ray, self.settings.max_distance)
+                        t_box = box.intersect(ray, self.settings.max_distance, self.settings.bounding_box_bias)
                         if stats: stats.aabb_tests += 1
                         if t_box == float('inf'):
                             continue
@@ -465,7 +453,7 @@ class BVHIntersection(IntersectionStrategy):
                 continue
             
             # INTERNAL: Use Helper
-            self._push_valid_children(stack, node, ray, min(current_max, self.settings.max_distance))
+            self._push_valid_children(stack, node, ray, min(current_max, self.settings.max_distance), self.settings.bounding_box_bias)
                 
         return closest_hit
     
@@ -474,7 +462,7 @@ class BVHIntersection(IntersectionStrategy):
         point_1: np.ndarray, 
         point_2: np.ndarray, 
         objects: List[SceneNode], 
-        bias: float = 1e-4,
+        bias: float = 1e-6,
         exclude_obj: Optional[SceneNode] = None,
         stats: Optional["TracingStats"] = None
     ) -> bool:
@@ -543,15 +531,16 @@ class BVHIntersection(IntersectionStrategy):
         stack: List[Tuple[BVHNode, float]], 
         node: BVHNode, 
         ray: TracingRay, 
-        limit_dist: float
+        limit_dist: float,
+        bias: float = 1e-6 
     ):
         """
         Checks children AABBs and pushes them to the stack.
         Ensures the CLOSER child is popped first (by pushing the FURTHEST first).
         """
         # Check intersections with child boxes (returns float('inf') if miss or no child)
-        t_left = node.left.box.intersect(ray, limit_dist) if node.left and node.left.box else float('inf')
-        t_right = node.right.box.intersect(ray, limit_dist) if node.right and node.right.box else float('inf')
+        t_left = node.left.box.intersect(ray, limit_dist, bias) if node.left and node.left.box else float('inf')
+        t_right = node.right.box.intersect(ray, limit_dist, bias) if node.right and node.right.box else float('inf')
 
         # Optimization: Push the FURTHEST valid node first, so we pop the CLOSEST node first.
         # This maximizes the chance of finding a closer hit early and shrinking the limit_dist.

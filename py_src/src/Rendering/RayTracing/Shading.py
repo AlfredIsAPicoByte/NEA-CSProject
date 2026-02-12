@@ -153,7 +153,7 @@ class ShadingStrategy(ABC):
         sampler: Sampler,
         intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
         occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
-        bias: float = 1e-4,
+        bias: float = 1e-6,
         stats: Optional["TracingStats"] = None
     ) -> Color:
         """
@@ -354,7 +354,7 @@ class VolumetricShading(ShadingStrategy):
         scene: "Scene",
         ray: TracingRay,
         hit_info: "HitInfo",
-        bias: float = 1e-4,
+        bias: float = 1e-6,
         stats: Optional["TracingStats"] = None,
         *args, **kwargs
     ) -> Color:
@@ -423,6 +423,8 @@ class VolumetricShading(ShadingStrategy):
 
         return final_color
 
+
+
 @dataclass
 class PhysicalShadingSettings(ShadingSettings):
     """
@@ -456,7 +458,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
             light_node: SceneNode,
             sampler: Sampler,
             occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
-            bias: float = 1e-4,
+            bias: float = 1e-6,
             exclude_obj: Optional[SceneNode] = None,
             stats: Optional["TracingStats"] = None
         ) -> float:
@@ -524,7 +526,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
             light_node: SceneNode,
             sampler: Sampler,
             occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
-            bias: float = 1e-4,
+            bias: float = 1e-6,
             exclude_obj: Optional[SceneNode] = None,
             stats: Optional["TracingStats"] = None
         ) -> float:
@@ -636,7 +638,7 @@ class LambertShading(PhysicalShadingStrategy):
             sampler: Sampler,
             intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
             occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
-            bias: float = 1e-4,
+            bias: float = 1e-6,
             stats: Optional["TracingStats"] = None,
             *args, **kwargs
         ) -> Color:
@@ -713,7 +715,6 @@ class RecursiveLambertShading(LambertShading):
     """
     Extends Lambertian shading with recursive reflections and refractions.
     """
-    
     a = 3.0
     b = 0.7
     c = 1.0
@@ -728,7 +729,7 @@ class RecursiveLambertShading(LambertShading):
             sampler: Sampler,
             intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
             occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
-            bias: float = 1e-4,
+            bias: float = 1e-6,
             stats: Optional["TracingStats"] = None,
             *args, **kwargs
         ) -> Color:
