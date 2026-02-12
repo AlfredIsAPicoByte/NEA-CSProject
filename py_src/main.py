@@ -14,7 +14,7 @@ from src.Rendering.RayTracing.Intersections import *
 from src.Rendering.RayTracing.Shading import *
 from src.Image.Film import Film
 from src.Utilities.Memory.Profiler import MemoryProfiler
-from tests.test_scenes import *
+from tests.bench_scenes import *
 PostProcessingPipeline = None
 
 def render_process(scene: Scene, algorithm: Algorithm):
@@ -40,7 +40,7 @@ def apply_post_processing(raw_img):
     """
     from src.Image.PostProcessing.Pipeline import ImagePipeline
     from src.Image.PostProcessing.Passes import (
-        AutoExposure,
+        Exposure,
         Bloom,
         ChromaticAberration,
         Vignette,
@@ -49,7 +49,7 @@ def apply_post_processing(raw_img):
     )
     
     pipeline = ImagePipeline()
-    pipeline.add_pass(AutoExposure())
+    pipeline.add_pass(Exposure(0.5))
     pipeline.add_pass(Bloom(1.5, 5, 0.25, 0.75))
     # pipeline.add_pass(ChromaticAberration())
     # pipeline.add_pass(Vignette(0.15, 0.6))

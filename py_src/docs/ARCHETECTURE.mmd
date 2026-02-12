@@ -1,0 +1,909 @@
+classDiagram
+    namespace Data.Ratio {
+        class Ratio {
+            +new
+            +simplify
+            +__add__
+            +__sub__
+            +__mul__
+            +__truediv__
+            +__repr__
+            +__float__
+            +__neg__
+            +__eq__
+            +__lt__
+            +__le__
+            +__gt__
+            +__ge__
+            +__ne__
+            +value
+        }
+    }
+    namespace Data.Camera {
+        class CameraType {
+            <<enumeration>>
+            +Enum
+        }
+        class CameraMode {
+            <<enumeration>>
+            +Enum
+        }
+        class Camera {
+            +new
+            +__post_init__
+            +get_view_matrix
+            +get_projection_matrix
+            +resize
+            +resize_aspect
+            +generate_ray
+            +generate_lens_ray
+            +generate_screen_rays
+            +screen_to_world
+            +world_to_screen
+            +to_perspective
+            +to_matrices
+            +get_camera_matrix
+            +get_frustum_planes
+            +export_uniforms
+            +__repr__
+        }
+    }
+    namespace Data.Color {
+        class Color {
+            +clamp
+            +red
+            +green
+            +blue
+            +to_np_ndarray
+            +hsv_to_rgb
+            +rgb_to_hsv
+            +hsl_to_rgb
+            +rgb_to_hsl
+            +cmyk_to_rgb
+            +rgb_to_cmyk
+            +rgb_to_grayscale
+            +hex_to_rgb
+            +rgb_to_hex
+            +kelvin_to_rgb
+            +wavelength_to_rgb
+            +from_hex
+            +from_hsv
+            +from_hsl
+            +from_cmyk
+            +from_kelvin
+            +from_wavelength
+            +from_int_rgb
+            +from_np
+            +to_hsv
+            +to_hsl
+            +to_cmyk
+            +to_grayscale
+            +to_hex
+            +to_int_rgb
+            +to_int_rgba
+            +to_np_array
+            +__add__
+            +__radd__
+            +__sub__
+            +__rsub__
+            +__mul__
+            +__rmul__
+            +__truediv__
+            +__rtruediv__
+            +__getitem__
+            +__repr__
+        }
+        class ColorGradient {
+            +__post_init__
+            +get_color
+        }
+    }
+    namespace Data.Hit {
+        class HitInfo {
+            +new
+            +miss
+        }
+    }
+    namespace Data.Ray {
+        class Ray {
+            +__post_init__
+            +direction
+            +direction
+            +point_at
+            +check_point_on_ray
+            +check_point_in_front
+            +check_point_behind
+            +rotate
+            +translate
+            +get_angle
+            +__repr__
+        }
+        class TracingRay {
+            +Ray
+            +__repr__
+        }
+        class RayPool {
+            +new
+            +get_ray
+            +return_ray
+        }
+    }
+    namespace Data.Transform {
+        class Transform {
+            +new
+            +Identity
+            +from_matrix
+            +_matrix_to_euler
+            +_rotation_matrix_from_euler
+            +_make_transform_matrix
+            +decompose_matrix
+            +update_orientations
+            +get_global_matrix
+            +to_matrix
+            +get_inverse_matrix
+            +look_at
+            +translate
+            +rotate
+            +enlarge
+            +world_transform_point
+            +world_transform_direction
+            +world_transform_normal
+            +world_transform_ray
+            +local_transform_point
+            +local_transform_direction
+            +local_transform_normal
+            +local_transform_ray
+            +__mul__
+            +__repr__
+        }
+    }
+    namespace Data.Context {
+        class SDF_Material {
+            +__post_init__
+            +signed_distance
+            +normal
+            +local_corners
+            +is_2d
+            +world_corners
+            +local_bounds
+            +world_bounds
+        }
+        class Mesh_Material {
+            +__post_init__
+            +vertices
+            +triangles
+            +local_corners
+            +world_corners
+            +local_bounds
+            +world_bounds
+        }
+    }
+    namespace Data.Scene {
+        class SceneNode {
+            +__post_init__
+            +add_child
+            +remove_child
+            +update_matrices
+            +get_world_matrix
+            +get_local_matrix
+            +world_transform
+            +local_transform
+            +get_local_bounds
+            +get_global_bounds
+            +get_transformed_aabb
+            +__hash__
+            +__eq__
+            +__repr__
+        }
+        class Scene {
+            +new
+            +version
+            +set_camera
+            +add_node
+            +add_object_by_context
+            +get_node
+            +get_node_by_id
+            +_matches_context
+            +get_nodes_by_type
+            +get_nodes_by_types
+            +get_nodes_not_of_type
+            +get_nodes_not_of_types
+            +get_nodes_subclass_of
+            +get_nodes_with_attribute
+            +get_nodes_by_attribute_value
+            +get_nodes_by_condition
+            +flatten_scene_nodes
+            +cache_scene_nodes_flat
+            +remove_node
+            +remove_object_by_name
+            +reparent
+            +print_hierarchy
+            +_print_node_recursive
+            +get_scene_summary
+            +clear_scene
+            +update_version
+        }
+    }
+    namespace Lighting.Core {
+        class LightType {
+            <<enumeration>>
+            +Enum
+        }
+        class Light {
+            +__post_init__
+            +get_direction
+            +get_distance
+            +get_radiance
+        }
+    }
+    namespace Rendering.Core {
+        class RenderStats {
+            +start_timer
+            +stop_timer
+            +update_memory
+            +__add__
+            +format_report
+            +print_verbose_report
+        }
+        class AlgorithmSettings {
+        }
+        class Algorithm {
+            <<abstract>>
+            +ABC
+            +new
+            +setup
+            +render_tile
+            +generate_film
+            +reset_stats
+        }
+        class RenderManager {
+        }
+    }
+    namespace Material.Core {
+        class MaterialType {
+            <<enumeration>>
+            +Enum
+        }
+        class MaterialData {
+        }
+        class PBRMaterial {
+            +evaluate_direct_light
+            +sample_indirect_contribution
+            +sample_glass_contribution
+            +evaluate_bsdf
+            +evaluate_diffuse_component
+            +evaluate_specular_component
+            +evaluate_metallic_component
+            +evaluate_emissive_component
+            +evaluate_volumetric_component
+            +evaluate_ambient_color
+            +__repr__
+        }
+    }
+    namespace Material.Factory {
+        class MaterialFactory {
+            +create_diffuse
+            +create_specular
+            +create_glass
+            +create_transparent
+            +create_emissive
+        }
+    }
+    namespace Geometry.AABB {
+        class AABB {
+            +new
+            +from_corners
+            +from_bounds
+            +intersect
+            +combine
+            +center
+            +size
+            +empty
+            +infinite
+            +unit_cube
+            +__repr__
+        }
+    }
+    namespace Geometry.Mesh {
+        class Vertex {
+            +to_array
+        }
+        class Face {
+        }
+        class Mesh {
+            +new
+            +add_vertex
+            +add_face
+            +get_vertex_array
+            +vertex_count
+            +face_count
+            +clear
+            +update_version
+            +get_local_bounds
+            +get_local_corners
+            +__repr__
+        }
+    }
+    namespace Geometry.Factory {
+        class ShapeFactory {
+            <<abstract>>
+            +ABC
+            +create
+        }
+    }
+    namespace Geometry.BVH {
+        class BVHSplitMode {
+            <<enumeration>>
+            +Enum
+        }
+        class BVHNode {
+            +new
+        }
+    }
+    namespace Geometry.SDF {
+        class SignedDistanceFunction {
+            <<abstract>>
+            +ABC
+            +get_distance
+        }
+        class SignedDistanceGradient {
+            <<abstract>>
+            +ABC
+            +get_gradient
+            +get_normal
+            +get_tangent_bitangent
+        }
+        class CorrespondingBoxCorners {
+            <<abstract>>
+            +ABC
+            +new
+            +get_local_corners
+        }
+        class SignedDistanceShape {
+            <<abstract>>
+            +SignedDistanceFunction
+            +SignedDistanceGradient
+            +ray_intersect
+            +get_ray_intersections
+            +get_uv
+            +is_closed
+            +is_manifold
+            +is_convex
+            +get_convex_hull
+            +dimension
+        }
+        class SignedDistanceShape2D {
+            +SignedDistanceShape
+            +dimension
+            +perimeter
+            +area
+        }
+        class SignedDistanceShape3D {
+            +SignedDistanceShape
+            +dimension
+            +volume
+            +surface_area
+        }
+        class RoundedShape {
+            +SignedDistanceShape
+            +new
+            +get_distance
+            +get_gradient
+            +get_uv
+            +get_local_corners
+        }
+        class OnionShape {
+            +SignedDistanceShape
+        }
+        class ShapeExtrusion {
+            +SignedDistanceShape3D
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+            +get_local_corners
+            +volume
+            +surface_area
+            +is_convex
+            +get_convex_hull
+        }
+        class ShapeRevolution {
+            +SignedDistanceShape3D
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+            +get_local_corners
+            +volume
+            +surface_area
+            +is_convex
+            +get_convex_hull
+        }
+        class ShapeCombination {
+            +SignedDistanceShape
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +_combine_distances
+            +get_gradient
+            +get_uv
+            +get_local_corners
+            +_combine_bounds
+            +ray_intersect
+        }
+        class ShapeUnion {
+            +ShapeCombination
+            +_combine_distances
+        }
+        class ShapeIntersection {
+            +ShapeCombination
+            +_combine_distances
+            +_combine_bounds
+        }
+        class ShapeSubtraction {
+            +ShapeCombination
+            +_combine_distances
+            +_combine_bounds
+        }
+        class ShapeSmoothUnion {
+            +ShapeCombination
+            +new
+            +_combine_distances
+            +get_gradient
+        }
+        class ShapeXor {
+            +ShapeCombination
+            +_combine_distances
+        }
+        class Circle {
+            +SignedDistanceShape2D
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+            +get_local_corners
+            +perimeter
+            +area
+            +is_convex
+            +get_convex_hull
+        }
+        class Rectangle {
+            +SignedDistanceShape2D
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+            +get_local_corners
+            +perimeter
+            +area
+            +is_convex
+            +get_convex_hull
+        }
+        class Square {
+            +Rectangle
+            +new
+        }
+        class Triangle {
+            +SignedDistanceShape2D
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +get_gradient
+            +get_uv
+            +ray_intersect
+            +get_local_corners
+            +area
+            +perimeter
+        }
+        class Ellipse {
+            +SignedDistanceShape2D
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+            +get_local_corners
+            +perimeter
+            +area
+        }
+        class Plane {
+            +SignedDistanceShape3D
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+            +get_local_corners
+        }
+        class Moon {
+            +SignedDistanceShape2D
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+        }
+        class Cross {
+            +SignedDistanceShape2D
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+        }
+        class Gear {
+            +SignedDistanceShape2D
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+        }
+        class Star {
+            +SignedDistanceShape2D
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+        }
+        class RegularPolygon {
+            +SignedDistanceShape2D
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+        }
+        class Polygon {
+            +SignedDistanceShape2D
+        }
+        class Heart {
+            +SignedDistanceShape2D
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+        }
+        class Sphere {
+            +SignedDistanceShape3D
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+            +get_local_corners
+            +volume
+            +surface_area
+        }
+        class Cube {
+            +SignedDistanceShape3D
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+            +get_local_corners
+            +volume
+        }
+        class Cylinder {
+            +SignedDistanceShape3D
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+            +get_local_corners
+            +volume
+            +surface_area
+        }
+        class Pyramid {
+            +SignedDistanceShape3D
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+            +get_local_corners
+            +volume
+            +surface_area
+        }
+        class Cone {
+            +SignedDistanceShape3D
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+            +get_local_corners
+            +volume
+            +surface_area
+        }
+        class Torus {
+            +SignedDistanceShape3D
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+            +volume
+        }
+        class Capsule {
+            +SignedDistanceShape3D
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+            +get_uv
+            +volume
+            +surface_area
+        }
+        class EllipticSphere {
+            +SignedDistanceShape3D
+            +CorrespondingBoxCorners
+            +new
+            +get_distance
+            +get_gradient
+            +ray_intersect
+        }
+    }
+    namespace Image.Film {
+        class Film {
+            +new
+            +add_pixel_batch
+            +get_image
+            +save
+            +__repr__
+        }
+    }
+    namespace Data.Sampling.Core {
+        class PixelFilter {
+            <<enumeration>>
+            +Enum
+        }
+        class SampleSettings {
+            +__post_init__
+        }
+        class Sample {
+        }
+        class Sampler {
+            +new
+            +next_1d
+            +next_2d
+            +start_pixel
+            +get_samples_per_pixel
+            +sample_pixel
+            +sample_lens
+            +sample_time
+            +sample_light_selection
+            +sample_light_position
+            +sample_bsdf
+            +sample_wavelength
+            +sample_unit_sphere
+            +sample_cosine_hemisphere
+            +_align_to_normal
+            +sample_scattering_distance
+            +sample_phase_function
+            +sample_roulette
+        }
+        class RandomSampler {
+            +Sampler
+            +sample_pixel
+        }
+        class StratifiedSampler {
+            +Sampler
+            +new
+            +_rebuild_grid
+            +set_samples_per_pixel
+            +sample_pixel
+        }
+        class HaltonSampler {
+            +Sampler
+            +_halton
+            +sample_pixel
+        }
+        class AdaptiveSampler {
+            +Sampler
+            +new
+            +sample_pixel
+            +has_converged
+        }
+        class SamplingManager {
+            +new
+            +_sampler
+            +get_samples_per_pixel
+        }
+    }
+    namespace Rendering.RayTracing.Intersections {
+        class IntersectionSettings {
+            +__post_init__
+        }
+        class IntersectionStrategy {
+            <<abstract>>
+            +ABC
+            +new
+            +find_hit
+            +_resolve_normal
+            +_intersect_sdf_object
+            +is_point_occluded
+        }
+        class RayMarchingIntersection {
+            +IntersectionStrategy
+            +find_hit
+            +_distance_estimator
+        }
+        class InverseSDFIntersection {
+            +IntersectionStrategy
+            +find_hit
+        }
+        class BVHIntersection {
+            +IntersectionStrategy
+            +new
+            +find_hit
+            +is_point_occluded
+            +_push_valid_children
+        }
+        class AnalyticalIntersection {
+            +IntersectionStrategy
+            +find_hit
+        }
+    }
+    namespace Rendering.RayTracing.Core {
+        class TracingStats {
+            +RenderStats
+            +total_rays
+            +intersections_per_ray
+            +culling_efficiency
+            +reset_ray_counter
+            +__iadd__
+            +format_report
+        }
+        class RayTracingSettings {
+            +AlgorithmSettings
+            +__post_init__
+            +clone
+            +validate
+        }
+        class RayTracer {
+            +Algorithm
+            +new
+            +_trace_ray
+            +render_tile
+            +generate_film
+            +_sanitize_color
+        }
+    }
+    namespace Rendering.RayTracing.Shading {
+        class AmbienceSettings {
+        }
+        class ShadowSettings {
+        }
+        class BackgroundSettings {
+            +get_background_color
+            +_sample_equirectangular_map
+        }
+        class ShadingSettings {
+        }
+        class ShadingStrategy {
+            <<abstract>>
+            +ABC
+            +new
+            +shade
+            +_random_point_on_disc
+            +_random_point_in_sphere
+        }
+        class NormalShading {
+            +ShadingStrategy
+            +shade
+        }
+        class DistanceShading {
+            +ShadingStrategy
+            +new
+            +shade
+        }
+        class FlatShading {
+            +ShadingStrategy
+            +shade
+        }
+        class VolumetricShading {
+            +ShadingStrategy
+            +new
+            +shade
+        }
+        class PhysicalShadingSettings {
+            +ShadingSettings
+        }
+        class PhysicalShadingStrategy {
+            +ShadingStrategy
+            +new
+            +_calculate_shadow_visibility
+            +_calculate_shadow_visibility_spherical
+            +_calculate_occlusion_factor
+            +_generate_ambient_occlusion_map
+        }
+        class LambertShading {
+            +PhysicalShadingStrategy
+            +shade
+        }
+        class RecursiveLambertShading {
+            +LambertShading
+            +shade
+        }
+    }
+    namespace Image.PostProcessing.Passes {
+        class ACESFilmicToneMapping {
+            +PostProcessPass
+            +apply
+        }
+        class ReinhardToneMapping {
+            +PostProcessPass
+            +apply
+        }
+        class GammaCorrection {
+            +PostProcessPass
+            +new
+            +apply
+        }
+        class Exposure {
+            +PostProcessPass
+            +new
+            +apply
+        }
+        class AutoExposure {
+            +PostProcessPass
+            +apply
+        }
+        class Bloom {
+            +PostProcessPass
+            +new
+            +apply
+        }
+        class Vignette {
+            +PostProcessPass
+            +new
+            +apply
+        }
+        class ChromaticAberration {
+            +PostProcessPass
+            +new
+            +apply
+        }
+    }
+    namespace Image.PostProcessing.Pipeline {
+        class PostProcessPass {
+            <<abstract>>
+            +ABC
+            +apply
+        }
+        class ImagePipeline {
+            +new
+            +add_pass
+            +execute
+        }
+    }
+    namespace Utilities.Memory.Profiler {
+        class MemoryProfileResult {
+        }
+        class MemoryProfiler {
+            +new
+            +__enter__
+            +__exit__
+            +format_report
+        }
+    }
