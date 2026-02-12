@@ -7,14 +7,26 @@ Usage:
     python3 generate_drawio_diagram.py
     python3 generate_drawio_diagram.py --output custom_diagram.graphml
     python3 generate_drawio_diagram.py --include-private
+
+Script to generate a Mermaid class diagram from Python source files.
+Can output to a file or update an existing Markdown documentation file.
+
+Usage:
+    python3 generate_mermaid.py
+    python3 generate_mermaid.py --output docs/diagram.mmd
+    python3 generate_mermaid.py --update-docs docs/ARCHITECTURE.md
 """
 
 import ast
+import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Set, Optional
 from dataclasses import dataclass, field
 import argparse
+
+MARKER_START = ""
+MARKER_END = ""
 
 
 @dataclass
@@ -128,6 +140,110 @@ class PythonClassParser:
                         Relationship(class_obj.name, base, "inherits")
                     )
 
+class MermaidGenerator:
+    """Generates Mermaid diagram syntax."""
+    
+    def __init__(self, classes: Dict[str, PyClass], relationships: List[Relationship]):
+        self.classes = classes
+        self.relationships = relationships
+
+    def generate(self) -> str:
+        lines = ["classDiagram"]
+        
+        # Group by Module (Namespace)
+        modules = {}
+        for cls in self.classes.values():
+            modules.setdefault(cls.module, []).append(cls)
+
+        for module_name, class_list in modules.items():
+            lines.append(f"    namespace {module_name} {{")
+            for cls in class_list:
+                stereotype = ""
+                if cls.is_enum: stereotype = "<<enumeration>>"
+                elif cls.is_abstract: stereotype = "<<abstract>>"
+                
+                # Class definition
+                lines.append(f"        class {cls.name} {{")
+                if stereotype:
+                    lines.append(f"            {stereotype}")
+                
+                # Properties
+                for prop in cls.bases:
+                    lines.append(f"            +{prop}")
+                
+                # Methods
+                for method in cls.methods:
+                    method_clean = method.replace("__init__", "new")
+                    lines.append(f"            +{method_clean}")
+                
+                lines.append("        }")
+            lines.append("    }")
+
+        # Relationships (Outside namespace to avoid syntax issues in some renderers)
+        for rel in self.relationships:
+            if rel.rel_type == "inheritance":
+                # Parent <|-- Child
+                lines.append(f"    {rel.source} <|-- {rel.target}")
+
+        return "\n".join(lines)
+
+
+def update_docs(file_path: str, mermaid_content: str):
+    """Updates a markdown file between markers."""
+    path = Path(file_path)
+    if not path.exists():
+        print(f"❌ File {file_path} not found.")
+        return
+
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    if MARKER_START not in content or MARKER_END not in content:
+        print(f"⚠️ Markers not found in {file_path}.")
+        print(f"   Please add {MARKER_START} and {MARKER_END} to the file.")
+        return
+
+    # Replace content between markers
+    pre = content.split(MARKER_START)[0]
+    post = content.split(MARKER_END)[1]
+    
+    new_content = (
+        f"{pre}{MARKER_START}\n"
+        f"```mermaid\n{mermaid_content}\n```\n"
+        f"{MARKER_END}{post}"
+    )
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(new_content)
+    print(f"✅ Updated documentation: {file_path}")
+
+def mermaid_main():
+    parser = argparse.ArgumentParser(description="Generate Mermaid Class Diagram from Python Code")
+    parser.add_argument("--source", default="py_src/src", help="Source code directory")
+    parser.add_argument("--output", help="Output .mmd file path")
+    parser.add_argument("--update-docs", help="Markdown file to update (must contain markers)")
+    parser.add_argument("--include-private", action="store_true", help="Include private classes")
+    
+    args = parser.parse_args()
+
+    print(f"🔍 Scanning {args.source}...")
+    scanner = PythonClassParser(args.source, args.include_private)
+    scanner.parse_directory()
+    
+    print(f"📊 Found {len(scanner.classes)} classes.")
+    generator = MermaidGenerator(scanner.classes, scanner.relationships)
+    diagram = generator.generate()
+
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(diagram)
+        print(f"💾 Saved diagram to {args.output}")
+
+    if args.update_docs:
+        update_docs(args.update_docs, diagram)
+
+    if not args.output and not args.update_docs:
+        print("\n" + diagram)
 
 class GraphMLGenerator:
     """Generate GraphML output from parsed classes."""
@@ -205,8 +321,7 @@ class GraphMLGenerator:
 
         return '\n'.join(lines)
 
-
-def main():
+def graphml_main():
     parser = argparse.ArgumentParser(
         description='Generate draw.io class diagram from Python source code'
     )
@@ -271,6 +386,5 @@ def main():
     print(f"  3. Select {args.output}")
     print(f"  4. Your diagram is ready!")
 
-
 if __name__ == '__main__':
-    main()
+    mermaid_main()
