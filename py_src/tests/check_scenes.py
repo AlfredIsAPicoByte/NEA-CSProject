@@ -43,7 +43,7 @@ for name in SCENE_FUNCS:
             image_width=scene.camera.width,
             image_height=scene.camera.height,
             sampling_manager=sampling_manager,
-            max_recursions=1,
+            max_recursions=0,
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,

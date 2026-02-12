@@ -28,7 +28,6 @@ import argparse
 MARKER_START = ""
 MARKER_END = ""
 
-
 @dataclass
 class PyClass:
     """Represents a parsed Python class."""
@@ -37,6 +36,7 @@ class PyClass:
     file_path: str
     bases: List[str] = field(default_factory=list)
     methods: List[str] = field(default_factory=list)
+    properties: List[str] = field(default_factory=list)  # ADD THIS
     description: str = ""
     is_abstract: bool = False
     is_enum: bool = False
@@ -46,14 +46,12 @@ class PyClass:
         """Get unique node ID for GraphML."""
         return self.name
 
-
 @dataclass
 class Relationship:
     """Represents a relationship between classes."""
     source: str  # Class name
     target: str  # Class name
     rel_type: str  # 'inherits', 'contains', 'uses'
-
 
 class PythonClassParser:
     """Parse Python files to extract class information."""
@@ -120,6 +118,31 @@ class PythonClassParser:
                     item.name for item in node.body
                     if isinstance(item, ast.FunctionDef)
                 ]
+                
+                # Extract properties/attributes from class variables and annotations
+                properties = set()
+                
+                # From type annotations
+                if hasattr(node, 'annotation'):
+                    if isinstance(node.annotation, ast.Name):
+                        properties.add(node.annotation.id)
+                
+                # From assignments (class variables)
+                for item in node.body:
+                    if isinstance(item, ast.Assign):
+                        for target in item.targets:
+                            if isinstance(target, ast.Name):
+                                properties.add(target.id)
+                    elif isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                        properties.add(item.target.id)
+                
+                # From __init__ parameters (instance attributes)
+                for item in node.body:
+                    if isinstance(item, ast.FunctionDef) and item.name == "__init__":
+                        for arg in item.args.args[1:]:  # Skip 'self'
+                            properties.add(arg.arg)
+                
+                py_class.properties = sorted(list(properties))
 
                 self.classes[node.name] = py_class
 
@@ -129,16 +152,67 @@ class PythonClassParser:
             return base_node.id
         elif isinstance(base_node, ast.Attribute):
             return base_node.attr
+        elif isinstance(base_node, ast.Subscript):# Handle generics like List[MyClass] if isinstance(base_node.value, ast.Name): return base_node.value.id
+            if isinstance(base_node.value, ast.Name):return base_node.value.id
+            raise NotImplementedError(f"Unsupported base type: {ast.dump(base_node)}")
+        
         return "Unknown"
 
     def extract_relationships(self):
         """Extract inheritance and dependency relationships."""
         for class_obj in self.classes.values():
+            # Extract inheritance relationships
             for base in class_obj.bases:
                 if base in self.classes:
                     self.relationships.append(
                         Relationship(class_obj.name, base, "inherits")
                     )
+                elif base != "object":  # Ignore built-in 'object' base
+                    self.relationships.append(Relationship(class_obj.name, base, "depends"))
+            
+            # Extract method and attribute type annotations
+            class_file = Path(class_obj.file_path)
+            try:
+                with open(class_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                tree = ast.parse(content)
+                
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ClassDef) and node.name == class_obj.name:
+                        # Check for type annotations in methods and attributes
+                        for item in node.body:
+                            # Method return type hints
+                            if isinstance(item, ast.FunctionDef) and item.returns:
+                                target_class = self._extract_type_hint(item.returns)
+                                if target_class and target_class in self.classes:
+                                    self.relationships.append(
+                                        Relationship(class_obj.name, target_class, "uses")
+                                    )
+                            
+                            # Attribute type hints
+                            if isinstance(item, ast.AnnAssign) and item.annotation:
+                                target_class = self._extract_type_hint(item.annotation)
+                                if target_class and target_class in self.classes:
+                                    self.relationships.append(
+                                        Relationship(class_obj.name, target_class, "contains")
+                                    )
+            except (SyntaxError, UnicodeDecodeError):
+                pass
+
+    def _extract_type_hint(self, annotation_node) -> Optional[str]:
+        """Extract class name from type annotation AST node."""
+        if isinstance(annotation_node, ast.Name):
+            return annotation_node.id
+        elif isinstance(annotation_node, ast.Attribute):
+            return annotation_node.attr
+        elif isinstance(annotation_node, ast.Subscript):
+            # Handle generics like List[MyClass]
+            if isinstance(annotation_node.slice, ast.Name):
+                return annotation_node.slice.id
+            elif isinstance(annotation_node.slice, ast.Index) and isinstance(annotation_node.slice.value, ast.Name):
+                return annotation_node.slice.value.id
+        return None
+                
 
 class MermaidGenerator:
     """Generates Mermaid diagram syntax."""
@@ -181,9 +255,23 @@ class MermaidGenerator:
 
         # Relationships (Outside namespace to avoid syntax issues in some renderers)
         for rel in self.relationships:
-            if rel.rel_type == "inheritance":
-                # Parent <|-- Child
+            if rel.rel_type == "inherits":  # Inheritance <|--
                 lines.append(f"    {rel.source} <|-- {rel.target}")
+            elif rel.rel_type == "contains":  # Container o--
+                lines.append(f"    {rel.source}o-- {rel.target}")
+            elif rel.rel_type == "depends":  # Dependency <..>
+                lines.append(f"    {rel.source} <..> {rel.target}")
+            elif rel.rel_type == "uses":  # Usage -->
+                lines.append(f"    {rel.source} --> {rel.target}")
+            elif rel.rel_type == "association":  # Association -->
+                lines.append(f"    {rel.source} --> {rel.target}")
+            elif rel.rel_type == "aggregation":  # Aggregation o--
+                lines.append(f"    {rel.source}o-- {rel.target}")
+            elif rel.rel_type == "composition":  # Composition *--
+                lines.append(f"    {rel.source}*-- {rel.target}")
+            elif rel.rel_type == "realization":  # Realization <|..
+                lines.append(f"    {rel.source} <|.. {rel.target}")
+            
 
         return "\n".join(lines)
 
@@ -220,7 +308,7 @@ def update_docs(file_path: str, mermaid_content: str):
 def mermaid_main():
     parser = argparse.ArgumentParser(description="Generate Mermaid Class Diagram from Python Code")
     parser.add_argument("--source", default="py_src/src", help="Source code directory")
-    parser.add_argument("--output", help="Output .mmd file path")
+    parser.add_argument("--output", default="py_src/docs", help="Output .mmd file path")
     parser.add_argument("--update-docs", help="Markdown file to update (must contain markers)")
     parser.add_argument("--include-private", action="store_true", help="Include private classes")
     
@@ -235,9 +323,13 @@ def mermaid_main():
     diagram = generator.generate()
 
     if args.output:
-        with open(args.output, "w", encoding="utf-8") as f:
+        if os.path.isdir(args.output):
+            output_path = os.path.join(args.output, "ARCHETECTURE.mmd")
+        else:
+            output_path = args.output
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(diagram)
-        print(f"💾 Saved diagram to {args.output}")
+        print(f"💾 Saved diagram to {output_path}")
 
     if args.update_docs:
         update_docs(args.update_docs, diagram)
