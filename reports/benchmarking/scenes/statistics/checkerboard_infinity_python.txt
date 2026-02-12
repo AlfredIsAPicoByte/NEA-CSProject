@@ -1,21 +1,42 @@
 === Tracing Stats ===
-Time: 26.461s | Mem: 0.00MB
+Render Type: Ray Tracing
+Intersection: BVHIntersection
+Shading: NormalShading
+Time: 172.890s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
-  - Total:       9,216
-  - Primary:     9,216      (100.0%)
+  - Total:       65,536
+  - Primary:     65,536     (100.0%)
   - Shadow:      0          (Lights used: 2)
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      0
-  - Tri Tests:       183,900
+  - AABB Tests:      318,638
+  - Tri Tests:       1,064,087
   - Nodes Visited:   0
-  - Cost/Ray:        19.95 (Target: < 50)
-  - Culling Ratio:   0.00 (Target: > 2.0)
+  - Cost/Ray:        21.10 (Target: < 50)
+  - Culling Ratio:   0.30 (Target: > 2.0)
 -------------------------
 Diagnostics:
   - Max Depth Hit:   0
   - Roulette Kills:  0
   - NaN Errors:      0
   - NaN Rate:        0.00 per 1000 rays
+-------------------------
+Totals:
+Pixels Processed: 0
+Tiles Processed:  64
+-------------------------
+Settings:
+  - Image_width: 256
+  - Image_height: 256
+  - Film: Film(256x256, accum_pixels=(256, 256, 3), accum_weight=(256, 256), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0.532279   0.5894271  0.00912236], center_weight=1.0, last_pixel=[0.5 1.  0.5], last_weight=1.0)
+  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x000001FF62A89210>
+  - Max_recursions: 2
+  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x000001FF5B7F9910>
+  - Shading_strategy: <src.Rendering.RayTracing.Shading.NormalShading object at 0x000001FF62B75610>
+  - Use_tiling: True
+  - Tile_size: 32
+  - Debug_mode: True
+  - Verbose_logging: False
+=========================

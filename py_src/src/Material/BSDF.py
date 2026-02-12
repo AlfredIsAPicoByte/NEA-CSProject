@@ -151,7 +151,7 @@ def sample_microfacet_surface(
         sampler: Sampler,
         ior_1: float,
         ior_2: float,
-        bias: float = 1e-4
+        bias: float = 1e-6
     ) -> TracingRay:
     """
     Unified Microfacet BSDF (Glass/Dielectric).
@@ -288,7 +288,14 @@ def calculate_throughput_weight(
 
     return weight
 
-def calculate_microfacet_brdf(roughness: float, intensity: float, L: np.ndarray, V: np.ndarray, N: np.ndarray, F0: np.ndarray) -> Color:
+def calculate_microfacet_brdf(
+        roughness: float,
+        intensity: float,
+        L: np.ndarray,
+        V: np.ndarray,
+        N: np.ndarray,
+        F0: np.ndarray
+    )-> Color:
     """
     Calculate the Microfacet BRDF using GGX NDF, Smith GSF, and Schlick Fresnel.
 
@@ -340,7 +347,13 @@ def calculate_microfacet_brdf(roughness: float, intensity: float, L: np.ndarray,
     
     return brdf
 
-def evaluate_glass_bsdf(roughness: float, ior: float, L: np.ndarray, V: np.ndarray, N: np.ndarray) -> Color:
+def evaluate_glass_bsdf(
+        roughness: float,
+        ior: float,
+        L: np.ndarray,
+        V: np.ndarray,
+        N: np.ndarray
+    ) -> Color:
     """
     Evaluate glass BSDF (both reflection and refraction lobes).
     This is tricky because we need to know which lobe the light direction is in.

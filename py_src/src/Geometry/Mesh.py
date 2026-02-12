@@ -3,7 +3,7 @@ from typing import List, Tuple, Optional
 from dataclasses import dataclass, field
 
 
-from .AABB import AABB
+from .AABB import convert_bounds_to_corners
 
 """
 Mesh module for handling large 3D meshes efficiently.
@@ -35,17 +35,19 @@ class Face:
 class Mesh:
     """Handles large 3D meshes with efficient storage and operations."""
     
-    def __init__(self, name: str = "Mesh"):
-        """Initialize an empty mesh."""
+    def __init__(self, name: str = "Mesh", vertices: Optional[List[Vertex]] = None, faces: Optional[List[Face]] = None):
         self.name = name
-        self.vertices: List[Vertex] = []
-        self.faces: List[Face] = []
-        self._vertex_array: Optional[np.ndarray] = None
-    
+        self.vertices: List[Vertex] = vertices if vertices is not None else []
+        self.faces: List[Face] = faces if faces is not None else []
+        
+        self._vertex_array: Optional[np.ndarray] = None  # Cached numpy array of vertices
+        self._version: int = 0  # Versioning for change tracking
+
     def add_vertex(self, x: float, y: float, z: float) -> int:
         """Add a vertex and return its index."""
         self.vertices.append(Vertex(x, y, z))
         self._vertex_array = None  # Invalidate cache
+        self.update_version()
         return len(self.vertices) - 1
     
     def add_face(self, v1: int, v2: int, v3: int) -> None:
@@ -54,7 +56,9 @@ class Mesh:
                 0 <= v2 < len(self.vertices) and 
                 0 <= v3 < len(self.vertices)):
             raise IndexError("Invalid vertex indices")
+        
         self.faces.append(Face(v1, v2, v3))
+        self.update_version()
     
     def get_vertex_array(self) -> np.ndarray:
         """Get cached numpy array of all vertices."""
@@ -78,28 +82,21 @@ class Mesh:
         self.faces.clear()
         self._vertex_array = None
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        """
-        Compute the axis-aligned bounding box (AABB) of the mesh after applying a transformation.
-        
-        :param transformation_matrix: A 4x4 transformation matrix as a numpy array.
-        :param padding: A small padding value to expand the AABB.
-        :return: An AABB instance representing the transformed bounding box.
-        """
-        if not self.vertices:
-            return AABB.empty()
-        
-        vertex_array = self.get_vertex_array()
-        
-        for i in range(len(vertex_array)):
-            vertex_array[i] += np.sign(vertex_array[i]) * padding
+    def update_version(self) -> None:
+        """Increment the version to indicate a change."""
+        self._version += 1
 
-        transformed_vertices = AABB.transform_local_bounds(transformation_matrix, vertex_array)
-        
-        min_bounds = np.min(transformed_vertices, axis=0)
-        max_bounds = np.max(transformed_vertices, axis=0)
-
-        return AABB(min_bounds, max_bounds)
+    def get_local_bounds(self) -> tuple[np.ndarray, np.ndarray]:
+        """Compute local axis-aligned bounding box."""
+        v_array = self.get_vertex_array()
+        min_pt = v_array.min(axis=0)
+        max_pt = v_array.max(axis=0)
+        return (min_pt, max_pt)
+    
+    def get_local_corners(self) -> np.ndarray:
+        """Get local bounding box corners."""
+        bounds = self.get_local_bounds()
+        return convert_bounds_to_corners(bounds[0], bounds[1])
 
     def __repr__(self) -> str:
         return f"Mesh(name={self.name} vertices={self.vertex_count()} faces={self.face_count()})"

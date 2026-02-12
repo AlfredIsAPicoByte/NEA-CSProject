@@ -1,13 +1,11 @@
-from abc import ABC, abstractmethod
-from pyclbr import Class
 import numpy as np
-from typing import TYPE_CHECKING, Optional, Union, List, Tuple
-from dataclasses import dataclass, field
+from typing import Optional, List, Tuple
+from abc import ABC, abstractmethod
 
+from src.Data.Transform import Transform
 from src.Data.Ray import Ray
 from .Operations import *
-
-from .AABB import AABB
+from .AABB import convert_bounds_to_corners, convert_bounds_to_corners_2d
 
 class SignedDistanceFunction(ABC):
     """
@@ -74,26 +72,27 @@ class SignedDistanceGradient(ABC):
         
         return tangent, bitangent
     
-class CorrespondingBoundingBox(ABC):
+class CorrespondingBoxCorners(ABC):
     """
-    Abstract base class to define an AABB for Signed Distance Functions to improve performance.
-    Only applied to simple shapes.
+    Abstract base class to define the corner points for Signed Distance Functions to improve performance.
+    This is useful for quickly computing bounding boxes and spatial partitioning.
+    
+    2D shapes: return (4, 3)
+    3D shapes: return (8, 3)
+
+    Note: The corners should be defined in local space. And not all shapes will have a simple box.
     """
 
     def __init__(self):
         pass
 
     @abstractmethod
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_corners(self, padding: float = 1e-2) -> np.ndarray:
         """
-        Compute the axis-aligned bounding box (AABB) of the shape after applying a transformation matrix.
-        
-        :param transformation_matrix: A 4x4 transformation matrix as a numpy array.
-        :param padding: A small padding value to expand the AABB.
-        :return: An AABB instance representing the transformed bounding box.
+        Compute the points that encapsulates an object
         """
-        raise NotImplementedError("AABB transformation not implemented for this shape.")
-
+        raise NotImplementedError("Local corners not implemented for this shape.")
+    
 class SignedDistanceShape(SignedDistanceFunction, SignedDistanceGradient):
     """
     Abstract base class for shapes defined by Signed Distance Functions paired with their Gradients.
@@ -180,22 +179,6 @@ class SignedDistanceShape(SignedDistanceFunction, SignedDistanceGradient):
         """
         return 3
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        """
-        Default AABB computation for SDF shapes.
-        """
-        r = 0.5 + padding
-
-        local_bounds = np.array([
-            [-r, -r, 0], [r, -r, 0],
-            [-r, r, 0],  [r, r, 0]
-        ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
-
 class SignedDistanceShape2D(SignedDistanceShape):
     """
     Abstract base class for 2D shapes defined by Signed Distance Functions and their gradients.
@@ -250,28 +233,53 @@ class SignedDistanceShape3D(SignedDistanceShape):
         """
         raise NotImplementedError("Surface area computation not implemented for this shape.")
 
-class SignedDistanceShape3DExtrusion(SignedDistanceShape3D):
+
+class RoundedShape(SignedDistanceShape):
+    def __init__(self, shape: SignedDistanceShape, radius: float = 0.1):
+        self.shape = shape
+        self.radius = radius
+        
+    def get_distance(self, point: np.ndarray) -> float:
+        return self.shape.get_distance(point) - self.radius
+        
+    def get_gradient(self, point: np.ndarray) -> np.ndarray:
+        return self.shape.get_gradient(point)
+        
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        return self.shape.get_uv(point)
+        
+    def get_local_corners(self, padding: float=1e-2):
+        # Rounding expands the object by radius
+        return self.shape.get_local_corners(padding + self.radius)
+
+class OnionShape(SignedDistanceShape):
+    pass
+
+class ShapeExtrusion(SignedDistanceShape3D, CorrespondingBoxCorners):
     """
-    A 3D shape created by extruding a 2D signed distance shape along the local Y-axis.
-    The 2D shape is assumed to lie on the XZ plane (inputs x, y treated as x, z).
+    A 3D shape created by extruding a 2D signed distance shape along the local Z-axis.
+    The 2D shape is assumed to lie on the XY plane.
     """
     def __init__(self, shape_2d: SignedDistanceShape2D, height: float = 1.0):
+        if not isinstance(shape_2d, CorrespondingBoxCorners):
+            raise NotImplementedError("The shape does not inherit the bounding box logic")
+
         self.shape_2d = shape_2d
-        self.height = height
+
         self.half_height = height / 2.0
 
     def get_distance(self, point: np.ndarray) -> float:
-        # Project 3D point to 2D plane (XZ)
-        # We map 3D (x, y, z) -> 2D (x, z)
-        p_2d = np.array([point[0], point[2]])
+        # Project 3D point to 2D plane (XY)
+        # We map 3D (x, y, z) -> 2D (x, y)
+        p_2d = point[:2]
         
         # Get distance to the 2D profile
         d_2d = self.shape_2d.get_distance(p_2d)
         
-        # Calculate distance logic for extrusion (intersection of profile and height slab)
-        # w.x = distance to 2D shape side
-        # w.y = distance to top/bottom cap
-        w = np.array([d_2d, abs(point[1]) - self.half_height])
+        # Calculate distance logic for extrusion along Z-AXIS
+        # w.x = distance to 2D shape side (in XY plane)
+        # w.y = distance to top/bottom cap (abs(z) - h/2)
+        w = np.array([d_2d, abs(point[2]) - self.half_height])
         
         # SDF logic: interior distance (negative) + exterior distance (positive length)
         return min(max(w[0], w[1]), 0.0) + np.linalg.norm(np.maximum(w, 0.0))
@@ -284,10 +292,10 @@ class SignedDistanceShape3DExtrusion(SignedDistanceShape3D):
         dz = self.get_distance(point + np.array([0, 0, h])) - self.get_distance(point - np.array([0, 0, h]))
         grad = np.array([dx, dy, dz])
         norm = np.linalg.norm(grad)
-        return grad / norm if norm > 0 else np.array([0.0, 1.0, 0.0])
+        return grad / norm if norm > 0 else np.array([0.0, 0.0, 1.0])
 
     def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
-        # Sphere Tracing: robust for arbitrary SDFs
+        # Sphere Tracing
         t = 0.0
         for _ in range(128):
             p = ray.point_at(t)
@@ -300,23 +308,34 @@ class SignedDistanceShape3DExtrusion(SignedDistanceShape3D):
         return []
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
-        # U: Derived from the 2D profile (its perimeter/angle)
-        # V: Derived from the height
-        p_2d = np.array([point[0], point[2]])
+        # U: Derived from the 2D profile (XY)
+        # V: Derived from the height (Z)
+        p_2d = point[:2]
         u, _ = self.shape_2d.get_uv(p_2d) 
         
-        # Map height [-h/2, h/2] to [0, 1]
-        v = (point[1] + self.half_height) / self.height
+        # Map height (Z) [-h/2, h/2] to [0, 1]
+        v = (point[2] + self.half_height) / (self.half_height * 2)
         return u, v
+
+    def get_local_corners(self, padding: float = 1e-2) -> np.ndarray:
+        local_2d = self.shape_2d.get_local_corners(padding)
+        min_xy = local_2d[:, :2].min(axis=0)
+        max_xy = local_2d[:, :2].max(axis=0)
+
+        h = self.half_height + padding
+        return convert_bounds_to_corners(
+            np.array([min_xy[0], min_xy[1], -h]),
+            np.array([max_xy[0], max_xy[1],  h])
+        )
 
     @property
     def volume(self) -> float:
-        return self.shape_2d.area * self.height
+        return self.shape_2d.area * self.half_height * 2
 
     @property
     def surface_area(self) -> float:
         # 2 Caps + Side walls
-        return (2 * self.shape_2d.area) + (self.shape_2d.perimeter * self.height)
+        return (2 * self.shape_2d.area) + (self.shape_2d.perimeter * self.half_height * 2)
 
     @property
     def is_convex(self) -> bool:
@@ -328,28 +347,34 @@ class SignedDistanceShape3DExtrusion(SignedDistanceShape3D):
             return None
         
         points = []
-        # Create 3D hull by capping the 2D hull at top and bottom
+        # Create 3D hull by capping the 2D hull at front (+Z) and back (-Z)
         for p in hull_2d:
-            points.append(np.array([p[0], self.half_height, p[1]]))  # Top cap
-            points.append(np.array([p[0], -self.half_height, p[1]])) # Bottom cap
+            # p is [x, y, 0] from the 2D shape
+            points.append(np.array([p[0], p[1],  self.half_height])) # Front cap
+            points.append(np.array([p[0], p[1], -self.half_height])) # Back cap
         return points
 
-class SignedDistanceShape3DRevolution(SignedDistanceShape3D):
+class ShapeRevolution(SignedDistanceShape3D, CorrespondingBoxCorners):
     """
     A 3D shape created by revolving a 2D signed distance shape around the Y-axis.
     The 2D shape is assumed to be defined in the XY plane, where X represents the radius.
     """
     def __init__(self, shape_2d: SignedDistanceShape2D):
+        if not isinstance(shape_2d, CorrespondingBoxCorners):
+            raise NotImplementedError("The shape does not inherit the bounding box logic")
+
         self.shape_2d = shape_2d
 
     def get_distance(self, point: np.ndarray) -> float:
         # Convert 3D point (x, y, z) to Cylindrical coordinates (r, y)
+        # We assume revolution around Y-axis, so Radius is distance in XZ plane
         r = np.linalg.norm(point[[0, 2]])
         p_2d = np.array([r, point[1]])
         
         return self.shape_2d.get_distance(p_2d)
 
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
+        # Numerical gradient (Finite Difference)
         h = 1e-4
         dx = self.get_distance(point + np.array([h, 0, 0])) - self.get_distance(point - np.array([h, 0, 0]))
         dy = self.get_distance(point + np.array([0, h, 0])) - self.get_distance(point - np.array([0, h, 0]))
@@ -382,11 +407,24 @@ class SignedDistanceShape3DRevolution(SignedDistanceShape3D):
         
         return u, v_profile
 
+    def get_local_corners(self, padding: float = 1e-2) -> np.ndarray:
+        local_2d = self.shape_2d.get_local_corners(padding)
+        min_xy = local_2d[:, :2].min(axis=0)
+        max_xy = local_2d[:, :2].max(axis=0)
+
+        max_radius = max(abs(min_xy[0]), abs(max_xy[0])) + padding
+        min_y = min_xy[1] - padding
+        max_y = max_xy[1] + padding
+
+        return convert_bounds_to_corners(
+            np.array([-max_radius, min_y, -max_radius]),
+            np.array([ max_radius, max_y,  max_radius])
+        )   
+
     @property
     def volume(self) -> float:
-        # Requires Centroid for Pappus's Theorem. 
-        # Since Shape2D generic interface doesn't strictly guarantee centroid access,
-        # we return 0.0 or raise to indicate manual calculation needed.
+        # Pappus's Theorem (V = 2 * pi * r_centroid * Area) would be ideal here,
+        # but requires knowing the centroid of the 2D shape.
         return 0.0 
 
     @property
@@ -395,59 +433,121 @@ class SignedDistanceShape3DRevolution(SignedDistanceShape3D):
 
     @property
     def is_convex(self) -> bool:
-        # A revolution is generally only convex if the 2D shape is a specific 
-        # type of convex (e.g. aligned rectangle) and touches the axis.
-        # A torus (circle revolution) is NOT convex.
         return False
 
     def get_convex_hull(self) -> Optional[List[np.ndarray]]:
-        # Convex hull of a revolution is difficult to generalize (usually a cylinder or cone).
         return None
 
-class SignedDistanceShapeCombinations(SignedDistanceShape, CorrespondingBoundingBox):
+class ShapeCombination(SignedDistanceShape, CorrespondingBoxCorners):
     """
     Base class for binary operations between two SDF shapes (A and B).
-    Handles the logic for combining bounding boxes, mapping UVs, and 
-    ray-marching the combined field.
+    Handles transformation logic centrally so subclasses don't have to.
     """
-    def __init__(self, shape_a: SignedDistanceShape, shape_b: SignedDistanceShape):
+    def __init__(self, shape_a: SignedDistanceShape, transform_a: Transform, 
+                 shape_b: SignedDistanceShape, transform_b: Transform):
+        if not (isinstance(shape_a, CorrespondingBoxCorners) or isinstance(shape_b, CorrespondingBoxCorners)):
+            raise TypeError("Either shape does not inherit the bounding box logic")
+        
+        if shape_a.dimension != shape_b.dimension:
+            raise TypeError("The combined shapes must be in the same dimensions")
+        
         self.shape_a = shape_a
+        self.transform_a = transform_a
         self.shape_b = shape_b
+        self.transform_b = transform_b
+
+    def get_distance(self, point: np.ndarray) -> float:
+        """
+        1. Transforms point into Local Space of Shape A and B.
+        2. Gets distance.
+        3. Scales distance back to World Space (crucial for correct SDFs).
+        4. Combines results.
+        """
+        # Transform Point: World -> Local A
+        local_p_a = self.transform_a.local_transform_point(point)
+        dist_a = self.shape_a.get_distance(local_p_a)
+        
+        # Scale Correction: SDF distances must be scaled back to world units.
+        # We use the minimum scale component to be conservative (avoids overstepping).
+        scale_a = self.transform_a.scale
+        if hasattr(scale_a, '__iter__'): 
+            dist_a *= min(scale_a)
+        else:
+            dist_a *= scale_a
+
+        # Transform Point: World -> Local B
+        local_p_b = self.transform_b.local_transform_point(point)
+        dist_b = self.shape_b.get_distance(local_p_b)
+        
+        scale_b = self.transform_b.scale
+        if hasattr(scale_b, '__iter__'):
+            dist_b *= min(scale_b)
+        else:
+            dist_b *= scale_b
+        
+        return self._combine_distances(float(dist_a), float(dist_b))
+
+    def _combine_distances(self, dist_a: float, dist_b: float) -> float:
+        raise NotImplementedError("Subclasses must implement _combine_distances")
 
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
-        """
-        Computes the gradient (normal). 
-        For standard boolean ops (Union/Intersection), the gradient is exactly 
-        that of the shape defining the surface at this point.
-        """
-        dist_a = self.shape_a.get_distance(point)
-        dist_b = self.shape_b.get_distance(point)
-        
-        # For simple booleans, we just return the gradient of the closer surface.
-        # Note: For smooth blends, a numerical gradient (finite differences) 
-        # is often superior to this approximation.
-        if abs(dist_a) < abs(dist_b):
-            return self.shape_a.get_gradient(point)
+        # Transform points to local space to check distance
+        p_a = self.transform_a.local_transform_point(point)
+        d_a = self.shape_a.get_distance(p_a) * (min(self.transform_a.scale) if hasattr(self.transform_a.scale, '__iter__') else self.transform_a.scale)
+
+        p_b = self.transform_b.local_transform_point(point)
+        d_b = self.shape_b.get_distance(p_b) * (min(self.transform_b.scale) if hasattr(self.transform_b.scale, '__iter__') else self.transform_b.scale)
+
+        if abs(d_a) < abs(d_b):
+            # Gradient A in Local Space
+            local_grad = self.shape_a.get_gradient(p_a)
+            # Rotate Gradient to World Space (inverse transpose of rotation, or just rotation for orthogonal matrices)
+            return self.transform_a.world_transform_direction(local_grad)
         else:
-            return self.shape_b.get_gradient(point)
+            # Gradient B in Local Space
+            local_grad = self.shape_b.get_gradient(p_b)
+            return self.transform_b.world_transform_direction(local_grad)
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
-        """
-        Delegates UV mapping to the shape closest to the surface.
-        """
-        dist_a = self.shape_a.get_distance(point)
-        dist_b = self.shape_b.get_distance(point)
-        
-        if abs(dist_a) < abs(dist_b):
-            return self.shape_a.get_uv(point)
+        # Similar logic to gradient: find closest shape, map UV in its local space
+        p_a = self.transform_a.local_transform_point(point)
+        d_a = self.shape_a.get_distance(p_a)
+
+        p_b = self.transform_b.local_transform_point(point)
+        d_b = self.shape_b.get_distance(p_b)
+
+        if abs(d_a) < abs(d_b):
+            return self.shape_a.get_uv(p_a)
         else:
-            return self.shape_b.get_uv(point)
+            return self.shape_b.get_uv(p_b)
+
+    def get_local_corners(self, padding: float = 1e-2) -> np.ndarray:
+        """
+        Returns the bounding box of the COMBINATION.
+        This requires transforming the children's corners into this object's space.
+        """
+        # 1. Get local corners of children
+        corners_a = self.shape_a.get_local_corners(padding)
+        corners_b = self.shape_b.get_local_corners(padding)
+
+        # 2. Transform children corners to Current Space (Local -> World)
+        corners_a_transformed = np.array([self.transform_a.world_transform_point(p) for p in corners_a])
+        corners_b_transformed = np.array([self.transform_b.world_transform_point(p) for p in corners_b])
+
+        return self._combine_bounds(corners_a_transformed, corners_b_transformed)
+
+    def _combine_bounds(self, corners_a: np.ndarray, corners_b: np.ndarray) -> np.ndarray:
+        """Default behavior: Union of bounds (for ShapeUnion and general case)"""
+        all_pts = np.vstack([corners_a, corners_b])
+        min_pt = all_pts.min(axis=0)
+        max_pt = all_pts.max(axis=0)
+        
+        if self.shape_a.dimension == 2:
+            return convert_bounds_to_corners_2d(min_pt, max_pt)
+        return convert_bounds_to_corners(min_pt, max_pt)
 
     def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
-        """
-        Performs Sphere Tracing (Ray Marching) to find the intersection.
-        Unlike simple primitives, combined SDFs rarely have analytic solutions.
-        """
+        # Standard sphere tracing
         t = 0.0
         MAX_STEPS = 128
         EPSILON = 1e-4
@@ -465,88 +565,84 @@ class SignedDistanceShapeCombinations(SignedDistanceShape, CorrespondingBounding
         
         return []
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+class ShapeUnion(ShapeCombination):
+    def _combine_distances(self, dist_a: float, dist_b: float) -> float:
+        return op_union(dist_a, dist_b)
+
+class ShapeIntersection(ShapeCombination):
+    def _combine_distances(self, dist_a: float, dist_b: float) -> float:
+        return op_intersect(dist_a, dist_b)
+
+    def _combine_bounds(self, corners_a: np.ndarray, corners_b: np.ndarray) -> np.ndarray:
         """
-        Default AABB combination strategy (Union). 
-        Subclasses can override this (e.g., Intersection).
+        Intersection Bounds Optimization.
+        The resulting volume is contained within the intersection of the two AABBs.
         """
-        aabb_a = self.shape_a.get_transformed_aabb(transformation_matrix, padding)
-        aabb_b = self.shape_b.get_transformed_aabb(transformation_matrix, padding)
+        min_a, max_a = corners_a.min(axis=0), corners_a.max(axis=0)
+        min_b, max_b = corners_b.min(axis=0), corners_b.max(axis=0)
+
+        # Intersect the two AABBs
+        min_pt = np.maximum(min_a, min_b)
+        max_pt = np.minimum(max_a, max_b)
+
+        # If intersection is empty (min > max in any axis), return empty
+        if np.any(min_pt > max_pt):
+            return np.zeros((0, 3), dtype=np.float32)
+
+        if self.shape_a.dimension == 2:
+            return convert_bounds_to_corners_2d(min_pt, max_pt)
+        return convert_bounds_to_corners(min_pt, max_pt)
+
+class ShapeSubtraction(ShapeCombination):
+    def _combine_distances(self, dist_a: float, dist_b: float) -> float:
+        # Note: Order matters. Here we assume A - B
+        return op_subtract(dist_a, dist_b)
+
+    def _combine_bounds(self, corners_a: np.ndarray, corners_b: np.ndarray) -> np.ndarray:
+        """
+        Subtraction Bounds.
+        The result of (A - B) is always contained within A.
+        We can ignore B's bounds for the bounding box.
+        """
+        min_pt = corners_a.min(axis=0)
+        max_pt = corners_a.max(axis=0)
         
-        min_p = np.minimum(aabb_a.min_point, aabb_b.min_point)
-        max_p = np.maximum(aabb_a.max_point, aabb_b.max_point)
-        
-        return AABB(min_p, max_p)
+        if self.shape_a.dimension == 2:
+            return convert_bounds_to_corners_2d(min_pt, max_pt)
+        return convert_bounds_to_corners(min_pt, max_pt)
 
-class SDFUnion(SignedDistanceShapeCombinations):
-    """
-    Combines two shapes into one (Shape A OR Shape B).
-    """
-    def get_distance(self, point: np.ndarray) -> float:
-        return op_union(self.shape_a.get_distance(point),
-                        self.shape_b.get_distance(point))
+class ShapeSmoothUnion(ShapeCombination):
+    def __init__(self, shape_a: SignedDistanceShape, transform_a: Transform, 
+                 shape_b: SignedDistanceShape, transform_b: Transform, 
+                 k: float = 0.5):
+        super().__init__(shape_a, transform_a, shape_b, transform_b)
+        self.k = k
 
-class SDFIntersection(SignedDistanceShapeCombinations):
-    """
-    The volume shared by both shapes (Shape A AND Shape B).
-    """
-    def get_distance(self, point: np.ndarray) -> float:
-        return op_intersect(self.shape_a.get_distance(point),
-                            self.shape_b.get_distance(point))
-    
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        # Optimization: The intersection is strictly smaller than the smallest AABB.
-        # We can intersect the bounding boxes.
-        aabb_a = self.shape_a.get_transformed_aabb(transformation_matrix, padding)
-        aabb_b = self.shape_b.get_transformed_aabb(transformation_matrix, padding)
-        
-        min_p = np.maximum(aabb_a.min_point, aabb_b.min_point)
-        max_p = np.minimum(aabb_a.max_point, aabb_b.max_point)
-        
-        # Check if the boxes actually overlap; if not, return a degenerate box
-        if np.any(min_p > max_p):
-             return AABB(np.zeros(3), np.zeros(3)) # Effectively empty
-             
-        return AABB(min_p, max_p)
+    def _combine_distances(self, dist_a: float, dist_b: float) -> float:
+        return op_smooth_union(dist_a, dist_b, self.k)
 
-class SDFSubtraction(SignedDistanceShapeCombinations):
-    """
-    Carves Shape B out of Shape A (Shape A MINUS Shape B).
-    """
-    def get_distance(self, point: np.ndarray) -> float:
-        # Note: Using op_addition (max(d1, -d2)) because 
-        # op_subtract is defined as max(-d1, d2) in the provided snippet.
-        # We want: A - B => max(distA, -distB)
-        return op_addition(self.shape_a.get_distance(point),
-                           self.shape_b.get_distance(point))
-
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        # Optimization: The bounding box is just AABB(A). 
-        # Cutting a hole doesn't expand the outer bounds.
-        return self.shape_a.get_transformed_aabb(transformation_matrix, padding)
-
-class SDFSmoothUnion(SignedDistanceShapeCombinations):
-    """
-    Blends two shapes together smoothly, like liquid mercury.
-    """
-    k: float = 0.5 # Smoothing factor
-
-    def get_distance(self, point: np.ndarray) -> float:
-        return op_smooth_union(self.shape_a.get_distance(point),
-                               self.shape_b.get_distance(point),
-                               self.k)
-    
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
-        # For smooth unions, the 'closest shape' analytic approximation is inaccurate
-        # near the blend region. A finite difference approach is preferred here.
+        """
+        Override gradient for SmoothUnion.
+        Analytic 'closest shape' gradient is wrong in the blending region.
+        We use finite difference.
+        """
         epsilon = 1e-4
         d = self.get_distance(point)
         dx = self.get_distance(point + np.array([epsilon, 0, 0])) - d
         dy = self.get_distance(point + np.array([0, epsilon, 0])) - d
         dz = self.get_distance(point + np.array([0, 0, epsilon])) - d
-        return np.array([dx, dy, dz]) / epsilon
+        
+        grad = np.array([dx, dy, dz])
+        norm = np.linalg.norm(grad)
 
-class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
+        return grad / norm if norm > 0 else np.zeros(3)
+    
+class ShapeXor(ShapeCombination):
+    def _combine_distances(self, dist_a: float, dist_b: float) -> float:
+        return op_xor(dist_a, dist_b)
+
+class Circle(SignedDistanceShape2D, CorrespondingBoxCorners):
     """
     A simple 2D circle shape defined by a signed distance function.
     Centered at the origin with a given radius.
@@ -565,14 +661,23 @@ class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
         return point[:3] / dist
 
     def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Ray is in-plane, use 2D intersection
+        origin_2d = ray.origin[:2]
+        direction_2d = ray.direction[:2]
+
         # Ray-circle intersection in 2D
         origin_2d = ray.origin[:2]
+
         # Ensure direction is normalized
         direction_2d = ray.direction[:2] 
         dir_len = np.linalg.norm(direction_2d)
         if dir_len == 0: return []
-        direction_2d /= dir_len
 
+        direction_2d /= dir_len
         a = 1.0 # Since direction is normalized
         b = 2 * np.dot(origin_2d, direction_2d)
         c = np.dot(origin_2d, origin_2d) - self.radius ** 2
@@ -580,7 +685,7 @@ class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
         discriminant = b ** 2 - 4 * a * c
         if discriminant < 0:
             return []
-
+        
         sqrt_disc = np.sqrt(discriminant)
         t1 = (-b - sqrt_disc) / (2 * a)
         t2 = (-b + sqrt_disc) / (2 * a)
@@ -597,18 +702,9 @@ class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
         v = 0.5  # Circle has no height variation
         return u, v
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_corners(self, padding: float = 1e-2) -> np.ndarray:
         r = self.radius + padding
-
-        local_bounds = np.array([
-            [-r, -r, 0], [r, -r, 0],
-            [-r, r, 0],  [r, r, 0]
-        ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+        return convert_bounds_to_corners_2d(np.array([-r, -r]), np.array([r, r]))
 
     @property
     def perimeter(self) -> float:
@@ -625,106 +721,15 @@ class Circle(SignedDistanceShape2D, CorrespondingBoundingBox):
     def get_convex_hull(self, resolution: int = 16) -> List[np.ndarray]:
         # Approximate the convex hull with a polygon (e.g., 16 points)
         points = []
+
         for i in range(resolution):
             angle = (i / resolution) * 2 * np.pi
             x = self.radius * np.cos(angle)
             y = self.radius * np.sin(angle)
             points.append(np.array([x, y, 0]))
         return points
-    
-class Square(SignedDistanceShape2D, CorrespondingBoundingBox):
-    """
-    A simple 2D square shape defined by a signed distance function.
-    Centered at the origin with a given half-size.
-    """
-    def __init__(self, size: float = 1.0):
-        self.half_size = size / 2
 
-    def get_distance(self, point: np.ndarray) -> float:
-        dx = abs(point[0]) - self.half_size
-        dy = abs(point[1]) - self.half_size
-        outside_dist = np.maximum(dx, dy)
-        inside_dist = np.minimum(np.maximum(dx, dy), 0)
-        return outside_dist + inside_dist
-
-    def get_gradient(self, point: np.ndarray) -> np.ndarray:
-        # Gradient approximation for square
-        grad = np.zeros(2)
-        if abs(point[0]) > self.half_size:
-            grad[0] = np.sign(point[0])
-        if abs(point[1]) > self.half_size:
-            grad[1] = np.sign(point[1])
-        norm = np.linalg.norm(grad)
-        if norm > 0:
-            return grad / norm
-        return np.array([0.0, 0.0])
-    
-    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
-        origin_2d = ray.origin[:2]
-        direction_2d = ray.direction[:2]
-        
-        # Handle small direction components to avoid div by zero
-        inv_dir = np.zeros_like(direction_2d)
-        with np.errstate(divide='ignore'):
-            inv_dir = 1.0 / direction_2d
-        
-        tmin = (-self.half_size - origin_2d) * inv_dir
-        tmax = (self.half_size - origin_2d) * inv_dir
-
-        t1 = np.minimum(tmin, tmax)
-        t2 = np.maximum(tmin, tmax)
-
-        t_enter = np.max(t1)
-        t_exit = np.min(t2)
-
-        if t_exit >= t_enter and t_enter < max_t:
-            hits = []
-            if t_enter > 0: hits.append(t_enter)
-            if t_exit > 0: hits.append(t_exit)
-            return sorted(list(set(hits))) # remove duplicates if corner hit
-        
-        return []
-
-    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
-        u = (point[0] + self.half_size) / (2 * self.half_size)
-        v = (point[1] + self.half_size) / (2 * self.half_size)
-        return u, v
-    
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        r = self.half_size + padding
-
-        local_bounds = np.array([
-            [-r, -r, 0], [r, -r, 0],
-            [-r, r, 0],  [r, r, 0]
-        ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
-    
-    @property
-    def perimeter(self) -> float:
-        return 8 * self.half_size
-
-    @property
-    def area(self) -> float:
-        return (2 * self.half_size) ** 2
-
-    @property
-    def is_convex(self) -> bool:
-        return True
-    
-    def get_convex_hull(self) -> List[np.ndarray]:
-        points = [
-            np.array([-self.half_size, -self.half_size, 0]),
-            np.array([ self.half_size, -self.half_size, 0]),
-            np.array([ self.half_size,  self.half_size, 0]),
-            np.array([-self.half_size,  self.half_size, 0])
-        ]
-        return points
-
-class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
+class Rectangle(SignedDistanceShape2D, CorrespondingBoxCorners):
     """
     A simple 2D square shape defined by a signed distance function.
     Centered at the origin with a given half-size.
@@ -733,18 +738,18 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
         self.half_size = size / 2
 
     def get_distance(self, point: np.ndarray) -> float:
-        dx = abs(point[0]) - self.half_size
-        dy = abs(point[1]) - self.half_size
+        dx = abs(point[0]) - self.half_size[0]
+        dy = abs(point[1]) - self.half_size[1]
         outside_dist = np.maximum(dx, dy)
         inside_dist = np.minimum(np.maximum(dx, dy), 0)
         return outside_dist + inside_dist
 
     def get_gradient(self, point: np.ndarray) -> np.ndarray:
-        # Gradient approximation for square
-        grad = np.zeros(2)
-        if abs(point[0]) > self.half_size:
+        # Gradient approximation for rectangles
+        grad = np.zeros(3)
+        if abs(point[0]) > self.half_size[0]:
             grad[0] = np.sign(point[0])
-        if abs(point[1]) > self.half_size:
+        if abs(point[1]) > self.half_size[1]:
             grad[1] = np.sign(point[1])
         norm = np.linalg.norm(grad)
         if norm > 0:
@@ -752,6 +757,10 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
         return np.array([0.0, 1.0, 0.0])
     
     def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
         origin_2d = ray.origin[:2]
         direction_2d = ray.direction[:2]
         
@@ -782,18 +791,9 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
         v = (point[1] + self.half_size[1]) / (2 * self.half_size[1])
         return u, v
     
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_corners(self, padding: float = 1e-2) -> np.ndarray:
         r = self.half_size + padding
-
-        local_bounds = np.array([
-            [-r[0], -r[1], 0], [r[0], -r[1], 0],
-            [-r[0], r[1], 0],  [r[0], r[1], 0]
-        ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+        return convert_bounds_to_corners_2d(-r, r)
     
     @property
     def perimeter(self) -> float:
@@ -801,7 +801,7 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
 
     @property
     def area(self) -> float:
-        return (self.half_size[0] * self.half_size[1]) ** 2
+        return 4 * self.half_size[0] * self.half_size[1]
     
     @property
     def is_convex(self) -> bool:
@@ -816,7 +816,15 @@ class Rectangle(SignedDistanceShape2D, CorrespondingBoundingBox):
         ]
         return points
 
-class Triangle(SignedDistanceShape2D, CorrespondingBoundingBox):
+class Square(Rectangle):
+    """
+    A simple 2D square shape defined by a signed distance function.
+    Centered at the origin with a given half-size.
+    """
+    def __init__(self, size: float = 1.0):
+        self.half_size = np.array([size / 2, size / 2])
+
+class Triangle(SignedDistanceShape2D, CorrespondingBoxCorners):
     """
     A simple 2D triangle shape defined by a signed distance function.
     Defined by three vertices in 3D space (z=0)."""
@@ -867,11 +875,28 @@ class Triangle(SignedDistanceShape2D, CorrespondingBoundingBox):
         return np.array([dx, dy, 0]) / (2*h)
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
-        # Simple barycentric placeholder: project onto plane and return normalized UV inside triangle bounds.
-        # This is sufficient to satisfy tests that only require the method to exist.
-        return 0.0, 0.0
+        # Barycentric coordinates for UV mapping
+        p = point[:2]
+        v0, v1, v2 = self.v0[:2], self.v1[:2], self.v2[:2]
+        
+        denom = (v1[1] - v2[1]) * (v0[0] - v2[0]) + (v2[0] - v1[0]) * (v0[1] - v2[1])
+        if denom == 0:
+            return 0.0, 0.0  # Degenerate triangle
+        
+        a = ((v1[1] - v2[1]) * (p[0] - v2[0]) + (v2[0] - v1[0]) * (p[1] - v2[1])) / denom
+        b = ((v2[1] - v0[1]) * (p[0] - v2[0]) + (v0[0] - v2[0]) * (p[1] - v2[1])) / denom
+        c = 1.0 - a - b
+        
+        # Map barycentric to UV space (simple linear mapping)
+        u = a * 0.0 + b * 1.0 + c * 0.5  # Example UV mapping
+        v = a * 0.0 + b * 0.0 + c * 1.0
+        return u, v
     
     def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
         # Möller–Trumbore intersection algorithm
         epsilon = 1e-8
         
@@ -903,14 +928,10 @@ class Triangle(SignedDistanceShape2D, CorrespondingBoundingBox):
             
         return []
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        # Transform the three vertices
-        local_bounds = np.array([self.v0, self.v1, self.v2])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-
-        min_p = np.min(world_bounds, axis=0) - padding
-        max_p = np.max(world_bounds, axis=0) + padding
-        return AABB(min_p, max_p)
+    def get_local_corners(self, padding: float = 1e-4) -> np.ndarray:
+        min_xy = np.minimum.reduce([self.v0[:2], self.v1[:2], self.v2[:2]]) - padding
+        max_xy = np.maximum.reduce([self.v0[:2], self.v1[:2], self.v2[:2]]) + padding
+        return convert_bounds_to_corners_2d(min_xy, max_xy)
     
     @property
     def area(self) -> float:
@@ -922,7 +943,7 @@ class Triangle(SignedDistanceShape2D, CorrespondingBoundingBox):
                 np.linalg.norm(self.v2-self.v1) + 
                 np.linalg.norm(self.v0-self.v2))
     
-class Ellipse(SignedDistanceShape2D, CorrespondingBoundingBox):
+class Ellipse(SignedDistanceShape2D, CorrespondingBoxCorners):
     """
     A simple 2D ellipse shape defined by a signed distance function.
     Centered at the origin with given radii along x and y axes.
@@ -968,6 +989,10 @@ class Ellipse(SignedDistanceShape2D, CorrespondingBoundingBox):
         return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
 
     def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
         ox = ray.origin[0] / self.radius_x
         oy = ray.origin[1] / self.radius_y
         dx = ray.direction[0] / self.radius_x
@@ -997,16 +1022,9 @@ class Ellipse(SignedDistanceShape2D, CorrespondingBoundingBox):
         v = 0.5
         return u, v
     
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        rx, ry = self.radius_x + padding, self.radius_y + padding
-        local_bounds = np.array([
-            [-rx, -ry, 0], [rx, -ry, 0],
-            [-rx, ry, 0],  [rx, ry, 0]
-        ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+    def get_local_corners(self, padding: float = 1e-2) -> np.ndarray:
+        r = self.radii + padding
+        return convert_bounds_to_corners_2d(-r, r)
 
     @property
     def perimeter(self) -> float:
@@ -1019,7 +1037,7 @@ class Ellipse(SignedDistanceShape2D, CorrespondingBoundingBox):
     def area(self) -> float:
         return np.pi * self.radius_x * self.radius_y
     
-class Plane(SignedDistanceShape3D, CorrespondingBoundingBox):
+class Plane(SignedDistanceShape3D, CorrespondingBoxCorners):
     def __init__(self, normal: np.ndarray = np.array([0, 1, 0]), d: float = 0.0):
         # Plane equation: dot(p, n) + d = 0
         self.normal = normal / np.linalg.norm(normal)
@@ -1034,12 +1052,13 @@ class Plane(SignedDistanceShape3D, CorrespondingBoundingBox):
     def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
         denom = np.dot(self.normal, ray.direction)
         
-        # Check if ray is not parallel to the plane
-        if abs(denom) > 1e-6:
-            t = -(np.dot(self.normal, ray.origin) + self.d) / denom
-            if 0 <= t < max_t:
-                return [t]
-                
+        if abs(denom) < 1e-6:
+            return []
+        
+        t = -(np.dot(self.normal, ray.origin) + self.d) / denom
+        if 0 < t < max_t:
+            return [t]
+        
         return []
 
     def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
@@ -1051,13 +1070,314 @@ class Plane(SignedDistanceShape3D, CorrespondingBoundingBox):
             return point[0], point[2]
         else:
             return point[0], point[1]
+        
+    def get_local_corners(self, padding: float = 1e-2) -> np.ndarray:
+        R = 1e6  # Scene-scale bound
+        return convert_bounds_to_corners(
+            np.array([-R, -R, -R]),
+            np.array([ R,  R,  R])
+        )
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        # A plane is infinite, returning a very large AABB
-        inf = 1e10
-        return AABB(np.array([-inf]*3), np.array([inf]*3))
+class Moon(SignedDistanceShape2D):
+    def __init__(self, radius_a: float = 0.5, radius_b: float = 0.3, offset: float = 0.2):
+        self.radius_a = radius_a
+        self.radius_b = radius_b
+        self.offset = offset
+
+    def get_distance(self, point: np.ndarray) -> float:
+        # Simplified moon shape (two circles)
+        d1 = np.linalg.norm(point - np.array([self.offset, 0])) - self.radius_a
+        d2 = np.linalg.norm(point - np.array([-self.offset, 0])) - self.radius_b
+        return max(float(d1), float(d2))
+
+    def get_gradient(self, point: np.ndarray) -> np.ndarray:
+        # Numerical approximation
+        h = 1e-4
+        dx = self.get_distance(point + np.array([h, 0, 0])) - self.get_distance(point - np.array([h, 0, 0]))
+        dy = self.get_distance(point + np.array([0, h, 0])) - self.get_distance(point - np.array([0, h, 0]))
+        res = np.array([dx, dy, 0])
+        norm = np.linalg.norm(res)
+        return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
     
-class Sphere(SignedDistanceShape3D, CorrespondingBoundingBox):
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Standard sphere tracing
+        t = 0.0
+        MAX_STEPS = 128
+        EPSILON = 1e-4
+
+        for _ in range(MAX_STEPS):
+            p = ray.origin + ray.direction * t
+            dist = self.get_distance(p)
+            
+            if dist < EPSILON:
+                return [t]
+            
+            t += dist
+            if t > max_t:
+                return []
+        
+        return []
+        
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        return 0, 0
+
+class Cross(SignedDistanceShape2D):
+    def __init__(self, size: float = 0.5, thickness: float = 0.2):
+        self.size = size
+        self.thickness = thickness
+    
+    def get_distance(self, point: np.ndarray) -> float:
+        # Cross shape SDF
+        dx = abs(point[0])
+        dy = abs(point[1])
+        qx = dx - self.thickness
+        qy = dy - self.size
+        return min(max(qx, qy), 0.0) + np.linalg.norm(np.maximum(np.array([qx, qy]), 0.0))
+
+    def get_gradient(self, point: np.ndarray) -> np.ndarray:
+        # Numerical approximation
+        h = 1e-4
+        dx = self.get_distance(point + np.array([h, 0, 0])) - self.get_distance(point - np.array([h, 0, 0]))
+        dy = self.get_distance(point + np.array([0, h, 0])) - self.get_distance(point - np.array([0, h, 0]))
+        res = np.array([dx, dy, 0])
+        norm = np.linalg.norm(res)
+        return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
+    
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Standard sphere tracing
+        t = 0.0
+        MAX_STEPS = 128
+        EPSILON = 1e-4
+
+        for _ in range(MAX_STEPS):
+            p = ray.origin + ray.direction * t
+            dist = self.get_distance(p)
+            
+            if dist < EPSILON:
+                return [t]
+            
+            t += dist
+            if t > max_t:
+                return []
+        
+        return []
+    
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        return 0, 0
+
+class Gear(SignedDistanceShape2D):
+    def __init__(self, radius: float = 0.5, teeth: int = 8, tooth_depth: float = 0.1):
+        self.radius = radius
+        self.teeth = teeth
+        self.tooth_depth = tooth_depth
+    
+    def get_distance(self, point: np.ndarray) -> float:
+        # Gear shape SDF
+        angle = np.arctan2(point[1], point[0])
+        r = np.linalg.norm(point)
+        tooth_angle = (angle + np.pi) / (2 * np.pi) * self.teeth
+        tooth_mod = abs(tooth_angle - round(tooth_angle))
+        gear_radius = self.radius + self.tooth_depth * (1 - tooth_mod * 2)
+        return r - gear_radius
+
+    def get_gradient(self, point: np.ndarray) -> np.ndarray:
+        # Numerical approximation
+        h = 1e-4
+        dx = self.get_distance(point + np.array([h, 0, 0])) - self.get_distance(point - np.array([h, 0, 0]))
+        dy = self.get_distance(point + np.array([0, h, 0])) - self.get_distance(point - np.array([0, h, 0]))
+        res = np.array([dx, dy, 0])
+        norm = np.linalg.norm(res)
+        return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
+    
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Standard sphere tracing
+        t = 0.0
+        MAX_STEPS = 128
+        EPSILON = 1e-4
+
+        for _ in range(MAX_STEPS):
+            p = ray.origin + ray.direction * t
+            dist = self.get_distance(p)
+            
+            if dist < EPSILON:
+                return [t]
+            
+            t += dist
+            if t > max_t:
+                return []
+        
+        return []
+    
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        return 0, 0
+
+class Star(SignedDistanceShape2D):
+    def __init__(self, points: int = 5, inner_radius: float = 0.2, outer_radius: float = 0.5):
+        self.points = points
+        self.inner_radius = inner_radius
+        self.outer_radius = outer_radius
+
+    def get_distance(self, point: np.ndarray) -> float:
+        # Star shape SDF
+        angle = np.arctan2(point[1], point[0])
+        r = np.linalg.norm(point)
+        sector_angle = 2 * np.pi / self.points
+        sector_index = int((angle + np.pi) / sector_angle) % self.points
+        inner_sector_angle = sector_index * sector_angle
+        outer_sector_angle = (sector_index + 1) * sector_angle
+        # Calculate distance to nearest edge of the star's point
+        d1 = r - self.outer_radius
+        d2 = r - self.inner_radius
+        return min(float(d1), float(d2))
+
+    def get_gradient(self, point: np.ndarray) -> np.ndarray:
+        # Numerical approximation
+        h = 1e-4
+        dx = self.get_distance(point + np.array([h, 0, 0])) - self.get_distance(point - np.array([h, 0, 0]))
+        dy = self.get_distance(point + np.array([0, h, 0])) - self.get_distance(point - np.array([0, h, 0]))
+        res = np.array([dx, dy, 0])
+        norm = np.linalg.norm(res)
+        return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
+    
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Standard sphere tracing
+        t = 0.0
+        MAX_STEPS = 128
+        EPSILON = 1e-4
+
+        for _ in range(MAX_STEPS):
+            p = ray.origin + ray.direction * t
+            dist = self.get_distance(p)
+            
+            if dist < EPSILON:
+                return [t]
+            
+            t += dist
+            if t > max_t:
+                return []
+        
+        return []
+    
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        return 0, 0
+
+class RegularPolygon(SignedDistanceShape2D):
+    def __init__(self, sides: int = 6, radius: float = 0.5):
+        self.sides = sides
+        self.radius = radius
+
+    def get_distance(self, point: np.ndarray) -> float:
+        angle = np.arctan2(point[1], point[0])
+        r = np.linalg.norm(point)
+        sector_angle = 2 * np.pi / self.sides
+        sector_index = int((angle + np.pi) / sector_angle) % self.sides
+        inner_sector_angle = sector_index * sector_angle
+        outer_sector_angle = (sector_index + 1) * sector_angle
+        # Calculate distance to nearest edge of the polygon's side
+        d1 = r - self.radius
+        d2 = r - self.radius * np.cos(np.pi / self.sides)
+        return min(d1, d2)
+
+    def get_gradient(self, point: np.ndarray) -> np.ndarray:
+        # Numerical approximation
+        h = 1e-4
+        dx = self.get_distance(point + np.array([h, 0, 0])) - self.get_distance(point - np.array([h, 0, 0]))
+        dy = self.get_distance(point + np.array([0, h, 0])) - self.get_distance(point - np.array([0, h, 0]))
+        res = np.array([dx, dy, 0])
+        norm = np.linalg.norm(res)
+        return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
+    
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Standard sphere tracing
+        t = 0.0
+        MAX_STEPS = 128
+        EPSILON = 1e-4
+
+        for _ in range(MAX_STEPS):
+            p = ray.origin + ray.direction * t
+            dist = self.get_distance(p)
+            
+            if dist < EPSILON:
+                return [t]
+            
+            t += dist
+            if t > max_t:
+                return []
+        
+        return []
+    
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        return 0, 0
+
+class Polygon(SignedDistanceShape2D):
+    pass
+
+class Heart(SignedDistanceShape2D):
+    def __init__(self, size: float = 0.5):
+        self.size = size
+
+    def get_distance(self, point: np.ndarray) -> float:
+        x = point[0] / self.size
+        y = point[1] / self.size
+        a = x**2 + y**2 - 1
+        return (a**3 - x**2 * y**3) * self.size
+
+    def get_gradient(self, point: np.ndarray) -> np.ndarray:
+        # Numerical approximation
+        h = 1e-4
+        dx = self.get_distance(point + np.array([h, 0, 0])) - self.get_distance(point - np.array([h, 0, 0]))
+        dy = self.get_distance(point + np.array([0, h, 0])) - self.get_distance(point - np.array([0, h, 0]))
+        res = np.array([dx, dy, 0])
+        norm = np.linalg.norm(res)
+        return res / norm if norm > 0 else np.array([0.0, 0.0, 0.0])
+    
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        if abs(ray.direction[2]) >= 1e-6:
+            # Ray is not in-plane, no intersection
+            return []
+        
+        # Standard sphere tracing
+        t = 0.0
+        MAX_STEPS = 128
+        EPSILON = 1e-4
+
+        for _ in range(MAX_STEPS):
+            p = ray.origin + ray.direction * t
+            dist = self.get_distance(p)
+            
+            if dist < EPSILON:
+                return [t]
+            
+            t += dist
+            if t > max_t:
+                return []
+        
+        return []
+    
+    def get_uv(self, point: np.ndarray) -> Tuple[float, float]:
+        return 0, 0
+
+class Sphere(SignedDistanceShape3D, CorrespondingBoxCorners):
     def __init__(self, radius: float = 0.5):
         self.radius = radius
 
@@ -1096,22 +1416,9 @@ class Sphere(SignedDistanceShape3D, CorrespondingBoundingBox):
         v = 0.5 - (np.arcsin(p[1])) / np.pi
         return u, v
     
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        # Efficient sphere AABB transformation: Center translates, radius scales by max scale
-        # Extract scale from matrix columns
+    def get_local_corners(self, padding: float = 1e-2) -> np.ndarray:
         r = self.radius + padding
-
-        local_bounds = np.array([
-            [-r, -r, -r], [r, -r, -r],
-            [-r, r, -r],  [r, r, -r],
-            [-r, -r, r],  [r, -r, r],
-            [-r, r, r],   [r, r, r]
-        ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+        return convert_bounds_to_corners(np.array([-r, -r, -r]), np.array([r, r, r]))
 
     @property
     def volume(self) -> float:
@@ -1121,7 +1428,7 @@ class Sphere(SignedDistanceShape3D, CorrespondingBoundingBox):
     def surface_area(self) -> float:
         return 4 * np.pi * self.radius**2
 
-class Cube(SignedDistanceShape3D, CorrespondingBoundingBox):
+class Cube(SignedDistanceShape3D, CorrespondingBoxCorners):
     def __init__(self, size: float = 1.0):
         self.half_size = size / 2
 
@@ -1170,24 +1477,15 @@ class Cube(SignedDistanceShape3D, CorrespondingBoundingBox):
         else:
              return (p[0]/self.half_size + 1)/2, (p[1]/self.half_size + 1)/2
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        # Transform all 8 corners
+    def get_local_corners(self, padding: float = 1e-2) -> np.ndarray:
         r = self.half_size + padding
-        local_bounds = np.array([
-            [-r,-r,-r], [r,-r,-r], [-r,r,-r], [r,r,-r],
-            [-r,-r,r],  [r,-r,r],  [-r,r,r],  [r,r,r]
-        ])
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+        return convert_bounds_to_corners(np.array([-r, -r, -r]), np.array([r, r, r]))
 
     @property
     def volume(self) -> float:
         return (self.half_size * 2) ** 3
 
-class Cylinder(SignedDistanceShape3D, CorrespondingBoundingBox):
+class Cylinder(SignedDistanceShape3D, CorrespondingBoxCorners):
     def __init__(self, radius: float = 0.5, height: float = 1.0):
         self.radius = radius
         self.height = height
@@ -1256,20 +1554,13 @@ class Cylinder(SignedDistanceShape3D, CorrespondingBoundingBox):
         v = (point[1] + self.height/2) / self.height
         return u, v
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_corners(self, padding: float = 1e-2) -> np.ndarray:
         r = self.radius + padding
-        h = self.height / 2 + padding
-        
-        # 8 corners of the cylinder's bounding box
-        local_bounds = np.array([
-            [-r, -h, -r], [r, -h, -r], [-r, h, -r], [r, h, -r],
-            [-r, -h, r],  [r, -h, r],  [-r, h, r],  [r, h, r]
-        ])
-        
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+        h = self.height * 0.5 + padding
+        return convert_bounds_to_corners(
+            np.array([-r, -h, -r]),
+            np.array([ r,  h,  r])
+        )
 
     @property
     def volume(self) -> float:
@@ -1280,7 +1571,7 @@ class Cylinder(SignedDistanceShape3D, CorrespondingBoundingBox):
         # 2 circles + side area
         return 2 * np.pi * self.radius * (self.radius + self.height)
 
-class Pyramid(SignedDistanceShape3D, CorrespondingBoundingBox):
+class Pyramid(SignedDistanceShape3D, CorrespondingBoxCorners):
     """
     A simple 3D pyramid shape defined by a signed distance function.
     Centered at the origin with a square base and a given height.
@@ -1398,23 +1689,13 @@ class Pyramid(SignedDistanceShape3D, CorrespondingBoundingBox):
         v = (point[2] / (2 * self.base_half_size)) + 0.5
         return u, v
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
-        bs = self.base_half_size + padding
-        h = self.height / 2 + padding
-        
-        # 5 defining vertices: Apex + 4 Base corners
-        local_bounds = np.array([
-            [0, h, 0],          # Apex
-            [-bs, -h, -bs],     # Base FL
-            [ bs, -h, -bs],     # Base FR
-            [ bs, -h,  bs],     # Base BR
-            [-bs, -h,  bs]      # Base BL
-        ])
-        
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+    def get_local_corners(self, padding: float = 1e-2) -> np.ndarray:
+        r = self.base_half_size + padding
+        h = self.height * 0.5 + padding
+        return convert_bounds_to_corners(
+            np.array([-r, -h, -r]),
+            np.array([ r,  h,  r])
+        )
 
     @property
     def volume(self) -> float:
@@ -1429,7 +1710,7 @@ class Pyramid(SignedDistanceShape3D, CorrespondingBoundingBox):
         lateral_area = 2 * base_width * slant_height # 4 * (0.5 * b * s)
         return base_area + lateral_area
     
-class Cone(SignedDistanceShape3D, CorrespondingBoundingBox):
+class Cone(SignedDistanceShape3D, CorrespondingBoxCorners):
     """
     A simple 3D cone shape defined by a signed distance function.
     Centered at the origin with a given base radius and height.
@@ -1549,20 +1830,13 @@ class Cone(SignedDistanceShape3D, CorrespondingBoundingBox):
         v = (point[1] + self.height/2) / self.height
         return u, v
 
-    def get_transformed_aabb(self, transformation_matrix: np.ndarray, padding: float = 1e-4) -> AABB:
+    def get_local_corners(self, padding: float = 1e-2) -> np.ndarray:
         r = self.base_radius + padding
-        h = self.height / 2 + padding
-        
-        # Define the local bounding box of the cone (same as cylinder)
-        local_bounds = np.array([
-            [-r, -h, -r], [r, -h, -r], [-r, h, -r], [r, h, -r],
-            [-r, -h, r],  [r, -h, r],  [-r, h, r],  [r, h, r]
-        ])
-        
-        world_bounds = AABB.transform_local_bounds(transformation_matrix, local_bounds)
-        min_point = np.min(world_bounds, axis=0)
-        max_point = np.max(world_bounds, axis=0)
-        return AABB(min_point, max_point)
+        h = self.height * 0.5 + padding
+        return convert_bounds_to_corners(
+            np.array([-r, -h, -r]),
+            np.array([ r,  h,  r])
+        )
 
     @property
     def volume(self) -> float:
@@ -1573,7 +1847,7 @@ class Cone(SignedDistanceShape3D, CorrespondingBoundingBox):
         slant_height = np.sqrt(self.base_radius**2 + self.height**2)
         return np.pi * self.base_radius * (self.base_radius + slant_height)
 
-class Torus(SignedDistanceShape3D, CorrespondingBoundingBox):
+class Torus(SignedDistanceShape3D):
     def __init__(self, major_radius: float = 0.5, minor_radius: float = 0.2):
         self.major_radius = major_radius
         self.minor_radius = minor_radius
@@ -1629,7 +1903,7 @@ class Torus(SignedDistanceShape3D, CorrespondingBoundingBox):
     def volume(self) -> float:
         return (np.pi * self.minor_radius**2) * (2 * np.pi * self.major_radius)
 
-class Capsule(SignedDistanceShape3D, CorrespondingBoundingBox):
+class Capsule(SignedDistanceShape3D):
     def __init__(self, radius: float = 0.2, height: float = 1.0):
         self.radius = radius
         self.height = height 
@@ -1709,3 +1983,48 @@ class Capsule(SignedDistanceShape3D, CorrespondingBoundingBox):
         cyl_vol = np.pi * self.radius**2 * self.height
         sphere_vol = (4/3) * np.pi * self.radius**3
         return cyl_vol + sphere_vol
+
+    @property
+    def surface_area(self) -> float:
+        cyl_area = 2 * np.pi * self.radius * self.height
+        sphere_area = 4 * np.pi * self.radius**2
+        return cyl_area + sphere_area
+
+class EllipticSphere(SignedDistanceShape3D, CorrespondingBoxCorners):
+    def __init__(self, radius_x: float = 0.5, radius_y: float = 0.3, radius_z: float = 0.4):
+        self.radius_x = radius_x
+        self.radius_y = radius_y
+        self.radius_z = radius_z
+        self.radii = np.array([radius_x, radius_y, radius_z])
+
+    def get_distance(self, point: np.ndarray) -> float:
+        # Approximate SDF for Ellipsoid
+        p = point / self.radii
+        return float(np.linalg.norm(p) - 1.0) * min(self.radii)
+
+    def get_gradient(self, point: np.ndarray) -> np.ndarray:
+        # Numerical approximation
+        h = 1e-4
+        x = self.get_distance(point + np.array([h,0,0])) - self.get_distance(point - np.array([h,0,0]))
+        y = self.get_distance(point + np.array([0,h,0])) - self.get_distance(point - np.array([0,h,0]))
+        z = self.get_distance(point + np.array([0,0,h])) - self.get_distance(point - np.array([0,0,h]))
+        return np.array([x,y,z]) / (2*h)
+
+    def ray_intersect(self, ray: Ray, max_t: float = 1e30) -> List[float]:
+        # Ray-Ellipsoid intersection via quadratic solution
+        ro = ray.origin / self.radii
+        rd = ray.direction / self.radii
+        
+        a = np.dot(rd, rd)
+        b = 2.0 * np.dot(ro, rd)
+        c = np.dot(ro, ro) - 1.0
+        disc = b*b - 4*a*c
+        
+        if disc < 0:
+            return []
+        
+        sqrt_disc = np.sqrt(disc)
+        t1 = (-b - sqrt_disc) / (2*a)
+        t2 = (-b + sqrt_disc) / (2*a)
+
+        return []

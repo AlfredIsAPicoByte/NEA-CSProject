@@ -4,7 +4,7 @@ import gc
 
 from src.Data.Scene import Scene
 from src.Data.Color import Color
-from src.Data.Scene import Scene
+from src.Data.Scene import Scene, find_scene_extremes
 from src.Data.Sampling.Core import SamplingManager, SampleSettings, PixelFilter
 from src.Geometry.SDF import *
 from src.Geometry.Mesh import *
@@ -14,7 +14,7 @@ from src.Rendering.RayTracing.Intersections import *
 from src.Rendering.RayTracing.Shading import *
 from src.Image.Film import Film
 from src.Utilities.Memory.Profiler import MemoryProfiler
-from tests.test_scenes import *
+from tests.bench_scenes import *
 PostProcessingPipeline = None
 
 def render_process(scene: Scene, algorithm: Algorithm):
@@ -40,7 +40,7 @@ def apply_post_processing(raw_img):
     """
     from src.Image.PostProcessing.Pipeline import ImagePipeline
     from src.Image.PostProcessing.Passes import (
-        AutoExposure,
+        Exposure,
         Bloom,
         ChromaticAberration,
         Vignette,
@@ -49,22 +49,65 @@ def apply_post_processing(raw_img):
     )
     
     pipeline = ImagePipeline()
-    pipeline.add_pass(AutoExposure())
-    pipeline.add_pass(Bloom(1, 25, 0.67, 0.75))
-    pipeline.add_pass(ChromaticAberration())
-    pipeline.add_pass(Vignette(0.15, 0.6))
+    pipeline.add_pass(Exposure(0.5))
+    pipeline.add_pass(Bloom(1.5, 5, 0.25, 0.75))
+    # pipeline.add_pass(ChromaticAberration())
+    # pipeline.add_pass(Vignette(0.15, 0.6))
     pipeline.add_pass(ACESFilmicToneMapping())
     pipeline.add_pass(GammaCorrection(2.2))
-    
+
     return pipeline.execute(raw_img)
+
+class TypeShading(ShadingStrategy):
+    """
+    Renders objects depending on their object type
+    """
+    def __init__(self, settings: ShadingSettings | None = None):
+        super().__init__(settings)
+        self.settings.background_settings.enabled = False
+
+    def shade(self, hit_info: HitInfo, *args, **kwargs) -> Color:
+        if not hit_info.hit:
+            return Color(0.0, 0.0, 0.0)  # No hit, return black
+        
+        hit_obj = cast(SceneNode, hit_info.obj)
+
+        if isinstance(hit_obj.context, Light):
+            return Color(1.0, 1.0, 1.0)
+        
+        if isinstance(hit_obj.context, SignedDistanceShape):
+            return Color(1.0, 0.0, 0.0)
+        
+        if isinstance(hit_obj.context, SDF_Material):
+            return Color(1.0, 0.5, 0.0)
+        
+        if isinstance(hit_obj.context, Mesh):
+            return Color(0.0, 1.0, 0.0)
+        
+        if isinstance(hit_obj.context, Mesh_Material):
+            return Color(0.5, 1.0, 0.0)
+        
+        # Just return the base color (Albedo)
+        return Color(0.0, 0.0, 0.0)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RayTracer CLI")
     parser.add_argument("--post", dest="postprocessing", action="store_true", help="Enable post-processing")
-    parser.add_argument("--verbose", dest="verbose", action="store_true", help="Enable verbose logging during rendering")
-    parser.add_argument("--debug", dest="debug", action="store_true", help="Enable debug mode during rendering")
-    parser.add_argument("--mem-trace", dest="memory_trace", action="store_true", help="Enable memory tracing during rendering")
+    parser.add_argument("--verbose", dest="verbose", action="store_true", help="Enable verbose logging")
+    parser.add_argument("--debug", dest="debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("--mem-trace", dest="memory_trace", action="store_true", help="Enable memory tracing")
+    parser.add_argument("--samples", type=int, default=1, help="Samples per pixel (1=fast, 16=quality)")
+    parser.add_argument("--quick", action="store_true", help="Quick preview mode (1spp, no post, etc)")
     args = parser.parse_args()
+    
+    img_width, img_height = 80, 45
+    args.samples = 4
+
+    # Quick mode overrides
+    if args.quick:
+        args.samples = 1
+        args.postprocessing = False
+        img_width, img_height = 180, 144
 
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     IMG_OUT_DIR = os.path.join(PROJECT_ROOT, "images", "benchmarking", "scenes")
@@ -72,13 +115,8 @@ if __name__ == "__main__":
     os.makedirs(IMG_OUT_DIR, exist_ok=True)
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
-    img_width, img_height = 16 * 8, 9 * 8
-
-    # 16 * 32, 9 * 32
-
     all_scenes = [
         get_minimal_scene(img_width, img_height),
-        get_sdf_boolean_scene(img_width, img_height),
         get_gradient_scene(img_width, img_height),
         get_emissive_scene(img_width, img_height),
         get_lit_studio_scene(img_width, img_height),
@@ -99,32 +137,41 @@ if __name__ == "__main__":
         get_forest_clearing_scene(img_width, img_height),
         get_checkerboard_infinity_scene(img_width, img_height),
         get_orbital_dock_scene(img_width, img_height),
+        get_sdf_boolean_scene(img_width, img_height),
     ]
 
-    sample_settings = SampleSettings(width=img_width, height=img_height, samples_per_pixel=1, filter_type=PixelFilter.NEAREST, filter_width=2)
+    sample_settings = SampleSettings(
+        width=img_width, 
+        height=img_height, 
+        samples_per_pixel=args.samples,
+        filter_type=PixelFilter.GAUSSIAN, 
+        filter_width=3,
+    )
     sampling_manager = SamplingManager(sample_settings, "halton")
 
     for scene in all_scenes:
         intersection = BVHIntersection(IntersectionSettings(
-            max_distance=1000,
-            max_steps=256
+            max_distance=2000,
+            max_steps=256,
+            step_relaxation=0.99,
+            epsilon=1e-4
         ))
-        
+
         shading = FlatShading(PhysicalShadingSettings(
-            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.07)),
+            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.25)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
-            background_settings=BackgroundSettings(True, Color(0.0, 0.0, 0.0, 0.0), getattr(scene, "background_color", None), False)
+            background_settings=BackgroundSettings(True, Color.from_hex("#283848"), getattr(scene, "background_color", None), True, 0.67)
         ))
 
         raytracer = RayTracer(RayTracingSettings(
             image_width=img_width,
             image_height=img_height,
             sampling_manager=sampling_manager,
-            max_recursions=0, 
+            max_recursions=4,
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,
-            tile_size=128,
+            tile_size=16,
             debug_mode=args.debug,
             verbose_logging=args.verbose
         ))

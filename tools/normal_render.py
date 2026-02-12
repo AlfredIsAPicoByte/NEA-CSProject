@@ -2,7 +2,7 @@ import sys, os
 repo = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.join(repo, 'py_src'))
 
-from tests.test_scenes import get_minimal_scene
+from tests.bench_scenes import get_minimal_scene
 from src.Rendering.Raytracing import RayTracer
 from src.Rendering.Intersections import BVHIntersection
 from src.Rendering.Interactions import TerminalInteraction

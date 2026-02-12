@@ -314,8 +314,11 @@ class Camera:
                 pixel_samples = sampler.get_samples_per_pixel(x, y)
                 for i, sample in enumerate(pixel_samples):
                     # Normalize sample coordinates to 0..1 for camera functions
+                    # to avoid noisy renders with one sample only perform when there are more samples to work with
                     screen_x = (x + sample.u) / float(self.width)
                     screen_y = (y + sample.v) / float(self.height)
+                    
+                    pixle_x, pixle_y = sampler.sample_pixel(x, y, i % region_w + i // region_w) if i > 0 else [0.0, 0.0]
                     
                     # 4. Calculate Ray Geometry
                     _r = self.generate_ray(screen_x, screen_y)

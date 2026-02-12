@@ -153,7 +153,7 @@ class ShadingStrategy(ABC):
         sampler: Sampler,
         intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
         occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
-        bias: float = 1e-4,
+        bias: float = 1e-6,
         stats: Optional["TracingStats"] = None
     ) -> Color:
         """
@@ -257,23 +257,29 @@ class DistanceShading(ShadingStrategy):
             settings: Optional[ShadingSettings] = None,
             min_distance: float = 0.0,
             max_distance: float = 20.0,
-            color_gradient: Optional[ColorGradient] = None
+            reference_point: np.ndarray = np.zeros(3),
+            color_gradient: Optional[ColorGradient] = None,
+            invert_colors: bool = False,
             ):
         super().__init__(settings)
-        self.min_dist = min_distance
-        self.max_dist = max_distance
+        self.min_dist = max(min_distance, 0)
+        self.max_dist = min(max_distance, np.inf)
+
+        self.reference_point = reference_point
 
         if color_gradient is None:
-            # Default: Black (0.0) -> White (1.0)
+            # Default: Black (0.0) -> White (1.0) with no inversion
             self.color_gradient = ColorGradient(
                 [Color(0, 0, 0), Color(1, 1, 1)], 
                 np.array([0.0, 1.0])
             )
         else:
             self.color_gradient = color_gradient
+        
+        self.invert_colors = invert_colors
 
     def shade(self, hit_info: HitInfo, *args, **kwargs) -> Color:
-        dist = hit_info.distance
+        dist = float(np.linalg.norm(self.reference_point - hit_info.point))
 
         if dist < 0:
             return Color(0.0, 1.0, 0.0) # Debug: Negative Distance is usually an error
@@ -283,13 +289,12 @@ class DistanceShading(ShadingStrategy):
         if range_dist == 0: range_dist = 1.0
         
         # 2. Normalize and Invert in one step
-        # Original: normalized = (dist - min) / range; val = 1.0 - normalized
-        # Optimized: val = (max - dist) / range
         val = (self.max_dist - dist) / range_dist
         
         # 3. Clamp between 0.0 and 1.0
-        # (This handles both 'too close' and 'too far' cases)
         val = max(0.0, min(1.0, val))
+
+        val = 1 - val if self.invert_colors else val 
         
         return self.color_gradient.get_color(val)
 
@@ -349,7 +354,7 @@ class VolumetricShading(ShadingStrategy):
         scene: "Scene",
         ray: TracingRay,
         hit_info: "HitInfo",
-        bias: float = 1e-4,
+        bias: float = 1e-6,
         stats: Optional["TracingStats"] = None,
         *args, **kwargs
     ) -> Color:
@@ -418,6 +423,8 @@ class VolumetricShading(ShadingStrategy):
 
         return final_color
 
+
+
 @dataclass
 class PhysicalShadingSettings(ShadingSettings):
     """
@@ -451,7 +458,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
             light_node: SceneNode,
             sampler: Sampler,
             occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
-            bias: float = 1e-4,
+            bias: float = 1e-6,
             exclude_obj: Optional[SceneNode] = None,
             stats: Optional["TracingStats"] = None
         ) -> float:
@@ -481,13 +488,13 @@ class PhysicalShadingStrategy(ShadingStrategy):
         if not self.shadow_settings.enabled:
             return 1.0
         
-        if not isinstance(light_node.context, "Light"):
+        if not isinstance(light_node.context, Light):
             return 1.0  # Non-light objects do not cast shadows
         
         light = cast(Light, light_node.context)
 
         radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
-        occluding_objects = Scene.get_objects_by_types(scene.get_scene_objects_flattened(), ["SDF_Material", "Mesh_Material"])
+        occluding_objects = Scene.get_nodes_with_attribute(scene.cache_scene_nodes_flat(), "material")
         
         # Case A: Point SceneNode (Hard Shadows)
         if radius <= 0.0 or self.shadow_settings.samples <= 1:
@@ -519,7 +526,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
             light_node: SceneNode,
             sampler: Sampler,
             occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
-            bias: float = 1e-4,
+            bias: float = 1e-6,
             exclude_obj: Optional[SceneNode] = None,
             stats: Optional["TracingStats"] = None
         ) -> float:
@@ -536,7 +543,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
         light = cast(Light, light_node.context)
 
         radius = getattr(light, "radius", 0.0) or getattr(light, "size", 0.0)
-        occluding_objects = Scene.get_objects_by_types(scene.get_scene_objects_flattened(), ["SDF_Material", "Mesh_Material"])
+        occluding_objects = Scene.get_nodes_by_types(scene.cache_scene_nodes_flat(), ["SDF_Material", "Mesh_Material"])
         
         # Case A: Point SceneNode (Hard Shadows)
         if radius <= 0.0 or self.shadow_settings.samples <= 1:
@@ -600,7 +607,7 @@ class PhysicalShadingStrategy(ShadingStrategy):
         height = scene.camera.height
 
         ao_map = np.zeros((height, width), dtype=float)
-        occluding_objects = Scene.get_objects_by_types(scene.get_scene_objects_flattened(), ["SDF_Material", "Mesh_Material"])
+        occluding_objects = Scene.get_nodes_by_types(scene.cache_scene_nodes_flat(), ["SDF_Material", "Mesh_Material"])
 
         for y in range(height):
             for x in range(width):
@@ -631,7 +638,7 @@ class LambertShading(PhysicalShadingStrategy):
             sampler: Sampler,
             intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
             occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
-            bias: float = 1e-4,
+            bias: float = 1e-6,
             stats: Optional["TracingStats"] = None,
             *args, **kwargs
         ) -> Color:
@@ -639,9 +646,7 @@ class LambertShading(PhysicalShadingStrategy):
         if not hit_info.hit:
             return Color(0.0, 0.0, 0.0)  # No hit, return black
         
-        hit_obj = cast(SceneNode, hit_info.obj)
-        
-        material: Optional[PBRMaterial] = getattr(hit_obj.context, 'material', None)
+        material: Optional[PBRMaterial] = getattr(cast(SceneNode, hit_info.obj).context, 'material', None)
         if material is None:
             return Color(1.0, 0.0, 1.0) # Material Error
 
@@ -670,6 +675,7 @@ class LambertShading(PhysicalShadingStrategy):
                         occlusion_function,
                         stats
                     )
+                
                 screen_coords = scene.camera.world_to_screen(hit_info.point)
                 x_idx = int(round(screen_coords[0]))
                 y_idx = int(round(screen_coords[1]))
@@ -682,7 +688,7 @@ class LambertShading(PhysicalShadingStrategy):
         # 4. Evaluate Direct Lighting
         # The material class already contains the logic to loop over lights
         # and apply the BRDF (Diffuse + Specular).
-        light_nodes = Scene.get_objects_by_type(scene.get_scene_objects_flattened(), "Light")
+        light_nodes = Scene.get_nodes_by_type(scene.cache_scene_nodes_flat(), Light)
         if light_nodes is None or len(light_nodes) == 0:
             return final_color  # No lights in scene
         
@@ -709,7 +715,6 @@ class RecursiveLambertShading(LambertShading):
     """
     Extends Lambertian shading with recursive reflections and refractions.
     """
-    
     a = 3.0
     b = 0.7
     c = 1.0
@@ -724,7 +729,7 @@ class RecursiveLambertShading(LambertShading):
             sampler: Sampler,
             intersection_function: Callable[[Scene, TracingRay, Optional["TracingStats"]], Optional[HitInfo]],
             occlusion_function: Callable[[np.ndarray, np.ndarray, List[SceneNode], float, Optional[SceneNode], Optional["TracingStats"]], bool],
-            bias: float = 1e-4,
+            bias: float = 1e-6,
             stats: Optional["TracingStats"] = None,
             *args, **kwargs
         ) -> Color:
@@ -758,29 +763,41 @@ class RecursiveLambertShading(LambertShading):
         indirect_color = Color(0.0, 0.0, 0.0)
 
         # Sample indirect lighting contribution
-        if material.data.type == MaterialType.GLASS:
-            if self.settings.enable_bidirectional_scattering:
-                direction, throughput = material.sample_glass_contribution(hit_info.direction, hit_info.normal, sampler, 1.0003)
-                pdf = 1.0
-            else:
-                direction = hit_info.normal
-                throughput = material.data.albedo
-                pdf = 0.0
-        else:
-            direction, throughput, pdf = material.sample_indirect_contribution(hit_info.direction, hit_info.normal, sampler)
-        
-        if pdf > 1e-6 and np.linalg.norm(throughput.to_np_array()[:3]) > 1e-6:
-            weighted_throughput = Color(*calculate_throughput_weight(direction, hit_info.normal, throughput, pdf))
-            attenuation = attenuate_distance_coefficents(hit_info.distance, self.a, self.b, self.c)
-            # Create new ray for indirect bounce
+        if material.data.type == MaterialType.GLASS:    
+            direction, throughput = material.sample_glass_contribution(
+                hit_info.direction, hit_info.normal, sampler, 1.0003
+            )
+
+            # Glass is a singular event: trace directly, no pdf division needed
             new_origin = hit_info.point + direction * bias
             indirect_ray = TracingRay(new_origin, direction, is_inside=ray.is_inside)
-
-            # Trace the indirect ray
             bounced_color = trace_function(scene, indirect_ray, recursions_left - 1, sampler)
+            indirect_color += throughput * bounced_color
 
-            # Accumulate indirect contribution
-            indirect_color += weighted_throughput * bounced_color
+        elif material.data.type == MaterialType.SPECULAR and material.data.roughness < 0.01:
+            # Perfect mirror: also singular, same treatment
+            direction, throughput, _ = material.sample_indirect_contribution(
+                hit_info.direction, hit_info.normal, sampler
+            )
+            new_origin = hit_info.point + direction * bias
+            indirect_ray = TracingRay(new_origin, direction, is_inside=ray.is_inside)
+            bounced_color = trace_function(scene, indirect_ray, recursions_left - 1, sampler)
+            indirect_color += throughput * bounced_color
+
+        else:
+            # Everything else (diffuse, rough specular): normal pdf-weighted path
+            direction, throughput, pdf = material.sample_indirect_contribution(
+                hit_info.direction, hit_info.normal, sampler
+            )
+
+            if pdf > 1e-6 and np.linalg.norm(throughput.to_np_array()[:3]) > 1e-6:
+                weighted_throughput = Color(*calculate_throughput_weight(
+                    direction, hit_info.normal, throughput, pdf
+                ))
+                new_origin = hit_info.point + direction * bias
+                indirect_ray = TracingRay(new_origin, direction, is_inside=ray.is_inside)
+                bounced_color = trace_function(scene, indirect_ray, recursions_left - 1, sampler)
+                indirect_color += weighted_throughput * bounced_color
         
         final_color += indirect_color
         return final_color

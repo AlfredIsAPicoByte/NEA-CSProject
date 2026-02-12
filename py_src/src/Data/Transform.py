@@ -117,23 +117,17 @@ class Transform:
 
     def update_orientations(self):
         """Updates forward/right/up vectors based on current rotation."""
-        rx, ry, rz = self.rotation + self.local_rotation
-        cx, sx = np.cos(rx), np.sin(rx)
-        cy, sy = np.cos(ry), np.sin(ry)
-        cz, sz = np.cos(rz), np.sin(rz)
+        mat = self.get_global_matrix()
         
-        # Rotation Matrix (Z * Y * X)
-        R = np.array([
-            [cy*cz, cz*sx*sy - cx*sz, cx*cz*sy + sx*sz],
-            [cy*sz, cx*cz + sx*sy*sz, -cz*sx + cx*sy*sz],
-            [-sy,   cy*sx,            cx*cy]
-        ])
+        # Extract columns (Right, Up, Forward)
+        r = mat[:3, 0]
+        u = mat[:3, 1]
+        f = mat[:3, 2]
         
-        # Basis Vectors
-        # Assuming standard identity is Right=(1,0,0), Up=(0,1,0), Forward=(0,0,1)
-        self.right   = R @ np.array([1, 0, 0])
-        self.up      = R @ np.array([0, 1, 0])
-        self.forward = R @ np.array([0, 0, 1])
+        # Normalize to remove scale
+        self.right = unit(r)
+        self.up = unit(u)
+        self.forward = unit(f)
 
     def get_global_matrix(self) -> np.ndarray:
         """Returns the global transformation matrix: base @ local."""
@@ -195,9 +189,9 @@ class Transform:
         else: self.local_position += vector
         self.update_orientations()
 
-    def rotate(self, angle: float, axis: np.ndarray, space: str = "global"):
+    def rotate(self, angle: float, axis: np.ndarray, units: str = "degrees", space: str = "global"):
         axis = unit(axis)
-        angle_rad = angle
+        angle_rad = angle if units == "radians" or units == "rad" or units == "r" else (np.deg2rad(angle) if units == "degrees" or units == "deg" or units == "d" else 0)
         if space == "global":
             rot_matrix = self._rotation_matrix_from_euler(self.rotation)
             axis_local = rot_matrix.T @ axis
@@ -233,67 +227,37 @@ class Transform:
     # Application Methods (Transforming data)
     # -------------------------------------------------------------------------
 
-    def transform_point(self, point: np.ndarray) -> np.ndarray:
+    def world_transform_point(self, point: np.ndarray) -> np.ndarray:
         """Local -> World (Points)"""
-        point = np.asarray(point, dtype=float)
-        model_matrix = self.get_global_matrix()
-        p_hom = np.append(point, 1.0)
-        return (model_matrix @ p_hom)[:3]
+        return transform_point(self.get_global_matrix(), point)
 
-    def transform_direction(self, direction: np.ndarray, normalize: bool = False) -> np.ndarray:
+    def world_transform_direction(self, direction: np.ndarray, normalize: bool = False) -> np.ndarray:
         """Local -> World (Directions)"""
-        direction = np.asarray(direction, dtype=float)
-        # Extract 3x3 for rotation/scale
-        rs_matrix = self.get_global_matrix()[:3, :3]
-        transformed = rs_matrix @ direction
-        return unit(transformed) if normalize else transformed
+        return transform_direction(self.get_global_matrix(), direction, normalize)
 
-    def transform_normal(self, normal: np.ndarray) -> np.ndarray:
-        """Local -> World (Normals, handling non-uniform scale)"""
-        normal = np.asarray(normal, dtype=float)
-        # Inverse Transpose of the upper 3x3
-        rs_matrix = self.get_global_matrix()[:3, :3]
-        try:
-            norm_matrix = np.linalg.inv(rs_matrix).T
-        except np.linalg.LinAlgError:
-            norm_matrix = rs_matrix 
-        return unit(norm_matrix @ normal)
+    def world_transform_normal(self, normal: np.ndarray) -> np.ndarray:
+        """Local -> World (Normals)"""
+        return transform_normal(self.get_global_matrix(), normal)
     
-    def transform_ray(self, ray: Ray, normalize: bool = False) -> Ray:
+    def world_transform_ray(self, ray: Ray) -> Ray:
         """Local -> World (Ray)"""
-        # Note: If your Ray class expects World -> Local, use inverse_transform_ray
-        # Usually: Object stores geometry in Local. Ray is World.
-        # To intersect, we transform Ray World -> Local.
-        return Ray(
-            self.transform_point(ray.origin),
-            self.transform_direction(ray.direction, normalize)
-        )
+        return transform_ray(self.get_global_matrix(), ray)
 
-    def inverse_transform_point(self, world_point: np.ndarray) -> np.ndarray:
+    def local_transform_point(self, point: np.ndarray) -> np.ndarray:
         """World -> Local (Points)"""
-        world_point = np.asarray(world_point, dtype=float)
-        inv_matrix = self.get_inverse_matrix()
-        p_hom = np.append(world_point, 1.0)
-        return (inv_matrix @ p_hom)[:3]
+        return transform_point(self.get_inverse_matrix(), point)
 
-    def inverse_transform_direction(self, world_direction: np.ndarray, normalize: bool = False) -> np.ndarray:
+    def local_transform_direction(self, direction: np.ndarray, normalize: bool = False) -> np.ndarray:
         """World -> Local (Directions)"""
-        world_direction = np.asarray(world_direction, dtype=float)
-        inv_rs_matrix = self.get_inverse_matrix()[:3, :3]
-        transformed = inv_rs_matrix @ world_direction
-        return unit(transformed) if normalize else transformed
+        return transform_direction(self.get_inverse_matrix(), direction, normalize)
+    
+    def local_transform_normal(self, normal: np.ndarray) -> np.ndarray:
+        """World -> Local (Normals)"""
+        return transform_normal(self.get_inverse_matrix(), normal)
 
-    def inverse_transform_ray(self, ray: Ray) -> Ray:
-        """
-        World -> Local (Ray).
-        """
-        # Note: If your Ray class expects Local -> World, use transform_ray
-        # Usually: Object stores geometry in Local. Ray is World.
-        # To intersect, we transform Ray World -> Local.
-        return Ray(
-            self.inverse_transform_point(ray.origin),
-            self.inverse_transform_direction(ray.direction, normalize=True)
-        )
+    def local_transform_ray(self, ray: Ray) -> Ray:
+        """World -> Local (Ray)."""
+        return transform_ray(self.get_inverse_matrix(), ray)
 
     # -------------------------------------------------------------------------
     # Dunder Methods
@@ -311,10 +275,39 @@ class Transform:
         elif isinstance(other, np.ndarray):
             # Transform Vector/Point
             if other.shape == (3,):
-                return self.transform_point(other)
+                return self.world_transform_point(other)
             return self.get_global_matrix() @ other
         
         raise TypeError(f"Cannot multiply Transform by type {type(other)}")
 
     def __repr__(self):
         return f"Transform(pos={self.position}, rot={self.rotation}, scale={self.scale})"
+    
+def transform_point(matrix: np.ndarray, point: np.ndarray) -> np.ndarray:
+    """Helper function to transform a point"""
+    point_h = np.append(point, 1.0)  # Homogeneous coordinate
+    transformed = matrix @ point_h
+    return transformed[:3] / transformed[3]
+
+def transform_direction(matrix: np.ndarray, direction: np.ndarray, normalize: bool = False) -> np.ndarray:
+    """Helper function to transform a direction"""
+    direction_h = np.append(direction, 0.0)  # Homogeneous coordinate for direction
+    transformed = matrix @ direction_h
+    result = transformed[:3]
+    if normalize:
+        result = unit(result)
+    return result
+
+def transform_normal(matrix: np.ndarray, normal: np.ndarray) -> np.ndarray:
+    """Helper function to transform a normal"""
+    inv_matrix = np.linalg.inv(matrix)
+    normal_h = np.append(normal, 0.0)  # Homogeneous coordinate for normal
+    transformed = inv_matrix.T @ normal_h
+    return unit(transformed[:3])
+
+def transform_ray(matrix: np.ndarray, ray: Ray, normalize: bool = False) -> Ray:
+    """Helper function to transform a ray"""
+    return Ray(
+        transform_point(matrix, ray.origin),
+        transform_direction(matrix, ray.direction, normalize)
+    )

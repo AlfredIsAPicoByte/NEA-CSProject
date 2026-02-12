@@ -60,7 +60,7 @@ class PBRMaterial:
         hit_info: HitInfo,
         view_dir: np.ndarray,
         visibility_function: Callable[[np.ndarray, SceneNode], float],
-        bias: float = 1e-4
+        bias: float = 1e-8
     ) -> Color:
         """
         Calculates direct lighting contribution from all light sources in the scene.
@@ -93,16 +93,10 @@ class PBRMaterial:
         
         if self.data.type == MaterialType.EMISSIVE:
             return self.evaluate_emissive_component()
-        
-        if light_nodes is None or len(light_nodes) == 0:
-            return accumulated_light
 
         for light_node in light_nodes:
             # --- Light Setup (World Space) ---
-            light_context = light_node.context
-            light = getattr(light_context, "light", None)
-            if light is None:
-                continue
+            light = light_node.context
 
             light = cast(Light, light)
 
@@ -177,7 +171,8 @@ class PBRMaterial:
             pdf = cos_theta / np.pi
             
             # 3. Throughput (The attenuation of light)
-            return new_dir, self.data.albedo, pdf
+            bsdf = self.data.albedo * (1.0 / np.pi)   # Lambertian BRDF
+            return new_dir, bsdf, pdf
         
         # --- D. SPECULAR (Metal/Mirror) ---
         if self.data.type == MaterialType.SPECULAR:
@@ -293,8 +288,9 @@ class PBRMaterial:
             # Only evaluate if roughness > 0 (otherwise it's a delta distribution)
             if self.data.roughness > 0.01:
                 # Calculate the microfacet BRDF
-                specular_brdf = calculate_microfacet_brdf(self.data.roughness, self.data.specular_intensity,L, V, N, self.evaluate_metallic_component().to_np_array())
-                
+                spec_arr = calculate_microfacet_brdf(self.data.roughness, self.data.specular_intensity,L, V, N, self.evaluate_metallic_component().to_np_array())
+                specular_brdf = Color.from_np(spec_arr)
+
                 # Add diffuse component (scaled by metallic)
                 diffuse_brdf = (self.data.albedo / np.pi) * (1.0 - self.data.metallic)
                 
@@ -308,7 +304,8 @@ class PBRMaterial:
             if self.data.roughness > 0.01:
                 # Evaluate both reflection and refraction lobes
                 # This is complex - see below
-                return evaluate_glass_bsdf(self.data.roughness, self.data.ior, L, V, N)
+                glass_arr = evaluate_glass_bsdf(self.data.roughness, self.data.ior, L, V, N)
+                return Color.from_np(glass_arr)
             else:
                 # Perfect glass - delta distribution
                 return Color(0.0, 0.0, 0.0)
@@ -391,24 +388,31 @@ class PBRMaterial:
         F0 = self.evaluate_metallic_component()
         
         # F_schlick calculation (Color operations are handled correctly)
-        FF = schlick_fresnel_metalic(VdotH, F0.to_np_array())
+        FF_arr = schlick_fresnel_metalic(VdotH, F0.to_np_array())
+        FF = Color.from_np(FF_arr)
 
         # --- 4. Final BRDF Term (Fs) and Specular Contribution ---
         # Denominator of the BRDF term
         denom_fs = 4.0 * NdotL * NdotV 
         
         if denom_fs > 0:
+            # Clamp NDF to prevent fireflies on mirror-like surfaces
+            clamped_NDF = min(NDF, 1.0 / (np.pi * 1e-4))
             # Fs is the specular BRDF (Fs = D * G * F / denominator)
-            Fs = (NDF * GSF * FF) * (1.0 / denom_fs) 
+            Fs = (clamped_NDF * GSF * FF) * (1.0 / denom_fs) 
         else:
             Fs = Color(0.0, 0.0, 0.0) 
 
-        # Final Specular Color: Light Intensity * BRDF * Cosine Term
-        specular =  Fs * NdotL * self.data.specular_intensity
+        # Final Specular Color: Light Intensity * BRDF * Cosine Term        # Final Specular Color: Light Intensity * BRDF * Cosine Term
+        # For metals (metallic ≈ 1), specular_intensity should NOT dim the reflection
+        # since F0 already encodes the metal's reflectivity via albedo.
+        # For dielectrics (metallic ≈ 0), specular_intensity controls highlight strength.
+        specular_scale = lerp(self.data.specular_intensity, 1.0, self.data.metallic)
+        specular =  Fs * NdotL * specular_scale
         
         return specular
 
-    def evaluate_metallic_component(self, bias: float = 1e-4) -> Color:
+    def evaluate_metallic_component(self, bias: float = 1e-8) -> Color:
         """
         Calculates the base reflectivity (F0) for Fresnel calculations.
         Blends between dielectric (0.04 grey) and metallic (albedo-based) reflectivity.

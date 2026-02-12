@@ -15,9 +15,19 @@ class AABB:
     __slots__ = ['min_point', 'max_point']
 
     def __init__(self, min_point: np.ndarray, max_point: np.ndarray):
-        self.min_point = min_point
-        self.max_point = max_point
+        self.min_point = np.minimum(min_point, max_point)
+        self.max_point = np.maximum(max_point, min_point)
 
+    @classmethod
+    def from_corners(cls, corners: np.ndarray) -> AABB:
+        min_point = np.min(corners, axis=0)
+        max_point = np.max(corners, axis=0)
+        return cls(min_point, max_point)
+    
+    @classmethod
+    def from_bounds(cls, bounds: np.ndarray) -> AABB:
+        return cls(bounds[0], bounds[1])
+    
     def intersect(self, ray: Ray, max_t: float =  1e30, bias: float = 1e-9) -> float:
         """
         Slab Method for Ray/AABB intersection.
@@ -44,66 +54,6 @@ class AABB:
             return max(t_enter, 0.0)
         
         return float('inf')
-    
-    @staticmethod
-    def transform_local_bounds(transformation_matrix: np.ndarray, local_bounds: np.ndarray) -> np.ndarray:
-        ones = np.ones((len(local_bounds), 1))
-        corners_4d = np.hstack([local_bounds, ones])
-
-        return (transformation_matrix @ corners_4d.T).T[:, :3]
-
-    @staticmethod
-    def from_transform_data_object(world_Transform: Transform, data: Any, padding: float = 1e-2) -> 'AABB':
-        """
-        Calculates the world-space AABB for a given object.
-        """
-        if data is None:
-            return AABB(np.zeros(3), np.zeros(3))
-        
-        # 1. Get Transform Matrix
-        matrix = world_Transform.get_global_matrix()
-        
-        # 2. Define the 8 corners of a cube localy
-        local_bounds = None
-        
-        if data is not None:
-            # Try to get local bounds from data object
-            if hasattr(data, "get_local_bounds"):
-                local_bounds = data.get_local_bounds()
-
-            # Try to get convex hull points if available
-            if hasattr(data, "convex_hull"):
-                hull = data.convex_hull()
-                if isinstance(hull, list) and len(hull) > 0:
-                    local_bounds = np.array(hull)
-            
-            # Try to get vertex/point array if available
-            if hasattr(data, "vertices"):
-                verts = data.get_vertex_array()
-                if verts is not None and len(verts) > 0:
-                    local_bounds = verts
-            elif hasattr(data, "points"):
-                pts = data.get_point_array()
-                if pts is not None and len(pts) > 0:
-                    local_bounds = pts
-
-        # Fallback: Unit Cube (-0.5 to 0.5)
-        if local_bounds is None:
-            local_bounds = np.array([
-                [-0.5, -0.5, -0.5], [0.5, -0.5, -0.5], 
-                [-0.5, 0.5, -0.5], [0.5, 0.5, -0.5],
-                [-0.5, -0.5, 0.5],  [0.5, -0.5, 0.5],  
-                [-0.5, 0.5, 0.5],  [0.5, 0.5, 0.5]
-            ])
-        
-        # Apply Matrix (Scale, Rotate, Translate)
-        world_corners = AABB.transform_local_bounds(matrix, local_bounds)
-
-        # 3. Find min/max of transformed corners
-        min_p = np.min(world_corners, axis=0) - padding # Small padding
-        max_p = np.max(world_corners, axis=0) + padding
-        
-        return AABB(min_p, max_p)
 
     @staticmethod
     def combine(box_a: 'AABB', box_b: 'AABB', operation: str) -> 'AABB':
@@ -121,7 +71,7 @@ class AABB:
 
             # Ensure valid AABB
             if np.any(min_point > max_point):
-                return AABB(np.zeros(3), np.zeros(3))  # Empty AABB
+                return AABB.empty()  # Empty AABB
         else:
             raise ValueError(f"Unsupported operation '{operation}' for AABB combination.")
         
@@ -129,7 +79,9 @@ class AABB:
     
     @property
     def center(self) -> np.ndarray:
-        return (self.min_point + self.max_point) * 0.5
+        center = (self.min_point + self.max_point) * 0.5
+        center = np.nan_to_num(center)
+        return center
     
     @property
     def size(self) -> np.ndarray:
@@ -152,3 +104,51 @@ class AABB:
     
     def __repr__(self) -> str:
         return f"AABB(min={self.min_point}, max={self.max_point})"
+
+def transform_corners(matrix: np.ndarray, corners: np.ndarray) -> np.ndarray:
+    """Helper function to transform a set of corners (8 points)."""
+    ones = np.ones((len(corners), 1))
+    corners_4d = np.hstack([corners, ones])
+    transformed_corners = (matrix @ corners_4d.T).T[:, :3]
+    return transformed_corners
+    
+BOUNDING_INDICES = np.array([
+    [0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0],
+    [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]
+])
+
+def transform_bounds(matrix: np.ndarray, bounds: np.ndarray) -> np.ndarray:
+    """Helper function to transform a bounding box"""
+    bounds_arr = np.array(bounds)
+    corners = np.stack([
+        bounds_arr[BOUNDING_INDICES[:,0], 0], # X coords
+        bounds_arr[BOUNDING_INDICES[:,1], 1], # Y coords
+        bounds_arr[BOUNDING_INDICES[:,2], 2]  # Z coords
+    ], axis=1)
+    
+    transformed_corners = transform_corners(matrix, corners)
+    min_point = np.min(transformed_corners, axis=0)
+    max_point = np.max(transformed_corners, axis=0)
+    return np.array([min_point, max_point])
+
+def convert_bounds_to_corners(min_p: np.ndarray, max_p: np.ndarray) -> np.ndarray:
+    bounds = np.array([min_p, max_p])
+    corners = np.stack([
+        bounds[BOUNDING_INDICES[:,0], 0], # X coords
+        bounds[BOUNDING_INDICES[:,1], 1], # Y coords
+        bounds[BOUNDING_INDICES[:,2], 2]  # Z coords
+    ], axis=1)
+    return corners
+
+def convert_bounds_to_corners_2d(min_p: np.ndarray, max_p: np.ndarray) -> np.ndarray:
+    bounds = np.array([min_p, max_p])
+    corners = np.stack([
+        bounds[BOUNDING_INDICES[:,0], 0], # X coords
+        bounds[BOUNDING_INDICES[:,1], 1], # Y coords
+    ], axis=1)
+    return corners
+
+def convert_corners_to_bounds(corners: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    min_p = np.min(corners, axis=0)
+    max_p = np.max(corners, axis=0)
+    return min_p, max_p

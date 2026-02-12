@@ -1,4 +1,4 @@
-from tests.test_scenes import get_minimal_scene
+from tests.bench_scenes import get_minimal_scene
 from src.Rendering.Intersections import BVHIntersection
 
 s = get_minimal_scene(64,64)

@@ -1,6 +1,8 @@
+from random import sample
+from xmlrpc.client import Boolean
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 from src.Data.Ray import TracingRay, RayPool
 from src.Data.Color import Color
@@ -9,7 +11,7 @@ from ..Core import Algorithm, RenderStats, AlgorithmSettings
 from . import Intersections
 from . import Shading
 from src.Image.Film import Film
-from src.Data.Sampling.Core import SamplingManager, SampleSettings, Sampler, Sample, reconstruct_pixel
+from src.Data.Sampling.Core import SamplingManager, SampleSettings, Sampler, Sample, reconstruct_pixel, AdaptiveSampler
 from src.Data.Scene import Scene
 
 # TODO: Pool tracing rays and hit info to reduce memory useage at runtime
@@ -17,6 +19,10 @@ from src.Data.Scene import Scene
 # Stats for ray tracing
 @dataclass(slots=True)
 class TracingStats(RenderStats):
+    render_type: str = "Ray Tracing"
+    intersection_type: str = "N/A"
+    shading_type: str = "N/A"
+
     # --- Basic Counters ---
     rays_primary: int = 0
     rays_shadow: int = 0
@@ -25,7 +31,7 @@ class TracingStats(RenderStats):
     rays_transparency: int = 0
     rays_missed: int = 0
     pixels_processed: int = 0
-    tiles_proccesed: int = 0
+    tiles_processed: int = 0
     
     # --- Intersection Performance (BVH Health) ---
     aabb_tests: int = 0         # Box hits
@@ -36,6 +42,8 @@ class TracingStats(RenderStats):
     max_recursions: int = 0
     roulette_kills: int = 0
     lights_sampled: int = 0
+
+    _settings: Any = field(default=None, repr=False)
 
     @property
     def total_rays(self) -> int:
@@ -90,6 +98,9 @@ class TracingStats(RenderStats):
         """
         lines = []
         lines.append(f"=== Tracing Stats ===")
+        lines.append(f"Render Type: {self.render_type}")
+        lines.append(f"Intersection: {self.intersection_type}")
+        lines.append(f"Shading: {self.shading_type}")
         lines.append(f"Time: {self.time_taken_seconds:.3f}s | Mem: {self.memory_usage:.2f}MB")
         lines.append(f"-------------------------")
         lines.append(f"Ray Traffic:")
@@ -111,7 +122,17 @@ class TracingStats(RenderStats):
         lines.append(f"  - NaN Errors:      {self.nan_errors}")
         na_rate = (self.nan_errors / max(1, self.total_rays)) * 1000.0
         lines.append(f"  - NaN Rate:        {na_rate:.2f} per 1000 rays")
-        
+        lines.append(f"-------------------------")
+        lines.append(f"Totals:")
+        lines.append(f"Pixels Processed: {self.pixels_processed:,}")
+        lines.append(f"Tiles Processed:  {self.tiles_processed:,}")
+        if self._settings is not None:
+            lines.append(f"-------------------------")
+            lines.append(f"Settings:")
+            for field_name in self._settings.__dataclass_fields__:
+                value = getattr(self._settings, field_name)
+                lines.append(f"  - {str(field_name).capitalize()}: {value}")
+        lines.append(f"=========================")
         return "\n".join(lines)
 
 @dataclass(slots=True)
@@ -129,6 +150,27 @@ class RayTracingSettings(AlgorithmSettings):
     debug_mode: bool = False
     verbose_logging: bool = False
 
+    def __post_init__(self):
+        if self.sampling_manager is None:
+            self.sampling_manager = SamplingManager(SampleSettings(), "random")
+
+    @classmethod
+    def clone(cls, self) -> 'RayTracingSettings':
+        # Create a deep copy of the settings
+        return cls(**{field: getattr(self, field) for field in self.__dataclass_fields__})
+    
+    def validate(self) -> bool:
+        # Basic validation of settings
+        if self.max_recursions < 0:
+            raise ValueError("max_recursions must be non-negative")
+        if self.tile_size <= 0:
+            raise ValueError("tile_size must be positive")
+        if self.intersection_strategy is None:
+            raise ValueError("intersection_strategy must be set")
+        if self.shading_strategy is None:
+            raise ValueError("shading_strategy must be set")
+        return True
+
 # RayTracer using strategies
 @register_algorithm("ray-tracer")
 class RayTracer(Algorithm):
@@ -138,7 +180,10 @@ class RayTracer(Algorithm):
         super().__init__(settings)
         self.settings = settings
         self.stats: TracingStats = TracingStats()
-    
+        self.stats.intersection_type = type(self.settings.intersection_strategy).__name__
+        self.stats.shading_type = type(self.settings.shading_strategy).__name__
+        self.stats._settings = settings
+
     def _trace_ray(self, scene: Scene, ray: TracingRay, recursions_left: int, sampler: Sampler) -> Color:
         # 1. Base Case
         if recursions_left < 0:
@@ -227,14 +272,22 @@ class RayTracer(Algorithm):
                 self.settings.max_recursions,
                 sampler
             )
-            pixle_color = self._sanitize_color(pixle_color)
+            pixle_color = Color.from_np(self._sanitize_color(pixle_color))
 
-            s_u = getattr(ray, "sample_u", (px + 0.5) / width)
-            s_v = getattr(ray, "sample_v", (py + 0.5) / height)
+            image_w = self.settings.sampling_manager.settings.width
+            image_h = self.settings.sampling_manager.settings.height
+            s_u = getattr(ray, "sample_u", (px + 0.5) / image_w)
+            s_v = getattr(ray, "sample_v", (py + 0.5) / image_h)
             sample = Sample(s_u, s_v, 1.0)
             
             local_idx = local_y * width + local_x
             tile_samples[local_idx].append((sample, pixle_color))
+
+            if isinstance(sampler, AdaptiveSampler):
+                pixel_colors_so_far = [sc[1].to_np_array(include_alpha=False) for sc in tile_samples[local_idx]]
+                if len(pixel_colors_so_far) >= sampler.settings.min_samples:
+                    if sampler.has_converged(pixel_colors_so_far):
+                        continue  # skip remaining samples for this pixel
 
             self.stats.pixels_processed += 1
 
@@ -244,36 +297,36 @@ class RayTracer(Algorithm):
                 
                 if not samples_and_colors: continue
                 # Calculate Global Pixel Index
-                local_y_in_tile = i // width
-                local_x_in_tile = i % width
+                ty = i // width
+                tx = i % width
                     
-                global_x = tile_x + local_x_in_tile
-                global_y = tile_y + local_y_in_tile
+                px = tile_x + tx
+                py = tile_y + ty
                     
                 # Reconstruct
                 samples = [sc[0] for sc in samples_and_colors]
+                
                 # Convert Color objects to RGBA arrays
                 colors = []
                 for sc in samples_and_colors:
                     color_obj: Color = sc[1]
-                    color_array = color_obj.to_np_array(include_alpha=True)
-                    colors.append(color_array)
+                    colors.append(color_obj.to_np_array(include_alpha=False))
                 
-                rec_rgb = reconstruct_pixel(global_x, global_y, samples, colors, self.settings.sampling_manager.settings)
-                final_color = Color(*rec_rgb)
+                rec_rgb = reconstruct_pixel(px, py, samples, colors, self.settings.sampling_manager.settings)
+                final_color = Color(*rec_rgb[:3])
                 
                 self.settings.film.add_pixel_batch(
-                    global_x,
-                    global_y,
+                    px, py,
                     final_color.to_np_array(),
                     1.0
                 )
+        self.stats.tiles_processed += 1
 
     def generate_film(
         self,
         scene: Scene,
         sampler: Optional[Sampler] = None,
-        region: Optional[Tuple[int, int, int, int]] = None
+        region: Optional[Tuple[int, int, int, int]] = None,
     ):
         self.stats.reset_ray_counter()
         self.stats.start_timer()
@@ -303,37 +356,38 @@ class RayTracer(Algorithm):
         if self.settings.use_tiling:
             for tile_y in range(region_y, region_y + region_height, self.settings.tile_size):
                 for tile_x in range(region_x, region_x + region_width, self.settings.tile_size):
+
                     tile_w = min(self.settings.tile_size, region_x + region_width - tile_x)
                     tile_h = min(self.settings.tile_size, region_y + region_height - tile_y)
-                    
+
                     self.render_tile(scene, sampler, tile_x, tile_y, tile_w, tile_h)
-                    
                     tile_count += 1
+                    
                     if self.settings.verbose_logging:
                         print(f" * Rendered tile {tile_count}/{total_tiles}")
+                    
+                    if self.settings.debug_mode:
+                        # Save intermediate image for debugging
+                        Film.save(self.settings.film.get_image(), "_temp.png")
         else:
             self.render_tile(scene, sampler, region_x, region_y, region_width, region_height)
 
         self.stats.pixels_processed = pixels_processed
-        self.stats.lights_sampled = len(Scene.get_objects_by_type(scene.get_scene_objects_flattened(), "Light"))
+        self.stats.lights_sampled = len(Scene.get_nodes_by_type(scene.cache_scene_nodes_flat(), "Light"))
         self.stats.stop_timer()
 
         if self.settings.verbose_logging:
             print(" * Rendering complete.")
     
-    def _sanitize_color(self, color: Color) -> Color:
-        """Turn arbitrary shader output into a finite Color and record NaN events if needed."""
-        # 1. Handle None or Invalid types quickly
-        if color is None: 
-            return np.array([0.0, 0.0, 0.0])
-            
-        # 2. Extract values
-        # Accessing slots directly (c.r) is faster than methods
-        vals = np.array([color.r, color.g, color.b], dtype=np.float32)
-        
-        # 3. Check Finite (Vectorized)
-        if not np.isfinite(vals).all():
-            self.stats.nan_errors += 1
-            return Color(*np.nan_to_num(vals, nan=0.0, posinf=1.0))
-            
-        return Color(*vals)
+    def _sanitize_color(self, color):
+        if color is None:
+            return np.zeros(3, dtype=np.float32)
+
+        # If already a numpy RGB array
+        if isinstance(color, np.ndarray):
+            vals = color.astype(np.float32)
+        else:
+            vals = np.array([color.r, color.g, color.b], dtype=np.float32)
+
+        vals = np.nan_to_num(vals, nan=0.0, posinf=0.0, neginf=0.0)
+        return np.clip(vals, 0.0, 1.0)

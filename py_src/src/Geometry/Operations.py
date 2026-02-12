@@ -24,7 +24,7 @@ def op_smooth_addition(d1, d2, k):
     return op_smooth_union(d1, -d2, k)
 
 def op_subtract(d1, d2): # is not commutative for sdf's and depending on the order of the operand it will produce different results
-    return np.maximum(-d1, d2)
+    return np.maximum(d1, -d2)
 
 def op_smooth_subtract(d1, d2, k):
     return -op_smooth_union(d1, -d2, k)
