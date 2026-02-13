@@ -31,7 +31,7 @@ class AABB:
     def intersect(self, ray: Ray, max_t: float =  1e30, bias: float = 1e-9) -> float:
         """
         Slab Method for Ray/AABB intersection.
-        Returns distance to entry, or infinity if miss.
+        Returns distance to entry, or `None` if miss.
         """
         # We use the inverse direction to replace division with multiplication
         # This handles division by zero gracefully (results in +/- inf)
@@ -53,7 +53,10 @@ class AABB:
             # Usually for BVH culling, returning t_enter is fine.
             return max(t_enter, 0.0)
         
-        return float('inf')
+        # On a miss we return `None` which callers/tests expect as a miss
+        # indicator (instead of +/-inf). This is more ergonomic for
+        # downstream users (BVH traversal and unit tests).
+        return None
 
     @staticmethod
     def combine(box_a: 'AABB', box_b: 'AABB', operation: str) -> 'AABB':
@@ -76,6 +79,14 @@ class AABB:
             raise ValueError(f"Unsupported operation '{operation}' for AABB combination.")
         
         return AABB(min_point, max_point)
+    
+    def contains(self, point: np.ndarray) -> bool:
+        """Check if the AABB contains the given point."""
+        return np.all(point >= self.min_point) and np.all(point <= self.max_point)
+    
+    def overlaps(self, other: AABB) -> bool:
+        """Check if this AABB overlaps with another AABB."""
+        return np.all(self.max_point >= other.min_point) and np.all(other.max_point >= self.min_point)
     
     @property
     def center(self) -> np.ndarray:

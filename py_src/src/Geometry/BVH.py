@@ -23,6 +23,91 @@ class BVHNode:
         self.right: Optional[BVHNode] = None
         self.box: Optional[AABB] = None
         self.objects: Optional[List["SceneNode"]] = objects
+        # Convenience: if caller passed a list to the constructor, build
+        # a BVH from those items so `BVHNode(shapes)` behaves like tests expect.
+        if objects is not None:
+            try:
+                # Lazy import to avoid circular import at module load
+                from src.Data.Scene import SceneNode
+            except Exception:
+                SceneNode = None
+
+            # Wrap raw shape/context objects into SceneNode when needed
+            prepared = []
+            for o in objects:
+                if SceneNode is not None and isinstance(o, SceneNode):
+                    prepared.append(o)
+                else:
+                    # Create a SceneNode wrapper for plain shape/context
+                    from src.Data.Scene import SceneNode as _SN
+                    prepared.append(_SN(context=o))
+
+            # Build the BVH tree from the prepared SceneNode list and copy
+            # the resulting root node into this instance.
+            root = build_bvh_tree(prepared)
+            # Copy structure
+            self.left = root.left
+            self.right = root.right
+            self.box = root.box
+            self.objects = root.objects
+
+    @property
+    def is_leaf(self) -> bool:
+        return self.objects is not None
+    
+    @property
+    def is_empty(self) -> bool:
+        return self.objects is not None and len(self.objects) == 0
+    
+    @property
+    def is_internal(self) -> bool:
+        return self.objects is None and (self.left is not None or self.right is not None)
+    
+    @property
+    def is_valid(self) -> bool:
+        return self.box is not None and (self.is_leaf or self.is_internal)
+    
+    @property
+    def leaf_count(self) -> int:
+        if self.is_leaf:
+            return len(self.objects)
+        count = 0
+        if self.left is not None:
+            count += self.left.leaf_count
+        if self.right is not None:
+            count += self.right.leaf_count
+        return count
+    
+    @property
+    def node_count(self) -> int:
+        count = 1  # Count self
+        if self.left is not None:
+            count += self.left.node_count
+        if self.right is not None:
+            count += self.right.node_count
+        return count
+    
+    @property
+    def depth(self) -> int:
+        if self.is_leaf:
+            return 1
+        left_depth = self.left.depth if self.left is not None else 0
+        right_depth = self.right.depth if self.right is not None else 0
+        return 1 + max(left_depth, right_depth)
+    
+    @property
+    def is_balanced(self) -> bool:
+        if self.is_leaf:
+            return True
+        left_depth = self.left.depth if self.left is not None else 0
+        right_depth = self.right.depth if self.right is not None else 0
+        return abs(left_depth - right_depth) <= 1 and (self.left.is_balanced if self.left is not None else True) and (self.right.is_balanced if self.right is not None else True)
+
+    def __repr__(self) -> str:
+        if self.is_leaf:
+            return f"BVHNode(Leaf, Box={self.box}, Objects={len(self.objects)})"
+        else:
+            return f"BVHNode(Internal, Box={self.box})"
 
 def build_bvh_tree(
         objects: List["SceneNode"],

@@ -1,3 +1,5 @@
+from turtle import tracer
+
 import numpy as np
 import pytest
 
@@ -6,9 +8,12 @@ from src.Data.Color import Color
 from src.Data.Ray import Ray
 from src.Data.Camera import Camera, CameraType
 from src.Data.Context import SDF_Material
+from src.Data.Scene import Scene, SceneNode
+from src.Data.Sampling.Core import Sampler
 from src.Geometry.SDF import Sphere, Cube
 from src.Material.Factory import MaterialFactory
 from src.Lighting.Core import Light
+from src.Rendering.RayTracing.Core import RayTracer, RayTracingSettings
 
 IMG_OUTPUT_DIR = "images/testing"
 
@@ -24,8 +29,12 @@ def _make_base_scene(width=32, height=32):
 
 
 def _render(scene, seed=0):
-    from src.Rendering.Raytracing import RayTracer
-    return RayTracer(scene).render(seed=seed)
+    from src.Rendering.RayTracing.Core import RayTracer, RayTracingSettings
+    width = scene.camera.resolution_width
+    height = scene.camera.resolution_height
+    tracer = RayTracer(RayTracingSettings(width, height))
+    tracer.generate_film(scene, Sampler(seed=seed))
+    return tracer.settings.film.get_image()
 
 
 # ---------------------------------------------------------------------------
@@ -39,11 +48,11 @@ class TestSceneConstruction:
 
     def test_minimal_scene_has_objects(self):
         scene = _make_base_scene()
-        assert len(scene.objects) > 0
+        assert len(scene.nodes) > 0
 
     def test_minimal_scene_has_lights(self):
         scene = _make_base_scene()
-        lights = [o for o in scene.objects if isinstance(o.context, Light)]
+        lights = [o for o in scene.nodes if isinstance(o.context, Light)]
         assert len(lights) > 0
 
     def test_scene_name_set(self):
@@ -52,22 +61,22 @@ class TestSceneConstruction:
 
     def test_adding_object_increases_count(self):
         scene = _make_base_scene()
-        initial_count = len(scene.objects)
+        initial_count = len(scene.nodes)
         mat = MaterialFactory.create_diffuse(Color(1, 0, 0), roughness=0.5)
         scene.add_object_by_context(
             SDF_Material(Sphere(0.5), mat), "ExtraObj", Transform(np.array([5.0, 0.0, 0.0]))
         )
-        assert len(scene.objects) == initial_count + 1
+        assert len(scene.nodes) == initial_count + 1
 
     def test_adding_light_increases_count(self):
         scene = _make_base_scene()
-        initial_count = len(scene.objects)
+        initial_count = len(scene.nodes)
         scene.add_object_by_context(
             Light(color=Color(1, 1, 1), intensity=100.0),
             "ExtraLight",
             Transform(np.array([0.0, 10.0, 0.0]))
         )
-        assert len(scene.objects) == initial_count + 1
+        assert len(scene.nodes) == initial_count + 1
 
     def test_camera_resolution_matches_request(self):
         scene = _make_base_scene(width=64, height=128)
@@ -131,11 +140,13 @@ class TestRenderingPipeline:
     @pytest.mark.slow
     def test_render_different_seeds_may_differ(self):
         """Different seeds for a stochastic renderer should typically differ."""
-        from src.Rendering.Raytracing import RayTracer
+        from src.Rendering.RayTracing.Core import RayTracer, RayTracingSettings
         scene = _make_base_scene(width=16, height=16)
-        tracer = RayTracer(scene)
-        out1 = tracer.render(seed=1)
-        out2 = tracer.render(seed=99)
+        tracer = RayTracer(RayTracingSettings(16, 16))
+        tracer.generate_film(scene, Sampler(seed=1))
+        out1 = tracer.settings.film.get_image()
+        tracer.generate_film(scene, Sampler(seed=99))
+        out2 = tracer.settings.film.get_image()
         # If renderer is deterministic regardless of seed this is still fine;
         # we only assert it does NOT crash.
         assert out1.shape == out2.shape
@@ -156,8 +167,8 @@ class TestRenderingPipeline:
         lit_scene   = _make_base_scene(width=16, height=16)
         dark_scene  = _make_base_scene(width=16, height=16)
         # Strip all lights from the dark scene
-        dark_scene.objects = [
-            o for o in dark_scene.objects
+        dark_scene.nodes = [
+            o for o in dark_scene.nodes
             if not isinstance(o.context, Light)
         ]
 
@@ -184,10 +195,12 @@ class TestRenderingPipeline:
         """A scene with a glass sphere should have higher average brightness
         than the same scene with an opaque black sphere blocking the same view."""
         from py_src.tests.bench_scenes import get_refraction_lab_scene
-        from src.Rendering.Raytracing import RayTracer
+        from src.Rendering.RayTracing.Core import RayTracer, RayTracingSettings
 
         glass_scene = get_refraction_lab_scene(width=16, height=16)
-        glass_out = RayTracer(glass_scene).render(seed=0)
+        tracer = RayTracer(RayTracingSettings(16, 16))
+        tracer.generate_film(glass_scene, Sampler(seed=0))
+        glass_out = tracer.settings.film.get_image()
         assert glass_out.mean() > 0.0, "Glass scene produced all-black output"
 
 
@@ -215,12 +228,13 @@ class TestBenchSceneSmoke:
     @pytest.mark.parametrize("scene_fn", SCENES)
     def test_scene_renders_without_error(self, scene_fn):
         import importlib, py_src.tests.bench_scenes as bs
-        from src.Rendering.Raytracing.Core import RayTracer
+        from src.Rendering.RayTracing.Core import RayTracer, RayTracingSettings
 
         fn = getattr(bs, scene_fn)
         scene = fn(width=16, height=16)
-        tracer = RayTracer()
-        output = tracer.render(seed=0)
+        tracer = RayTracer(RayTracingSettings(16, 16))
+        tracer.generate_film(scene, Sampler(seed=0))
+        output = tracer.settings.film.get_image()
 
         assert output.shape == (16, 16, 3), f"{scene_fn}: bad shape {output.shape}"
         assert np.all(output >= 0.0),  f"{scene_fn}: pixel below 0"
@@ -236,14 +250,14 @@ class TestCameraRayGeneration:
     def test_ray_count_matches_resolution(self):
         from py_src.tests.bench_scenes import get_minimal_scene
         scene = get_minimal_scene(width=8, height=8)
-        rays = scene.camera.generate_rays()
+        rays = scene.camera.generate_screen_rays(Sampler(seed=0))
         flat = np.array(rays).reshape(-1, 3)
         assert flat.shape[0] == 8 * 8
 
     def test_all_ray_directions_normalised(self):
         from py_src.tests.bench_scenes import get_minimal_scene
         scene = get_minimal_scene(width=8, height=8)
-        dirs = np.array(scene.camera.generate_rays()).reshape(-1, 3)
+        dirs = np.array(scene.camera.generate_screen_rays(Sampler(seed=0))).reshape(-1, 3)
         norms = np.linalg.norm(dirs, axis=-1)
         assert np.allclose(norms, 1.0, atol=1e-5)
 
@@ -251,7 +265,7 @@ class TestCameraRayGeneration:
         """Corner rays must point away from the centre ray."""
         from py_src.tests.bench_scenes import get_minimal_scene
         scene = get_minimal_scene(width=9, height=9)
-        rays = np.array(scene.camera.generate_rays()).reshape(9, 9, 3)
+        rays = np.array(scene.camera.generate_screen_rays(Sampler(seed=0))).reshape(9, 9, 3)
         center = rays[4, 4]
         corner = rays[0, 0]
         cosine = np.dot(center, corner) / (np.linalg.norm(center) * np.linalg.norm(corner))

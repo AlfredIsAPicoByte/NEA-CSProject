@@ -4,7 +4,7 @@ import numpy as np
 from src.Data.Ray import Ray
 from src.Data.Color import Color
 from src.Data.Transform import Transform
-from src.Data.Camera import Camera, CameraType
+from src.Data.Sampling.Core import Sampler
 from src.Geometry.SDF import Sphere, Cube, Cylinder
 from src.Material.Factory import MaterialFactory
 from src.Utilities.Common import unit
@@ -20,7 +20,7 @@ def _march_sphere(ray: Ray, sphere: Sphere, max_steps: int = 128, tol: float = 1
     t = 0.0
     for _ in range(max_steps):
         p = ray.origin + t * ray.direction
-        d = sphere.evaluate(p)
+        d = sphere.get_distance(p)
         if d < tol:
             return t, p
         t += d
@@ -40,15 +40,15 @@ class TestRay:
 
     def test_ray_at_t_zero_is_origin(self):
         ray = Ray(np.array([1.0, 2.0, 3.0]), np.array([0.0, 0.0, 1.0]))
-        assert np.allclose(ray.at(0.0), ray.origin)
+        assert np.allclose(ray.point_at(0.0), ray.origin)
 
     def test_ray_at_t_positive(self):
         ray = Ray(np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]))
-        assert np.allclose(ray.at(5.0), np.array([0.0, 0.0, 5.0]))
+        assert np.allclose(ray.point_at(5.0), np.array([0.0, 0.0, 5.0]))
 
     def test_ray_at_negative_t(self):
         ray = Ray(np.array([0.0, 0.0, 5.0]), np.array([0.0, 0.0, 1.0]))
-        result = ray.at(-3.0)
+        result = ray.point_at(-3.0)
         assert np.allclose(result, np.array([0.0, 0.0, 2.0]))
 
     def test_ray_stores_origin(self):
@@ -104,7 +104,7 @@ class TestRaySphereIntersection:
         sphere = Sphere(1.0)
         t, p = _march_sphere(ray, sphere)
         assert t is not None
-        assert np.allclose(ray.at(t), p, atol=1e-3)
+        assert np.allclose(ray.point_at(t), p, atol=1e-3)
 
     def test_larger_sphere_hit_at_greater_t(self):
         """A bigger sphere blocks the ray sooner when facing the same ray origin."""
@@ -122,9 +122,9 @@ class TestRaySphereIntersection:
 class TestSurfaceNormals:
     def _numerical_normal(self, sdf, p, eps=1e-4):
         grad = np.array([
-            sdf.evaluate(p + np.array([eps, 0, 0])) - sdf.evaluate(p - np.array([eps, 0, 0])),
-            sdf.evaluate(p + np.array([0, eps, 0])) - sdf.evaluate(p - np.array([0, eps, 0])),
-            sdf.evaluate(p + np.array([0, 0, eps])) - sdf.evaluate(p - np.array([0, 0, eps])),
+            sdf.get_distance(p + np.array([eps, 0, 0])) - sdf.get_distance(p - np.array([eps, 0, 0])),
+            sdf.get_distance(p + np.array([0, eps, 0])) - sdf.get_distance(p - np.array([0, eps, 0])),
+            sdf.get_distance(p + np.array([0, 0, eps])) - sdf.get_distance(p - np.array([0, 0, eps])),
         ])
         return grad / (np.linalg.norm(grad) + 1e-12)
 
@@ -149,6 +149,19 @@ class TestSurfaceNormals:
         cube = Cube(1.0)
         n = self._numerical_normal(cube, np.array([1.0, 0.0, 0.0]))
         assert np.allclose(n, np.array([1.0, 0.0, 0.0]), atol=1e-2)
+
+    @pytest.mark.parametrize("sdf, point, expected_normal", [
+        (Sphere(1.0), np.array([1.0, 0.0, 0.0]), np.array([1.0, 0.0, 0.0])),
+        (Sphere(1.0), np.array([0.0, 1.0, 0.0]), np.array([0.0, 1.0, 0.0])),
+        (Cube(1.0), np.array([1.0, 0.0, 0.0]), np.array([1.0, 0.0, 0.0])),
+        (Cube(1.0), np.array([0.0, 1.0, 0.0]), np.array([0.0, 1.0, 0.0])),
+        (Cylinder(1.0, 2.0), np.array([1.0, 2e-4, 2e-4]), np.array([1., 2e-4/np.sqrt(2e-8), 2e-4/np.sqrt(2e-8)])),
+        (Cylinder(1.0, 2.0), np.array([0.0, 1.0, 0.0]), np.array([0.0, 1.0, 0.0])),
+    ])
+    def test_numerical_normal(self, sdf, point, expected_normal):
+        """Numerical normal should approximate the expected normal for simple shapes."""
+        n = self._numerical_normal(sdf, point)
+        assert np.allclose(n, expected_normal, atol=1e-1), f"Normal {n} differs from expected {expected_normal}"  
 
 
 # ---------------------------------------------------------------------------
@@ -232,11 +245,12 @@ class TestRenderingPipeline:
     def test_render_output_shape(self):
         """Rendered output should have the expected pixel dimensions."""
         from py_src.tests.bench_scenes import get_minimal_scene
-        from src.Rendering.Raytracing import RayTracer
+        from src.Rendering.RayTracing.Core import RayTracer, RayTracingSettings
 
         scene = get_minimal_scene(width=16, height=16)
-        tracer = RayTracer(scene)
-        output = tracer.render()
+        tracer = RayTracer(RayTracingSettings(16, 16))
+        tracer.generate_film(scene)
+        output = tracer.settings.film.get_image()
 
         assert output.shape == (16, 16, 3), f"Unexpected shape {output.shape}"
 
@@ -244,11 +258,12 @@ class TestRenderingPipeline:
     def test_render_values_in_range(self):
         """All pixel values should be in [0, 1]."""
         from py_src.tests.bench_scenes import get_minimal_scene
-        from src.Rendering.Raytracing import RayTracer
+        from src.Rendering.RayTracing.Core import RayTracer, RayTracingSettings
 
         scene = get_minimal_scene(width=16, height=16)
-        tracer = RayTracer(scene)
-        output = tracer.render()
+        tracer = RayTracer(RayTracingSettings(16, 16))
+        tracer.generate_film(scene)
+        output = tracer.settings.film.get_image()
 
         assert np.all(output >= 0.0), "Pixel value below 0"
         assert np.all(output <= 1.0), "Pixel value above 1"
@@ -257,11 +272,12 @@ class TestRenderingPipeline:
     def test_render_has_non_background_pixels(self):
         """A sphere in front of the camera should colour at least some pixels."""
         from py_src.tests.bench_scenes import get_minimal_scene
-        from src.Rendering.Raytracing import RayTracer
+        from src.Rendering.RayTracing.Core import RayTracer, RayTracingSettings
 
         scene = get_minimal_scene(width=32, height=32)
-        tracer = RayTracer(scene)
-        output = tracer.render()
+        tracer = RayTracer(RayTracingSettings(32, 32))
+        tracer.generate_film(scene)
+        output = tracer.settings.film.get_image()
 
         bg = np.array([0x9B, 0xB0, 0xCA]) / 255.0  # scene background
         # At least 10 % of pixels must differ from the background
@@ -272,11 +288,14 @@ class TestRenderingPipeline:
     def test_render_is_deterministic(self):
         """Two renders of the same scene with the same seed must be identical."""
         from py_src.tests.bench_scenes import get_minimal_scene
-        from src.Rendering.Raytracing import RayTracer
+        from src.Rendering.RayTracing.Core import RayTracer, RayTracingSettings
 
         scene = get_minimal_scene(width=16, height=16)
-        out1 = RayTracer(scene).render(seed=42)
-        out2 = RayTracer(scene).render(seed=42)
+        tracer = RayTracer(RayTracingSettings(16, 16))
+        tracer.generate_film(scene, Sampler(seed=0))
+        out1 = tracer.settings.film.get_image()
+        tracer.generate_film(scene, Sampler(seed=0))
+        out2 = tracer.settings.film.get_image()
 
         assert np.allclose(out1, out2), "Non-deterministic output for identical seeds"
 
@@ -284,13 +303,15 @@ class TestRenderingPipeline:
     def test_emissive_object_brightens_scene(self):
         """Adding an emissive object should increase average luminance."""
         from py_src.tests.bench_scenes import get_minimal_scene
-        from src.Rendering.Raytracing import RayTracer
+        from src.Rendering.RayTracing import RayTracer, RayTracingSettings
         from src.Data.Scene import Scene
         from src.Data.Context import SDF_Material
         from src.Geometry.SDF import Sphere as _Sphere
 
         base_scene = get_minimal_scene(width=16, height=16)
-        base_output = RayTracer(base_scene).render(seed=0)
+        tracer = RayTracer(RayTracingSettings(16, 16))
+        tracer.generate_film(base_scene, Sampler(seed=0))
+        base_output = tracer.settings.film.get_image()
 
         emissive_scene = get_minimal_scene(width=16, height=16)
         mat_glow = MaterialFactory.create_emissive(Color(1, 1, 1), 10.0)
@@ -298,6 +319,7 @@ class TestRenderingPipeline:
             SDF_Material(_Sphere(0.5), mat_glow), "Glow",
             Transform(np.array([0.0, 3.0, 0.0]))
         )
-        emissive_output = RayTracer(emissive_scene).render(seed=0)
+        tracer.generate_film(emissive_scene, Sampler(seed=0))
+        emissive_output = tracer.settings.film.get_image()
 
         assert emissive_output.mean() >= base_output.mean() - 1e-4

@@ -318,12 +318,34 @@ class Color:
 
     @classmethod
     def from_hsv(cls, h: float, s: float, v: float, a: float = 1.0):
-        r, g, b = cls.hsv_to_rgb(h, s, v)
+        # Accept either hue in degrees (0..360) or fraction (0..1)
+        hh = float(h)
+        ss = float(s)
+        vv = float(v)
+        if hh > 1.0:
+            hh = hh / 360.0
+        if ss > 1.0:
+            ss = ss / 100.0
+        if vv > 1.0:
+            vv = vv / 100.0
+
+        r, g, b = cls.hsv_to_rgb(hh, ss, vv)
         return cls(r, g, b, a)
 
     @classmethod
     def from_hsl(cls, h: float, s: float, l: float, a: float = 1.0):
-        r, g, b = cls.hsl_to_rgb(h, s, l)
+        # Accept hue in degrees or fraction, saturation/light as percent or fraction
+        hh = float(h)
+        ss = float(s)
+        ll = float(l)
+        if hh > 1.0:
+            hh = hh / 360.0
+        if ss > 1.0:
+            ss = ss / 100.0
+        if ll > 1.0:
+            ll = ll / 100.0
+
+        r, g, b = cls.hsl_to_rgb(hh, ss, ll)
         return cls(r, g, b, a)
 
     @classmethod
@@ -347,11 +369,18 @@ class Color:
 
     @classmethod
     def from_np(cls, arr: np.ndarray):
-        """Creates color from numpy array (size 3 or 4)."""
-        if arr.shape[0] == 3:
-            return cls(float(arr[0]), float(arr[1]), float(arr[2]), 1.0)
-        elif arr.shape[0] >= 4:
-            return cls(float(arr[0]), float(arr[1]), float(arr[2]), float(arr[3]))
+        """Creates color from numpy array (size 3 or 4) or returns Color unchanged."""
+        # If already a Color, return as-is
+        if isinstance(arr, Color):
+            return arr
+
+        a = np.asarray(arr)
+        if a.ndim == 0:
+            raise ValueError("Input cannot be a scalar for Color.from_np")
+        if a.shape[0] == 3:
+            return cls(float(a[0]), float(a[1]), float(a[2]), 1.0)
+        elif a.shape[0] >= 4:
+            return cls(float(a[0]), float(a[1]), float(a[2]), float(a[3]))
         raise ValueError("Numpy array must have at least 3 elements")
 
     # =========================================================================
@@ -389,7 +418,8 @@ class Color:
             int(clamp(int(self.a * 255), 0, 255))
         )
 
-    def to_np_array(self, include_alpha: bool = True) -> np.ndarray:
+    def to_np_array(self, include_alpha: bool = False) -> np.ndarray:
+        """Return color as numpy array. Defaults to RGB (no alpha)."""
         if include_alpha:
             return np.array([self.r, self.g, self.b, self.a], dtype=np.float32)
         return np.array([self.r, self.g, self.b], dtype=np.float32)

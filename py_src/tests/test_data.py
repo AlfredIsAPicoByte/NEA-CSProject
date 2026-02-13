@@ -5,6 +5,7 @@ from src.Data.Color import Color, ColorGradient
 from src.Data.Ray import Ray
 from src.Data.Camera import Camera, CameraType
 from src.Data.Scene import Scene, SceneNode
+from src.Data.Sampling.Core import RandomSampler
 
 
 class TestTransform:
@@ -25,7 +26,7 @@ class TestTransform:
         """Translation should add to an existing point."""
         t = Transform(np.array([1.0, 0.0, 0.0]))
         point = np.array([2.0, 3.0, 4.0])
-        result = t.translate(point)
+        result = t.world_transform_point(point)
         assert np.allclose(result, np.array([3.0, 3.0, 4.0]))
 
     def test_translation_negative(self):
@@ -38,7 +39,7 @@ class TestTransform:
         """90° rotation around Y should map +X to +Z (right-hand convention)."""
         t = Transform(np.zeros(3), rotation=np.array([0.0, np.deg2rad(90), 0.0]))
         point = np.array([1.0, 0.0, 0.0])
-        result = t.apply(point)
+        result = t.world_transform_point(point)
         # After 90° CCW around Y: +X → −Z
         assert np.allclose(result, np.array([0.0, 0.0, 1.0]), atol=1e-6)
 
@@ -46,20 +47,20 @@ class TestTransform:
         """Uniform scale by 2 should double all coordinates."""
         t = Transform(np.zeros(3), scale=np.full(3, 2.0))
         point = np.array([1.0, 1.0, 1.0])
-        assert np.allclose(t.apply(point), np.array([2.0, 2.0, 2.0]))
+        assert np.allclose(t.world_transform_point(point), np.array([2.0, 2.0, 2.0]))
 
     def test_non_uniform_scale(self):
         """Non-uniform scale should scale each axis independently."""
         t = Transform(np.zeros(3), scale=np.array([2.0, 3.0, 4.0]))
         point = np.array([1.0, 1.0, 1.0])
-        assert np.allclose(t.apply(point), np.array([2.0, 3.0, 4.0]))
+        assert np.allclose(t.world_transform_point(point), np.array([2.0, 3.0, 4.0]))
 
     def test_transform_composition_translation(self):
         """Two sequential translations should accumulate."""
         t1 = Transform(np.array([1.0, 0.0, 0.0]))
         t2 = Transform(np.array([0.0, 1.0, 0.0]))
         origin = np.array([0.0, 0.0, 0.0])
-        result = t2.apply(t1.apply(origin))
+        result = t2.world_transform_point(t1.world_transform_point(origin))
         assert np.allclose(result, np.array([1.0, 1.0, 0.0]))
 
     def test_identity_position_is_zero(self):
@@ -72,7 +73,7 @@ class TestTransform:
         t = Transform(np.array([0.0, 0.0, -5.0]))
         t.look_at(np.array([0.0, 0.0, 0.0]))
         # After look_at the forward vector should point from position toward target
-        forward = t.apply(np.array([0.0, 0.0, 1.0])) - t.position
+        forward = t.world_transform_point(np.array([0.0, 0.0, 1.0])) - t.position
         direction = np.array([0.0, 0.0, 0.0]) - np.array([0.0, 0.0, -5.0])
         direction /= np.linalg.norm(direction)
         assert np.allclose(forward / np.linalg.norm(forward), direction, atol=1e-5)
@@ -81,7 +82,7 @@ class TestTransform:
         """Scale of 1 should not change coordinates."""
         t = Transform(np.zeros(3), scale=np.ones(3))
         point = np.array([3.0, -2.0, 7.0])
-        assert np.allclose(t.apply(point), point)
+        assert np.allclose(t.world_transform_point(point), point)
 
 
 class TestColor:
@@ -218,12 +219,12 @@ class TestCamera:
 
     def test_camera_default_type_perspective(self):
         cam = self._make_cam()
-        assert cam.camera_type == CameraType.PERSPECTIVE
+        assert cam.type == CameraType.PERSPECTIVE
 
     def test_camera_rays_have_unit_direction(self):
         """Every generated ray direction should be normalised."""
         cam = self._make_cam(32, 32, fov=60.0)
-        rays = cam.generate_rays()           # expected: ndarray of shape (H, W, ?) or similar
+        rays = cam.generate_screen_rays(RandomSampler())           # expected: ndarray of shape (H, W, ?) or similar
         # Tolerant iteration regardless of exact shape
         dirs = np.array(rays).reshape(-1, 3)
         norms = np.linalg.norm(dirs, axis=-1)
@@ -237,7 +238,7 @@ class TestCamera:
                      camera_type=CameraType.PERSPECTIVE)
         # Look along +Z
         cam.transform.look_at(np.array([0.0, 0.0, 1.0]))
-        rays = cam.generate_rays()
+        rays = cam.generate_screen_rays(RandomSampler())
         cx, cy = 50, 50          # centre pixel
         centre_dir = np.array(rays).reshape(101, 101, 3)[cy, cx]
         centre_dir /= np.linalg.norm(centre_dir)
@@ -247,8 +248,8 @@ class TestScene:
     def test_scene_initialisation(self):
         """A new Scene should have empty geometry and materials."""
         scene = Scene()
-        assert len(scene.nodes) == 0
-        assert scene.version == 0
+        assert len(scene.nodes) == 0, "Initial scene should have no nodes"
+        assert scene.version == 0, "Initial scene version should be 0"
 
     def test_scene_node_addition(self):
         """Adding a node to the scene should increase the node count."""

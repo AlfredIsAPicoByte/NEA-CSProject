@@ -50,8 +50,11 @@ class Camera:
         self.transform = transform
         self.transform.update_orientations()
         
-        self.width = resolution_width
-        self.height = resolution_height
+        # Resolution stored under both legacy names and new aliases
+        self.resolution_width = int(resolution_width)
+        self.resolution_height = int(resolution_height)
+        self.width = int(resolution_width)
+        self.height = int(resolution_height)
         self.aspect_ratio = Ratio(self.width, self.height)
         
         self.fov = fov
@@ -131,9 +134,11 @@ class Camera:
         :param width: New width in pixels.
         :param height: New height in pixels.
         """
-        self.resolution_width = width
-        self.resolution_height = height
-        self.aspect_ratio = Ratio(width, height)
+        self.resolution_width = int(width)
+        self.resolution_height = int(height)
+        self.width = int(width)
+        self.height = int(height)
+        self.aspect_ratio = Ratio(self.width, self.height)
 
     def resize_aspect(self, aspect: Ratio, scale: float = 1.0):
         """
@@ -293,9 +298,17 @@ class Camera:
         :return: List of TracingRay objects for the specified region.
         """
 
+        # Ensure sampler knows the current resolution
+        try:
+            sampler.settings.width = int(self.resolution_width)
+            sampler.settings.height = int(self.resolution_height)
+        except Exception:
+            pass
+
         # 1. Resolve Region
         if region is None:
-            x_start, y_start, region_w, region_h = 0, 0, self.height, self.height
+            x_start, y_start, region_w, region_h = 0, 0, self.width, self.height
+            return_directions = True
         else:
             x_start, y_start, req_w, req_h = region
             # Clamp to image bounds
@@ -303,27 +316,28 @@ class Camera:
             y_start = max(0, min(y_start, self.height))
             region_w = max(0, min(req_w, self.width - x_start))
             region_h = max(0, min(req_h, self.height - y_start))
+            return_directions = False
 
+        if return_directions:
+            # Produce *one* representative direction per pixel (first sample) as a NumPy array
+            dirs = np.zeros((region_h, region_w, 3), dtype=float)
+            for yy, y in enumerate(range(y_start, y_start + region_h)):
+                for xx, x in enumerate(range(x_start, x_start + region_w)):
+                    pixel_samples = sampler.get_samples_per_pixel(x, y)
+                    sample = pixel_samples[0]
+                    _r = self.generate_ray(sample.u, sample.v)
+                    dirs[yy, xx, :] = _r.direction
+            return dirs
+
+        # Otherwise build a list of TracingRay objects for the requested region (used by renderer)
         rays: List[TracingRay] = []
-
-        # 2. Iterate over pixels
         for y in range(y_start, y_start + region_h):
             for x in range(x_start, x_start + region_w):
-
-                # 3. Get Samples
                 pixel_samples = sampler.get_samples_per_pixel(x, y)
                 for i, sample in enumerate(pixel_samples):
-                    # Normalize sample coordinates to 0..1 for camera functions
-                    # to avoid noisy renders with one sample only perform when there are more samples to work with
-                    screen_x = (x + sample.u) / float(self.width)
-                    screen_y = (y + sample.v) / float(self.height)
-                    
-                    pixle_x, pixle_y = sampler.sample_pixel(x, y, i % region_w + i // region_w) if i > 0 else [0.0, 0.0]
-                    
-                    # 4. Calculate Ray Geometry
+                    screen_x = sample.u
+                    screen_y = sample.v
                     _r = self.generate_ray(screen_x, screen_y)
-
-                    # 5. Build Ray
                     ray = TracingRay(
                         origin=_r.origin,
                         orientation=_r.orientation,

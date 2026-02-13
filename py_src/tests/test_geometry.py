@@ -1,9 +1,13 @@
 import pytest
 import numpy as np
-from src.Geometry.SDF import Sphere, Cube, Cylinder, Pyramid, Capsule, ShapeSubtraction, ShapeIntersection, ShapeExtrusion
-from src.Geometry.BVH import BVHNode
-from src.Geometry.AABB import AABB
 from src.Data.Transform import Transform
+from src.Data.Ray import Ray
+from src.Data.Scene import SceneNode
+from src.Geometry.SDF import Sphere, Cube, Cylinder, Pyramid, Capsule, ShapeSubtraction, ShapeIntersection, ShapeExtrusion
+from src.Geometry.BVH import BVHNode, BVHSplitMode, build_bvh_tree
+from src.Geometry.AABB import AABB, transform_bounds, convert_bounds_to_corners
+from src.Rendering.RayTracing.Intersections import BVHIntersection
+from .bench_scenes import get_minimal_scene
 
 
 # ---------------------------------------------------------------------------
@@ -186,12 +190,12 @@ class TestAABB:
     def test_size(self):
         """AABB extent should be max - min."""
         aabb = AABB(np.array([0.0, 0.0, 0.0]), np.array([3.0, 4.0, 5.0]))
-        size = aabb.max - aabb.min
+        size = aabb.max_point - aabb.min_point
         assert np.allclose(size, np.array([3.0, 4.0, 5.0]))
 
     def test_center(self):
         aabb = AABB(np.array([-2.0, -2.0, -2.0]), np.array([2.0, 2.0, 2.0]))
-        center = (aabb.min + aabb.max) / 2
+        center = (aabb.min_point + aabb.max_point) / 2
         assert np.allclose(center, np.zeros(3))
 
     def test_ray_intersection_hit(self):
@@ -199,7 +203,7 @@ class TestAABB:
         aabb = AABB(np.array([-1.0, -1.0, -1.0]), np.array([1.0, 1.0, 1.0]))
         origin = np.array([0.0, 0.0, -5.0])
         direction = np.array([0.0, 0.0, 1.0])
-        hit = aabb.intersect_ray(origin, direction)
+        hit = aabb.intersect(Ray(origin, direction))
         assert hit is not None and hit > 0
 
     def test_ray_intersection_miss(self):
@@ -207,88 +211,10 @@ class TestAABB:
         aabb = AABB(np.array([-1.0, -1.0, -1.0]), np.array([1.0, 1.0, 1.0]))
         origin = np.array([0.0, 0.0, -5.0])
         direction = np.array([0.0, 0.0, -1.0])
-        hit = aabb.intersect_ray(origin, direction)
+        hit = aabb.intersect(Ray(origin, direction))
         assert hit is None or hit < 0
 
-
-# ---------------------------------------------------------------------------
-# BVH Tests
-# ---------------------------------------------------------------------------
-
-class TestBVH:
-    def _make_sphere_list(self, n: int = 8):
-        """Create a grid of unit spheres for testing."""
-        return [Sphere(0.4) for _ in range(n)]
-
-    def test_bvh_constructs_from_shapes(self):
-        shapes = [Sphere(1.0), Cube(1.0), Cylinder(0.5, 1.0)]
-        bvh = BVHNode(shapes)
-        assert bvh is not None
-
-    def test_bvh_constructs_from_single_shape(self):
-        bvh = BVHNode([Sphere(1.0)])
-        assert bvh is not None
-
-    def test_bvh_constructs_from_many_shapes(self):
-        shapes = self._make_sphere_list(64)
-        bvh = BVHNode(shapes)
-        assert bvh is not None
-
-    def test_bvh_node_count_non_zero(self):
-        shapes = [Sphere(1.0), Cube(1.0)]
-        bvh = BVHNode(shapes)
-        assert bvh.node_count() > 0
-
-    def test_bvh_leaf_count_matches_input(self):
-        """Number of leaf nodes must equal number of input shapes."""
-        shapes = [Sphere(1.0), Cube(1.0), Cylinder(0.5, 1.0), Pyramid()]
-        bvh = BVHNode(shapes)
-        assert bvh.leaf_count() == len(shapes)
-
-    def test_bvh_ray_hit_returns_correct_shape(self):
-        """A ray aimed at a sphere should report a hit on that sphere."""
-        sphere = Sphere(1.0)
-        bvh = BVHNode([sphere], transforms=[Transform(np.array([0.0, 0.0, 0.0]))])
-        origin = np.array([0.0, 0.0, -5.0])
-        direction = np.array([0.0, 0.0, 1.0])
-        hit = bvh.intersect(origin, direction)
-        assert hit is not None
-
-    def test_bvh_ray_miss_returns_none(self):
-        """A ray aimed away from all geometry should return no hit."""
-        bvh = BVHNode([Sphere(1.0)], transforms=[Transform(np.array([0.0, 0.0, 0.0]))])
-        origin = np.array([0.0, 0.0, -5.0])
-        direction = np.array([0.0, 1.0, 0.0])   # perpendicular – misses sphere
-        hit = bvh.intersect(origin, direction)
-        assert hit is None
-
-    @pytest.mark.slow
-    def test_bvh_faster_than_linear_search(self):
-        """BVH traversal should visit fewer nodes than the total shape count."""
-        import time
-        shapes = [Sphere(0.3) for _ in range(200)]
-        transforms = [Transform(np.array([np.random.uniform(-10, 10),
-                                          np.random.uniform(-10, 10),
-                                          np.random.uniform(-10, 10)])) for _ in shapes]
-        bvh = BVHNode(shapes, transforms=transforms)
-        origin = np.array([0.0, 0.0, -50.0])
-        direction = np.array([0.0, 0.0, 1.0])
-
-        t0 = time.perf_counter()
-        for _ in range(200):
-            bvh.intersect(origin, direction)
-        bvh_time = time.perf_counter() - t0
-
-        t1 = time.perf_counter()
-        for _ in range(200):
-            for s, tr in zip(shapes, transforms):
-                s.get_distance(tr.inverse().apply(origin))
-        linear_time = time.perf_counter() - t1
-
-        # BVH should be at least as fast (within 5×)
-        assert bvh_time <= linear_time * 5
-
-class TestAABB:
+    
     def test_aabb_contains_point(self):
         """Test point-in-AABB queries"""
         aabb = AABB(np.array([-1, -1, -1]), np.array([1, 1, 1]))
@@ -300,8 +226,8 @@ class TestAABB:
         aabb1 = AABB(np.array([-1, -1, -1]), np.array([1, 1, 1]))
         aabb2 = AABB(np.array([0, 0, 0]), np.array([2, 2, 2]))
         aabb3 = AABB(np.array([2, 2, 2]), np.array([3, 3, 3]))
-        assert aabb1.intersects(aabb2)
-        assert not aabb1.intersects(aabb3)
+        assert aabb1.overlaps(aabb2)
+        assert not aabb1.overlaps(aabb3)
 
     def test_aabb_transform(self):
         """Test AABB transformation"""
@@ -316,7 +242,9 @@ class TestAABB:
             [-sin_a, 0, cos_a, 0],
             [0, 0, 0, 1]
         ])
-        transformed_aabb = aabb.transform(rotation_matrix)
+        bounds = np.array([aabb.min_point, aabb.max_point])
+        transformed_bounds = transform_bounds(rotation_matrix, bounds)
+        transformed_aabb = AABB(transformed_bounds[0], transformed_bounds[1])
         # The transformed AABB should still contain the original corners
         corners = convert_bounds_to_corners(aabb.min_point, aabb.max_point)
         for corner in corners:
@@ -341,3 +269,96 @@ class TestAABB:
         unit_cube_aabb = AABB.unit_cube()
         assert np.allclose(unit_cube_aabb.min_point, np.array([-0.5, -0.5, -0.5]))
         assert np.allclose(unit_cube_aabb.max_point, np.array([0.5, 0.5, 0.5]))
+
+
+# ---------------------------------------------------------------------------
+# BVH Tests
+# ---------------------------------------------------------------------------
+
+class TestBVH:
+    def _make_sphere_list(self, n: int = 8):
+        """Create a grid of unit spheres for testing."""
+        return [Sphere(0.4) for _ in range(n)]
+
+    def test_bvh_constructs_from_shapes(self):
+        shapes = [Sphere(1.0), Cube(1.0), Cylinder(0.5, 1.0)]
+        bvh = BVHNode(shapes)
+        assert bvh is not None
+
+    def test_bvh_constructs_from_single_shape(self):
+        bvh = BVHNode([SceneNode(context=Sphere(1.0))])
+        assert bvh is not None
+
+    def test_bvh_constructs_from_many_shapes(self):
+        shapes = self._make_sphere_list(64)
+        nodes = [SceneNode(context=s) for s in shapes]
+        bvh = BVHNode(nodes)
+        assert bvh is not None
+
+    def test_bvh_node_count_non_zero(self):
+        shapes = [Sphere(1.0), Cube(1.0)]
+        nodes = [SceneNode(context=s) for s in shapes]
+        bvh = BVHNode(nodes)
+        assert bvh.node_count > 0
+
+    def test_bvh_leaf_count_matches_input(self):
+        """Number of leaf nodes must equal number of input shapes."""
+        shapes = [Sphere(1.0), Cube(1.0), Cylinder(0.5, 1.0), Pyramid()]
+        nodes = [SceneNode(context=s) for s in shapes]
+        bvh = BVHNode(nodes)
+        assert bvh.leaf_count == len(shapes)
+
+    def test_bvh_debug_print(self):
+        s = get_minimal_scene(64,64)
+        for obj in s.nodes:
+            obj.update_matrices()
+
+        bvh = BVHIntersection()
+        root = build_bvh_tree(list(s.nodes))
+        print('Root box min, max:', root.box.min_point, root.box.max_point)
+        for node in [root.left, root.right]:
+            if node is not None and node.box is not None:
+                print('Child box min, max:', node.box.min_point, node.box.max_point)
+
+    def test_bvh_ray_hit_returns_correct_shape(self):
+        """A ray aimed at a sphere should report a hit on that sphere."""
+        sphere = Sphere(1.0)
+        bvh = BVHNode([SceneNode(context=sphere, transform=Transform(np.array([0.0, 0.0, 0.0])))])
+        origin = np.array([0.0, 0.0, -5.0])
+        direction = np.array([0.0, 0.0, 1.0])
+        hit = bvh.box.intersect(Ray(origin, direction))
+        assert hit is not None
+
+    def test_bvh_ray_miss_returns_none(self):
+        """A ray aimed away from all geometry should return no hit."""
+        bvh = BVHNode([SceneNode(context=Sphere(1.0), transform=Transform(np.array([0.0, 0.0, 0.0])))])
+        origin = np.array([0.0, 0.0, -5.0])
+        direction = np.array([0.0, 1.0, 0.0])   # perpendicular – misses sphere
+        hit = bvh.box.intersect(Ray(origin, direction))
+        assert hit is None
+
+    @pytest.mark.slow
+    def test_bvh_faster_than_linear_search(self):
+        """BVH traversal should visit fewer nodes than the total shape count."""
+        import time
+        shapes = [Sphere(0.3) for _ in range(200)]
+        transforms = [Transform(np.array([np.random.uniform(-10, 10),
+                                          np.random.uniform(-10, 10),
+                                          np.random.uniform(-10, 10)])) for _ in shapes]
+        bvh = BVHNode([SceneNode(context=s, transform=tr) for s, tr in zip(shapes, transforms)])
+        origin = np.array([0.0, 0.0, -50.0])
+        direction = np.array([0.0, 0.0, 1.0])
+
+        t0 = time.perf_counter()
+        for _ in range(200):
+            bvh.box.intersect(Ray(origin, direction))
+        bvh_time = time.perf_counter() - t0
+
+        t1 = time.perf_counter()
+        for _ in range(200):
+            for s, tr in zip(shapes, transforms):
+                s.get_distance(tr.local_transform_point(origin))
+        linear_time = time.perf_counter() - t1
+
+        # BVH should be at least as fast (within 5×)
+        assert bvh_time <= linear_time * 5
