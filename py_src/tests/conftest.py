@@ -130,11 +130,6 @@ def default_camera():
         camera_type=CameraType.PERSPECTIVE
     )
 
-
-# ---------------------------------------------------------------------------
-# Pytest configuration
-# ---------------------------------------------------------------------------
-
 def pytest_configure(config):
     config.addinivalue_line(
         "markers",

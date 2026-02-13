@@ -1,27 +1,5 @@
 classDiagram
-    namespace Data.Ratio {
-        class Ratio {
-            -height
-            -width
-            +new(width: float, height: float)
-            +simplify()
-            +__add__(other)
-            +__sub__(other)
-            +__mul__(other)
-            +__truediv__(other)
-            +__repr__()
-            +__float__()
-            +__neg__()
-            +__eq__(other)
-            +__lt__(other)
-            +__le__(other)
-            +__gt__(other)
-            +__ge__(other)
-            +__ne__(other)
-            +value() -> float
-        }
-    }
-    namespace Data.Camera {
+    namespace Data\Camera {
         class CameraType {
             <<enumeration>>
             -ORTHOGRAPHIC
@@ -63,7 +41,7 @@ classDiagram
             +__repr__()
         }
     }
-    namespace Data.Color {
+    namespace Data\Color {
         class Color {
             -a
             -b
@@ -107,7 +85,7 @@ classDiagram
             +__rsub__(other: None)
             +__mul__(scale: None)
             +__rmul__(scale: None)
-            +__truediv__(scale: None)
+            +__truediv__(other: None) -> None
             +__rtruediv__(other: None)
             +__getitem__(index)
             +__repr__()
@@ -120,7 +98,26 @@ classDiagram
             +get_color(t: float) -> Color
         }
     }
-    namespace Data.Hit {
+    namespace Data\Context {
+        class SDF_Material {
+            -material
+            -shape
+            +__post_init__()
+            +signed_distance(point: ndarray) -> float
+            +normal(point: ndarray) -> ndarray
+            +local_corners(padding: float) -> None
+            +is_2d() -> bool
+        }
+        class Mesh_Material {
+            -material
+            -mesh
+            +__post_init__()
+            +vertices() -> ndarray
+            +triangles() -> ndarray
+            +local_corners() -> ndarray
+        }
+    }
+    namespace Data\Hit {
         class HitInfo {
             -did_hit
             -direction
@@ -134,7 +131,29 @@ classDiagram
             +miss()
         }
     }
-    namespace Data.Ray {
+    namespace Data\Ratio {
+        class Ratio {
+            -height
+            -width
+            +new(width: float, height: float)
+            +simplify()
+            +__add__(other)
+            +__sub__(other)
+            +__mul__(other)
+            +__truediv__(other)
+            +__repr__()
+            +__float__()
+            +__neg__()
+            +__eq__(other)
+            +__lt__(other)
+            +__le__(other)
+            +__gt__(other)
+            +__ge__(other)
+            +__ne__(other)
+            +value() -> float
+        }
+    }
+    namespace Data\Ray {
         class Ray {
             -name
             -orientation
@@ -168,65 +187,7 @@ classDiagram
             +return_ray(ray: TracingRay)
         }
     }
-    namespace Data.Transform {
-        class Transform {
-            -name
-            -position
-            -rotation
-            -scale
-            +new(position: ndarray, rotation: ndarray, scale: ndarray, name: str)
-            +Identity()
-            +from_matrix(matrix: ndarray) -> None
-            +_matrix_to_euler() -> ndarray
-            +_rotation_matrix_from_euler(euler: ndarray) -> ndarray
-            +_make_transform_matrix(position: ndarray, rotation: ndarray, scale: ndarray) -> ndarray
-            +decompose_matrix(matrix: ndarray, epsilon: float)
-            +update_orientations()
-            +get_global_matrix() -> ndarray
-            +to_matrix() -> ndarray
-            +get_inverse_matrix() -> ndarray
-            +look_at(target_position: ndarray, world_up: ndarray)
-            +translate(vector: ndarray, space: str)
-            +rotate(angle: float, axis: ndarray, units: str, space: str)
-            +enlarge(vector: ndarray, space: str)
-            +world_transform_point(point: ndarray) -> ndarray
-            +world_transform_direction(direction: ndarray, normalize: bool) -> ndarray
-            +world_transform_normal(normal: ndarray) -> ndarray
-            +world_transform_ray(ray: Ray) -> Ray
-            +local_transform_point(point: ndarray) -> ndarray
-            +local_transform_direction(direction: ndarray, normalize: bool) -> ndarray
-            +local_transform_normal(normal: ndarray) -> ndarray
-            +local_transform_ray(ray: Ray) -> Ray
-            +__mul__(other)
-            +__repr__()
-        }
-    }
-    namespace Data.Context {
-        class SDF_Material {
-            -material
-            -shape
-            +__post_init__()
-            +signed_distance(point: ndarray) -> float
-            +normal(point: ndarray) -> ndarray
-            +local_corners(padding: float) -> None
-            +is_2d() -> bool
-            +world_corners(padding: float) -> ndarray
-            +local_bounds(padding: float) -> None
-            +world_bounds(padding: float) -> None
-        }
-        class Mesh_Material {
-            -material
-            -mesh
-            +__post_init__()
-            +vertices() -> ndarray
-            +triangles() -> ndarray
-            +local_corners() -> ndarray
-            +world_corners() -> ndarray
-            +local_bounds() -> None
-            +world_bounds() -> None
-        }
-    }
-    namespace Data.Scene {
+    namespace Data\Scene {
         class SceneNode {
             -_aabb_bounds
             -_inverse_world_matrix
@@ -283,108 +244,116 @@ classDiagram
             +update_version()
         }
     }
-    namespace Lighting.Core {
-        class LightType {
-            <<enumeration>>
-            -DIRECTIONAL
-            -POINT
-            -SPOT
-        }
-        class Light {
-            -color
-            -direction
-            -intensity
-            -radius
-            -spot_inner_angle
-            -spot_outer_angle
-            -type
-            +__post_init__()
-            +get_direction(light_pos: ndarray, hit_point: ndarray) -> ndarray
-            +get_distance(light_pos: ndarray, hit_point: ndarray, bias: float) -> float
-            +get_radiance(light_pos: ndarray, hit_point: ndarray) -> Color
-        }
-    }
-    namespace Rendering.Core {
-        class RenderStats {
-            -_start_time
-            -memory_usage
-            -nan_errors
-            -pixels_processed
-            -time_taken_seconds
-            +start_timer()
-            +stop_timer()
-            +update_memory()
-            +__add__(other: None) -> None
-            +format_report() -> str
-            +print_verbose_report()
-        }
-        class AlgorithmSettings {
-            -film
-            -image_height
-            -image_width
-        }
-        class Algorithm {
-            <<abstract>>
-            -settings
-            -settings_type
-            +new(settings: AlgorithmSettings)
-            +setup(scene: Scene) -> None
-            +render_tile(scene: Scene, sampler: Sampler, tile_x: int, tile_y: int, width: int, height: int) -> None
-            +generate_film(scene: Scene, sampler: Sampler, region: None) -> None
-            +reset_stats() -> None
-        }
-        class RenderManager {
-        }
-    }
-    namespace Material.Core {
-        class MaterialType {
-            <<enumeration>>
-            -DIFFUSE
-            -EMISSIVE
-            -GLASS
-            -SPECULAR
-            -TRANSPARENT
-        }
-        class MaterialData {
-            -absorption_color
-            -absorption_density
-            -albedo
-            -emission_color
-            -emission_intensity
-            -ior
-            -metallic
+    namespace Data\Transform {
+        class Transform {
             -name
-            -roughness
-            -specular_intensity
-            -specular_tint
-            -transmission
-            -type
-        }
-        class PBRMaterial {
-            -data
-            +evaluate_direct_light(light_nodes: SceneNode, hit_info: HitInfo, view_dir: ndarray, visibility_function: None, bias: float) -> Color
-            +sample_indirect_contribution(incident_dir: ndarray, surface_normal: ndarray, sampler: Sampler) -> None
-            +sample_glass_contribution(incident_dir: ndarray, surface_normal: ndarray, sampler: Sampler, other_ior: float) -> None
-            +evaluate_bsdf(incident_dir: ndarray, view_dir: ndarray, normal: ndarray) -> Color
-            +evaluate_diffuse_component(light_dir: ndarray, surface_normal: ndarray) -> Color
-            +evaluate_specular_component(light_dir: ndarray, surface_normal: ndarray, view_dir: ndarray) -> Color
-            +evaluate_metallic_component(bias: float) -> Color
-            +evaluate_emissive_component() -> Color
-            +evaluate_volumetric_component(distance: float) -> Color
-            +evaluate_ambient_color(ambient_color: Color, ambient_intensity: float) -> Color
+            -position
+            -rotation
+            -scale
+            +new(position: ndarray, rotation: ndarray, scale: ndarray, name: str)
+            +Identity()
+            +from_matrix(matrix: ndarray) -> None
+            +_matrix_to_euler() -> ndarray
+            +_rotation_matrix_from_euler(euler: ndarray) -> ndarray
+            +_make_transform_matrix(position: ndarray, rotation: ndarray, scale: ndarray) -> ndarray
+            +decompose_matrix(matrix: ndarray, epsilon: float)
+            +update_orientations()
+            +get_global_matrix() -> ndarray
+            +to_matrix() -> ndarray
+            +get_inverse_matrix() -> ndarray
+            +look_at(target_position: ndarray, world_up: ndarray)
+            +translate(vector: ndarray, space: str)
+            +rotate(angle: float, axis: ndarray, units: str, space: str)
+            +enlarge(vector: ndarray, space: str)
+            +world_transform_point(point: ndarray) -> ndarray
+            +world_transform_direction(direction: ndarray, normalize: bool) -> ndarray
+            +world_transform_normal(normal: ndarray) -> ndarray
+            +world_transform_ray(ray: Ray) -> Ray
+            +local_transform_point(point: ndarray) -> ndarray
+            +local_transform_direction(direction: ndarray, normalize: bool) -> ndarray
+            +local_transform_normal(normal: ndarray) -> ndarray
+            +local_transform_ray(ray: Ray) -> Ray
+            +__mul__(other)
             +__repr__()
         }
     }
-    namespace Material.Factory {
-        class MaterialFactory {
-            +create_diffuse(albedo: Color, roughness: float)
-            +create_specular(albedo: Color, roughness: float, metallicness: float, specular_intensity: float, specular_tint_amount: float)
-            +create_glass(albedo: Color, absorption_color: Color, roughness: float, metallicness: float, ior: float, transmission: float, absorption_density: float)
-            +create_transparent(albedo: Color)
-            +create_emissive(color: Color, intensity: float)
+    namespace Data\Sampling\Core {
+        class PixelFilter {
+            <<enumeration>>
+            -BOX
+            -GAUSSIAN
+            -NEAREST
+            -TENT
+        }
+        class SampleSettings {
+            -filter_type
+            -filter_width
+            -height
+            -min_samples
+            -noise_threshold
+            -samples_per_pixel
+            -width
+            +__post_init__()
+        }
+        class Sample {
+            -u
+            -v
+            -w
+        }
+        class Sampler {
+            -input_source
+            -seed
+            +new(input_source: None, seed: int)
+            +next_1d() -> float
+            +next_2d() -> None
+            +start_pixel(x: int, y: int) -> None
+            +get_samples_per_pixel(x: int, y: int) -> Sample
+            +sample_pixel(x: int, y: int, sample_idx: int) -> None
+            +sample_lens() -> None
+            +sample_time() -> float
+            +sample_light_selection() -> float
+            +sample_light_position() -> None
+            +sample_bsdf() -> None
+            +sample_wavelength() -> float
+            +sample_unit_sphere() -> ndarray
+            +sample_cosine_hemisphere(normal: ndarray) -> ndarray
+            +_align_to_normal(sample_dir: ndarray, normal: ndarray) -> ndarray
+            +sample_scattering_distance() -> float
+            +sample_phase_function() -> None
+            +sample_roulette() -> float
+        }
+        class RandomSampler {
+            +sample_pixel(x: int, y: int, sample_idx: int) -> None
+        }
+        class StratifiedSampler {
+            -seed
+            -settings
+            +new(settings: SampleSettings, seed: int)
+            +_rebuild_grid()
+            +set_samples_per_pixel(spp: int) -> None
+            +sample_pixel(x: int, y: int, sample_idx: int) -> None
+        }
+        class HaltonSampler {
+            +_halton(base: int) -> float
+            +sample_pixel(x: int, y: int, sample_idx: int) -> None
+        }
+        class AdaptiveSampler {
+            -sample_settings
+            -seed
+            +new(sample_settings: SampleSettings, seed: int)
+            +sample_pixel(x: int, y: int, sample_idx: int) -> None
+            +has_converged(colors: None) -> bool
+        }
+        class SamplingManager {
+            -sample_settings
+            -sampler_name
+            -seed
+            +new(sample_settings: SampleSettings, sampler_name: str, seed: int)
+            +_sampler()
+            +get_samples_per_pixel(x: int, y: int) -> Sample
         }
     }
-    namespace Geometry.AABB {
+    namespace Geometry\AABB {
         class AABB {
             -__slots__
             -max_point
@@ -394,6 +363,8 @@ classDiagram
             +from_bounds(bounds: ndarray) -> AABB
             +intersect(ray: Ray, max_t: float, bias: float) -> float
             +combine(box_b: None, operation: str) -> None
+            +contains(point: ndarray) -> bool
+            +overlaps(other: AABB) -> bool
             +center() -> ndarray
             +size() -> ndarray
             +empty() -> None
@@ -402,7 +373,34 @@ classDiagram
             +__repr__() -> str
         }
     }
-    namespace Geometry.Mesh {
+    namespace Geometry\BVH {
+        class BVHSplitMode {
+            <<enumeration>>
+            -BALANCED
+            -LONGEST_AXIS
+        }
+        class BVHNode {
+            -objects
+            +new(objects: None)
+            +is_leaf() -> bool
+            +is_empty() -> bool
+            +is_internal() -> bool
+            +is_valid() -> bool
+            +leaf_count() -> int
+            +node_count() -> int
+            +depth() -> int
+            +is_balanced() -> bool
+            +__repr__() -> str
+            +intersect(origin: ndarray, direction: ndarray)
+        }
+    }
+    namespace Geometry\Factory {
+        class ShapeFactory {
+            <<abstract>>
+            +create() -> SignedDistanceShape
+        }
+    }
+    namespace Geometry\Mesh {
         class Vertex {
             -x
             -y
@@ -435,24 +433,7 @@ classDiagram
             +__repr__() -> str
         }
     }
-    namespace Geometry.Factory {
-        class ShapeFactory {
-            <<abstract>>
-            +create() -> SignedDistanceShape
-        }
-    }
-    namespace Geometry.BVH {
-        class BVHSplitMode {
-            <<enumeration>>
-            -BALANCED
-            -LONGEST_AXIS
-        }
-        class BVHNode {
-            -objects
-            +new(objects: None)
-        }
-    }
-    namespace Geometry.SDF {
+    namespace Geometry\SDF {
         class SignedDistanceFunction {
             <<abstract>>
             +get_distance(point: ndarray) -> float
@@ -776,7 +757,7 @@ classDiagram
             +ray_intersect(ray: Ray, max_t: float) -> float
         }
     }
-    namespace Image.Film {
+    namespace Image\Film {
         class Film {
             -height
             -width
@@ -787,121 +768,160 @@ classDiagram
             +__repr__()
         }
     }
-    namespace Data.Sampling.Core {
-        class PixelFilter {
-            <<enumeration>>
-            -BOX
-            -GAUSSIAN
-            -NEAREST
-            -TENT
+    namespace Image\PostProcessing\Passes {
+        class ACESFilmicToneMapping {
+            +apply(image: ndarray) -> ndarray
         }
-        class SampleSettings {
-            -filter_type
-            -filter_width
-            -height
-            -min_samples
-            -noise_threshold
-            -samples_per_pixel
-            -width
-            +__post_init__()
+        class ReinhardToneMapping {
+            +apply(image: ndarray) -> ndarray
         }
-        class Sample {
-            -u
-            -v
-            -w
+        class GammaCorrection {
+            -gamma
+            +new(gamma: float)
+            +apply(image: ndarray) -> ndarray
         }
-        class Sampler {
-            -input_source
-            -seed
-            +new(input_source: None, seed: int)
-            +next_1d() -> float
-            +next_2d() -> None
-            +start_pixel(x: int, y: int) -> None
-            +get_samples_per_pixel(x: int, y: int) -> Sample
-            +sample_pixel(x: int, y: int, sample_idx: int) -> None
-            +sample_lens() -> None
-            +sample_time() -> float
-            +sample_light_selection() -> float
-            +sample_light_position() -> None
-            +sample_bsdf() -> None
-            +sample_wavelength() -> float
-            +sample_unit_sphere() -> ndarray
-            +sample_cosine_hemisphere(normal: ndarray) -> ndarray
-            +_align_to_normal(sample_dir: ndarray, normal: ndarray) -> ndarray
-            +sample_scattering_distance() -> float
-            +sample_phase_function() -> None
-            +sample_roulette() -> float
+        class Exposure {
+            -exposure_value
+            +new(exposure_value: float)
+            +apply(image: ndarray) -> ndarray
         }
-        class RandomSampler {
-            +sample_pixel(x: int, y: int, sample_idx: int) -> None
+        class AutoExposure {
+            +apply(image: ndarray) -> ndarray
         }
-        class StratifiedSampler {
-            -seed
-            -settings
-            +new(settings: SampleSettings, seed: int)
-            +_rebuild_grid()
-            +set_samples_per_pixel(spp: int) -> None
-            +sample_pixel(x: int, y: int, sample_idx: int) -> None
+        class Bloom {
+            -intensity
+            -radius
+            -softness
+            -threshold
+            +new(threshold: float, radius: float, intensity: float, softness: float)
+            +apply(image: ndarray) -> ndarray
         }
-        class HaltonSampler {
-            +_halton(base: int) -> float
-            +sample_pixel(x: int, y: int, sample_idx: int) -> None
+        class Vignette {
+            -curve
+            -intensity
+            -softness
+            +new(intensity: float, softness: float, curve: float)
+            +apply(image: ndarray) -> ndarray
         }
-        class AdaptiveSampler {
-            -sample_settings
-            -seed
-            +new(sample_settings: SampleSettings, seed: int)
-            +sample_pixel(x: int, y: int, sample_idx: int) -> None
-            +has_converged(colors: None) -> bool
-        }
-        class SamplingManager {
-            -sample_settings
-            -sampler_name
-            -seed
-            +new(sample_settings: SampleSettings, sampler_name: str, seed: int)
-            +_sampler()
-            +get_samples_per_pixel(x: int, y: int) -> Sample
+        class ChromaticAberration {
+            -intensity
+            +new(intensity: float)
+            +apply(image: ndarray) -> ndarray
         }
     }
-    namespace Rendering.RayTracing.Intersections {
-        class IntersectionSettings {
-            -always_rebuild_bvh
-            -epsilon
-            -max_distance
-            -max_steps
-            -step_relaxation
-            -use_aabb_bounding_box
-            +__post_init__()
+    namespace Image\PostProcessing\Pipeline {
+        class PostProcessPass {
+            <<abstract>>
+            +apply(image: ndarray) -> ndarray
         }
-        class IntersectionStrategy {
+        class ImagePipeline {
+            +new()
+            +add_pass(effect: PostProcessPass)
+            +execute(input_image: ndarray) -> ndarray
+        }
+    }
+    namespace Lighting\Core {
+        class LightType {
+            <<enumeration>>
+            -DIRECTIONAL
+            -POINT
+            -SPOT
+        }
+        class Light {
+            -color
+            -direction
+            -intensity
+            -radius
+            -spot_inner_angle
+            -spot_outer_angle
+            -type
+            +__post_init__()
+            +get_direction(light_pos: ndarray, hit_point: ndarray) -> ndarray
+            +get_distance(light_pos: ndarray, hit_point: ndarray, bias: float) -> float
+            +get_radiance(light_pos: ndarray, hit_point: ndarray) -> Color
+        }
+    }
+    namespace Material\Core {
+        class MaterialType {
+            <<enumeration>>
+            -DIFFUSE
+            -EMISSIVE
+            -GLASS
+            -SPECULAR
+            -TRANSPARENT
+        }
+        class MaterialData {
+            -absorption_color
+            -absorption_density
+            -albedo
+            -emission_color
+            -emission_intensity
+            -ior
+            -metallic
+            -name
+            -roughness
+            -specular_intensity
+            -specular_tint
+            -transmission
+            -type
+        }
+        class PBRMaterial {
+            -data
+            +evaluate_direct_light(light_nodes: SceneNode, hit_info: HitInfo, view_dir: ndarray, visibility_function: None, bias: float) -> Color
+            +sample_indirect_contribution(incident_dir: ndarray, surface_normal: ndarray, sampler: Sampler) -> None
+            +sample_glass_contribution(incident_dir: ndarray, surface_normal: ndarray, sampler: Sampler, other_ior: float) -> None
+            +evaluate_bsdf(incident_dir: ndarray, view_dir: ndarray, normal: ndarray) -> Color
+            +evaluate_diffuse_component(light_dir: ndarray, surface_normal: ndarray) -> Color
+            +evaluate_specular_component(light_dir: ndarray, surface_normal: ndarray, view_dir: ndarray) -> Color
+            +evaluate_metallic_component(bias: float) -> Color
+            +evaluate_emissive_component() -> Color
+            +evaluate_volumetric_component(distance: float) -> Color
+            +evaluate_ambient_color(ambient_color: Color, ambient_intensity: float) -> Color
+            +__repr__()
+        }
+    }
+    namespace Material\Factory {
+        class MaterialFactory {
+            +create_diffuse(albedo: Color, roughness: float)
+            +create_specular(albedo: Color, roughness: float, metallicness: float, specular_intensity: float, specular_tint_amount: float)
+            +create_glass(albedo: Color, absorption_color: Color, roughness: float, metallicness: float, ior: float, transmission: float, absorption_density: float)
+            +create_transparent(albedo: Color)
+            +create_emissive(color: Color, intensity: float)
+        }
+    }
+    namespace Rendering\Core {
+        class RenderStats {
+            -_start_time
+            -memory_usage
+            -nan_errors
+            -pixels_processed
+            -time_taken_seconds
+            +start_timer()
+            +stop_timer()
+            +update_memory()
+            +__add__(other: None) -> None
+            +format_report() -> str
+            +print_verbose_report()
+        }
+        class AlgorithmSettings {
+            -film
+            -image_height
+            -image_width
+        }
+        class Algorithm {
             <<abstract>>
             -settings
-            +new(settings: IntersectionSettings)
-            +find_hit(scene: Scene, ray: TracingRay, stats: None) -> HitInfo
-            +_resolve_normal(world_point: ndarray, world_transform: Transform, local_shape: SignedDistanceShape) -> ndarray
-            +_intersect_sdf_object(obj: SceneNode, ray: TracingRay, stats: None) -> HitInfo
-            +is_point_occluded(point_1: ndarray, point_2: ndarray, objects: SceneNode, bias: float, exclude_obj: SceneNode, stats: None) -> bool
+            -settings_type
+            +new(settings: AlgorithmSettings)
+            +setup(scene: Scene) -> None
+            +render_tile(scene: Scene, sampler: Sampler, tile_x: int, tile_y: int, width: int, height: int) -> None
+            +generate_film(scene: Scene, sampler: Sampler, region: None) -> None
+            +reset_stats() -> None
         }
-        class RayMarchingIntersection {
-            +find_hit(scene: Scene, ray: TracingRay, stats: None) -> HitInfo
-            +_distance_estimator(objects: SceneNode, point: ndarray, ray: TracingRay, exclude_obj: SceneNode, stats: None) -> None
-        }
-        class InverseSDFIntersection {
-            +find_hit(scene: Scene, ray: TracingRay, stats: None) -> HitInfo
-        }
-        class BVHIntersection {
-            -max_depth
-            -settings
-            +new(settings: IntersectionSettings, max_depth: int)
-            +find_hit(scene: Scene, ray: TracingRay, stats: None) -> HitInfo
-            +is_point_occluded(point_1: ndarray, point_2: ndarray, objects: SceneNode, bias: float, exclude_obj: SceneNode, stats: None) -> bool
-            +_push_valid_children(stack: None, node: BVHNode, ray: TracingRay, limit_dist: float)
-        }
-        class AnalyticalIntersection {
-            +find_hit(scene: Scene, ray: TracingRay, stats: None) -> HitInfo
+        class RenderManager {
         }
     }
-    namespace Rendering.RayTracing.Core {
+    namespace Rendering\RayTracing\Core {
         class TracingStats {
             -_settings
             -aabb_tests
@@ -951,7 +971,7 @@ classDiagram
             +_sanitize_color(color)
         }
     }
-    namespace Rendering.RayTracing.Shading {
+    namespace Rendering\RayTracing\Shading {
         class AmbienceSettings {
             -color
             -enabled
@@ -1043,59 +1063,7 @@ classDiagram
             +shade(scene: None, ray: TracingRay, hit_info: None, recursions_left: int, trace_function: None, sampler: Sampler, intersection_function: None, occlusion_function: None, bias: float, stats: None) -> Color
         }
     }
-    namespace Image.PostProcessing.Passes {
-        class ACESFilmicToneMapping {
-            +apply(image: ndarray) -> ndarray
-        }
-        class ReinhardToneMapping {
-            +apply(image: ndarray) -> ndarray
-        }
-        class GammaCorrection {
-            -gamma
-            +new(gamma: float)
-            +apply(image: ndarray) -> ndarray
-        }
-        class Exposure {
-            -exposure_value
-            +new(exposure_value: float)
-            +apply(image: ndarray) -> ndarray
-        }
-        class AutoExposure {
-            +apply(image: ndarray) -> ndarray
-        }
-        class Bloom {
-            -intensity
-            -radius
-            -softness
-            -threshold
-            +new(threshold: float, radius: float, intensity: float, softness: float)
-            +apply(image: ndarray) -> ndarray
-        }
-        class Vignette {
-            -curve
-            -intensity
-            -softness
-            +new(intensity: float, softness: float, curve: float)
-            +apply(image: ndarray) -> ndarray
-        }
-        class ChromaticAberration {
-            -intensity
-            +new(intensity: float)
-            +apply(image: ndarray) -> ndarray
-        }
-    }
-    namespace Image.PostProcessing.Pipeline {
-        class PostProcessPass {
-            <<abstract>>
-            +apply(image: ndarray) -> ndarray
-        }
-        class ImagePipeline {
-            +new()
-            +add_pass(effect: PostProcessPass)
-            +execute(input_image: ndarray) -> ndarray
-        }
-    }
-    namespace Utilities.Memory.Profiler {
+    namespace Utilities\Memory\Profiler {
         class MemoryProfileResult {
             -rss_delta_mb
             -rss_end_mb

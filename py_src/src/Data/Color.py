@@ -457,10 +457,11 @@ class Color:
     def __rmul__(self, scale: Union['Color', float, int, np.number]):
         return self.__mul__(scale)
 
-    def __truediv__(self, scale: Union[float, int, np.number]):
-        if isinstance(scale, numbers.Number) and scale != 0:
-            recip = 1.0 / scale
-            return Color(self.r * recip, self.g * recip, self.b * recip, self.a)
+    def __truediv__(self, other: Union['Color', float, int, np.number]) -> 'Color':
+        if isinstance(other, numbers.Number):
+            return Color(self.r / other, self.g / other, self.b / other, self.a)
+        elif isinstance(other, Color):
+            return Color(self.r / other.r, self.g / other.g, self.b / other.b, self.a / other.a)
         return NotImplemented
     
     def __rtruediv__(self, other: Union[float, int, np.number]):

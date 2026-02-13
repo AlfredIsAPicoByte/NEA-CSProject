@@ -7,7 +7,6 @@ from src.Data.Camera import Camera, CameraType
 from src.Data.Scene import Scene, SceneNode
 from src.Data.Sampling.Core import RandomSampler
 
-
 class TestTransform:
     def test_identity_transform(self):
         """Identity transform should leave any point unchanged."""
@@ -84,7 +83,6 @@ class TestTransform:
         point = np.array([3.0, -2.0, 7.0])
         assert np.allclose(t.world_transform_point(point), point)
 
-
 class TestColor:
     def test_from_hex_red(self):
         c = Color.from_hex("#FF0000")
@@ -157,7 +155,6 @@ class TestColor:
         assert np.isclose(c.g, 0.0, atol=1e-3)
         assert np.isclose(c.b, 0.0, atol=1e-3)
 
-
 class TestColorGradient:
     def test_gradient_at_zero(self):
         """Gradient evaluated at t=0 should return the first colour."""
@@ -191,7 +188,6 @@ class TestColorGradient:
         # At t=0.5 we should be at the middle stop (pure green)
         c = grad.get_color(0.5)
         assert np.isclose(c.g, 1.0, atol=0.05)
-
 
 class TestCamera:
     def _make_cam(self, width=800, height=600, fov=90.0):

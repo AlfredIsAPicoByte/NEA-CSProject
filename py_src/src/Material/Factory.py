@@ -81,6 +81,10 @@ class MaterialFactory:
         data = MaterialData(
             name="EmissiveMat",
             type=MaterialType.EMISSIVE,
+            albedo=Color(0.0, 0.0, 0.0),  # Emissive materials don't reflect light, so albedo is usually black
+            roughness=1.0,                # Doesn't matter much for emissive, but we can set it to max roughness to avoid any specular highlights
+            metallic=0.0,
+            transmission=0.0,
             emission_color=color,
             emission_intensity=intensity,
         )

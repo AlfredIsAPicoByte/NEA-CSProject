@@ -275,35 +275,37 @@ class PBRMaterial:
         :return: BSDF value (color reflectance)
         :rtype: Color
         """
-        # Use your existing evaluate_specular_component logic
-        L = unit(incident_dir)
-        V = unit(view_dir)
-        N = unit(normal)
+        # Normalize ray directions
+        L = unit(incident_dir)  # Light direction
+        V = unit(view_dir)       # View direction
+        N = unit(normal)         # Surface normal
 
         if self.data.type == MaterialType.DIFFUSE:
-            return self.data.albedo / np.pi
+            # Lambertian BRDF: (albedo / π) * max(N·L, 0)
+            NdotL = max(0.0, np.dot(N, L))
+            return self.data.albedo * (NdotL / np.pi)
         
         # Microfacet BRDF (GGX with roughness)
         elif self.data.type == MaterialType.SPECULAR:
-            # Only evaluate if roughness > 0 (otherwise it's a delta distribution)
-            if self.data.roughness > 0.01:
-                # Calculate the microfacet BRDF
-                spec_arr = calculate_microfacet_brdf(self.data.roughness, self.data.specular_intensity,L, V, N, self.evaluate_metallic_component().to_np_array())
-                specular_brdf = Color.from_np(spec_arr)
+            # Calculate the microfacet BRDF (handles roughness=0 internally by clamping)
+            spec_arr = calculate_microfacet_brdf(
+                self.data.roughness,
+                self.data.specular_intensity,
+                L, V, N,
+                self.evaluate_metallic_component().to_np_array()
+            )
+            specular_brdf = Color.from_np(spec_arr)
 
-                # Add diffuse component (scaled by metallic)
-                diffuse_brdf = (self.data.albedo / np.pi) * (1.0 - self.data.metallic)
-                
-                return diffuse_brdf + specular_brdf
-            else:
-                # Perfect mirror - delta distribution
-                return Color(0.0, 0.0, 0.0)
+            # Add diffuse component (scaled by metallic factor)
+            # Metals have no diffuse; dielectrics have significant diffuse
+            diffuse_brdf = (self.data.albedo / np.pi) * (1.0 - self.data.metallic)
+            
+            return diffuse_brdf + specular_brdf
         
         # Glass/Dielectric with microfacets
         elif self.data.type == MaterialType.GLASS:
             if self.data.roughness > 0.01:
                 # Evaluate both reflection and refraction lobes
-                # This is complex - see below
                 glass_arr = evaluate_glass_bsdf(self.data.roughness, self.data.ior, L, V, N)
                 return Color.from_np(glass_arr)
             else:

@@ -398,65 +398,90 @@ class BVHIntersection(IntersectionStrategy):
         self._cached_scene_version: Optional[int] = None
 
     def find_hit(self, scene: Scene, ray: TracingRay, stats: Optional["TracingStats"] = None) -> HitInfo:
+        """Build BVH if needed, then traverse with optimized recursion."""
         if self._cached_bvh_root is None or scene.version != self._cached_scene_version or self.settings.always_rebuild_bvh:
             print(f" < Building Hierarchy for scene objects...")
             
-            # Update world matrices for all root objects
             for obj in scene.cache_scene_nodes_flat():
                 obj.update_matrices()
             
-            # Get all objects including children
             all_objects = scene.cache_scene_nodes_flat()
-            
             self._cached_bvh_root = build_bvh_tree(all_objects)
             self._cached_scene_version = scene.version
             print(f" < Hierarchy build Complete for {len(all_objects)} objects.")
 
-        # Safety check
         if self._cached_bvh_root is None:
             return HitInfo.miss()
 
-        closest_hit = HitInfo.miss()
-        stack = [(self._cached_bvh_root, 0.0)]
-        
-        while stack:
-            node, t_enter = stack.pop()
-            
-            # Optimization: If we already found a hit closer than this box, skip it
-            current_max = closest_hit.distance if closest_hit.hit else float('inf')
-            if t_enter >= current_max:
-                continue
+        self._closest_hit = HitInfo.miss()  # Track best hit across recursion
+        self._scene = scene  # Cache for access in recurse function
+        self._ray = ray
+        self._stats = stats
 
-            # LEAF: Test Objects
+        def recurse(node: BVHNode):
+            """Recursively traverse BVH with ordered child visiting."""
+            if node is None or node.box is None:
+                return
+
+            # Prune if box is beyond current best hit
+            current_max = self._closest_hit.distance if self._closest_hit.hit else float('inf')
+            t_enter = node.box.intersect(self._ray, current_max, self.settings.bounding_box_bias)
+            
+            if t_enter == float('inf') or (self._closest_hit.hit and t_enter >= self._closest_hit.distance):
+                return
+
+            if self._stats:
+                self._stats.aabb_tests += 1
+
+            # LEAF: Test all objects
             if node.objects:
                 for obj in node.objects:
                     if self.settings.use_aabb_bounding_box:
                         box = obj.get_transformed_aabb()
-                        
-                        if box is None: # Empty node, skip
+                        if box is None:
                             continue
-
-                        t_box = box.intersect(ray, self.settings.max_distance, self.settings.bounding_box_bias)
-                        if stats: stats.aabb_tests += 1
+                        t_box = box.intersect(self._ray, self.settings.max_distance, self.settings.bounding_box_bias)
+                        if self._stats:
+                            self._stats.aabb_tests += 1
                         if t_box == float('inf'):
                             continue
 
-                    hit = self._intersect_sdf_object(obj, ray, stats)
+                    hit = self._intersect_sdf_object(obj, self._ray, self._stats)
                     if hit.hit:
-                        if scene.camera:
+                        # Respect far plane
+                        if self._scene.camera:
                             obj_pos = hit.obj.world_transform.position
-                            far_plane_dist = np.linalg.norm(scene.camera.transform.position - obj_pos)
-                            if far_plane_dist >= scene.camera.far:
-                                break
-                            
-                        if not closest_hit.hit or hit.distance < closest_hit.distance:
-                            closest_hit = hit
-                continue
-            
-            # INTERNAL: Use Helper
-            self._push_valid_children(stack, node, ray, min(current_max, self.settings.max_distance), self.settings.bounding_box_bias)
-                
-        return closest_hit
+                            far_plane_dist = np.linalg.norm(self._scene.camera.transform.position - obj_pos)
+                            if far_plane_dist >= self._scene.camera.far:
+                                continue
+
+                        if not self._closest_hit.hit or hit.distance < self._closest_hit.distance:
+                            self._closest_hit = hit
+                    return
+
+                self._traverse_ordered_children(recurse, node)
+
+        def _traverse_ordered_children(self, recurse_func, node: BVHNode):
+            """Visit children in order: closer child first."""
+            left_dist = self._get_box_distance(node.left)
+            right_dist = self._get_box_distance(node.right)
+
+            if left_dist < right_dist:
+                recurse_func(node.left)
+                recurse_func(node.right)
+            else:
+                recurse_func(node.right)
+                recurse_func(node.left)
+
+        def _get_box_distance(self, node: Optional[BVHNode]) -> float:
+            """Calculate distance from ray origin to box center."""
+            if node is None or node.box is None:
+                return float('inf')
+            center = node.box.center
+            return np.linalg.norm(center - self._ray.origin)
+
+        recurse(self._cached_bvh_root)
+        return self._closest_hit
     
     def is_point_occluded(
         self, 
@@ -467,65 +492,59 @@ class BVHIntersection(IntersectionStrategy):
         exclude_obj: Optional[SceneNode] = None,
         stats: Optional["TracingStats"] = None
     ) -> bool:
-        """
-        BVH-Optimized Shadow Ray.
-        Returns True immediately upon finding ANY valid intersection.
-        """
-        # 1. Setup Shadow Ray
+        """BVH shadow ray with early termination."""
         direction = np.array(point_2, dtype=float) - np.array(point_1, dtype=float)
         distance = float(np.linalg.norm(direction))
         
         if distance <= 1e-6:
             return False
+        
         unit_direction = direction / distance
-
         new_origin = np.array(point_1, dtype=float) + unit_direction * bias
-
         shadow_ray = TracingRay(origin=new_origin, orientation=unit_direction)
+        
         if stats is not None:
             stats.rays_shadow += 1
 
-        # 2. Fallback if BVH is not built (Safety check)
         if self._cached_bvh_root is None:
-            # Fallback to the slow O(N) loop from the base class
             return super().is_point_occluded(point_1, point_2, objects, bias, exclude_obj, stats)
 
-        # 3. "Any Hit" Traversal
-        # We don't need to sort children strictly because any valid hit is sufficient.
-        # However, checking the closest box first often yields an exit sooner.
-        stack = [(self._cached_bvh_root, 0.0)]
+        # Ordered recursion for shadow rays ("any hit" = early exit)
+        def recurse(node: BVHNode) -> bool:
+            """Returns True immediately if ANY valid blocker found."""
+            if node is None or node.box is None:
+                return False
 
-        while stack:
-            node, t_enter = stack.pop()
+            t_enter = node.box.intersect(shadow_ray, distance, 1e-7)
+            if t_enter == float('inf') or t_enter >= distance:
+                return False
 
-            # Optimization: If the box is further away than the light, 
-            # nothing inside it can block the light.
-            if t_enter >= distance:
-                continue
+            if stats:
+                stats.aabb_tests += 1
 
-            # LEAF: Check exact object intersections
+            # LEAF: Check for blockers
             if node.objects:
                 for obj in node.objects:
-                    if obj is exclude_obj:
-                        continue
-                    
-                    if not obj.active:
+                    if obj is exclude_obj or not obj.active:
                         continue
 
-                    # Use shared SDF intersection logic
                     hit = self._intersect_sdf_object(obj, shadow_ray)
                     
-                    # EARLY EXIT: We found a blocker!
-                    # We don't care if it's the closest one, just that it exists.
+                    # EARLY EXIT: Found blocker!
                     if hit.hit and hit.distance < (distance - self.settings.epsilon):
                         return True
-                continue
+                return False
 
-            # INTERNAL: Check children
-            self._push_valid_children(stack, node, shadow_ray, distance)
+            # INTERNAL: Check closer child first (better early exit)
+            left_dist = np.linalg.norm(node.left.box.center - shadow_ray.origin) if node.left else float('inf')
+            right_dist = np.linalg.norm(node.right.box.center - shadow_ray.origin) if node.right else float('inf')
 
-        # If stack empties without returning True, the path is clear.
-        return False
+            if left_dist < right_dist:
+                return recurse(node.left) or recurse(node.right)
+            else:
+                return recurse(node.right) or recurse(node.left)
+
+        return recurse(self._cached_bvh_root)
     
     def _push_valid_children(
         self, 

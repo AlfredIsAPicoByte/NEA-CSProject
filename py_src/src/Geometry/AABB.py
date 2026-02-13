@@ -1,7 +1,7 @@
 from __future__ import annotations
 from turtle import Shape
 import numpy as np
-from typing import Any
+from typing import Any, Optional
 
 from src.Data.Transform import Transform
 from src.Data.Ray import Ray
@@ -28,7 +28,7 @@ class AABB:
     def from_bounds(cls, bounds: np.ndarray) -> AABB:
         return cls(bounds[0], bounds[1])
     
-    def intersect(self, ray: Ray, max_t: float =  1e30, bias: float = 1e-9) -> float:
+    def intersect(self, ray: Ray, max_t: float =  1e30, bias: float = 1e-9) -> Optional[float]:
         """
         Slab Method for Ray/AABB intersection.
         Returns distance to entry, or `None` if miss.
@@ -41,22 +41,22 @@ class AABB:
         t0 = (self.min_point - ray.origin) * inv_dir
         t1 = (self.max_point - ray.origin) * inv_dir
 
-        tmin = np.maximum(np.minimum(t0, t1), 0.0)
-        tmax = np.minimum(np.maximum(t0, t1), max_t)
+        tmin = np.minimum(t0, t1)
+        tmax = np.maximum(t0, t1)
 
         # Find largest entry time and smallest exit time across all axes
         t_enter = np.max(tmin)
         t_exit = np.min(tmax)
 
-        if t_exit >= t_enter and t_exit > 0 and t_enter < max_t:
-            # If we are inside the box (t_enter < 0), return 0 or t_exit?
-            # Usually for BVH culling, returning t_enter is fine.
-            return max(t_enter, 0.0)
+        # Check if there's a valid intersection
+        if t_exit < t_enter:
+            return None  # No overlap
+        if t_exit < bias:
+            return None  # Exit is behind or at origin
+        if t_enter > max_t:
+            return None  # Box is beyond max distance
         
-        # On a miss we return `None` which callers/tests expect as a miss
-        # indicator (instead of +/-inf). This is more ergonomic for
-        # downstream users (BVH traversal and unit tests).
-        return None
+        return max(t_enter, bias)
 
     @staticmethod
     def combine(box_a: 'AABB', box_b: 'AABB', operation: str) -> 'AABB':

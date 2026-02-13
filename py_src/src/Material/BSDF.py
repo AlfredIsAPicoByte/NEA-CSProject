@@ -314,7 +314,7 @@ def calculate_microfacet_brdf(
     :return: Evaluated BRDF color
     :rtype: Color
     """
-    safe_roughness = max(roughness, 1e-2)
+    safe_roughness = max(roughness, 1e-4)
     alpha = safe_roughness ** 2
     alpha_sq = alpha ** 2
     

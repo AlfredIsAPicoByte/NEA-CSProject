@@ -9,11 +9,6 @@ from src.Geometry.AABB import AABB, transform_bounds, convert_bounds_to_corners
 from src.Rendering.RayTracing.Intersections import BVHIntersection
 from .bench_scenes import get_minimal_scene
 
-
-# ---------------------------------------------------------------------------
-# SDF Tests
-# ---------------------------------------------------------------------------
-
 class TestSphereSDF:
     def test_centre_is_negative(self):
         """Origin is inside a unit sphere → SDF < 0."""
@@ -64,7 +59,6 @@ class TestSphereSDF:
         assert np.allclose(grad / np.linalg.norm(grad), p / np.linalg.norm(p), atol=1e-3)
         assert np.allclose(sphere.get_normal(p), p / np.linalg.norm(p), atol=1e-3) # Test the analitical solution too
 
-
 class TestCubeSDF:
     def test_centre_is_inside(self):
         """Origin should be inside a unit cube (half-extent 1)."""
@@ -96,7 +90,6 @@ class TestCubeSDF:
         val = Cube(1.0).get_distance(np.array([0.0, 0.0, 0.0]))
         assert np.isclose(val, -1.0, atol=1e-5)
 
-
 class TestCylinderSDF:
     def test_centre_is_inside(self):
         assert Cylinder(1.0, 2.0).get_distance(np.array([0.0, 0.0, 0.0])) < 0
@@ -113,11 +106,6 @@ class TestCylinderSDF:
         """A point on the curved wall exactly should give SDF ≈ 0."""
         val = Cylinder(1.0, 2.0).get_distance(np.array([1.0, 0.0, 0.0]))
         assert np.isclose(val, 0.0, atol=1e-5)
-
-
-# ---------------------------------------------------------------------------
-# Boolean Operations
-# ---------------------------------------------------------------------------
 
 class TestShapeSubtraction:
     def test_subtracted_region_is_outside(self):
@@ -146,7 +134,6 @@ class TestShapeSubtraction:
         val = result.get_distance(np.array([0.8, 0.0, 0.0]))
         assert val < 0.0
 
-
 class TestShapeIntersection:
     def test_centre_inside_both(self):
         """Origin inside both shapes → intersection result should also be inside."""
@@ -163,11 +150,6 @@ class TestShapeIntersection:
         # (1.5, 0, 0): inside sphere (SDF ≈ -0.5), outside tiny cube (SDF ≈ +1.1)
         val = result.get_distance(np.array([1.5, 0.0, 0.0]))
         assert val > 0.0
-
-
-# ---------------------------------------------------------------------------
-# AABB Tests
-# ---------------------------------------------------------------------------
 
 class TestAABB:
     def test_contains_interior_point(self):
@@ -269,11 +251,6 @@ class TestAABB:
         unit_cube_aabb = AABB.unit_cube()
         assert np.allclose(unit_cube_aabb.min_point, np.array([-0.5, -0.5, -0.5]))
         assert np.allclose(unit_cube_aabb.max_point, np.array([0.5, 0.5, 0.5]))
-
-
-# ---------------------------------------------------------------------------
-# BVH Tests
-# ---------------------------------------------------------------------------
 
 class TestBVH:
     def _make_sphere_list(self, n: int = 8):
