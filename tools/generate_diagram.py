@@ -355,7 +355,7 @@ class XMLGenerator:
         self.classes = classes
         self.relationships = relationships
 
-    def generate_xml(self) -> str:
+    def generate(self) -> str:
         """Generate XML representation of classes and relationships."""
         lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<classes>']
         
@@ -411,7 +411,7 @@ class GraphMLGenerator:
         parts = module_path.split('.')
         return parts[0].capitalize() if parts else "Other"
 
-    def generate_graphml(self, graph_type: GraphType = GraphType.FULL) -> str:
+    def generate(self, graph_type: GraphType = GraphType.FULL) -> str:
         """Generate GraphML with optional filtering by graph type."""
         lines = [
             '<?xml version="1.0" encoding="UTF-8"?>',
@@ -579,8 +579,9 @@ class MermaidGenerator:
 def main():
     parser = argparse.ArgumentParser(description="Generate class diagrams from Python code")
     parser.add_argument("--source", default="py_src/src", help="Source directory")
+    parser.add_argument("--store", default="py_src/docs", help="Source directory")
     parser.add_argument("--output", default="diagram", help="Output file")
-    parser.add_argument("--format", choices=["xml", "graphml", "mermaid"], default="graphml", help="Output format")
+    parser.add_argument("--format", choices=["xml", "graphml", "mermaid"], default="xml", help="Output format")
     parser.add_argument("--type", choices=[t.value for t in GraphType], default="full", 
                        help="Graph type to generate")
     parser.add_argument("--include-private", action="store_true", help="Include private classes")
@@ -612,10 +613,10 @@ def main():
     
     if args.format.lower() == "xml":
         generator = XMLGenerator(python_parser.classes, python_parser.relationships)
-        content = generator.generate(graph_type)
+        content = generator.generate()
     elif args.format.lower() == "graphml":
         generator = GraphMLGenerator(python_parser.classes, python_parser.relationships)
-        content = generator.generate_graphml(graph_type)
+        content = generator.generate(graph_type)
     elif args.format.lower() == "mermaid":
         generator = MermaidGenerator(python_parser.classes, python_parser.relationships)
         content = generator.generate(graph_type)
@@ -625,7 +626,7 @@ def main():
     
     extension = "mmd" if args.format.lower() == "mermaid" else args.format.lower()
 
-    with open(f"py_src/docs/{args.output}.{extension}", 'w', encoding='utf-8') as f:
+    with open(f"{args.store}/{args.output}.{extension}", 'w', encoding='utf-8') as f:
         f.write(content)
 
     print(f"✅ Done! Generated {args.output}.{extension} with {len(python_parser.classes)} classes and {len(python_parser.relationships)} relationships.")
