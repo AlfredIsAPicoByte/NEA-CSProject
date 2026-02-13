@@ -36,7 +36,8 @@ class PyClass:
     file_path: str
     bases: List[str] = field(default_factory=list)
     methods: List[str] = field(default_factory=list)
-    properties: List[str] = field(default_factory=list)  # ADD THIS
+    properties: List[str] = field(default_factory=list)
+    method_signatures: Dict[str, str] = field(default_factory=dict)  # Maps method name to signature
     description: str = ""
     is_abstract: bool = False
     is_enum: bool = False
@@ -113,11 +114,16 @@ class PythonClassParser:
                         py_class.is_enum = True
                         break
 
-                # Extract methods
+                # Extract methods and their signatures
                 py_class.methods = [
                     item.name for item in node.body
                     if isinstance(item, ast.FunctionDef)
                 ]
+                
+                # Extract method signatures with parameters and return types
+                for item in node.body:
+                    if isinstance(item, ast.FunctionDef):
+                        py_class.method_signatures[item.name] = self._extract_method_signature(item)
                 
                 # Extract properties/attributes from class variables and annotations
                 properties = set()
@@ -146,14 +152,42 @@ class PythonClassParser:
 
                 self.classes[node.name] = py_class
 
+    def _extract_method_signature(self, func_node: ast.FunctionDef) -> str:
+        """Extract method signature with parameters and return type."""
+        # Method name
+        method_name = func_node.name
+        if method_name == "__init__":
+            method_name = "new"
+        
+        # Extract parameters
+        args = []
+        for arg in func_node.args.args[1:]:  # Skip 'self'
+            arg_str = arg.arg
+            if arg.annotation:
+                arg_type = self._extract_type_hint(arg.annotation)
+                arg_str += f": {arg_type}"
+            args.append(arg_str)
+        
+        # Extract return type
+        return_type = ""
+        if func_node.returns:
+            return_type = self._extract_type_hint(func_node.returns)
+            return_type = f" -> {return_type}"
+        
+        # Build signature
+        params = ", ".join(args) if args else ""
+        signature = f"{method_name}({params}){return_type}"
+        return signature
+
     def _get_base_name(self, base_node) -> str:
         """Extract base class name from AST node."""
         if isinstance(base_node, ast.Name):
             return base_node.id
         elif isinstance(base_node, ast.Attribute):
             return base_node.attr
-        elif isinstance(base_node, ast.Subscript):# Handle generics like List[MyClass] if isinstance(base_node.value, ast.Name): return base_node.value.id
-            if isinstance(base_node.value, ast.Name):return base_node.value.id
+        elif isinstance(base_node, ast.Subscript):
+            if isinstance(base_node.value, ast.Name):
+                return base_node.value.id
             raise NotImplementedError(f"Unsupported base type: {ast.dump(base_node)}")
         
         return "Unknown"
@@ -241,14 +275,16 @@ class MermaidGenerator:
                 if stereotype:
                     lines.append(f"            {stereotype}")
                 
-                # Properties
-                for prop in cls.bases:
-                    lines.append(f"            +{prop}")
+                # Properties (middle section)
+                if cls.properties:
+                    for prop in cls.properties:
+                        lines.append(f"            -{prop}")
                 
-                # Methods
-                for method in cls.methods:
-                    method_clean = method.replace("__init__", "new")
-                    lines.append(f"            +{method_clean}")
+                # Methods with signatures (bottom section)
+                if cls.methods:
+                    for method in cls.methods:
+                        signature = cls.method_signatures.get(method, method)
+                        lines.append(f"            +{signature}")
                 
                 lines.append("        }")
             lines.append("    }")

@@ -70,7 +70,8 @@ class Transform:
     def _rotation_matrix_from_euler(self, euler: np.ndarray) -> np.ndarray:
         rx, ry, rz = euler
         rot_x = np.array([[1, 0, 0], [0, np.cos(rx), -np.sin(rx)], [0, np.sin(rx), np.cos(rx)]])
-        rot_y = np.array([[np.cos(ry), 0, np.sin(ry)], [0, 1, 0], [-np.sin(ry), 0, np.cos(ry)]])
+        # Use right-handed convention: positive rotation around Y maps +X -> +Z
+        rot_y = np.array([[np.cos(ry), 0, -np.sin(ry)], [0, 1, 0], [np.sin(ry), 0, np.cos(ry)]])
         rot_z = np.array([[np.cos(rz), -np.sin(rz), 0], [np.sin(rz), np.cos(rz), 0], [0, 0, 1]])
         return rot_z @ rot_y @ rot_x
 

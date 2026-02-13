@@ -10,6 +10,7 @@ from src.Data.Hit import HitInfo
 from src.Data.Scene import SceneNode
 from src.Data.Context import Mesh_Material
 from src.Geometry.BVH import BVHNode, build_bvh_tree
+from src.Geometry.AABB import AABB
 from src.Geometry.SDF import SignedDistanceShape
 from src.Lighting.Core import Light
 from src.Utilities.Common import unit
@@ -238,7 +239,7 @@ class RayMarchingIntersection(IntersectionStrategy):
 
             world_point = ray.point_at(distance_world)
 
-            safe_objects = scene._cache_objects or scene.objects
+            safe_objects = scene._cache_nodes or scene.nodes
             closest_object, distance_to_closest = self._distance_estimator(safe_objects, world_point, ray=ray)
 
             # Optimization: If we marched into the void
@@ -322,8 +323,8 @@ class RayMarchingIntersection(IntersectionStrategy):
             safe_shape = cast(SignedDistanceShape, shape)
             
             if self.settings.use_aabb_bounding_box:
-                box = obj.get_bounds()
-                t_box = box.intersect(ray, self.settings.max_distance, self.settings.bounding_box_bias)
+                bounds = obj.get_global_bounds()
+                t_box = AABB.from_bounds(bounds).intersect(ray, self.settings.max_distance, self.settings.bounding_box_bias)
                 if stats: stats.aabb_tests += 1
                 if t_box == float('inf'):
                     continue
@@ -367,8 +368,8 @@ class InverseSDFIntersection(IntersectionStrategy):
 
             # Optional: AABB Culling
             if self.settings.use_aabb_bounding_box:
-                box = obj.get_bounds()
-                t_box = box.intersect(ray, self.settings.max_distance, self.settings.bounding_box_bias)
+                bounds = obj.get_global_bounds()
+                t_box = AABB.from_bounds(bounds).intersect(ray, self.settings.max_distance, self.settings.bounding_box_bias)
                 if stats: stats.aabb_tests += 1
                 if t_box == float('inf'):
                     continue

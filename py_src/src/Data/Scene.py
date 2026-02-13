@@ -166,7 +166,7 @@ class Scene:
 
         self.nodes: List[SceneNode] = []
         
-        self._version: int = 1
+        self._version: int = 0
         self._cache_nodes: Optional[List[SceneNode]] = None
 
         for key, value in kwargs.items():

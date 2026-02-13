@@ -1430,7 +1430,10 @@ class Sphere(SignedDistanceShape3D, CorrespondingBoxCorners):
 
 class Cube(SignedDistanceShape3D, CorrespondingBoxCorners):
     def __init__(self, size: float = 1.0):
-        self.half_size = size / 2
+        # Tests and API treat the constructor `size` as the half-extent
+        # (i.e. Cube(1.0) -> extends to +/-1.0 on each axis). Store
+        # directly as `half_size` to match the test expectations.
+        self.half_size = size
 
     def get_distance(self, point: np.ndarray) -> float:
         q = np.abs(point) - self.half_size
