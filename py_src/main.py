@@ -101,7 +101,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     img_width, img_height = 224, 126
-    args.samples = 2
+    args.samples = 16
 
     # Quick mode overrides
     if args.quick:

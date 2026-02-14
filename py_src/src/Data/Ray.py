@@ -132,21 +132,49 @@ class RayPool:
         self._pool = []
         self._block_size = block_size
 
-    def get_ray(self, origin, orientation, x, y):
+    def get_ray(self, origin, orientation, pixel_x=-1, pixel_y=-1, sample_u=0.5, sample_v=0.5, name: str = "ray"):
+        """
+        Acquire a TracingRay from the pool (or create one if empty), and initialize fields.
+        """
         if self._pool:
-            ray = self._pool.pop()
-            
+            ray: TracingRay = self._pool.pop()
             ray.origin = origin
             ray.orientation = orientation
-            ray.pixel_x = x
-            ray.pixel_y = y
+            ray.pixel_x = int(pixel_x)
+            ray.pixel_y = int(pixel_y)
+            ray.sample_u = float(sample_u)
+            ray.sample_v = float(sample_v)
+            ray.name = name
             ray.current_depth = 0
             ray.is_inside = False
-            ray.throughput = np.array([1.0, 1.0, 1.0])
+            ray.throughput = [1.0, 1.0, 1.0, 1.0]
             return ray
-        else:
-            # Create new if pool is empty
-            return TracingRay(origin, orientation, x, y)
+
+        # Create new if pool is empty
+        return TracingRay(
+            origin=origin,
+            orientation=orientation,
+            name=name,
+            pixel_x=int(pixel_x),
+            pixel_y=int(pixel_y),
+            sample_u=float(sample_u),
+            sample_v=float(sample_v),
+        )
 
     def return_ray(self, ray: TracingRay):
-        self._pool.append(ray)
+        # Reset lightweight state to make objects safe for reuse
+        try:
+            ray.current_depth = 0
+            ray.pixel_x = -1
+            ray.pixel_y = -1
+            ray.sample_u = 0.5
+            ray.sample_v = 0.5
+            ray.is_inside = False
+            ray.throughput = [1.0, 1.0, 1.0, 1.0]
+            ray.name = "ray"
+        except Exception:
+            pass
+
+        # Simple pool size control (avoid unbounded growth)
+        if len(self._pool) < (self._block_size * 16):
+            self._pool.append(ray)
