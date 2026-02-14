@@ -100,14 +100,14 @@ if __name__ == "__main__":
     parser.add_argument("--quick", action="store_true", help="Quick preview mode (1spp, no post, etc)")
     args = parser.parse_args()
     
-    img_width, img_height = 80, 45
-    args.samples = 4
+    img_width, img_height = 224, 126
+    args.samples = 2
 
     # Quick mode overrides
     if args.quick:
         args.samples = 1
         args.postprocessing = False
-        img_width, img_height = 180, 144
+        img_width, img_height = 16, 9
 
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     IMG_OUT_DIR = os.path.join(PROJECT_ROOT, "images", "benchmarking", "scenes")
@@ -157,7 +157,7 @@ if __name__ == "__main__":
             epsilon=1e-4
         ))
 
-        shading = FlatShading(PhysicalShadingSettings(
+        shading = RecursiveLambertShading(PhysicalShadingSettings(
             ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.25)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
             background_settings=BackgroundSettings(True, Color.from_hex("#283848"), getattr(scene, "background_color", None), True, 0.67)
@@ -167,7 +167,7 @@ if __name__ == "__main__":
             image_width=img_width,
             image_height=img_height,
             sampling_manager=sampling_manager,
-            max_recursions=4,
+            max_recursions=1,
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,

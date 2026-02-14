@@ -141,7 +141,7 @@ class BVHNode:
             
             # Quick aabb-ray test with early pruning
             t = node.box.intersect(query_ray)
-            if t == float('inf') or (best_t is not None and t >= best_t):
+            if t is None or (best_t is not None and t >= best_t):
                 return
             
             # Leaf node: test all objects
