@@ -101,7 +101,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     img_width, img_height = 224, 126
-    args.samples = 16
+    args.samples = 8
 
     # Quick mode overrides
     if args.quick:
@@ -171,7 +171,7 @@ if __name__ == "__main__":
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,
-            tile_size=16,
+            tile_size=32,
             debug_mode=args.debug,
             verbose_logging=args.verbose
         ))
@@ -205,6 +205,9 @@ if __name__ == "__main__":
                 # Track only overall memory usage during rendering
                 render_process(scene, raytracer)
             
+            raw_img_data = raytracer.settings.film.get_image()
+            if args.verbose: Film.save(raw_img_data, raw_image_out_path)
+
             try:
                 with open(stats_report_out_path, "w", encoding="utf-8") as f:
                     f.write(raytracer.stats.format_report())
@@ -224,15 +227,14 @@ if __name__ == "__main__":
                 import traceback
                 traceback.print_exc()
 
-            raw_img_data = raytracer.settings.film.get_image()
-            Film.save(raw_img_data, raw_image_out_path)
-
             # 2. Post-Process (The Pipeline)
             processed_img = raw_img_data
 
             if args.postprocessing:
                 with MemoryProfiler(enable_tracemalloc=args.memory_trace, top=6) as mp:
                     processed_img = apply_post_processing(raw_img_data)
+
+                Film.save(processed_img, processed_image_out_path, args.verbose)
 
                 try:
                     with open(mem_report_out_path, "a", encoding="utf-8") as f:
@@ -244,8 +246,6 @@ if __name__ == "__main__":
                     print(f" / Failed to append to memory report:\n{e}\n")
                     import traceback
                     traceback.print_exc()
-
-                Film.save(processed_img, processed_image_out_path)
 
             # Free large buffers promptly to avoid accumulation between scenes
             try:

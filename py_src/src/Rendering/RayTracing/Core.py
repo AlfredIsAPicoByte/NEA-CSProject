@@ -379,7 +379,7 @@ class RayTracer(Algorithm):
                     
                     if self.settings.debug_mode:
                         # Save intermediate image for debugging
-                        Film.save(self.settings.film.get_image(), "_temp.png")
+                        Film.save(self.settings.film.get_image(), "_temp.png", self.settings.verbose_logging)
         else:
             self.render_tile(scene, sampler, region_x, region_y, region_width, region_height)
 
