@@ -24,7 +24,6 @@ def render_process(scene: Scene, algorithm: Algorithm):
     # Render using the algorithm
     algorithm.generate_film(scene)
     print(" + Rendering complete")
-    print(f"{algorithm.settings.film}")
 
     # Convert List[Color] to numpy array (width x height x 3)
     cam = scene.camera
@@ -100,14 +99,14 @@ if __name__ == "__main__":
     parser.add_argument("--quick", action="store_true", help="Quick preview mode (1spp, no post, etc)")
     args = parser.parse_args()
     
-    img_width, img_height = 224, 126
-    args.samples = 8
+    img_width, img_height = 320, 180
+    args.samples = 2
 
     # Quick mode overrides
     if args.quick:
         args.samples = 1
         args.postprocessing = False
-        img_width, img_height = 16, 9
+        img_width, img_height = 160, 90
 
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     IMG_OUT_DIR = os.path.join(PROJECT_ROOT, "images", "benchmarking", "scenes")
@@ -158,9 +157,9 @@ if __name__ == "__main__":
         ))
 
         shading = RecursiveLambertShading(PhysicalShadingSettings(
-            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.25)),
+            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.75)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
-            background_settings=BackgroundSettings(True, Color.from_hex("#283848"), getattr(scene, "background_color", None), True, 0.67)
+            background_settings=BackgroundSettings(True, Color.from_hex("#283848"), getattr(scene, "background_color", None), True, 0.25)
         ))
 
         raytracer = RayTracer(RayTracingSettings(
@@ -206,7 +205,7 @@ if __name__ == "__main__":
                 render_process(scene, raytracer)
             
             raw_img_data = raytracer.settings.film.get_image()
-            if args.verbose: Film.save(raw_img_data, raw_image_out_path)
+            Film.save(raw_img_data, raw_image_out_path, args.verbose)
 
             try:
                 with open(stats_report_out_path, "w", encoding="utf-8") as f:
