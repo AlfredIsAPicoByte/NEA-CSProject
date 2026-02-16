@@ -8,6 +8,16 @@ from src.Geometry.SDF import Sphere, Cube
 from src.Material.Factory import MaterialFactory
 
 
+# Define pytest markers
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
+    )
+    config.addinivalue_line(
+        "markers", "fast: marks tests as fast (select with '-m \"fast\"')"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Transform fixtures
 # ---------------------------------------------------------------------------
