@@ -2,20 +2,20 @@
 Render Type: Ray Tracing
 Intersection: BVHIntersection
 Shading: RecursiveLambertShading
-Time: 384.162s | Mem: 0.00MB
+Time: 21.066s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
-  - Total:       373,344
-  - Primary:     115,200    (30.9%)
-  - Shadow:      258,144    (Lights used: 2)
+  - Total:       57,600
+  - Primary:     57,600     (100.0%)
+  - Shadow:      0          (Lights used: 2)
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      376,126
-  - Tri Tests:       375,501
+  - AABB Tests:      307,683
+  - Tri Tests:       173
   - Nodes Visited:   0
-  - Cost/Ray:        2.01 (Target: < 50)
-  - Culling Ratio:   1.00 (Target: > 2.0)
+  - Cost/Ray:        5.34 (Target: < 50)
+  - Culling Ratio:   1778.51 (Target: > 2.0)
 -------------------------
 Diagnostics:
   - Max Depth Hit:   0
@@ -30,13 +30,13 @@ Tiles Processed:  60
 Settings:
   - Image_width: 320
   - Image_height: 180
-  - Film: Film(320x180, accum_pixels=(180, 320, 3), accum_weight=(180, 320), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0.03 0.   0.  ], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
-  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x0000022B7C4A9810>
-  - Max_recursions: 4
-  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x0000022B7EEC9F50>
-  - Shading_strategy: <src.Rendering.RayTracing.Shading.RecursiveLambertShading object at 0x0000022B7EEC9550>
+  - Film: Film(320x180, accum_pixels=(180, 320, 3), accum_weight=(180, 320), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0. 0. 0.], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
+  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x0000025F406E6E50>
+  - Max_recursions: 1
+  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x0000025F40888590>
+  - Shading_strategy: <src.Rendering.RayTracing.Shading.RecursiveLambertShading object at 0x0000025F40742490>
   - Use_tiling: True
   - Tile_size: 32
   - Debug_mode: True
-  - Verbose_logging: False
+  - Verbose_logging: True
 =========================

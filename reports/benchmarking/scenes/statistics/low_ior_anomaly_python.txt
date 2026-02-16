@@ -2,20 +2,20 @@
 Render Type: Ray Tracing
 Intersection: BVHIntersection
 Shading: RecursiveLambertShading
-Time: 239.808s | Mem: 0.00MB
+Time: 157.127s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
-  - Total:       218,304
-  - Primary:     115,200    (52.8%)
-  - Shadow:      103,104    (Lights used: 2)
+  - Total:       82,208
+  - Primary:     57,600     (70.1%)
+  - Shadow:      24,608     (Lights used: 2)
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      432,440
-  - Tri Tests:       343,206
+  - AABB Tests:      1,175,017
+  - Tri Tests:       459,077
   - Nodes Visited:   0
-  - Cost/Ray:        3.55 (Target: < 50)
-  - Culling Ratio:   1.26 (Target: > 2.0)
+  - Cost/Ray:        19.88 (Target: < 50)
+  - Culling Ratio:   2.56 (Target: > 2.0)
 -------------------------
 Diagnostics:
   - Max Depth Hit:   0
@@ -30,13 +30,13 @@ Tiles Processed:  60
 Settings:
   - Image_width: 320
   - Image_height: 180
-  - Film: Film(320x180, accum_pixels=(180, 320, 3), accum_weight=(180, 320), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0.0375 0.0375 0.0375], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
-  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x0000022B7C4A9810>
-  - Max_recursions: 4
-  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x0000022B7C6BEFD0>
-  - Shading_strategy: <src.Rendering.RayTracing.Shading.RecursiveLambertShading object at 0x0000022B7EDF16D0>
+  - Film: Film(320x180, accum_pixels=(180, 320, 3), accum_weight=(180, 320), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0.045 0.045 0.045], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
+  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x0000025F406E6E50>
+  - Max_recursions: 1
+  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x0000025F4082CD50>
+  - Shading_strategy: <src.Rendering.RayTracing.Shading.RecursiveLambertShading object at 0x0000025F4F3D0710>
   - Use_tiling: True
   - Tile_size: 32
   - Debug_mode: True
-  - Verbose_logging: False
+  - Verbose_logging: True
 =========================

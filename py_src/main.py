@@ -39,7 +39,7 @@ def apply_post_processing(raw_img):
     """
     from src.Image.PostProcessing.Pipeline import ImagePipeline
     from src.Image.PostProcessing.Passes import (
-        Exposure,
+        AutoExposure,
         Bloom,
         ChromaticAberration,
         Vignette,
@@ -48,10 +48,7 @@ def apply_post_processing(raw_img):
     )
     
     pipeline = ImagePipeline()
-    pipeline.add_pass(Exposure(0.5))
-    pipeline.add_pass(Bloom(1.5, 5, 0.25, 0.75))
-    # pipeline.add_pass(ChromaticAberration())
-    # pipeline.add_pass(Vignette(0.15, 0.6))
+    pipeline.add_pass(AutoExposure())
     pipeline.add_pass(ACESFilmicToneMapping())
     pipeline.add_pass(GammaCorrection(2.2))
 
@@ -100,7 +97,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     img_width, img_height = 320, 180
-    args.samples = 2
+    args.samples = 1
 
     # Quick mode overrides
     if args.quick:
