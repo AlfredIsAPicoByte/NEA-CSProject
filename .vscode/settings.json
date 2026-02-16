@@ -107,8 +107,16 @@
     "${workspaceFolder}/py_src"
   ],
   "python.testing.pytestArgs": [
-    "py_src"
+    "py_src",
+    "-v"
+  ],
+  "python.testing.unittestArgs": [
+    "-v",
+    "-s",
+    ".",
+    "-p",
+    "*test*.py"
   ],
   "python.testing.unittestEnabled": false,
-  "python.testing.pytestEnabled": true
+  "python.testing.pytestEnabled": true,
 }

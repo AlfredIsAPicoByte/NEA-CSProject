@@ -4,7 +4,7 @@ from enum import Enum
 from typing import List, Tuple, Optional
 
 from src.Data.Transform import Transform
-from src.Data.Ray import Ray, TracingRay
+from src.Data.Ray import Ray, TracingRay, RayPool
 from src.Data.Ratio import Ratio
 from .Sampling.Core import Sampler
 
@@ -69,6 +69,8 @@ class Camera:
         # Ray Tracing Specifics
         self.aperture_radius = aperture_radius
         self.focal_distance = focal_distance
+        # Ray pooling for performance/memory
+        self.ray_pool = RayPool()
     
     def __post_init__(self):
         if self.fov <= 0:
@@ -338,7 +340,7 @@ class Camera:
                     screen_x = sample.u
                     screen_y = sample.v
                     _r = self.generate_ray(screen_x, screen_y)
-                    ray = TracingRay(
+                    ray = self.ray_pool.get_ray(
                         origin=_r.origin,
                         orientation=_r.orientation,
                         pixel_x=x,

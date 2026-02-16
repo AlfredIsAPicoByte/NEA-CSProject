@@ -1,0 +1,1580 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classes>
+  <class name="AABB" module="Geometry\AABB">
+    <attributes>
+      <attribute name="__slots__" type="list" source="assignment" private="True"/>
+      <attribute name="min_point" type="ndarray" source="parameter" private="False"/>
+      <attribute name="max_point" type="ndarray" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="from_corners" signature="from_corners(corners: ndarray) -> AABB"/>
+      <method name="from_bounds" signature="from_bounds(bounds: ndarray) -> AABB"/>
+      <method name="intersect" signature="intersect(ray: Ray, max_t: float, bias: float) -> float"/>
+      <method name="combine" signature="combine(box_b: None, operation: str) -> None"/>
+      <method name="contains" signature="contains(point: ndarray) -> bool"/>
+      <method name="overlaps" signature="overlaps(other: AABB) -> bool"/>
+      <method name="center" signature="center() -> ndarray"/>
+      <method name="size" signature="size() -> ndarray"/>
+      <method name="empty" signature="empty() -> None"/>
+      <method name="infinite" signature="infinite() -> None"/>
+      <method name="unit_cube" signature="unit_cube() -> None"/>
+    </methods>
+  </class>
+  <class name="ACESFilmicToneMapping" module="Image\PostProcessing\Passes">
+    <bases>PostProcessPass</bases>
+    <methods>
+      <method name="apply" signature="apply(image: ndarray) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="AdaptiveSampler" module="Data\Sampling\Core">
+    <bases>Sampler</bases>
+    <attributes>
+      <attribute name="sample_settings" type="SampleSettings" source="parameter" private="False"/>
+      <attribute name="seed" type="int" source="parameter" private="False"/>
+      <attribute name="_base_sampler" type="None" source="assignment" private="True"/>
+    </attributes>
+    <methods>
+      <method name="sample_pixel" signature="sample_pixel(x: int, y: int, sample_idx: int) -> None"/>
+      <method name="has_converged" signature="has_converged(colors: np) -> bool"/>
+    </methods>
+  </class>
+  <class name="Algorithm" module="Rendering\Core">
+    <bases>ABC</bases>
+    <attributes>
+      <attribute name="settings_type" type="AlgorithmSettings" source="assignment" private="False"/>
+      <attribute name="settings" type="AlgorithmSettings" source="parameter" private="False"/>
+      <attribute name="stats" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="setup" signature="setup(scene: Scene) -> None"/>
+      <method name="render_tile" signature="render_tile(scene: Scene, sampler: Sampler, tile_x: int, tile_y: int, width: int, height: int) -> None"/>
+      <method name="generate_film" signature="generate_film(scene: Scene, sampler: Sampler, region: Tuple) -> None"/>
+      <method name="reset_stats" signature="reset_stats() -> None"/>
+    </methods>
+  </class>
+  <class name="AlgorithmSettings" module="Rendering\Core">
+    <attributes>
+      <attribute name="image_width" type="int" source="annotation" private="False"/>
+      <attribute name="image_height" type="int" source="annotation" private="False"/>
+      <attribute name="film" type="Film" source="annotation" private="False"/>
+    </attributes>
+  </class>
+  <class name="AmbienceSettings" module="Rendering\RayTracing\Shading">
+    <attributes>
+      <attribute name="enabled" type="bool" source="annotation" private="False"/>
+      <attribute name="color" type="Color" source="annotation" private="False"/>
+      <attribute name="intensity" type="float" source="annotation" private="False"/>
+      <attribute name="occlusion_map_enabled" type="bool" source="annotation" private="False"/>
+      <attribute name="occlusion_sample_count" type="int" source="annotation" private="False"/>
+      <attribute name="occlusion_radius" type="float" source="annotation" private="False"/>
+      <attribute name="occlusion_bias" type="float" source="annotation" private="False"/>
+    </attributes>
+  </class>
+  <class name="AnalyticalIntersection" module="Rendering\RayTracing\Intersections">
+    <bases>IntersectionStrategy</bases>
+    <methods>
+      <method name="find_hit" signature="find_hit(scene: Scene, ray: TracingRay, stats: None) -> HitInfo"/>
+    </methods>
+  </class>
+  <class name="AutoExposure" module="Image\PostProcessing\Passes">
+    <bases>PostProcessPass</bases>
+    <methods>
+      <method name="apply" signature="apply(image: ndarray) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="BVHIntersection" module="Rendering\RayTracing\Intersections">
+    <bases>IntersectionStrategy</bases>
+    <attributes>
+      <attribute name="settings" type="IntersectionSettings" source="parameter" private="False"/>
+      <attribute name="max_depth" type="int" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="find_hit" signature="find_hit(scene: Scene, ray: TracingRay, stats: None) -> HitInfo"/>
+      <method name="is_point_occluded" signature="is_point_occluded(point_1: ndarray, point_2: ndarray, objects: SceneNode, bias: float, exclude_obj: SceneNode, stats: None) -> bool"/>
+    </methods>
+  </class>
+  <class name="BVHNode" module="Geometry\BVH">
+    <attributes>
+      <attribute name="objects" type="List" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="is_leaf" signature="is_leaf() -> bool"/>
+      <method name="is_empty" signature="is_empty() -> bool"/>
+      <method name="is_internal" signature="is_internal() -> bool"/>
+      <method name="is_valid" signature="is_valid() -> bool"/>
+      <method name="leaf_count" signature="leaf_count() -> int"/>
+      <method name="node_count" signature="node_count() -> int"/>
+      <method name="depth" signature="depth() -> int"/>
+      <method name="is_balanced" signature="is_balanced() -> bool"/>
+      <method name="intersect" signature="intersect(origin: ndarray, direction: ndarray)"/>
+    </methods>
+  </class>
+  <class name="BVHSplitMode" module="Geometry\BVH">
+    <bases>Enum</bases>
+    <attributes>
+      <attribute name="LONGEST_AXIS" type="str" source="assignment" private="False"/>
+      <attribute name="BALANCED" type="str" source="assignment" private="False"/>
+    </attributes>
+  </class>
+  <class name="BackgroundSettings" module="Rendering\RayTracing\Shading">
+    <attributes>
+      <attribute name="enabled" type="bool" source="annotation" private="False"/>
+      <attribute name="default_color" type="Color" source="annotation" private="False"/>
+      <attribute name="current_value" type="None" source="annotation" private="False"/>
+      <attribute name="environment_effect_enabled" type="bool" source="annotation" private="False"/>
+      <attribute name="environment_contribution_factor" type="float" source="annotation" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_background_color" signature="get_background_color(direction: ndarray) -> Color"/>
+    </methods>
+  </class>
+  <class name="Bloom" module="Image\PostProcessing\Passes">
+    <bases>PostProcessPass</bases>
+    <attributes>
+      <attribute name="threshold" type="float" source="parameter" private="False"/>
+      <attribute name="radius" type="float" source="parameter" private="False"/>
+      <attribute name="intensity" type="float" source="parameter" private="False"/>
+      <attribute name="softness" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="apply" signature="apply(image: ndarray) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="Camera" module="Data\Camera">
+    <attributes>
+      <attribute name="transform" type="Transform" source="parameter" private="False"/>
+      <attribute name="resolution_width" type="int" source="parameter" private="False"/>
+      <attribute name="resolution_height" type="int" source="parameter" private="False"/>
+      <attribute name="fov" type="float" source="parameter" private="False"/>
+      <attribute name="near" type="float" source="parameter" private="False"/>
+      <attribute name="far" type="float" source="parameter" private="False"/>
+      <attribute name="camera_type" type="CameraType" source="parameter" private="False"/>
+      <attribute name="othographic_distance" type="float" source="parameter" private="False"/>
+      <attribute name="aperture_radius" type="float" source="parameter" private="False"/>
+      <attribute name="focal_distance" type="float" source="parameter" private="False"/>
+      <attribute name="width" type="None" source="assignment" private="False"/>
+      <attribute name="height" type="None" source="assignment" private="False"/>
+      <attribute name="aspect_ratio" type="None" source="assignment" private="False"/>
+      <attribute name="type" type="None" source="assignment" private="False"/>
+      <attribute name="mode" type="None" source="assignment" private="False"/>
+      <attribute name="name" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_view_matrix" signature="get_view_matrix() -> ndarray"/>
+      <method name="get_projection_matrix" signature="get_projection_matrix() -> ndarray"/>
+      <method name="resize" signature="resize(width: float, height: float)"/>
+      <method name="resize_aspect" signature="resize_aspect(aspect: Ratio, scale: float)"/>
+      <method name="generate_ray" signature="generate_ray(u: float, v: float) -> Ray"/>
+      <method name="generate_lens_ray" signature="generate_lens_ray(u: float, v: float, sampler: Sampler) -> Ray"/>
+      <method name="generate_screen_rays" signature="generate_screen_rays(sampler: Sampler, region: Tuple) -> TracingRay"/>
+      <method name="screen_to_world" signature="screen_to_world(screen_x: float, screen_y: float, depth: float) -> ndarray"/>
+      <method name="world_to_screen" signature="world_to_screen(world_pos: ndarray) -> None"/>
+      <method name="to_perspective" signature="to_perspective() -> dict"/>
+      <method name="to_matrices" signature="to_matrices() -> dict"/>
+      <method name="get_camera_matrix" signature="get_camera_matrix() -> ndarray"/>
+      <method name="get_frustum_planes" signature="get_frustum_planes() -> dict"/>
+      <method name="export_uniforms" signature="export_uniforms() -> str"/>
+    </methods>
+  </class>
+  <class name="CameraMode" module="Data\Camera">
+    <bases>Enum</bases>
+    <attributes>
+      <attribute name="FIRST_PERSON" type="int" source="assignment" private="False"/>
+      <attribute name="PLANE" type="int" source="assignment" private="False"/>
+      <attribute name="ORBIT" type="int" source="assignment" private="False"/>
+    </attributes>
+  </class>
+  <class name="CameraType" module="Data\Camera">
+    <bases>Enum</bases>
+    <attributes>
+      <attribute name="PERSPECTIVE" type="int" source="assignment" private="False"/>
+      <attribute name="ORTHOGRAPHIC" type="int" source="assignment" private="False"/>
+    </attributes>
+  </class>
+  <class name="Capsule" module="Geometry\SDF">
+    <bases>SignedDistanceShape3D</bases>
+    <attributes>
+      <attribute name="radius" type="float" source="parameter" private="False"/>
+      <attribute name="height" type="float" source="parameter" private="False"/>
+      <attribute name="a" type="None" source="assignment" private="False"/>
+      <attribute name="b" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="volume" signature="volume() -> float"/>
+      <method name="surface_area" signature="surface_area() -> float"/>
+    </methods>
+  </class>
+  <class name="ChromaticAberration" module="Image\PostProcessing\Passes">
+    <bases>PostProcessPass</bases>
+    <attributes>
+      <attribute name="intensity" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="apply" signature="apply(image: ndarray) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="Circle" module="Geometry\SDF">
+    <bases>SignedDistanceShape2D;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="radius" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+      <method name="perimeter" signature="perimeter() -> float"/>
+      <method name="area" signature="area() -> float"/>
+      <method name="is_convex" signature="is_convex() -> bool"/>
+      <method name="get_convex_hull" signature="get_convex_hull(resolution: int) -> np"/>
+    </methods>
+  </class>
+  <class name="Color" module="Data\Color">
+    <attributes>
+      <attribute name="r" type="float" source="annotation" private="False"/>
+      <attribute name="g" type="float" source="annotation" private="False"/>
+      <attribute name="b" type="float" source="annotation" private="False"/>
+      <attribute name="a" type="float" source="annotation" private="False"/>
+    </attributes>
+    <methods>
+      <method name="clamp" signature="clamp()"/>
+      <method name="red" signature="red() -> float"/>
+      <method name="green" signature="green() -> float"/>
+      <method name="blue" signature="blue() -> float"/>
+      <method name="to_np_ndarray" signature="to_np_ndarray() -> ndarray"/>
+      <method name="hsv_to_rgb" signature="hsv_to_rgb(s: float, v: float) -> None"/>
+      <method name="rgb_to_hsv" signature="rgb_to_hsv(g: float, b: float) -> None"/>
+      <method name="hsl_to_rgb" signature="hsl_to_rgb(s: float, l: float) -> None"/>
+      <method name="rgb_to_hsl" signature="rgb_to_hsl(g: float, b: float) -> None"/>
+      <method name="cmyk_to_rgb" signature="cmyk_to_rgb(m: float, y: float, k: float) -> None"/>
+      <method name="rgb_to_cmyk" signature="rgb_to_cmyk(g: float, b: float) -> None"/>
+      <method name="rgb_to_grayscale" signature="rgb_to_grayscale(g: float, b: float) -> float"/>
+      <method name="hex_to_rgb" signature="hex_to_rgb() -> None"/>
+      <method name="rgb_to_hex" signature="rgb_to_hex(g: float, b: float, a: float, include_alpha: bool) -> str"/>
+      <method name="kelvin_to_rgb" signature="kelvin_to_rgb() -> None"/>
+      <method name="wavelength_to_rgb" signature="wavelength_to_rgb() -> None"/>
+      <method name="from_hex" signature="from_hex(hex_str: str)"/>
+      <method name="from_hsv" signature="from_hsv(h: float, s: float, v: float, a: float)"/>
+      <method name="from_hsl" signature="from_hsl(h: float, s: float, l: float, a: float)"/>
+      <method name="from_cmyk" signature="from_cmyk(c: float, m: float, y: float, k: float, a: float)"/>
+      <method name="from_kelvin" signature="from_kelvin(k: float, a: float)"/>
+      <method name="from_wavelength" signature="from_wavelength(nm: float, a: float)"/>
+      <method name="from_int_rgb" signature="from_int_rgb(r: int, g: int, b: int, a: int)"/>
+      <method name="from_np" signature="from_np(arr: ndarray)"/>
+      <method name="to_hsv" signature="to_hsv() -> None"/>
+      <method name="to_hsl" signature="to_hsl() -> None"/>
+      <method name="to_cmyk" signature="to_cmyk() -> None"/>
+      <method name="to_grayscale" signature="to_grayscale() -> None"/>
+      <method name="to_hex" signature="to_hex(include_alpha: bool) -> str"/>
+      <method name="to_int_rgb" signature="to_int_rgb() -> None"/>
+      <method name="to_int_rgba" signature="to_int_rgba() -> None"/>
+      <method name="to_np_array" signature="to_np_array(include_alpha: bool) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="ColorGradient" module="Data\Color">
+    <attributes>
+      <attribute name="colors" type="Color" source="annotation" private="False"/>
+      <attribute name="positions" type="ndarray" source="annotation" private="False"/>
+      <attribute name="interpolation" type="None" source="annotation" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_color" signature="get_color(t: float) -> Color"/>
+    </methods>
+  </class>
+  <class name="Cone" module="Geometry\SDF">
+    <bases>SignedDistanceShape3D;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="base_radius" type="float" source="parameter" private="False"/>
+      <attribute name="height" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+      <method name="volume" signature="volume() -> float"/>
+      <method name="surface_area" signature="surface_area() -> float"/>
+    </methods>
+  </class>
+  <class name="CorrespondingBoxCorners" module="Geometry\SDF">
+    <bases>ABC</bases>
+    <methods>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="Cross" module="Geometry\SDF">
+    <bases>SignedDistanceShape2D</bases>
+    <attributes>
+      <attribute name="size" type="float" source="parameter" private="False"/>
+      <attribute name="thickness" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+    </methods>
+  </class>
+  <class name="Cube" module="Geometry\SDF">
+    <bases>SignedDistanceShape3D;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="size" type="float" source="parameter" private="False"/>
+      <attribute name="half_size" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+      <method name="volume" signature="volume() -> float"/>
+    </methods>
+  </class>
+  <class name="Cylinder" module="Geometry\SDF">
+    <bases>SignedDistanceShape3D;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="radius" type="float" source="parameter" private="False"/>
+      <attribute name="height" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+      <method name="volume" signature="volume() -> float"/>
+      <method name="surface_area" signature="surface_area() -> float"/>
+    </methods>
+  </class>
+  <class name="DistanceShading" module="Rendering\RayTracing\Shading">
+    <bases>ShadingStrategy</bases>
+    <attributes>
+      <attribute name="settings" type="ShadingSettings" source="parameter" private="False"/>
+      <attribute name="min_distance" type="float" source="parameter" private="False"/>
+      <attribute name="max_distance" type="float" source="parameter" private="False"/>
+      <attribute name="reference_point" type="ndarray" source="parameter" private="False"/>
+      <attribute name="color_gradient" type="ColorGradient" source="parameter" private="False"/>
+      <attribute name="invert_colors" type="bool" source="parameter" private="False"/>
+      <attribute name="min_dist" type="None" source="assignment" private="False"/>
+      <attribute name="max_dist" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="shade" signature="shade(hit_info: HitInfo) -> Color"/>
+    </methods>
+  </class>
+  <class name="Ellipse" module="Geometry\SDF">
+    <bases>SignedDistanceShape2D;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="radius_x" type="float" source="parameter" private="False"/>
+      <attribute name="radius_y" type="float" source="parameter" private="False"/>
+      <attribute name="radii" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+      <method name="perimeter" signature="perimeter() -> float"/>
+      <method name="area" signature="area() -> float"/>
+    </methods>
+  </class>
+  <class name="EllipticSphere" module="Geometry\SDF">
+    <bases>SignedDistanceShape3D;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="radius_x" type="float" source="parameter" private="False"/>
+      <attribute name="radius_y" type="float" source="parameter" private="False"/>
+      <attribute name="radius_z" type="float" source="parameter" private="False"/>
+      <attribute name="radii" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+    </methods>
+  </class>
+  <class name="Exposure" module="Image\PostProcessing\Passes">
+    <bases>PostProcessPass</bases>
+    <attributes>
+      <attribute name="exposure_value" type="float" source="parameter" private="False"/>
+      <attribute name="exposure" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="apply" signature="apply(image: ndarray) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="Face" module="Geometry\Mesh">
+    <attributes>
+      <attribute name="v1" type="int" source="annotation" private="False"/>
+      <attribute name="v2" type="int" source="annotation" private="False"/>
+      <attribute name="v3" type="int" source="annotation" private="False"/>
+      <attribute name="uv" type="Tuple" source="annotation" private="False"/>
+      <attribute name="normal" type="np" source="annotation" private="False"/>
+      <attribute name="tangent" type="np" source="annotation" private="False"/>
+      <attribute name="bitangent" type="np" source="annotation" private="False"/>
+    </attributes>
+  </class>
+  <class name="Film" module="Image\Film">
+    <attributes>
+      <attribute name="width" type="int" source="parameter" private="False"/>
+      <attribute name="height" type="int" source="parameter" private="False"/>
+      <attribute name="accum_color" type="None" source="assignment" private="False"/>
+      <attribute name="accum_weight" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="add_pixel_batch" signature="add_pixel_batch(x: int, y: int, color_sum: ndarray, weighted_sum: float)"/>
+      <method name="get_image" signature="get_image() -> ndarray"/>
+      <method name="save" signature="save(pixles: ndarray, filename: str)"/>
+    </methods>
+  </class>
+  <class name="FlatShading" module="Rendering\RayTracing\Shading">
+    <bases>ShadingStrategy</bases>
+    <methods>
+      <method name="shade" signature="shade(hit_info: HitInfo) -> Color"/>
+    </methods>
+  </class>
+  <class name="GammaCorrection" module="Image\PostProcessing\Passes">
+    <bases>PostProcessPass</bases>
+    <attributes>
+      <attribute name="gamma" type="float" source="parameter" private="False"/>
+      <attribute name="inv_gamma" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="apply" signature="apply(image: ndarray) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="Gear" module="Geometry\SDF">
+    <bases>SignedDistanceShape2D</bases>
+    <attributes>
+      <attribute name="radius" type="float" source="parameter" private="False"/>
+      <attribute name="teeth" type="int" source="parameter" private="False"/>
+      <attribute name="tooth_depth" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+    </methods>
+  </class>
+  <class name="HaltonSampler" module="Data\Sampling\Core">
+    <bases>Sampler</bases>
+    <methods>
+      <method name="sample_pixel" signature="sample_pixel(x: int, y: int, sample_idx: int) -> None"/>
+    </methods>
+  </class>
+  <class name="Heart" module="Geometry\SDF">
+    <bases>SignedDistanceShape2D</bases>
+    <attributes>
+      <attribute name="size" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+    </methods>
+  </class>
+  <class name="HitInfo" module="Data\Hit">
+    <attributes>
+      <attribute name="hit" type="bool" source="annotation" private="False"/>
+      <attribute name="distance" type="float" source="annotation" private="False"/>
+      <attribute name="point" type="np" source="annotation" private="False"/>
+      <attribute name="normal" type="np" source="annotation" private="False"/>
+      <attribute name="direction" type="np" source="annotation" private="False"/>
+      <attribute name="obj" type="None" source="annotation" private="False"/>
+      <attribute name="uv" type="np" source="annotation" private="False"/>
+      <attribute name="did_hit" type="bool" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="miss" signature="miss()"/>
+    </methods>
+  </class>
+  <class name="ImagePipeline" module="Image\PostProcessing\Pipeline">
+    <methods>
+      <method name="add_pass" signature="add_pass(effect: PostProcessPass)"/>
+      <method name="execute" signature="execute(input_image: ndarray) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="IntersectionSettings" module="Rendering\RayTracing\Intersections">
+    <attributes>
+      <attribute name="epsilon" type="float" source="annotation" private="False"/>
+      <attribute name="max_steps" type="int" source="annotation" private="False"/>
+      <attribute name="max_distance" type="float" source="annotation" private="False"/>
+      <attribute name="step_relaxation" type="float" source="annotation" private="False"/>
+      <attribute name="use_aabb_bounding_box" type="bool" source="annotation" private="False"/>
+      <attribute name="always_rebuild_bvh" type="bool" source="annotation" private="False"/>
+      <attribute name="bounding_box_bias" type="float" source="assignment" private="False"/>
+    </attributes>
+  </class>
+  <class name="IntersectionStrategy" module="Rendering\RayTracing\Intersections">
+    <bases>ABC</bases>
+    <attributes>
+      <attribute name="settings" type="IntersectionSettings" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="find_hit" signature="find_hit(scene: Scene, ray: TracingRay, stats: None) -> HitInfo"/>
+      <method name="is_point_occluded" signature="is_point_occluded(point_1: ndarray, point_2: ndarray, objects: SceneNode, bias: float, exclude_obj: SceneNode, stats: None) -> bool"/>
+    </methods>
+  </class>
+  <class name="InverseSDFIntersection" module="Rendering\RayTracing\Intersections">
+    <bases>IntersectionStrategy</bases>
+    <methods>
+      <method name="find_hit" signature="find_hit(scene: Scene, ray: TracingRay, stats: None) -> HitInfo"/>
+    </methods>
+  </class>
+  <class name="LambertShading" module="Rendering\RayTracing\Shading">
+    <bases>PhysicalShadingStrategy</bases>
+    <methods>
+      <method name="shade" signature="shade(scene: None, ray: TracingRay, hit_info: None, sampler: Sampler, intersection_function: None, occlusion_function: None, bias: float, stats: None) -> Color"/>
+    </methods>
+  </class>
+  <class name="Light" module="Lighting\Core">
+    <attributes>
+      <attribute name="type" type="LightType" source="annotation" private="False"/>
+      <attribute name="color" type="Color" source="annotation" private="False"/>
+      <attribute name="intensity" type="float" source="annotation" private="False"/>
+      <attribute name="radius" type="float" source="annotation" private="False"/>
+      <attribute name="direction" type="ndarray" source="annotation" private="False"/>
+      <attribute name="spot_inner_angle" type="float" source="annotation" private="False"/>
+      <attribute name="spot_outer_angle" type="float" source="annotation" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_direction" signature="get_direction(light_pos: ndarray, hit_point: ndarray) -> ndarray"/>
+      <method name="get_distance" signature="get_distance(light_pos: ndarray, hit_point: ndarray, bias: float) -> float"/>
+      <method name="get_radiance" signature="get_radiance(light_pos: ndarray, hit_point: ndarray) -> Color"/>
+    </methods>
+  </class>
+  <class name="LightType" module="Lighting\Core">
+    <bases>Enum</bases>
+    <attributes>
+      <attribute name="POINT" type="int" source="assignment" private="False"/>
+      <attribute name="DIRECTIONAL" type="int" source="assignment" private="False"/>
+      <attribute name="SPOT" type="int" source="assignment" private="False"/>
+    </attributes>
+  </class>
+  <class name="MaterialData" module="Material\Core">
+    <attributes>
+      <attribute name="name" type="str" source="annotation" private="False"/>
+      <attribute name="albedo" type="Color" source="annotation" private="False"/>
+      <attribute name="roughness" type="float" source="annotation" private="False"/>
+      <attribute name="metallic" type="float" source="annotation" private="False"/>
+      <attribute name="specular_intensity" type="float" source="annotation" private="False"/>
+      <attribute name="specular_tint" type="float" source="annotation" private="False"/>
+      <attribute name="ior" type="float" source="annotation" private="False"/>
+      <attribute name="transmission" type="float" source="annotation" private="False"/>
+      <attribute name="absorption_color" type="Color" source="annotation" private="False"/>
+      <attribute name="absorption_density" type="float" source="annotation" private="False"/>
+      <attribute name="emission_color" type="Color" source="annotation" private="False"/>
+      <attribute name="emission_intensity" type="float" source="annotation" private="False"/>
+      <attribute name="type" type="MaterialType" source="annotation" private="False"/>
+    </attributes>
+  </class>
+  <class name="MaterialFactory" module="Material\Factory">
+    <methods>
+      <method name="create_diffuse" signature="create_diffuse(albedo: Color, roughness: float)"/>
+      <method name="create_specular" signature="create_specular(albedo: Color, roughness: float, metallicness: float, specular_intensity: float, specular_tint_amount: float)"/>
+      <method name="create_glass" signature="create_glass(albedo: Color, absorption_color: Color, roughness: float, metallicness: float, ior: float, transmission: float, absorption_density: float)"/>
+      <method name="create_transparent" signature="create_transparent(albedo: Color)"/>
+      <method name="create_emissive" signature="create_emissive(color: Color, intensity: float)"/>
+    </methods>
+  </class>
+  <class name="MaterialType" module="Material\Core">
+    <bases>Enum</bases>
+    <attributes>
+      <attribute name="DIFFUSE" type="int" source="assignment" private="False"/>
+      <attribute name="SPECULAR" type="int" source="assignment" private="False"/>
+      <attribute name="GLASS" type="int" source="assignment" private="False"/>
+      <attribute name="TRANSPARENT" type="int" source="assignment" private="False"/>
+      <attribute name="EMISSIVE" type="int" source="assignment" private="False"/>
+    </attributes>
+  </class>
+  <class name="MemoryProfileResult" module="Utilities\Memory\Profiler">
+    <attributes>
+      <attribute name="time_seconds" type="float" source="annotation" private="False"/>
+      <attribute name="rss_start_mb" type="float" source="annotation" private="False"/>
+      <attribute name="rss_end_mb" type="float" source="annotation" private="False"/>
+      <attribute name="rss_delta_mb" type="float" source="annotation" private="False"/>
+      <attribute name="tracemalloc_current_kb" type="float" source="annotation" private="False"/>
+      <attribute name="tracemalloc_peak_kb" type="float" source="annotation" private="False"/>
+      <attribute name="top_stats" type="Dict" source="annotation" private="False"/>
+    </attributes>
+  </class>
+  <class name="MemoryProfiler" module="Utilities\Memory\Profiler">
+    <attributes>
+      <attribute name="enable_tracemalloc" type="None" source="assignment" private="False"/>
+      <attribute name="top" type="None" source="assignment" private="False"/>
+      <attribute name="_start_snapshot" type="None" source="assignment" private="True"/>
+      <attribute name="_start_time" type="None" source="assignment" private="True"/>
+      <attribute name="_start_rss" type="None" source="assignment" private="True"/>
+    </attributes>
+    <methods>
+      <method name="format_report" signature="format_report(concise: bool) -> str"/>
+    </methods>
+  </class>
+  <class name="Mesh" module="Geometry\Mesh">
+    <attributes>
+      <attribute name="name" type="str" source="parameter" private="False"/>
+      <attribute name="vertices" type="List" source="parameter" private="False"/>
+      <attribute name="faces" type="List" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="add_vertex" signature="add_vertex(x: float, y: float, z: float) -> int"/>
+      <method name="add_face" signature="add_face(v1: int, v2: int, v3: int) -> None"/>
+      <method name="get_vertex_array" signature="get_vertex_array() -> ndarray"/>
+      <method name="vertex_count" signature="vertex_count() -> int"/>
+      <method name="face_count" signature="face_count() -> int"/>
+      <method name="clear" signature="clear() -> None"/>
+      <method name="update_version" signature="update_version() -> None"/>
+      <method name="get_local_bounds" signature="get_local_bounds() -> None"/>
+      <method name="get_local_corners" signature="get_local_corners() -> ndarray"/>
+    </methods>
+  </class>
+  <class name="Mesh_Material" module="Data\Context">
+    <attributes>
+      <attribute name="mesh" type="Mesh" source="annotation" private="False"/>
+      <attribute name="material" type="PBRMaterial" source="annotation" private="False"/>
+    </attributes>
+    <methods>
+      <method name="vertices" signature="vertices() -> ndarray"/>
+      <method name="triangles" signature="triangles() -> ndarray"/>
+      <method name="local_corners" signature="local_corners() -> ndarray"/>
+    </methods>
+  </class>
+  <class name="Moon" module="Geometry\SDF">
+    <bases>SignedDistanceShape2D</bases>
+    <attributes>
+      <attribute name="radius_a" type="float" source="parameter" private="False"/>
+      <attribute name="radius_b" type="float" source="parameter" private="False"/>
+      <attribute name="offset" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+    </methods>
+  </class>
+  <class name="NormalShading" module="Rendering\RayTracing\Shading">
+    <bases>ShadingStrategy</bases>
+    <methods>
+      <method name="shade" signature="shade(hit_info: HitInfo) -> Color"/>
+    </methods>
+  </class>
+  <class name="OnionShape" module="Geometry\SDF">
+    <bases>SignedDistanceShape</bases>
+  </class>
+  <class name="PBRMaterial" module="Material\Core">
+    <attributes>
+      <attribute name="data" type="MaterialData" source="annotation" private="False"/>
+    </attributes>
+    <methods>
+      <method name="evaluate_direct_light" signature="evaluate_direct_light(light_nodes: SceneNode, hit_info: HitInfo, view_dir: ndarray, visibility_function: None, bias: float) -> Color"/>
+      <method name="sample_indirect_contribution" signature="sample_indirect_contribution(incident_dir: ndarray, surface_normal: ndarray, sampler: Sampler) -> None"/>
+      <method name="sample_glass_contribution" signature="sample_glass_contribution(incident_dir: ndarray, surface_normal: ndarray, sampler: Sampler, other_ior: float) -> None"/>
+      <method name="evaluate_bsdf" signature="evaluate_bsdf(incident_dir: ndarray, view_dir: ndarray, normal: ndarray) -> Color"/>
+      <method name="evaluate_diffuse_component" signature="evaluate_diffuse_component(light_dir: ndarray, surface_normal: ndarray) -> Color"/>
+      <method name="evaluate_specular_component" signature="evaluate_specular_component(light_dir: ndarray, surface_normal: ndarray, view_dir: ndarray) -> Color"/>
+      <method name="evaluate_metallic_component" signature="evaluate_metallic_component(bias: float) -> Color"/>
+      <method name="evaluate_emissive_component" signature="evaluate_emissive_component() -> Color"/>
+      <method name="evaluate_volumetric_component" signature="evaluate_volumetric_component(distance: float) -> Color"/>
+      <method name="evaluate_ambient_color" signature="evaluate_ambient_color(ambient_color: Color, ambient_intensity: float) -> Color"/>
+    </methods>
+  </class>
+  <class name="PhysicalShadingSettings" module="Rendering\RayTracing\Shading">
+    <bases>ShadingSettings</bases>
+    <attributes>
+      <attribute name="enable_reflection_caustics" type="bool" source="annotation" private="False"/>
+      <attribute name="enable_refraction_caustics" type="bool" source="annotation" private="False"/>
+      <attribute name="enable_ambient_occlusion" type="bool" source="annotation" private="False"/>
+      <attribute name="enable_bidirectional_scattering" type="bool" source="annotation" private="False"/>
+    </attributes>
+  </class>
+  <class name="PhysicalShadingStrategy" module="Rendering\RayTracing\Shading">
+    <bases>ShadingStrategy</bases>
+    <attributes>
+      <attribute name="_cache_ambient_occlusion_map" type="np" source="annotation" private="True"/>
+      <attribute name="_cache_light_tree" type="BVHNode" source="annotation" private="True"/>
+      <attribute name="settings" type="PhysicalShadingSettings" source="parameter" private="False"/>
+      <attribute name="ambience_settings" type="None" source="assignment" private="False"/>
+      <attribute name="shadow_settings" type="None" source="assignment" private="False"/>
+      <attribute name="background_settings" type="None" source="assignment" private="False"/>
+    </attributes>
+  </class>
+  <class name="PixelFilter" module="Data\Sampling\Core">
+    <bases>Enum</bases>
+    <attributes>
+      <attribute name="BOX" type="int" source="assignment" private="False"/>
+      <attribute name="TENT" type="int" source="assignment" private="False"/>
+      <attribute name="GAUSSIAN" type="int" source="assignment" private="False"/>
+      <attribute name="NEAREST" type="int" source="assignment" private="False"/>
+    </attributes>
+  </class>
+  <class name="Plane" module="Geometry\SDF">
+    <bases>SignedDistanceShape3D;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="normal" type="ndarray" source="parameter" private="False"/>
+      <attribute name="d" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="Polygon" module="Geometry\SDF">
+    <bases>SignedDistanceShape2D</bases>
+  </class>
+  <class name="PostProcessPass" module="Image\PostProcessing\Pipeline">
+    <bases>ABC</bases>
+    <methods>
+      <method name="apply" signature="apply(image: ndarray) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="Pyramid" module="Geometry\SDF">
+    <bases>SignedDistanceShape3D;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="base_size" type="float" source="parameter" private="False"/>
+      <attribute name="height" type="float" source="parameter" private="False"/>
+      <attribute name="base_half_size" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+      <method name="volume" signature="volume() -> float"/>
+      <method name="surface_area" signature="surface_area() -> float"/>
+    </methods>
+  </class>
+  <class name="RandomSampler" module="Data\Sampling\Core">
+    <bases>Sampler</bases>
+    <methods>
+      <method name="sample_pixel" signature="sample_pixel(x: int, y: int, sample_idx: int) -> None"/>
+    </methods>
+  </class>
+  <class name="Ratio" module="Data\Ratio">
+    <attributes>
+      <attribute name="width" type="float" source="parameter" private="False"/>
+      <attribute name="height" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="simplify" signature="simplify()"/>
+      <method name="value" signature="value() -> float"/>
+    </methods>
+  </class>
+  <class name="Ray" module="Data\Ray">
+    <attributes>
+      <attribute name="origin" type="ndarray" source="annotation" private="False"/>
+      <attribute name="orientation" type="ndarray" source="annotation" private="False"/>
+      <attribute name="name" type="str" source="annotation" private="False"/>
+    </attributes>
+    <methods>
+      <method name="direction" signature="direction(v)"/>
+      <method name="direction" signature="direction(v)"/>
+      <method name="point_at" signature="point_at(t: float)"/>
+      <method name="check_point_on_ray" signature="check_point_on_ray(point: ndarray)"/>
+      <method name="check_point_in_front" signature="check_point_in_front(point: ndarray)"/>
+      <method name="check_point_behind" signature="check_point_behind(point: ndarray)"/>
+      <method name="rotate" signature="rotate(angle: float, axis: ndarray)"/>
+      <method name="translate" signature="translate(vector: ndarray)"/>
+      <method name="get_angle" signature="get_angle(line: ndarray)"/>
+    </methods>
+  </class>
+  <class name="RayMarchingIntersection" module="Rendering\RayTracing\Intersections">
+    <bases>IntersectionStrategy</bases>
+    <methods>
+      <method name="find_hit" signature="find_hit(scene: Scene, ray: TracingRay, stats: None) -> HitInfo"/>
+    </methods>
+  </class>
+  <class name="RayPool" module="Data\Ray">
+    <attributes>
+      <attribute name="block_size" type="None" source="parameter" private="False"/>
+      <attribute name="_pool" type="None" source="assignment" private="True"/>
+      <attribute name="_block_size" type="None" source="assignment" private="True"/>
+    </attributes>
+    <methods>
+      <method name="get_ray" signature="get_ray(origin, orientation, x, y)"/>
+      <method name="return_ray" signature="return_ray(ray: TracingRay)"/>
+    </methods>
+  </class>
+  <class name="RayTracer" module="Rendering\RayTracing\Core">
+    <bases>Algorithm</bases>
+    <attributes>
+      <attribute name="settings_type" type="RayTracingSettings" source="assignment" private="False"/>
+      <attribute name="settings" type="RayTracingSettings" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="render_tile" signature="render_tile(scene: Scene, sampler: Sampler, tile_x: int, tile_y: int, width: int, height: int) -> None"/>
+      <method name="generate_film" signature="generate_film(scene: Scene, sampler: Sampler, region: Tuple)"/>
+    </methods>
+  </class>
+  <class name="RayTracingSettings" module="Rendering\RayTracing\Core">
+    <bases>AlgorithmSettings</bases>
+    <attributes>
+      <attribute name="sampling_manager" type="SamplingManager" source="annotation" private="False"/>
+      <attribute name="max_recursions" type="int" source="annotation" private="False"/>
+      <attribute name="intersection_strategy" type="IntersectionStrategy" source="annotation" private="False"/>
+      <attribute name="shading_strategy" type="ShadingStrategy" source="annotation" private="False"/>
+      <attribute name="use_tiling" type="bool" source="annotation" private="False"/>
+      <attribute name="tile_size" type="int" source="annotation" private="False"/>
+      <attribute name="debug_mode" type="bool" source="annotation" private="False"/>
+      <attribute name="verbose_logging" type="bool" source="annotation" private="False"/>
+    </attributes>
+    <methods>
+      <method name="clone" signature="clone(self) -> None"/>
+      <method name="validate" signature="validate() -> bool"/>
+    </methods>
+  </class>
+  <class name="Rectangle" module="Geometry\SDF">
+    <bases>SignedDistanceShape2D;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="size" type="ndarray" source="parameter" private="False"/>
+      <attribute name="half_size" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+      <method name="perimeter" signature="perimeter() -> float"/>
+      <method name="area" signature="area() -> float"/>
+      <method name="is_convex" signature="is_convex() -> bool"/>
+      <method name="get_convex_hull" signature="get_convex_hull() -> np"/>
+    </methods>
+  </class>
+  <class name="RecursiveLambertShading" module="Rendering\RayTracing\Shading">
+    <bases>LambertShading</bases>
+    <attributes>
+      <attribute name="a" type="float" source="assignment" private="False"/>
+      <attribute name="b" type="float" source="assignment" private="False"/>
+      <attribute name="c" type="float" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="shade" signature="shade(scene: None, ray: TracingRay, hit_info: None, recursions_left: int, trace_function: None, sampler: Sampler, intersection_function: None, occlusion_function: None, bias: float, stats: None) -> Color"/>
+    </methods>
+  </class>
+  <class name="RegularPolygon" module="Geometry\SDF">
+    <bases>SignedDistanceShape2D</bases>
+    <attributes>
+      <attribute name="sides" type="int" source="parameter" private="False"/>
+      <attribute name="radius" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+    </methods>
+  </class>
+  <class name="ReinhardToneMapping" module="Image\PostProcessing\Passes">
+    <bases>PostProcessPass</bases>
+    <methods>
+      <method name="apply" signature="apply(image: ndarray) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="RenderManager" module="Rendering\Core">
+  </class>
+  <class name="RenderStats" module="Rendering\Core">
+    <attributes>
+      <attribute name="memory_usage" type="float" source="annotation" private="False"/>
+      <attribute name="pixels_processed" type="int" source="annotation" private="False"/>
+      <attribute name="nan_errors" type="int" source="annotation" private="False"/>
+      <attribute name="time_taken_seconds" type="float" source="annotation" private="False"/>
+      <attribute name="_start_time" type="float" source="annotation" private="True"/>
+    </attributes>
+    <methods>
+      <method name="start_timer" signature="start_timer()"/>
+      <method name="stop_timer" signature="stop_timer()"/>
+      <method name="update_memory" signature="update_memory()"/>
+      <method name="format_report" signature="format_report() -> str"/>
+      <method name="print_verbose_report" signature="print_verbose_report()"/>
+    </methods>
+  </class>
+  <class name="RoundedShape" module="Geometry\SDF">
+    <bases>SignedDistanceShape</bases>
+    <attributes>
+      <attribute name="shape" type="SignedDistanceShape" source="parameter" private="False"/>
+      <attribute name="radius" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float)"/>
+    </methods>
+  </class>
+  <class name="SDF_Material" module="Data\Context">
+    <attributes>
+      <attribute name="shape" type="SignedDistanceShape" source="annotation" private="False"/>
+      <attribute name="material" type="PBRMaterial" source="annotation" private="False"/>
+    </attributes>
+    <methods>
+      <method name="signed_distance" signature="signed_distance(point: ndarray) -> float"/>
+      <method name="normal" signature="normal(point: ndarray) -> ndarray"/>
+      <method name="local_corners" signature="local_corners(padding: float) -> np"/>
+      <method name="is_2d" signature="is_2d() -> bool"/>
+    </methods>
+  </class>
+  <class name="Sample" module="Data\Sampling\Core">
+    <attributes>
+      <attribute name="u" type="float" source="annotation" private="False"/>
+      <attribute name="v" type="float" source="annotation" private="False"/>
+      <attribute name="w" type="float" source="annotation" private="False"/>
+    </attributes>
+  </class>
+  <class name="SampleSettings" module="Data\Sampling\Core">
+    <attributes>
+      <attribute name="width" type="int" source="annotation" private="False"/>
+      <attribute name="height" type="int" source="annotation" private="False"/>
+      <attribute name="samples_per_pixel" type="int" source="annotation" private="False"/>
+      <attribute name="min_samples" type="int" source="annotation" private="False"/>
+      <attribute name="noise_threshold" type="float" source="annotation" private="False"/>
+      <attribute name="filter_type" type="PixelFilter" source="annotation" private="False"/>
+      <attribute name="filter_width" type="float" source="annotation" private="False"/>
+    </attributes>
+  </class>
+  <class name="Sampler" module="Data\Sampling\Core">
+    <attributes>
+      <attribute name="input_source" type="None" source="parameter" private="False"/>
+      <attribute name="seed" type="int" source="parameter" private="False"/>
+      <attribute name="settings" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="next_1d" signature="next_1d() -> float"/>
+      <method name="next_2d" signature="next_2d() -> None"/>
+      <method name="start_pixel" signature="start_pixel(x: int, y: int) -> None"/>
+      <method name="get_samples_per_pixel" signature="get_samples_per_pixel(x: int, y: int) -> Sample"/>
+      <method name="sample_pixel" signature="sample_pixel(x: int, y: int, sample_idx: int) -> None"/>
+      <method name="sample_lens" signature="sample_lens() -> None"/>
+      <method name="sample_time" signature="sample_time() -> float"/>
+      <method name="sample_light_selection" signature="sample_light_selection() -> float"/>
+      <method name="sample_light_position" signature="sample_light_position() -> None"/>
+      <method name="sample_bsdf" signature="sample_bsdf() -> None"/>
+      <method name="sample_wavelength" signature="sample_wavelength() -> float"/>
+      <method name="sample_unit_sphere" signature="sample_unit_sphere() -> ndarray"/>
+      <method name="sample_cosine_hemisphere" signature="sample_cosine_hemisphere(normal: ndarray) -> ndarray"/>
+      <method name="sample_scattering_distance" signature="sample_scattering_distance() -> float"/>
+      <method name="sample_phase_function" signature="sample_phase_function() -> None"/>
+      <method name="sample_roulette" signature="sample_roulette() -> float"/>
+    </methods>
+  </class>
+  <class name="SamplingManager" module="Data\Sampling\Core">
+    <attributes>
+      <attribute name="sample_settings" type="SampleSettings" source="parameter" private="False"/>
+      <attribute name="sampler_name" type="str" source="parameter" private="False"/>
+      <attribute name="seed" type="int" source="parameter" private="False"/>
+      <attribute name="settings" type="None" source="assignment" private="False"/>
+      <attribute name="sampler" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_samples_per_pixel" signature="get_samples_per_pixel(x: int, y: int) -> Sample"/>
+    </methods>
+  </class>
+  <class name="Scene" module="Data\Scene">
+    <attributes>
+      <attribute name="name" type="str" source="parameter" private="False"/>
+      <attribute name="camera" type="Camera" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="version" signature="version() -> int"/>
+      <method name="set_camera" signature="set_camera(camera: Camera)"/>
+      <method name="add_node" signature="add_node(node: SceneNode)"/>
+      <method name="add_object_by_context" signature="add_object_by_context(context: Any, name: str, transform: Transform) -> SceneNode"/>
+      <method name="get_node" signature="get_node(name: str) -> SceneNode"/>
+      <method name="get_node_by_id" signature="get_node_by_id(id: int) -> SceneNode"/>
+      <method name="get_nodes_by_type" signature="get_nodes_by_type(context_type: None) -> SceneNode"/>
+      <method name="get_nodes_by_types" signature="get_nodes_by_types(context_types: Union) -> SceneNode"/>
+      <method name="get_nodes_not_of_type" signature="get_nodes_not_of_type(context_type: None) -> SceneNode"/>
+      <method name="get_nodes_not_of_types" signature="get_nodes_not_of_types(context_types: Union) -> SceneNode"/>
+      <method name="get_nodes_subclass_of" signature="get_nodes_subclass_of(parent_class: type) -> SceneNode"/>
+      <method name="get_nodes_with_attribute" signature="get_nodes_with_attribute(attribute_name: str) -> SceneNode"/>
+      <method name="get_nodes_by_attribute_value" signature="get_nodes_by_attribute_value(attribute_name: str, value: Any) -> SceneNode"/>
+      <method name="get_nodes_by_condition" signature="get_nodes_by_condition(condition_func: None) -> SceneNode"/>
+      <method name="flatten_scene_nodes" signature="flatten_scene_nodes() -> SceneNode"/>
+      <method name="cache_scene_nodes_flat" signature="cache_scene_nodes_flat() -> SceneNode"/>
+      <method name="remove_node" signature="remove_node(object_node: SceneNode) -> bool"/>
+      <method name="remove_object_by_name" signature="remove_object_by_name(name: str) -> bool"/>
+      <method name="reparent" signature="reparent(object_node: SceneNode, new_parent: SceneNode)"/>
+      <method name="print_hierarchy" signature="print_hierarchy()"/>
+      <method name="get_scene_summary" signature="get_scene_summary() -> dict"/>
+      <method name="clear_scene" signature="clear_scene()"/>
+      <method name="update_version" signature="update_version()"/>
+    </methods>
+  </class>
+  <class name="SceneNode" module="Data\Scene">
+    <attributes>
+      <attribute name="name" type="str" source="annotation" private="False"/>
+      <attribute name="context" type="Any" source="annotation" private="False"/>
+      <attribute name="transform" type="Transform" source="annotation" private="False"/>
+      <attribute name="active" type="bool" source="annotation" private="False"/>
+      <attribute name="children" type="None" source="annotation" private="False"/>
+      <attribute name="parent" type="None" source="annotation" private="False"/>
+      <attribute name="_world_matrix" type="np" source="annotation" private="True"/>
+      <attribute name="_inverse_world_matrix" type="np" source="annotation" private="True"/>
+      <attribute name="_aabb_bounds" type="AABB" source="annotation" private="True"/>
+    </attributes>
+    <methods>
+      <method name="add_child" signature="add_child(child: None)"/>
+      <method name="remove_child" signature="remove_child(child: None)"/>
+      <method name="update_matrices" signature="update_matrices(parent_matrix: np)"/>
+      <method name="get_world_matrix" signature="get_world_matrix()"/>
+      <method name="get_local_matrix" signature="get_local_matrix()"/>
+      <method name="world_transform" signature="world_transform() -> Transform"/>
+      <method name="local_transform" signature="local_transform() -> Transform"/>
+      <method name="get_local_bounds" signature="get_local_bounds(padding: float) -> np"/>
+      <method name="get_global_bounds" signature="get_global_bounds(padding: float) -> np"/>
+      <method name="get_transformed_aabb" signature="get_transformed_aabb() -> AABB"/>
+    </methods>
+  </class>
+  <class name="ShadingSettings" module="Rendering\RayTracing\Shading">
+    <attributes>
+      <attribute name="ambience_settings" type="AmbienceSettings" source="annotation" private="False"/>
+      <attribute name="shadow_settings" type="ShadowSettings" source="annotation" private="False"/>
+      <attribute name="background_settings" type="BackgroundSettings" source="annotation" private="False"/>
+    </attributes>
+  </class>
+  <class name="ShadingStrategy" module="Rendering\RayTracing\Shading">
+    <bases>ABC</bases>
+    <attributes>
+      <attribute name="settings" type="ShadingSettings" source="parameter" private="False"/>
+      <attribute name="ambience_settings" type="None" source="assignment" private="False"/>
+      <attribute name="shadow_settings" type="None" source="assignment" private="False"/>
+      <attribute name="background_settings" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="shade" signature="shade(scene: Scene, ray: TracingRay, hit_info: HitInfo, recursions_left: int, trace_function: None, sampler: Sampler, intersection_function: None, occlusion_function: None, bias: float, stats: None) -> Color"/>
+    </methods>
+  </class>
+  <class name="ShadowSettings" module="Rendering\RayTracing\Shading">
+    <attributes>
+      <attribute name="enabled" type="bool" source="annotation" private="False"/>
+      <attribute name="samples" type="int" source="annotation" private="False"/>
+      <attribute name="bias" type="float" source="annotation" private="False"/>
+      <attribute name="use_light_tree" type="bool" source="annotation" private="False"/>
+    </attributes>
+  </class>
+  <class name="ShapeCombination" module="Geometry\SDF">
+    <bases>SignedDistanceShape;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="shape_a" type="SignedDistanceShape" source="parameter" private="False"/>
+      <attribute name="transform_a" type="Transform" source="parameter" private="False"/>
+      <attribute name="shape_b" type="SignedDistanceShape" source="parameter" private="False"/>
+      <attribute name="transform_b" type="Transform" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+    </methods>
+  </class>
+  <class name="ShapeExtrusion" module="Geometry\SDF">
+    <bases>SignedDistanceShape3D;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="shape_2d" type="SignedDistanceShape2D" source="parameter" private="False"/>
+      <attribute name="height" type="float" source="parameter" private="False"/>
+      <attribute name="half_height" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+      <method name="volume" signature="volume() -> float"/>
+      <method name="surface_area" signature="surface_area() -> float"/>
+      <method name="is_convex" signature="is_convex() -> bool"/>
+      <method name="get_convex_hull" signature="get_convex_hull() -> List"/>
+    </methods>
+  </class>
+  <class name="ShapeFactory" module="Geometry\Factory">
+    <bases>ABC</bases>
+    <methods>
+      <method name="create" signature="create() -> SignedDistanceShape"/>
+    </methods>
+  </class>
+  <class name="ShapeIntersection" module="Geometry\SDF">
+    <bases>ShapeCombination</bases>
+  </class>
+  <class name="ShapeRevolution" module="Geometry\SDF">
+    <bases>SignedDistanceShape3D;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="shape_2d" type="SignedDistanceShape2D" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+      <method name="volume" signature="volume() -> float"/>
+      <method name="surface_area" signature="surface_area() -> float"/>
+      <method name="is_convex" signature="is_convex() -> bool"/>
+      <method name="get_convex_hull" signature="get_convex_hull() -> List"/>
+    </methods>
+  </class>
+  <class name="ShapeSmoothUnion" module="Geometry\SDF">
+    <bases>ShapeCombination</bases>
+    <attributes>
+      <attribute name="shape_a" type="SignedDistanceShape" source="parameter" private="False"/>
+      <attribute name="transform_a" type="Transform" source="parameter" private="False"/>
+      <attribute name="shape_b" type="SignedDistanceShape" source="parameter" private="False"/>
+      <attribute name="transform_b" type="Transform" source="parameter" private="False"/>
+      <attribute name="k" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="ShapeSubtraction" module="Geometry\SDF">
+    <bases>ShapeCombination</bases>
+  </class>
+  <class name="ShapeUnion" module="Geometry\SDF">
+    <bases>ShapeCombination</bases>
+  </class>
+  <class name="ShapeXor" module="Geometry\SDF">
+    <bases>ShapeCombination</bases>
+  </class>
+  <class name="SignedDistanceFunction" module="Geometry\SDF">
+    <bases>ABC</bases>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+    </methods>
+  </class>
+  <class name="SignedDistanceGradient" module="Geometry\SDF">
+    <bases>ABC</bases>
+    <methods>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="get_normal" signature="get_normal(point: ndarray) -> ndarray"/>
+      <method name="get_tangent_bitangent" signature="get_tangent_bitangent(point: ndarray) -> None"/>
+    </methods>
+  </class>
+  <class name="SignedDistanceShape" module="Geometry\SDF">
+    <bases>SignedDistanceFunction;SignedDistanceGradient</bases>
+    <methods>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_ray_intersections" signature="get_ray_intersections(ray: Ray, max_t: float)"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="is_closed" signature="is_closed() -> bool"/>
+      <method name="is_manifold" signature="is_manifold() -> bool"/>
+      <method name="is_convex" signature="is_convex() -> bool"/>
+      <method name="get_convex_hull" signature="get_convex_hull() -> List"/>
+      <method name="dimension" signature="dimension() -> int"/>
+    </methods>
+  </class>
+  <class name="SignedDistanceShape2D" module="Geometry\SDF">
+    <bases>SignedDistanceShape</bases>
+    <methods>
+      <method name="dimension" signature="dimension() -> int"/>
+      <method name="perimeter" signature="perimeter() -> float"/>
+      <method name="area" signature="area() -> float"/>
+    </methods>
+  </class>
+  <class name="SignedDistanceShape3D" module="Geometry\SDF">
+    <bases>SignedDistanceShape</bases>
+    <methods>
+      <method name="dimension" signature="dimension() -> int"/>
+      <method name="volume" signature="volume() -> float"/>
+      <method name="surface_area" signature="surface_area() -> float"/>
+    </methods>
+  </class>
+  <class name="Sphere" module="Geometry\SDF">
+    <bases>SignedDistanceShape3D;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="radius" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+      <method name="volume" signature="volume() -> float"/>
+      <method name="surface_area" signature="surface_area() -> float"/>
+    </methods>
+  </class>
+  <class name="Square" module="Geometry\SDF">
+    <bases>Rectangle</bases>
+    <attributes>
+      <attribute name="size" type="float" source="parameter" private="False"/>
+      <attribute name="half_size" type="None" source="assignment" private="False"/>
+    </attributes>
+  </class>
+  <class name="Star" module="Geometry\SDF">
+    <bases>SignedDistanceShape2D</bases>
+    <attributes>
+      <attribute name="points" type="int" source="parameter" private="False"/>
+      <attribute name="inner_radius" type="float" source="parameter" private="False"/>
+      <attribute name="outer_radius" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+    </methods>
+  </class>
+  <class name="StratifiedSampler" module="Data\Sampling\Core">
+    <bases>Sampler</bases>
+    <attributes>
+      <attribute name="settings" type="SampleSettings" source="parameter" private="False"/>
+      <attribute name="seed" type="int" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="set_samples_per_pixel" signature="set_samples_per_pixel(spp: int) -> None"/>
+      <method name="sample_pixel" signature="sample_pixel(x: int, y: int, sample_idx: int) -> None"/>
+    </methods>
+  </class>
+  <class name="Torus" module="Geometry\SDF">
+    <bases>SignedDistanceShape3D</bases>
+    <attributes>
+      <attribute name="major_radius" type="float" source="parameter" private="False"/>
+      <attribute name="minor_radius" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="volume" signature="volume() -> float"/>
+    </methods>
+  </class>
+  <class name="TracingRay" module="Data\Ray">
+    <bases>Ray</bases>
+    <attributes>
+      <attribute name="current_depth" type="int" source="annotation" private="False"/>
+      <attribute name="pixel_x" type="int" source="annotation" private="False"/>
+      <attribute name="pixel_y" type="int" source="annotation" private="False"/>
+      <attribute name="throughput" type="float" source="annotation" private="False"/>
+      <attribute name="is_inside" type="bool" source="annotation" private="False"/>
+      <attribute name="sample_u" type="float" source="annotation" private="False"/>
+      <attribute name="sample_v" type="float" source="annotation" private="False"/>
+    </attributes>
+  </class>
+  <class name="TracingStats" module="Rendering\RayTracing\Core">
+    <bases>RenderStats</bases>
+    <attributes>
+      <attribute name="render_type" type="str" source="annotation" private="False"/>
+      <attribute name="intersection_type" type="str" source="annotation" private="False"/>
+      <attribute name="shading_type" type="str" source="annotation" private="False"/>
+      <attribute name="rays_primary" type="int" source="annotation" private="False"/>
+      <attribute name="rays_shadow" type="int" source="annotation" private="False"/>
+      <attribute name="rays_reflection" type="int" source="annotation" private="False"/>
+      <attribute name="rays_refraction" type="int" source="annotation" private="False"/>
+      <attribute name="rays_transparency" type="int" source="annotation" private="False"/>
+      <attribute name="rays_missed" type="int" source="annotation" private="False"/>
+      <attribute name="pixels_processed" type="int" source="annotation" private="False"/>
+      <attribute name="tiles_processed" type="int" source="annotation" private="False"/>
+      <attribute name="aabb_tests" type="int" source="annotation" private="False"/>
+      <attribute name="bvh_nodes_visited" type="int" source="annotation" private="False"/>
+      <attribute name="triangle_tests" type="int" source="annotation" private="False"/>
+      <attribute name="max_recursions" type="int" source="annotation" private="False"/>
+      <attribute name="roulette_kills" type="int" source="annotation" private="False"/>
+      <attribute name="lights_sampled" type="int" source="annotation" private="False"/>
+      <attribute name="_settings" type="Any" source="annotation" private="True"/>
+    </attributes>
+    <methods>
+      <method name="total_rays" signature="total_rays() -> int"/>
+      <method name="intersections_per_ray" signature="intersections_per_ray() -> float"/>
+      <method name="culling_efficiency" signature="culling_efficiency() -> float"/>
+      <method name="reset_ray_counter" signature="reset_ray_counter()"/>
+      <method name="format_report" signature="format_report() -> str"/>
+    </methods>
+  </class>
+  <class name="Transform" module="Data\Transform">
+    <attributes>
+      <attribute name="position" type="ndarray" source="parameter" private="False"/>
+      <attribute name="rotation" type="ndarray" source="parameter" private="False"/>
+      <attribute name="scale" type="ndarray" source="parameter" private="False"/>
+      <attribute name="name" type="str" source="parameter" private="False"/>
+      <attribute name="local_position" type="None" source="assignment" private="False"/>
+      <attribute name="local_rotation" type="None" source="assignment" private="False"/>
+      <attribute name="local_scale" type="None" source="assignment" private="False"/>
+      <attribute name="forward" type="None" source="assignment" private="False"/>
+      <attribute name="right" type="None" source="assignment" private="False"/>
+      <attribute name="up" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="Identity" signature="Identity()"/>
+      <method name="from_matrix" signature="from_matrix(matrix: ndarray) -> None"/>
+      <method name="decompose_matrix" signature="decompose_matrix(matrix: ndarray, epsilon: float)"/>
+      <method name="update_orientations" signature="update_orientations()"/>
+      <method name="get_global_matrix" signature="get_global_matrix() -> ndarray"/>
+      <method name="to_matrix" signature="to_matrix() -> ndarray"/>
+      <method name="get_inverse_matrix" signature="get_inverse_matrix() -> ndarray"/>
+      <method name="look_at" signature="look_at(target_position: ndarray, world_up: ndarray)"/>
+      <method name="translate" signature="translate(vector: ndarray, space: str)"/>
+      <method name="rotate" signature="rotate(angle: float, axis: ndarray, units: str, space: str)"/>
+      <method name="enlarge" signature="enlarge(vector: ndarray, space: str)"/>
+      <method name="world_transform_point" signature="world_transform_point(point: ndarray) -> ndarray"/>
+      <method name="world_transform_direction" signature="world_transform_direction(direction: ndarray, normalize: bool) -> ndarray"/>
+      <method name="world_transform_normal" signature="world_transform_normal(normal: ndarray) -> ndarray"/>
+      <method name="world_transform_ray" signature="world_transform_ray(ray: Ray) -> Ray"/>
+      <method name="local_transform_point" signature="local_transform_point(point: ndarray) -> ndarray"/>
+      <method name="local_transform_direction" signature="local_transform_direction(direction: ndarray, normalize: bool) -> ndarray"/>
+      <method name="local_transform_normal" signature="local_transform_normal(normal: ndarray) -> ndarray"/>
+      <method name="local_transform_ray" signature="local_transform_ray(ray: Ray) -> Ray"/>
+    </methods>
+  </class>
+  <class name="Triangle" module="Geometry\SDF">
+    <bases>SignedDistanceShape2D;CorrespondingBoxCorners</bases>
+    <attributes>
+      <attribute name="v0" type="ndarray" source="parameter" private="False"/>
+      <attribute name="v1" type="ndarray" source="parameter" private="False"/>
+      <attribute name="v2" type="ndarray" source="parameter" private="False"/>
+      <attribute name="e0" type="None" source="assignment" private="False"/>
+      <attribute name="e1" type="None" source="assignment" private="False"/>
+      <attribute name="e2" type="None" source="assignment" private="False"/>
+    </attributes>
+    <methods>
+      <method name="get_distance" signature="get_distance(point: ndarray) -> float"/>
+      <method name="get_gradient" signature="get_gradient(point: ndarray) -> ndarray"/>
+      <method name="get_uv" signature="get_uv(point: ndarray) -> None"/>
+      <method name="ray_intersect" signature="ray_intersect(ray: Ray, max_t: float) -> float"/>
+      <method name="get_local_corners" signature="get_local_corners(padding: float) -> ndarray"/>
+      <method name="area" signature="area() -> float"/>
+      <method name="perimeter" signature="perimeter() -> float"/>
+    </methods>
+  </class>
+  <class name="Vertex" module="Geometry\Mesh">
+    <attributes>
+      <attribute name="x" type="float" source="annotation" private="False"/>
+      <attribute name="y" type="float" source="annotation" private="False"/>
+      <attribute name="z" type="float" source="annotation" private="False"/>
+    </attributes>
+    <methods>
+      <method name="to_array" signature="to_array() -> ndarray"/>
+    </methods>
+  </class>
+  <class name="Vignette" module="Image\PostProcessing\Passes">
+    <bases>PostProcessPass</bases>
+    <attributes>
+      <attribute name="intensity" type="float" source="parameter" private="False"/>
+      <attribute name="softness" type="float" source="parameter" private="False"/>
+      <attribute name="curve" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="apply" signature="apply(image: ndarray) -> ndarray"/>
+    </methods>
+  </class>
+  <class name="VolumetricShading" module="Rendering\RayTracing\Shading">
+    <bases>ShadingStrategy</bases>
+    <attributes>
+      <attribute name="settings" type="ShadingSettings" source="parameter" private="False"/>
+      <attribute name="intersection_function" type="None" source="parameter" private="False"/>
+      <attribute name="density" type="float" source="parameter" private="False"/>
+      <attribute name="absorption_color" type="Color" source="parameter" private="False"/>
+      <attribute name="invert_style" type="bool" source="parameter" private="False"/>
+      <attribute name="rim_power" type="float" source="parameter" private="False"/>
+      <attribute name="rim_color" type="Color" source="parameter" private="False"/>
+      <attribute name="max_thickness" type="float" source="parameter" private="False"/>
+    </attributes>
+    <methods>
+      <method name="shade" signature="shade(scene: None, ray: TracingRay, hit_info: None, bias: float, stats: None) -> Color"/>
+    </methods>
+  </class>
+  <relationships>
+    <relationship source="CameraType" target="Enum" type="depends" multiplicity=""/>
+    <relationship source="CameraMode" target="Enum" type="depends" multiplicity=""/>
+    <relationship source="Camera" target="Transform" type="contains" multiplicity=""/>
+    <relationship source="Camera" target="CameraType" type="contains" multiplicity=""/>
+    <relationship source="Camera" target="Ray" type="uses" multiplicity=""/>
+    <relationship source="Camera" target="Ray" type="uses" multiplicity=""/>
+    <relationship source="Camera" target="TracingRay" type="uses" multiplicity=""/>
+    <relationship source="ColorGradient" target="Color" type="contains" multiplicity=""/>
+    <relationship source="ColorGradient" target="Color" type="uses" multiplicity=""/>
+    <relationship source="SDF_Material" target="SignedDistanceShape" type="contains" multiplicity=""/>
+    <relationship source="SDF_Material" target="PBRMaterial" type="contains" multiplicity=""/>
+    <relationship source="Mesh_Material" target="Mesh" type="contains" multiplicity=""/>
+    <relationship source="Mesh_Material" target="PBRMaterial" type="contains" multiplicity=""/>
+    <relationship source="TracingRay" target="Ray" type="inherits" multiplicity=""/>
+    <relationship source="SceneNode" target="Transform" type="contains" multiplicity=""/>
+    <relationship source="SceneNode" target="AABB" type="uses" multiplicity=""/>
+    <relationship source="SceneNode" target="Transform" type="uses" multiplicity=""/>
+    <relationship source="SceneNode" target="Transform" type="uses" multiplicity=""/>
+    <relationship source="SceneNode" target="AABB" type="uses" multiplicity=""/>
+    <relationship source="Scene" target="Camera" type="contains" multiplicity=""/>
+    <relationship source="Scene" target="SceneNode" type="uses" multiplicity=""/>
+    <relationship source="Scene" target="SceneNode" type="uses" multiplicity=""/>
+    <relationship source="Scene" target="SceneNode" type="uses" multiplicity=""/>
+    <relationship source="Scene" target="SceneNode" type="uses" multiplicity=""/>
+    <relationship source="Scene" target="SceneNode" type="uses" multiplicity=""/>
+    <relationship source="Scene" target="SceneNode" type="uses" multiplicity=""/>
+    <relationship source="Scene" target="SceneNode" type="uses" multiplicity=""/>
+    <relationship source="Scene" target="SceneNode" type="uses" multiplicity=""/>
+    <relationship source="Scene" target="SceneNode" type="uses" multiplicity=""/>
+    <relationship source="Scene" target="SceneNode" type="uses" multiplicity=""/>
+    <relationship source="Scene" target="SceneNode" type="uses" multiplicity=""/>
+    <relationship source="Scene" target="SceneNode" type="uses" multiplicity=""/>
+    <relationship source="Scene" target="SceneNode" type="uses" multiplicity=""/>
+    <relationship source="Transform" target="Ray" type="uses" multiplicity=""/>
+    <relationship source="Transform" target="Ray" type="uses" multiplicity=""/>
+    <relationship source="PixelFilter" target="Enum" type="depends" multiplicity=""/>
+    <relationship source="SampleSettings" target="PixelFilter" type="contains" multiplicity=""/>
+    <relationship source="Sampler" target="Sample" type="uses" multiplicity=""/>
+    <relationship source="RandomSampler" target="Sampler" type="inherits" multiplicity=""/>
+    <relationship source="StratifiedSampler" target="Sampler" type="inherits" multiplicity=""/>
+    <relationship source="StratifiedSampler" target="SampleSettings" type="contains" multiplicity=""/>
+    <relationship source="HaltonSampler" target="Sampler" type="inherits" multiplicity=""/>
+    <relationship source="AdaptiveSampler" target="Sampler" type="inherits" multiplicity=""/>
+    <relationship source="AdaptiveSampler" target="SampleSettings" type="contains" multiplicity=""/>
+    <relationship source="SamplingManager" target="SampleSettings" type="contains" multiplicity=""/>
+    <relationship source="SamplingManager" target="Sample" type="uses" multiplicity=""/>
+    <relationship source="AABB" target="AABB" type="uses" multiplicity=""/>
+    <relationship source="AABB" target="AABB" type="uses" multiplicity=""/>
+    <relationship source="BVHSplitMode" target="Enum" type="depends" multiplicity=""/>
+    <relationship source="ShapeFactory" target="SignedDistanceShape" type="uses" multiplicity=""/>
+    <relationship source="SignedDistanceShape" target="SignedDistanceFunction" type="inherits" multiplicity=""/>
+    <relationship source="SignedDistanceShape" target="SignedDistanceGradient" type="inherits" multiplicity=""/>
+    <relationship source="SignedDistanceShape2D" target="SignedDistanceShape" type="inherits" multiplicity=""/>
+    <relationship source="SignedDistanceShape3D" target="SignedDistanceShape" type="inherits" multiplicity=""/>
+    <relationship source="RoundedShape" target="SignedDistanceShape" type="inherits" multiplicity=""/>
+    <relationship source="RoundedShape" target="SignedDistanceShape" type="contains" multiplicity=""/>
+    <relationship source="OnionShape" target="SignedDistanceShape" type="inherits" multiplicity=""/>
+    <relationship source="ShapeExtrusion" target="SignedDistanceShape3D" type="inherits" multiplicity=""/>
+    <relationship source="ShapeExtrusion" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="ShapeExtrusion" target="SignedDistanceShape2D" type="contains" multiplicity=""/>
+    <relationship source="ShapeRevolution" target="SignedDistanceShape3D" type="inherits" multiplicity=""/>
+    <relationship source="ShapeRevolution" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="ShapeRevolution" target="SignedDistanceShape2D" type="contains" multiplicity=""/>
+    <relationship source="ShapeCombination" target="SignedDistanceShape" type="inherits" multiplicity=""/>
+    <relationship source="ShapeCombination" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="ShapeCombination" target="SignedDistanceShape" type="contains" multiplicity=""/>
+    <relationship source="ShapeCombination" target="Transform" type="contains" multiplicity=""/>
+    <relationship source="ShapeCombination" target="SignedDistanceShape" type="contains" multiplicity=""/>
+    <relationship source="ShapeCombination" target="Transform" type="contains" multiplicity=""/>
+    <relationship source="ShapeUnion" target="ShapeCombination" type="inherits" multiplicity=""/>
+    <relationship source="ShapeIntersection" target="ShapeCombination" type="inherits" multiplicity=""/>
+    <relationship source="ShapeSubtraction" target="ShapeCombination" type="inherits" multiplicity=""/>
+    <relationship source="ShapeSmoothUnion" target="ShapeCombination" type="inherits" multiplicity=""/>
+    <relationship source="ShapeSmoothUnion" target="SignedDistanceShape" type="contains" multiplicity=""/>
+    <relationship source="ShapeSmoothUnion" target="Transform" type="contains" multiplicity=""/>
+    <relationship source="ShapeSmoothUnion" target="SignedDistanceShape" type="contains" multiplicity=""/>
+    <relationship source="ShapeSmoothUnion" target="Transform" type="contains" multiplicity=""/>
+    <relationship source="ShapeXor" target="ShapeCombination" type="inherits" multiplicity=""/>
+    <relationship source="Circle" target="SignedDistanceShape2D" type="inherits" multiplicity=""/>
+    <relationship source="Circle" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="Rectangle" target="SignedDistanceShape2D" type="inherits" multiplicity=""/>
+    <relationship source="Rectangle" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="Square" target="Rectangle" type="inherits" multiplicity=""/>
+    <relationship source="Triangle" target="SignedDistanceShape2D" type="inherits" multiplicity=""/>
+    <relationship source="Triangle" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="Ellipse" target="SignedDistanceShape2D" type="inherits" multiplicity=""/>
+    <relationship source="Ellipse" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="Plane" target="SignedDistanceShape3D" type="inherits" multiplicity=""/>
+    <relationship source="Plane" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="Moon" target="SignedDistanceShape2D" type="inherits" multiplicity=""/>
+    <relationship source="Cross" target="SignedDistanceShape2D" type="inherits" multiplicity=""/>
+    <relationship source="Gear" target="SignedDistanceShape2D" type="inherits" multiplicity=""/>
+    <relationship source="Star" target="SignedDistanceShape2D" type="inherits" multiplicity=""/>
+    <relationship source="RegularPolygon" target="SignedDistanceShape2D" type="inherits" multiplicity=""/>
+    <relationship source="Polygon" target="SignedDistanceShape2D" type="inherits" multiplicity=""/>
+    <relationship source="Heart" target="SignedDistanceShape2D" type="inherits" multiplicity=""/>
+    <relationship source="Sphere" target="SignedDistanceShape3D" type="inherits" multiplicity=""/>
+    <relationship source="Sphere" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="Cube" target="SignedDistanceShape3D" type="inherits" multiplicity=""/>
+    <relationship source="Cube" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="Cylinder" target="SignedDistanceShape3D" type="inherits" multiplicity=""/>
+    <relationship source="Cylinder" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="Pyramid" target="SignedDistanceShape3D" type="inherits" multiplicity=""/>
+    <relationship source="Pyramid" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="Cone" target="SignedDistanceShape3D" type="inherits" multiplicity=""/>
+    <relationship source="Cone" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="Torus" target="SignedDistanceShape3D" type="inherits" multiplicity=""/>
+    <relationship source="Capsule" target="SignedDistanceShape3D" type="inherits" multiplicity=""/>
+    <relationship source="EllipticSphere" target="SignedDistanceShape3D" type="inherits" multiplicity=""/>
+    <relationship source="EllipticSphere" target="CorrespondingBoxCorners" type="inherits" multiplicity=""/>
+    <relationship source="ACESFilmicToneMapping" target="PostProcessPass" type="inherits" multiplicity=""/>
+    <relationship source="ReinhardToneMapping" target="PostProcessPass" type="inherits" multiplicity=""/>
+    <relationship source="GammaCorrection" target="PostProcessPass" type="inherits" multiplicity=""/>
+    <relationship source="Exposure" target="PostProcessPass" type="inherits" multiplicity=""/>
+    <relationship source="AutoExposure" target="PostProcessPass" type="inherits" multiplicity=""/>
+    <relationship source="Bloom" target="PostProcessPass" type="inherits" multiplicity=""/>
+    <relationship source="Vignette" target="PostProcessPass" type="inherits" multiplicity=""/>
+    <relationship source="ChromaticAberration" target="PostProcessPass" type="inherits" multiplicity=""/>
+    <relationship source="LightType" target="Enum" type="depends" multiplicity=""/>
+    <relationship source="Light" target="LightType" type="contains" multiplicity=""/>
+    <relationship source="Light" target="Color" type="contains" multiplicity=""/>
+    <relationship source="Light" target="Color" type="uses" multiplicity=""/>
+    <relationship source="MaterialType" target="Enum" type="depends" multiplicity=""/>
+    <relationship source="MaterialData" target="Color" type="contains" multiplicity=""/>
+    <relationship source="MaterialData" target="Color" type="contains" multiplicity=""/>
+    <relationship source="MaterialData" target="Color" type="contains" multiplicity=""/>
+    <relationship source="MaterialData" target="MaterialType" type="contains" multiplicity=""/>
+    <relationship source="PBRMaterial" target="MaterialData" type="contains" multiplicity=""/>
+    <relationship source="PBRMaterial" target="Color" type="uses" multiplicity=""/>
+    <relationship source="PBRMaterial" target="Color" type="uses" multiplicity=""/>
+    <relationship source="PBRMaterial" target="Color" type="uses" multiplicity=""/>
+    <relationship source="PBRMaterial" target="Color" type="uses" multiplicity=""/>
+    <relationship source="PBRMaterial" target="Color" type="uses" multiplicity=""/>
+    <relationship source="PBRMaterial" target="Color" type="uses" multiplicity=""/>
+    <relationship source="PBRMaterial" target="Color" type="uses" multiplicity=""/>
+    <relationship source="PBRMaterial" target="Color" type="uses" multiplicity=""/>
+    <relationship source="AlgorithmSettings" target="Film" type="contains" multiplicity=""/>
+    <relationship source="Algorithm" target="AlgorithmSettings" type="contains" multiplicity=""/>
+    <relationship source="Algorithm" target="AlgorithmSettings" type="contains" multiplicity=""/>
+    <relationship source="TracingStats" target="RenderStats" type="inherits" multiplicity=""/>
+    <relationship source="RayTracingSettings" target="AlgorithmSettings" type="inherits" multiplicity=""/>
+    <relationship source="RayTracingSettings" target="SamplingManager" type="contains" multiplicity=""/>
+    <relationship source="RayTracingSettings" target="IntersectionStrategy" type="contains" multiplicity=""/>
+    <relationship source="RayTracingSettings" target="ShadingStrategy" type="contains" multiplicity=""/>
+    <relationship source="RayTracer" target="Algorithm" type="inherits" multiplicity=""/>
+    <relationship source="RayTracer" target="RayTracingSettings" type="contains" multiplicity=""/>
+    <relationship source="RayTracer" target="RayTracingSettings" type="contains" multiplicity=""/>
+    <relationship source="RayTracer" target="Color" type="uses" multiplicity=""/>
+    <relationship source="IntersectionStrategy" target="IntersectionSettings" type="contains" multiplicity=""/>
+    <relationship source="IntersectionStrategy" target="HitInfo" type="uses" multiplicity=""/>
+    <relationship source="IntersectionStrategy" target="HitInfo" type="uses" multiplicity=""/>
+    <relationship source="RayMarchingIntersection" target="IntersectionStrategy" type="inherits" multiplicity=""/>
+    <relationship source="RayMarchingIntersection" target="HitInfo" type="uses" multiplicity=""/>
+    <relationship source="InverseSDFIntersection" target="IntersectionStrategy" type="inherits" multiplicity=""/>
+    <relationship source="InverseSDFIntersection" target="HitInfo" type="uses" multiplicity=""/>
+    <relationship source="BVHIntersection" target="IntersectionStrategy" type="inherits" multiplicity=""/>
+    <relationship source="BVHIntersection" target="IntersectionSettings" type="contains" multiplicity=""/>
+    <relationship source="BVHIntersection" target="HitInfo" type="uses" multiplicity=""/>
+    <relationship source="AnalyticalIntersection" target="IntersectionStrategy" type="inherits" multiplicity=""/>
+    <relationship source="AnalyticalIntersection" target="HitInfo" type="uses" multiplicity=""/>
+    <relationship source="AmbienceSettings" target="Color" type="contains" multiplicity=""/>
+    <relationship source="BackgroundSettings" target="Color" type="contains" multiplicity=""/>
+    <relationship source="BackgroundSettings" target="Color" type="uses" multiplicity=""/>
+    <relationship source="BackgroundSettings" target="Color" type="uses" multiplicity=""/>
+    <relationship source="ShadingSettings" target="AmbienceSettings" type="contains" multiplicity=""/>
+    <relationship source="ShadingSettings" target="ShadowSettings" type="contains" multiplicity=""/>
+    <relationship source="ShadingSettings" target="BackgroundSettings" type="contains" multiplicity=""/>
+    <relationship source="ShadingStrategy" target="ShadingSettings" type="contains" multiplicity=""/>
+    <relationship source="ShadingStrategy" target="Color" type="uses" multiplicity=""/>
+    <relationship source="NormalShading" target="ShadingStrategy" type="inherits" multiplicity=""/>
+    <relationship source="NormalShading" target="Color" type="uses" multiplicity=""/>
+    <relationship source="DistanceShading" target="ShadingStrategy" type="inherits" multiplicity=""/>
+    <relationship source="DistanceShading" target="ShadingSettings" type="contains" multiplicity=""/>
+    <relationship source="DistanceShading" target="ColorGradient" type="contains" multiplicity=""/>
+    <relationship source="DistanceShading" target="Color" type="uses" multiplicity=""/>
+    <relationship source="FlatShading" target="ShadingStrategy" type="inherits" multiplicity=""/>
+    <relationship source="FlatShading" target="Color" type="uses" multiplicity=""/>
+    <relationship source="VolumetricShading" target="ShadingStrategy" type="inherits" multiplicity=""/>
+    <relationship source="VolumetricShading" target="ShadingSettings" type="contains" multiplicity=""/>
+    <relationship source="VolumetricShading" target="Color" type="contains" multiplicity=""/>
+    <relationship source="VolumetricShading" target="Color" type="contains" multiplicity=""/>
+    <relationship source="VolumetricShading" target="Color" type="uses" multiplicity=""/>
+    <relationship source="PhysicalShadingSettings" target="ShadingSettings" type="inherits" multiplicity=""/>
+    <relationship source="PhysicalShadingStrategy" target="ShadingStrategy" type="inherits" multiplicity=""/>
+    <relationship source="PhysicalShadingStrategy" target="BVHNode" type="uses" multiplicity=""/>
+    <relationship source="PhysicalShadingStrategy" target="PhysicalShadingSettings" type="contains" multiplicity=""/>
+    <relationship source="LambertShading" target="PhysicalShadingStrategy" type="inherits" multiplicity=""/>
+    <relationship source="LambertShading" target="Color" type="uses" multiplicity=""/>
+    <relationship source="RecursiveLambertShading" target="LambertShading" type="inherits" multiplicity=""/>
+    <relationship source="RecursiveLambertShading" target="Color" type="uses" multiplicity=""/>
+  </relationships>
+</classes>

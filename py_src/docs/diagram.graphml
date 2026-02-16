@@ -1,0 +1,1220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d0" for="node" attr.name="description" attr.type="string"/>
+  <key id="d1" for="node" attr.name="module" attr.type="string"/>
+  <key id="d2" for="node" attr.name="type" attr.type="string"/>
+  <key id="d3" for="node" attr.name="attributes" attr.type="string"/>
+  <key id="d4" for="edge" attr.name="relationship" attr.type="string"/>
+
+  <graph id="NEA-CSProject-full" edgedefault="directed">
+    <attr name="name">NEA-CSProject Full (Auto-Generated)</attr>
+    <attr name="description">Complete class hierarchy with all attributes and methods</attr>
+
+    <node id="AABB" labels="AABB">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">-__slots__: list; +min_point: ndarray; +max_point: ndarray</data>
+    </node>
+    <node id="ACESFilmicToneMapping" labels="ACESFilmicToneMapping">
+      <data key="d0">Class</data>
+      <data key="d1">Image</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="AdaptiveSampler" labels="AdaptiveSampler">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+sample_settings: SampleSettings; +seed: int; -_base_sampler</data>
+    </node>
+    <node id="Algorithm" labels="Algorithm">
+      <data key="d0">Abstract</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">abstract</data>
+      <data key="d3">+settings_type: AlgorithmSettings; +settings: AlgorithmSettings; +stats</data>
+    </node>
+    <node id="AlgorithmSettings" labels="AlgorithmSettings">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+image_width: int; +image_height: int; +film: Film</data>
+    </node>
+    <node id="AmbienceSettings" labels="AmbienceSettings">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+enabled: bool; +color: Color; +intensity: float; +occlusion_map_enabled: bool; +occlusion_sample_count: int; +occlusion_radius: float; +occlusion_bias: float</data>
+    </node>
+    <node id="AnalyticalIntersection" labels="AnalyticalIntersection">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="AutoExposure" labels="AutoExposure">
+      <data key="d0">Class</data>
+      <data key="d1">Image</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="BVHIntersection" labels="BVHIntersection">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+settings: IntersectionSettings; +max_depth: int</data>
+    </node>
+    <node id="BVHNode" labels="BVHNode">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+objects: List</data>
+    </node>
+    <node id="BVHSplitMode" labels="BVHSplitMode">
+      <data key="d0">Enum</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">enum</data>
+      <data key="d3">+LONGEST_AXIS: str; +BALANCED: str</data>
+    </node>
+    <node id="BackgroundSettings" labels="BackgroundSettings">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+enabled: bool; +default_color: Color; +current_value; +environment_effect_enabled: bool; +environment_contribution_factor: float</data>
+    </node>
+    <node id="Bloom" labels="Bloom">
+      <data key="d0">Class</data>
+      <data key="d1">Image</data>
+      <data key="d2">class</data>
+      <data key="d3">+threshold: float; +radius: float; +intensity: float; +softness: float</data>
+    </node>
+    <node id="Camera" labels="Camera">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+transform: Transform; +resolution_width: int; +resolution_height: int; +fov: float; +near: float; +far: float; +camera_type: CameraType; +othographic_distance: float; +aperture_radius: float; +focal_distance: float; +width; +height; +aspect_ratio; +type; +mode; +name</data>
+    </node>
+    <node id="CameraMode" labels="CameraMode">
+      <data key="d0">Enum</data>
+      <data key="d1">Data</data>
+      <data key="d2">enum</data>
+      <data key="d3">+FIRST_PERSON: int; +PLANE: int; +ORBIT: int</data>
+    </node>
+    <node id="CameraType" labels="CameraType">
+      <data key="d0">Enum</data>
+      <data key="d1">Data</data>
+      <data key="d2">enum</data>
+      <data key="d3">+PERSPECTIVE: int; +ORTHOGRAPHIC: int</data>
+    </node>
+    <node id="Capsule" labels="Capsule">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+radius: float; +height: float; +a; +b</data>
+    </node>
+    <node id="ChromaticAberration" labels="ChromaticAberration">
+      <data key="d0">Class</data>
+      <data key="d1">Image</data>
+      <data key="d2">class</data>
+      <data key="d3">+intensity: float</data>
+    </node>
+    <node id="Circle" labels="Circle">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+radius: float</data>
+    </node>
+    <node id="Color" labels="Color">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+r: float; +g: float; +b: float; +a: float</data>
+    </node>
+    <node id="ColorGradient" labels="ColorGradient">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+colors: Color; +positions: ndarray; +interpolation</data>
+    </node>
+    <node id="Cone" labels="Cone">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+base_radius: float; +height: float</data>
+    </node>
+    <node id="CorrespondingBoxCorners" labels="CorrespondingBoxCorners">
+      <data key="d0">Abstract</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">abstract</data>
+    </node>
+    <node id="Cross" labels="Cross">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+size: float; +thickness: float</data>
+    </node>
+    <node id="Cube" labels="Cube">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+size: float; +half_size</data>
+    </node>
+    <node id="Cylinder" labels="Cylinder">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+radius: float; +height: float</data>
+    </node>
+    <node id="DistanceShading" labels="DistanceShading">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+settings: ShadingSettings; +min_distance: float; +max_distance: float; +reference_point: ndarray; +color_gradient: ColorGradient; +invert_colors: bool; +min_dist; +max_dist</data>
+    </node>
+    <node id="Ellipse" labels="Ellipse">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+radius_x: float; +radius_y: float; +radii</data>
+    </node>
+    <node id="EllipticSphere" labels="EllipticSphere">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+radius_x: float; +radius_y: float; +radius_z: float; +radii</data>
+    </node>
+    <node id="Exposure" labels="Exposure">
+      <data key="d0">Class</data>
+      <data key="d1">Image</data>
+      <data key="d2">class</data>
+      <data key="d3">+exposure_value: float; +exposure</data>
+    </node>
+    <node id="Face" labels="Face">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+v1: int; +v2: int; +v3: int; +uv: Tuple; +normal: np; +tangent: np; +bitangent: np</data>
+    </node>
+    <node id="Film" labels="Film">
+      <data key="d0">Class</data>
+      <data key="d1">Image</data>
+      <data key="d2">class</data>
+      <data key="d3">+width: int; +height: int; +accum_color; +accum_weight</data>
+    </node>
+    <node id="FlatShading" labels="FlatShading">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="GammaCorrection" labels="GammaCorrection">
+      <data key="d0">Class</data>
+      <data key="d1">Image</data>
+      <data key="d2">class</data>
+      <data key="d3">+gamma: float; +inv_gamma</data>
+    </node>
+    <node id="Gear" labels="Gear">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+radius: float; +teeth: int; +tooth_depth: float</data>
+    </node>
+    <node id="HaltonSampler" labels="HaltonSampler">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="Heart" labels="Heart">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+size: float</data>
+    </node>
+    <node id="HitInfo" labels="HitInfo">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+hit: bool; +distance: float; +point: np; +normal: np; +direction: np; +obj; +uv: np; +did_hit: bool</data>
+    </node>
+    <node id="ImagePipeline" labels="ImagePipeline">
+      <data key="d0">Class</data>
+      <data key="d1">Image</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="IntersectionSettings" labels="IntersectionSettings">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+epsilon: float; +max_steps: int; +max_distance: float; +step_relaxation: float; +use_aabb_bounding_box: bool; +always_rebuild_bvh: bool; +bounding_box_bias: float</data>
+    </node>
+    <node id="IntersectionStrategy" labels="IntersectionStrategy">
+      <data key="d0">Abstract</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">abstract</data>
+      <data key="d3">+settings: IntersectionSettings</data>
+    </node>
+    <node id="InverseSDFIntersection" labels="InverseSDFIntersection">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="LambertShading" labels="LambertShading">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="Light" labels="Light">
+      <data key="d0">Class</data>
+      <data key="d1">Lighting</data>
+      <data key="d2">class</data>
+      <data key="d3">+type: LightType; +color: Color; +intensity: float; +radius: float; +direction: ndarray; +spot_inner_angle: float; +spot_outer_angle: float</data>
+    </node>
+    <node id="LightType" labels="LightType">
+      <data key="d0">Enum</data>
+      <data key="d1">Lighting</data>
+      <data key="d2">enum</data>
+      <data key="d3">+POINT: int; +DIRECTIONAL: int; +SPOT: int</data>
+    </node>
+    <node id="MaterialData" labels="MaterialData">
+      <data key="d0">Class</data>
+      <data key="d1">Material</data>
+      <data key="d2">class</data>
+      <data key="d3">+name: str; +albedo: Color; +roughness: float; +metallic: float; +specular_intensity: float; +specular_tint: float; +ior: float; +transmission: float; +absorption_color: Color; +absorption_density: float; +emission_color: Color; +emission_intensity: float; +type: MaterialType</data>
+    </node>
+    <node id="MaterialFactory" labels="MaterialFactory">
+      <data key="d0">Class</data>
+      <data key="d1">Material</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="MaterialType" labels="MaterialType">
+      <data key="d0">Enum</data>
+      <data key="d1">Material</data>
+      <data key="d2">enum</data>
+      <data key="d3">+DIFFUSE: int; +SPECULAR: int; +GLASS: int; +TRANSPARENT: int; +EMISSIVE: int</data>
+    </node>
+    <node id="MemoryProfileResult" labels="MemoryProfileResult">
+      <data key="d0">Class</data>
+      <data key="d1">Utilities</data>
+      <data key="d2">class</data>
+      <data key="d3">+time_seconds: float; +rss_start_mb: float; +rss_end_mb: float; +rss_delta_mb: float; +tracemalloc_current_kb: float; +tracemalloc_peak_kb: float; +top_stats: Dict</data>
+    </node>
+    <node id="MemoryProfiler" labels="MemoryProfiler">
+      <data key="d0">Class</data>
+      <data key="d1">Utilities</data>
+      <data key="d2">class</data>
+      <data key="d3">+enable_tracemalloc; +top; -_start_snapshot; -_start_time; -_start_rss</data>
+    </node>
+    <node id="Mesh" labels="Mesh">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+name: str; +vertices: List; +faces: List</data>
+    </node>
+    <node id="Mesh_Material" labels="Mesh_Material">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+mesh: Mesh; +material: PBRMaterial</data>
+    </node>
+    <node id="Moon" labels="Moon">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+radius_a: float; +radius_b: float; +offset: float</data>
+    </node>
+    <node id="NormalShading" labels="NormalShading">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="OnionShape" labels="OnionShape">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="PBRMaterial" labels="PBRMaterial">
+      <data key="d0">Class</data>
+      <data key="d1">Material</data>
+      <data key="d2">class</data>
+      <data key="d3">+data: MaterialData</data>
+    </node>
+    <node id="PhysicalShadingSettings" labels="PhysicalShadingSettings">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+enable_reflection_caustics: bool; +enable_refraction_caustics: bool; +enable_ambient_occlusion: bool; +enable_bidirectional_scattering: bool</data>
+    </node>
+    <node id="PhysicalShadingStrategy" labels="PhysicalShadingStrategy">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">-_cache_ambient_occlusion_map: np; -_cache_light_tree: BVHNode; +settings: PhysicalShadingSettings; +ambience_settings; +shadow_settings; +background_settings</data>
+    </node>
+    <node id="PixelFilter" labels="PixelFilter">
+      <data key="d0">Enum</data>
+      <data key="d1">Data</data>
+      <data key="d2">enum</data>
+      <data key="d3">+BOX: int; +TENT: int; +GAUSSIAN: int; +NEAREST: int</data>
+    </node>
+    <node id="Plane" labels="Plane">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+normal: ndarray; +d: float</data>
+    </node>
+    <node id="Polygon" labels="Polygon">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="PostProcessPass" labels="PostProcessPass">
+      <data key="d0">Abstract</data>
+      <data key="d1">Image</data>
+      <data key="d2">abstract</data>
+    </node>
+    <node id="Pyramid" labels="Pyramid">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+base_size: float; +height: float; +base_half_size</data>
+    </node>
+    <node id="RandomSampler" labels="RandomSampler">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="Ratio" labels="Ratio">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+width: float; +height: float</data>
+    </node>
+    <node id="Ray" labels="Ray">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+origin: ndarray; +orientation: ndarray; +name: str</data>
+    </node>
+    <node id="RayMarchingIntersection" labels="RayMarchingIntersection">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="RayPool" labels="RayPool">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+block_size; -_pool; -_block_size</data>
+    </node>
+    <node id="RayTracer" labels="RayTracer">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+settings_type: RayTracingSettings; +settings: RayTracingSettings</data>
+    </node>
+    <node id="RayTracingSettings" labels="RayTracingSettings">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+sampling_manager: SamplingManager; +max_recursions: int; +intersection_strategy: IntersectionStrategy; +shading_strategy: ShadingStrategy; +use_tiling: bool; +tile_size: int; +debug_mode: bool; +verbose_logging: bool</data>
+    </node>
+    <node id="Rectangle" labels="Rectangle">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+size: ndarray; +half_size</data>
+    </node>
+    <node id="RecursiveLambertShading" labels="RecursiveLambertShading">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+a: float; +b: float; +c: float</data>
+    </node>
+    <node id="RegularPolygon" labels="RegularPolygon">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+sides: int; +radius: float</data>
+    </node>
+    <node id="ReinhardToneMapping" labels="ReinhardToneMapping">
+      <data key="d0">Class</data>
+      <data key="d1">Image</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="RenderManager" labels="RenderManager">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="RenderStats" labels="RenderStats">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+memory_usage: float; +pixels_processed: int; +nan_errors: int; +time_taken_seconds: float; -_start_time: float</data>
+    </node>
+    <node id="RoundedShape" labels="RoundedShape">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+shape: SignedDistanceShape; +radius: float</data>
+    </node>
+    <node id="SDF_Material" labels="SDF_Material">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+shape: SignedDistanceShape; +material: PBRMaterial</data>
+    </node>
+    <node id="Sample" labels="Sample">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+u: float; +v: float; +w: float</data>
+    </node>
+    <node id="SampleSettings" labels="SampleSettings">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+width: int; +height: int; +samples_per_pixel: int; +min_samples: int; +noise_threshold: float; +filter_type: PixelFilter; +filter_width: float</data>
+    </node>
+    <node id="Sampler" labels="Sampler">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+input_source; +seed: int; +settings</data>
+    </node>
+    <node id="SamplingManager" labels="SamplingManager">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+sample_settings: SampleSettings; +sampler_name: str; +seed: int; +settings; +sampler</data>
+    </node>
+    <node id="Scene" labels="Scene">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+name: str; +camera: Camera</data>
+    </node>
+    <node id="SceneNode" labels="SceneNode">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+name: str; +context: Any; +transform: Transform; +active: bool; +children; +parent; -_world_matrix: np; -_inverse_world_matrix: np; -_aabb_bounds: AABB</data>
+    </node>
+    <node id="ShadingSettings" labels="ShadingSettings">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+ambience_settings: AmbienceSettings; +shadow_settings: ShadowSettings; +background_settings: BackgroundSettings</data>
+    </node>
+    <node id="ShadingStrategy" labels="ShadingStrategy">
+      <data key="d0">Abstract</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">abstract</data>
+      <data key="d3">+settings: ShadingSettings; +ambience_settings; +shadow_settings; +background_settings</data>
+    </node>
+    <node id="ShadowSettings" labels="ShadowSettings">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+enabled: bool; +samples: int; +bias: float; +use_light_tree: bool</data>
+    </node>
+    <node id="ShapeCombination" labels="ShapeCombination">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+shape_a: SignedDistanceShape; +transform_a: Transform; +shape_b: SignedDistanceShape; +transform_b: Transform</data>
+    </node>
+    <node id="ShapeExtrusion" labels="ShapeExtrusion">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+shape_2d: SignedDistanceShape2D; +height: float; +half_height</data>
+    </node>
+    <node id="ShapeFactory" labels="ShapeFactory">
+      <data key="d0">Abstract</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">abstract</data>
+    </node>
+    <node id="ShapeIntersection" labels="ShapeIntersection">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="ShapeRevolution" labels="ShapeRevolution">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+shape_2d: SignedDistanceShape2D</data>
+    </node>
+    <node id="ShapeSmoothUnion" labels="ShapeSmoothUnion">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+shape_a: SignedDistanceShape; +transform_a: Transform; +shape_b: SignedDistanceShape; +transform_b: Transform; +k: float</data>
+    </node>
+    <node id="ShapeSubtraction" labels="ShapeSubtraction">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="ShapeUnion" labels="ShapeUnion">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="ShapeXor" labels="ShapeXor">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="SignedDistanceFunction" labels="SignedDistanceFunction">
+      <data key="d0">Abstract</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">abstract</data>
+    </node>
+    <node id="SignedDistanceGradient" labels="SignedDistanceGradient">
+      <data key="d0">Abstract</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">abstract</data>
+    </node>
+    <node id="SignedDistanceShape" labels="SignedDistanceShape">
+      <data key="d0">Abstract</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">abstract</data>
+    </node>
+    <node id="SignedDistanceShape2D" labels="SignedDistanceShape2D">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="SignedDistanceShape3D" labels="SignedDistanceShape3D">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+    </node>
+    <node id="Sphere" labels="Sphere">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+radius: float</data>
+    </node>
+    <node id="Square" labels="Square">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+size: float; +half_size</data>
+    </node>
+    <node id="Star" labels="Star">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+points: int; +inner_radius: float; +outer_radius: float</data>
+    </node>
+    <node id="StratifiedSampler" labels="StratifiedSampler">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+settings: SampleSettings; +seed: int</data>
+    </node>
+    <node id="Torus" labels="Torus">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+major_radius: float; +minor_radius: float</data>
+    </node>
+    <node id="TracingRay" labels="TracingRay">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+current_depth: int; +pixel_x: int; +pixel_y: int; +throughput: float; +is_inside: bool; +sample_u: float; +sample_v: float</data>
+    </node>
+    <node id="TracingStats" labels="TracingStats">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+render_type: str; +intersection_type: str; +shading_type: str; +rays_primary: int; +rays_shadow: int; +rays_reflection: int; +rays_refraction: int; +rays_transparency: int; +rays_missed: int; +pixels_processed: int; +tiles_processed: int; +aabb_tests: int; +bvh_nodes_visited: int; +triangle_tests: int; +max_recursions: int; +roulette_kills: int; +lights_sampled: int; -_settings: Any</data>
+    </node>
+    <node id="Transform" labels="Transform">
+      <data key="d0">Class</data>
+      <data key="d1">Data</data>
+      <data key="d2">class</data>
+      <data key="d3">+position: ndarray; +rotation: ndarray; +scale: ndarray; +name: str; +local_position; +local_rotation; +local_scale; +forward; +right; +up</data>
+    </node>
+    <node id="Triangle" labels="Triangle">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+v0: ndarray; +v1: ndarray; +v2: ndarray; +e0; +e1; +e2</data>
+    </node>
+    <node id="Vertex" labels="Vertex">
+      <data key="d0">Class</data>
+      <data key="d1">Geometry</data>
+      <data key="d2">class</data>
+      <data key="d3">+x: float; +y: float; +z: float</data>
+    </node>
+    <node id="Vignette" labels="Vignette">
+      <data key="d0">Class</data>
+      <data key="d1">Image</data>
+      <data key="d2">class</data>
+      <data key="d3">+intensity: float; +softness: float; +curve: float</data>
+    </node>
+    <node id="VolumetricShading" labels="VolumetricShading">
+      <data key="d0">Class</data>
+      <data key="d1">Rendering</data>
+      <data key="d2">class</data>
+      <data key="d3">+settings: ShadingSettings; +intersection_function; +density: float; +absorption_color: Color; +invert_style: bool; +rim_power: float; +rim_color: Color; +max_thickness: float</data>
+    </node>
+
+    <edge id="e_Camera_Transform_0" source="Camera" target="Transform">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_Camera_CameraType_1" source="Camera" target="CameraType">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_Camera_Ray_2" source="Camera" target="Ray">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Camera_Ray_3" source="Camera" target="Ray">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Camera_TracingRay_4" source="Camera" target="TracingRay">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_ColorGradient_Color_5" source="ColorGradient" target="Color">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ColorGradient_Color_6" source="ColorGradient" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_SDF_Material_SignedDistanceShape_7" source="SDF_Material" target="SignedDistanceShape">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_SDF_Material_PBRMaterial_8" source="SDF_Material" target="PBRMaterial">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_Mesh_Material_Mesh_9" source="Mesh_Material" target="Mesh">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_Mesh_Material_PBRMaterial_10" source="Mesh_Material" target="PBRMaterial">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_TracingRay_Ray_11" source="TracingRay" target="Ray">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_SceneNode_Transform_12" source="SceneNode" target="Transform">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_SceneNode_AABB_13" source="SceneNode" target="AABB">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_SceneNode_Transform_14" source="SceneNode" target="Transform">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_SceneNode_Transform_15" source="SceneNode" target="Transform">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_SceneNode_AABB_16" source="SceneNode" target="AABB">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Scene_Camera_17" source="Scene" target="Camera">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_Scene_SceneNode_18" source="Scene" target="SceneNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Scene_SceneNode_19" source="Scene" target="SceneNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Scene_SceneNode_20" source="Scene" target="SceneNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Scene_SceneNode_21" source="Scene" target="SceneNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Scene_SceneNode_22" source="Scene" target="SceneNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Scene_SceneNode_23" source="Scene" target="SceneNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Scene_SceneNode_24" source="Scene" target="SceneNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Scene_SceneNode_25" source="Scene" target="SceneNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Scene_SceneNode_26" source="Scene" target="SceneNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Scene_SceneNode_27" source="Scene" target="SceneNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Scene_SceneNode_28" source="Scene" target="SceneNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Scene_SceneNode_29" source="Scene" target="SceneNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Scene_SceneNode_30" source="Scene" target="SceneNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Transform_Ray_31" source="Transform" target="Ray">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_Transform_Ray_32" source="Transform" target="Ray">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_SampleSettings_PixelFilter_33" source="SampleSettings" target="PixelFilter">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_Sampler_Sample_34" source="Sampler" target="Sample">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_RandomSampler_Sampler_35" source="RandomSampler" target="Sampler">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_StratifiedSampler_Sampler_36" source="StratifiedSampler" target="Sampler">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_StratifiedSampler_SampleSettings_37" source="StratifiedSampler" target="SampleSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_HaltonSampler_Sampler_38" source="HaltonSampler" target="Sampler">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_AdaptiveSampler_Sampler_39" source="AdaptiveSampler" target="Sampler">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_AdaptiveSampler_SampleSettings_40" source="AdaptiveSampler" target="SampleSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_SamplingManager_SampleSettings_41" source="SamplingManager" target="SampleSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_SamplingManager_Sample_42" source="SamplingManager" target="Sample">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_AABB_AABB_43" source="AABB" target="AABB">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_AABB_AABB_44" source="AABB" target="AABB">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_ShapeFactory_SignedDistanceShape_45" source="ShapeFactory" target="SignedDistanceShape">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_SignedDistanceShape_SignedDistanceFunction_46" source="SignedDistanceShape" target="SignedDistanceFunction">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_SignedDistanceShape_SignedDistanceGradient_47" source="SignedDistanceShape" target="SignedDistanceGradient">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_SignedDistanceShape2D_SignedDistanceShape_48" source="SignedDistanceShape2D" target="SignedDistanceShape">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_SignedDistanceShape3D_SignedDistanceShape_49" source="SignedDistanceShape3D" target="SignedDistanceShape">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_RoundedShape_SignedDistanceShape_50" source="RoundedShape" target="SignedDistanceShape">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_RoundedShape_SignedDistanceShape_51" source="RoundedShape" target="SignedDistanceShape">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_OnionShape_SignedDistanceShape_52" source="OnionShape" target="SignedDistanceShape">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ShapeExtrusion_SignedDistanceShape3D_53" source="ShapeExtrusion" target="SignedDistanceShape3D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ShapeExtrusion_CorrespondingBoxCorners_54" source="ShapeExtrusion" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ShapeExtrusion_SignedDistanceShape2D_55" source="ShapeExtrusion" target="SignedDistanceShape2D">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShapeRevolution_SignedDistanceShape3D_56" source="ShapeRevolution" target="SignedDistanceShape3D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ShapeRevolution_CorrespondingBoxCorners_57" source="ShapeRevolution" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ShapeRevolution_SignedDistanceShape2D_58" source="ShapeRevolution" target="SignedDistanceShape2D">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShapeCombination_SignedDistanceShape_59" source="ShapeCombination" target="SignedDistanceShape">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ShapeCombination_CorrespondingBoxCorners_60" source="ShapeCombination" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ShapeCombination_SignedDistanceShape_61" source="ShapeCombination" target="SignedDistanceShape">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShapeCombination_Transform_62" source="ShapeCombination" target="Transform">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShapeCombination_SignedDistanceShape_63" source="ShapeCombination" target="SignedDistanceShape">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShapeCombination_Transform_64" source="ShapeCombination" target="Transform">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShapeUnion_ShapeCombination_65" source="ShapeUnion" target="ShapeCombination">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ShapeIntersection_ShapeCombination_66" source="ShapeIntersection" target="ShapeCombination">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ShapeSubtraction_ShapeCombination_67" source="ShapeSubtraction" target="ShapeCombination">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ShapeSmoothUnion_ShapeCombination_68" source="ShapeSmoothUnion" target="ShapeCombination">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ShapeSmoothUnion_SignedDistanceShape_69" source="ShapeSmoothUnion" target="SignedDistanceShape">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShapeSmoothUnion_Transform_70" source="ShapeSmoothUnion" target="Transform">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShapeSmoothUnion_SignedDistanceShape_71" source="ShapeSmoothUnion" target="SignedDistanceShape">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShapeSmoothUnion_Transform_72" source="ShapeSmoothUnion" target="Transform">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShapeXor_ShapeCombination_73" source="ShapeXor" target="ShapeCombination">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Circle_SignedDistanceShape2D_74" source="Circle" target="SignedDistanceShape2D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Circle_CorrespondingBoxCorners_75" source="Circle" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Rectangle_SignedDistanceShape2D_76" source="Rectangle" target="SignedDistanceShape2D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Rectangle_CorrespondingBoxCorners_77" source="Rectangle" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Square_Rectangle_78" source="Square" target="Rectangle">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Triangle_SignedDistanceShape2D_79" source="Triangle" target="SignedDistanceShape2D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Triangle_CorrespondingBoxCorners_80" source="Triangle" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Ellipse_SignedDistanceShape2D_81" source="Ellipse" target="SignedDistanceShape2D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Ellipse_CorrespondingBoxCorners_82" source="Ellipse" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Plane_SignedDistanceShape3D_83" source="Plane" target="SignedDistanceShape3D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Plane_CorrespondingBoxCorners_84" source="Plane" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Moon_SignedDistanceShape2D_85" source="Moon" target="SignedDistanceShape2D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Cross_SignedDistanceShape2D_86" source="Cross" target="SignedDistanceShape2D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Gear_SignedDistanceShape2D_87" source="Gear" target="SignedDistanceShape2D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Star_SignedDistanceShape2D_88" source="Star" target="SignedDistanceShape2D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_RegularPolygon_SignedDistanceShape2D_89" source="RegularPolygon" target="SignedDistanceShape2D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Polygon_SignedDistanceShape2D_90" source="Polygon" target="SignedDistanceShape2D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Heart_SignedDistanceShape2D_91" source="Heart" target="SignedDistanceShape2D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Sphere_SignedDistanceShape3D_92" source="Sphere" target="SignedDistanceShape3D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Sphere_CorrespondingBoxCorners_93" source="Sphere" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Cube_SignedDistanceShape3D_94" source="Cube" target="SignedDistanceShape3D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Cube_CorrespondingBoxCorners_95" source="Cube" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Cylinder_SignedDistanceShape3D_96" source="Cylinder" target="SignedDistanceShape3D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Cylinder_CorrespondingBoxCorners_97" source="Cylinder" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Pyramid_SignedDistanceShape3D_98" source="Pyramid" target="SignedDistanceShape3D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Pyramid_CorrespondingBoxCorners_99" source="Pyramid" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Cone_SignedDistanceShape3D_100" source="Cone" target="SignedDistanceShape3D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Cone_CorrespondingBoxCorners_101" source="Cone" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Torus_SignedDistanceShape3D_102" source="Torus" target="SignedDistanceShape3D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Capsule_SignedDistanceShape3D_103" source="Capsule" target="SignedDistanceShape3D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_EllipticSphere_SignedDistanceShape3D_104" source="EllipticSphere" target="SignedDistanceShape3D">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_EllipticSphere_CorrespondingBoxCorners_105" source="EllipticSphere" target="CorrespondingBoxCorners">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ACESFilmicToneMapping_PostProcessPass_106" source="ACESFilmicToneMapping" target="PostProcessPass">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ReinhardToneMapping_PostProcessPass_107" source="ReinhardToneMapping" target="PostProcessPass">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_GammaCorrection_PostProcessPass_108" source="GammaCorrection" target="PostProcessPass">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Exposure_PostProcessPass_109" source="Exposure" target="PostProcessPass">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_AutoExposure_PostProcessPass_110" source="AutoExposure" target="PostProcessPass">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Bloom_PostProcessPass_111" source="Bloom" target="PostProcessPass">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Vignette_PostProcessPass_112" source="Vignette" target="PostProcessPass">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_ChromaticAberration_PostProcessPass_113" source="ChromaticAberration" target="PostProcessPass">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_Light_LightType_114" source="Light" target="LightType">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_Light_Color_115" source="Light" target="Color">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_Light_Color_116" source="Light" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_MaterialData_Color_117" source="MaterialData" target="Color">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_MaterialData_Color_118" source="MaterialData" target="Color">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_MaterialData_Color_119" source="MaterialData" target="Color">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_MaterialData_MaterialType_120" source="MaterialData" target="MaterialType">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_PBRMaterial_MaterialData_121" source="PBRMaterial" target="MaterialData">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_PBRMaterial_Color_122" source="PBRMaterial" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_PBRMaterial_Color_123" source="PBRMaterial" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_PBRMaterial_Color_124" source="PBRMaterial" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_PBRMaterial_Color_125" source="PBRMaterial" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_PBRMaterial_Color_126" source="PBRMaterial" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_PBRMaterial_Color_127" source="PBRMaterial" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_PBRMaterial_Color_128" source="PBRMaterial" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_PBRMaterial_Color_129" source="PBRMaterial" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_AlgorithmSettings_Film_130" source="AlgorithmSettings" target="Film">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_Algorithm_AlgorithmSettings_131" source="Algorithm" target="AlgorithmSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_Algorithm_AlgorithmSettings_132" source="Algorithm" target="AlgorithmSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_TracingStats_RenderStats_133" source="TracingStats" target="RenderStats">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_RayTracingSettings_AlgorithmSettings_134" source="RayTracingSettings" target="AlgorithmSettings">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_RayTracingSettings_SamplingManager_135" source="RayTracingSettings" target="SamplingManager">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_RayTracingSettings_IntersectionStrategy_136" source="RayTracingSettings" target="IntersectionStrategy">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_RayTracingSettings_ShadingStrategy_137" source="RayTracingSettings" target="ShadingStrategy">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_RayTracer_Algorithm_138" source="RayTracer" target="Algorithm">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_RayTracer_RayTracingSettings_139" source="RayTracer" target="RayTracingSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_RayTracer_RayTracingSettings_140" source="RayTracer" target="RayTracingSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_RayTracer_Color_141" source="RayTracer" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_IntersectionStrategy_IntersectionSettings_142" source="IntersectionStrategy" target="IntersectionSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_IntersectionStrategy_HitInfo_143" source="IntersectionStrategy" target="HitInfo">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_IntersectionStrategy_HitInfo_144" source="IntersectionStrategy" target="HitInfo">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_RayMarchingIntersection_IntersectionStrategy_145" source="RayMarchingIntersection" target="IntersectionStrategy">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_RayMarchingIntersection_HitInfo_146" source="RayMarchingIntersection" target="HitInfo">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_InverseSDFIntersection_IntersectionStrategy_147" source="InverseSDFIntersection" target="IntersectionStrategy">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_InverseSDFIntersection_HitInfo_148" source="InverseSDFIntersection" target="HitInfo">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_BVHIntersection_IntersectionStrategy_149" source="BVHIntersection" target="IntersectionStrategy">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_BVHIntersection_IntersectionSettings_150" source="BVHIntersection" target="IntersectionSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_BVHIntersection_HitInfo_151" source="BVHIntersection" target="HitInfo">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_AnalyticalIntersection_IntersectionStrategy_152" source="AnalyticalIntersection" target="IntersectionStrategy">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_AnalyticalIntersection_HitInfo_153" source="AnalyticalIntersection" target="HitInfo">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_AmbienceSettings_Color_154" source="AmbienceSettings" target="Color">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_BackgroundSettings_Color_155" source="BackgroundSettings" target="Color">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_BackgroundSettings_Color_156" source="BackgroundSettings" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_BackgroundSettings_Color_157" source="BackgroundSettings" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_ShadingSettings_AmbienceSettings_158" source="ShadingSettings" target="AmbienceSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShadingSettings_ShadowSettings_159" source="ShadingSettings" target="ShadowSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShadingSettings_BackgroundSettings_160" source="ShadingSettings" target="BackgroundSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShadingStrategy_ShadingSettings_161" source="ShadingStrategy" target="ShadingSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_ShadingStrategy_Color_162" source="ShadingStrategy" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_NormalShading_ShadingStrategy_163" source="NormalShading" target="ShadingStrategy">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_NormalShading_Color_164" source="NormalShading" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_DistanceShading_ShadingStrategy_165" source="DistanceShading" target="ShadingStrategy">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_DistanceShading_ShadingSettings_166" source="DistanceShading" target="ShadingSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_DistanceShading_ColorGradient_167" source="DistanceShading" target="ColorGradient">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_DistanceShading_Color_168" source="DistanceShading" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_FlatShading_ShadingStrategy_169" source="FlatShading" target="ShadingStrategy">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_FlatShading_Color_170" source="FlatShading" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_VolumetricShading_ShadingStrategy_171" source="VolumetricShading" target="ShadingStrategy">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_VolumetricShading_ShadingSettings_172" source="VolumetricShading" target="ShadingSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_VolumetricShading_Color_173" source="VolumetricShading" target="Color">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_VolumetricShading_Color_174" source="VolumetricShading" target="Color">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_VolumetricShading_Color_175" source="VolumetricShading" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_PhysicalShadingSettings_ShadingSettings_176" source="PhysicalShadingSettings" target="ShadingSettings">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_PhysicalShadingStrategy_ShadingStrategy_177" source="PhysicalShadingStrategy" target="ShadingStrategy">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_PhysicalShadingStrategy_BVHNode_178" source="PhysicalShadingStrategy" target="BVHNode">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_PhysicalShadingStrategy_PhysicalShadingSettings_179" source="PhysicalShadingStrategy" target="PhysicalShadingSettings">
+      <data key="d4">contains</data>
+    </edge>
+    <edge id="e_LambertShading_PhysicalShadingStrategy_180" source="LambertShading" target="PhysicalShadingStrategy">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_LambertShading_Color_181" source="LambertShading" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+    <edge id="e_RecursiveLambertShading_LambertShading_182" source="RecursiveLambertShading" target="LambertShading">
+      <data key="d4">inherits</data>
+    </edge>
+    <edge id="e_RecursiveLambertShading_Color_183" source="RecursiveLambertShading" target="Color">
+      <data key="d4">uses</data>
+    </edge>
+
+  </graph>
+</graphml>

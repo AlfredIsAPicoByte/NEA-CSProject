@@ -320,6 +320,17 @@ class RayTracer(Algorithm):
                     final_color.to_np_array(),
                     1.0
                 )
+        # Return rays to camera pool (if available) to reduce peak memory
+        try:
+            if camera is not None and hasattr(camera, 'ray_pool') and camera.ray_pool is not None:
+                for r in rays:
+                    try:
+                        camera.ray_pool.return_ray(r)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
         self.stats.tiles_processed += 1
 
     def generate_film(
@@ -368,7 +379,7 @@ class RayTracer(Algorithm):
                     
                     if self.settings.debug_mode:
                         # Save intermediate image for debugging
-                        Film.save(self.settings.film.get_image(), "_temp.png")
+                        Film.save(self.settings.film.get_image(), "_temp.png", self.settings.verbose_logging)
         else:
             self.render_tile(scene, sampler, region_x, region_y, region_width, region_height)
 

@@ -71,7 +71,7 @@ def get_gradient_scene(width: int = 64, height: int = 64) -> Scene:
 
     # Matte Box (Left)
     mat_matte = MaterialFactory.create_diffuse(Color.from_hex("#8EFFE7"), 0.8)
-    bx_1 = SDF_Material(Cube(1.25), mat_matte)
+    bx_1 = SDF_Material(Cube(0.5), mat_matte)
     scene.add_object_by_context(bx_1, "Matte Box", Transform(np.array([-1.8, 0.7, -0.5]), np.array([0.0, np.deg2rad(35), 0.0])))
 
     # Floating Emissive Orb (Above/Right)

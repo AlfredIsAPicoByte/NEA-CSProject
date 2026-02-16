@@ -17,11 +17,6 @@ from src.Rendering.RayTracing.Core import RayTracer, RayTracingSettings
 
 IMG_OUTPUT_DIR = "images/testing"
 
-
-# ---------------------------------------------------------------------------
-# Scene Construction Helpers
-# ---------------------------------------------------------------------------
-
 def _make_base_scene(width=32, height=32):
     """Return the canonical minimal scene from bench_scenes."""
     from py_src.tests.bench_scenes import get_minimal_scene
@@ -35,11 +30,6 @@ def _render(scene, seed=0):
     tracer = RayTracer(RayTracingSettings(width, height))
     tracer.generate_film(scene, Sampler(seed=seed))
     return tracer.settings.film.get_image()
-
-
-# ---------------------------------------------------------------------------
-# Scene Construction Tests
-# ---------------------------------------------------------------------------
 
 class TestSceneConstruction:
     def test_minimal_scene_creates_camera(self):
@@ -95,11 +85,6 @@ class TestSceneConstruction:
             SDF_Material(Sphere(0.5), mat), "CheckObj", Transform(target_pos)
         )
         assert np.allclose(node.world_transform.position, target_pos)
-
-
-# ---------------------------------------------------------------------------
-# Rendering Pipeline Tests
-# ---------------------------------------------------------------------------
 
 class TestRenderingPipeline:
     @pytest.mark.slow
@@ -203,11 +188,6 @@ class TestRenderingPipeline:
         glass_out = tracer.settings.film.get_image()
         assert glass_out.mean() > 0.0, "Glass scene produced all-black output"
 
-
-# ---------------------------------------------------------------------------
-# Scene-specific Smoke Tests
-# ---------------------------------------------------------------------------
-
 class TestBenchSceneSmoke:
     """Quick smoke tests: every bench scene should render without crashing and
     produce a valid (H, W, 3) float array in [0, 1]."""
@@ -240,11 +220,6 @@ class TestBenchSceneSmoke:
         assert np.all(output >= 0.0),  f"{scene_fn}: pixel below 0"
         assert np.all(output <= 1.0),  f"{scene_fn}: pixel above 1"
         assert output.dtype.kind == "f", f"{scene_fn}: expected float array"
-
-
-# ---------------------------------------------------------------------------
-# Camera Ray Generation
-# ---------------------------------------------------------------------------
 
 class TestCameraRayGeneration:
     def test_ray_count_matches_resolution(self):

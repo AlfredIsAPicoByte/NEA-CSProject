@@ -1,0 +1,37 @@
+======================================================================
+SYSTEM BENCHMARK REPORT - 2026-02-16 13:43:59
+======================================================================
+
+Operating System:
+  System    : Windows
+  Release   : 10
+  Version   : 10.0.26100
+  Platform  : Windows-10-10.0.26100-SP0
+
+Python Environment:
+  Version         : 3.11.8
+  Implementation  : CPython
+  Compiler        : MSC v.1937 64 bit (AMD64)
+  Executable      : C:\Users\atang\Documents\GitHub\Programing_Projects\NEA-CSProject\.venv\Scripts\python.exe
+
+CPU:
+  Processor              : Intel64 Family 6 Model 140 Stepping 1, GenuineIntel
+  Architecture           : AMD64
+  Physical Cores         : 4
+  Logical Cores          : 8
+  Max Frequency Mhz      : 2803
+  Current Frequency Mhz  : 2803
+
+Memory:
+  Total Ram Gb        : 15.70
+  Available Ram Gb    : 1.94
+  Ram Usage Percent   : 87.6
+  Total Swap Gb       : 33.65
+  Swap Usage Percent  : 13.0
+
+Disk:
+  Total Disk Gb       : 475.40
+  Free Disk Gb        : 98.24
+  Disk Usage Percent  : 79.3
+
+======================================================================

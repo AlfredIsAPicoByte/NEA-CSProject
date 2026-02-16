@@ -1,4 +1,4 @@
-from zipfile import Path
+from pathlib import Path
 
 def find_project_root(marker_files=('pyproject.toml', 'setup.py', '.git')):
     """

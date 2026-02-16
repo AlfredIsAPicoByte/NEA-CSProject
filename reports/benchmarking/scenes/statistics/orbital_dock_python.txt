@@ -2,20 +2,20 @@
 Render Type: Ray Tracing
 Intersection: BVHIntersection
 Shading: RecursiveLambertShading
-Time: 715.734s | Mem: 0.00MB
+Time: 40.996s | Mem: 0.00MB
 -------------------------
 Ray Traffic:
-  - Total:       403,824
-  - Primary:     115,200    (28.5%)
-  - Shadow:      288,624    (Lights used: 2)
+  - Total:       57,600
+  - Primary:     57,600     (100.0%)
+  - Shadow:      0          (Lights used: 2)
   - Bounce:      0         
 -------------------------
 BVH Health:
-  - AABB Tests:      412,528
-  - Tri Tests:       648,059
+  - AABB Tests:      633,600
+  - Tri Tests:       0
   - Nodes Visited:   0
-  - Cost/Ray:        2.63 (Target: < 50)
-  - Culling Ratio:   0.64 (Target: > 2.0)
+  - Cost/Ray:        11.00 (Target: < 50)
+  - Culling Ratio:   0.00 (Target: > 2.0)
 -------------------------
 Diagnostics:
   - Max Depth Hit:   0
@@ -30,13 +30,13 @@ Tiles Processed:  60
 Settings:
   - Image_width: 320
   - Image_height: 180
-  - Film: Film(320x180, accum_pixels=(180, 320, 3), accum_weight=(180, 320), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0.0031769  0.00332401 0.00350059], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
-  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x000001EBC24F6750>
-  - Max_recursions: 4
-  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x000001EBC24F6850>
-  - Shading_strategy: <src.Rendering.RayTracing.Shading.RecursiveLambertShading object at 0x000001EBC24F6910>
+  - Film: Film(320x180, accum_pixels=(180, 320, 3), accum_weight=(180, 320), first_pixel=[0. 0. 0.], first_weight=1.0, center_pixel=[0. 0. 0.], center_weight=1.0, last_pixel=[0. 0. 0.], last_weight=1.0)
+  - Sampling_manager: <src.Data.Sampling.Core.SamplingManager object at 0x0000025F406E6E50>
+  - Max_recursions: 1
+  - Intersection_strategy: <src.Rendering.RayTracing.Intersections.BVHIntersection object at 0x0000025F4EDA9A90>
+  - Shading_strategy: <src.Rendering.RayTracing.Shading.RecursiveLambertShading object at 0x0000025F4F4B3F10>
   - Use_tiling: True
   - Tile_size: 32
   - Debug_mode: True
-  - Verbose_logging: False
+  - Verbose_logging: True
 =========================

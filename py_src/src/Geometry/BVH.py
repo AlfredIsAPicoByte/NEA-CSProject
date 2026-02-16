@@ -108,6 +108,103 @@ class BVHNode:
             return f"BVHNode(Leaf, Box={self.box}, Objects={len(self.objects)})"
         else:
             return f"BVHNode(Internal, Box={self.box})"
+        
+    def intersect(self, origin: np.ndarray, direction: np.ndarray):
+        """
+        Traverse BVH: if a leaf's objects hit, return first hit t (float) else None.
+        Uses shape.ray_intersect if available (after transforming ray into local space).
+        Optimized with:
+        - Early termination when best_t is updated
+        - Dynamic MAX_DISTANCE based on current best hit
+        - Ordered child traversal (visit nearer child first for better pruning)
+        """
+        from src.Data.Ray import Ray
+        root = self
+        if root is None:
+            return None
+
+        query_ray = Ray(np.array(origin, dtype=float), np.array(direction, dtype=float))
+        best_t = None
+
+        def get_distance_to_box_center(node):
+            """Helper to determine which child to visit first."""
+            if node is None or node.box is None:
+                return float('inf')
+            center = node.box.center
+            ray_origin = query_ray.origin
+            return np.linalg.norm(center - ray_origin)
+
+        def recurse(node):
+            nonlocal best_t
+            if node is None or node.box is None:
+                return
+            
+            # Quick aabb-ray test with early pruning
+            t = node.box.intersect(query_ray)
+            if t is None or (best_t is not None and t >= best_t):
+                return
+            
+            # Leaf node: test all objects
+            if node.left is None and node.right is None:
+                for obj in (node.objects or []):
+                    shape = getattr(obj, "context", obj)
+                    
+                    # Transform ray into object's local space if obj is SceneNode
+                    inv_mat = getattr(obj, "get_local_matrix", lambda: None)()
+                    if inv_mat is not None:
+                        from src.Data.Transform import Transform as _T
+                        inv_t = _T.from_matrix(inv_mat)
+                        local_ray = inv_t.apply(query_ray)
+                    else:
+                        local_ray = query_ray
+
+                    # Prefer ray_intersect
+                    if hasattr(shape, "ray_intersect"):
+                        hits = shape.ray_intersect(local_ray)
+                        if hits:
+                            for ht in hits:
+                                if ht > 0 and (best_t is None or ht < best_t):
+                                    best_t = ht
+                    else:
+                        # Fallback: sphere-trace using get_distance
+                        if hasattr(shape, "get_distance"):
+                            t0 = 0.0
+                            MAX_STEPS = 128
+                            EPS = 1e-4
+                            # Dynamic max distance: limit search to nearest hit found so far
+                            max_distance = best_t if best_t is not None else 1e30
+                            
+                            for _ in range(MAX_STEPS):
+                                # Early exit if we've exceeded best found hit
+                                if t0 >= max_distance:
+                                    break
+                                
+                                p = local_ray.origin + local_ray.direction * t0
+                                d = shape.get_distance(p)
+                                
+                                if d < EPS:
+                                    if best_t is None or t0 < best_t:
+                                        best_t = t0
+                                        max_distance = best_t  # Update limit for next objects
+                                    break
+                                
+                                t0 += d
+                return
+            
+            # Internal node: recurse on children with ordered traversal
+            # Visit nearer child first for better pruning of far branch
+            left_dist = get_distance_to_box_center(node.left)
+            right_dist = get_distance_to_box_center(node.right)
+            
+            if left_dist < right_dist:
+                recurse(node.left)
+                recurse(node.right)
+            else:
+                recurse(node.right)
+                recurse(node.left)
+
+        recurse(root)
+        return best_t
 
 def build_bvh_tree(
         objects: List["SceneNode"],

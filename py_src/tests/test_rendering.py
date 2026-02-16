@@ -11,10 +11,6 @@ from src.Utilities.Common import unit
 
 IMG_OUTPUT_DIR = "images/testing"
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _march_sphere(ray: Ray, sphere: Sphere, max_steps: int = 128, tol: float = 1e-4):
     """Minimal sphere-tracing loop used to validate ray-SDF intersection logic."""
     t = 0.0
@@ -27,11 +23,6 @@ def _march_sphere(ray: Ray, sphere: Sphere, max_steps: int = 128, tol: float = 1
         if t > 1000.0:
             break
     return None, None
-
-
-# ---------------------------------------------------------------------------
-# Ray Basics
-# ---------------------------------------------------------------------------
 
 class TestRay:
     def test_ray_direction_normalised(self):
@@ -55,11 +46,6 @@ class TestRay:
         origin = np.array([1.0, -2.0, 3.0])
         ray = Ray(origin, np.array([0.0, 1.0, 0.0]))
         assert np.allclose(ray.origin, origin)
-
-
-# ---------------------------------------------------------------------------
-# Ray ↔ Sphere Intersection (via sphere-marching)
-# ---------------------------------------------------------------------------
 
 class TestRaySphereIntersection:
     def test_direct_hit_returns_positive_t(self):
@@ -114,11 +100,6 @@ class TestRaySphereIntersection:
         assert t_large is not None and t_small is not None
         assert t_large < t_small  # larger sphere reached sooner from behind
 
-
-# ---------------------------------------------------------------------------
-# SDF-based Normals
-# ---------------------------------------------------------------------------
-
 class TestSurfaceNormals:
     def _numerical_normal(self, sdf, p, eps=1e-4):
         grad = np.array([
@@ -163,11 +144,6 @@ class TestSurfaceNormals:
         n = self._numerical_normal(sdf, point)
         assert np.allclose(n, expected_normal, atol=1e-1), f"Normal {n} differs from expected {expected_normal}"  
 
-
-# ---------------------------------------------------------------------------
-# Shading
-# ---------------------------------------------------------------------------
-
 class TestDiffuseShading:
     def _lambertian(self, normal, light_dir, albedo):
         """Simple Lambertian shading: albedo * max(dot(N, L), 0)."""
@@ -207,7 +183,6 @@ class TestDiffuseShading:
         shade = self._lambertian(normal, light_dir, 1.0)
         assert np.isclose(shade, np.cos(np.deg2rad(45)), atol=1e-5)
 
-
 class TestSpecularShading:
     def _blinn_phong(self, normal, view_dir, light_dir, shininess):
         half = unit(view_dir + light_dir)
@@ -234,11 +209,6 @@ class TestSpecularShading:
         behind    = unit(np.array([0.0, -1.0, 0.0]))
         val = max(float(np.dot(normal, unit(view + behind))), 0.0) ** 32
         assert val < 0.1
-
-
-# ---------------------------------------------------------------------------
-# Integration: Render Pipeline
-# ---------------------------------------------------------------------------
 
 class TestRenderingPipeline:
     @pytest.mark.slow

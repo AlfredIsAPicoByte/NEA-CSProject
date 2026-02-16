@@ -24,7 +24,6 @@ def render_process(scene: Scene, algorithm: Algorithm):
     # Render using the algorithm
     algorithm.generate_film(scene)
     print(" + Rendering complete")
-    print(f"{algorithm.settings.film}")
 
     # Convert List[Color] to numpy array (width x height x 3)
     cam = scene.camera
@@ -40,7 +39,7 @@ def apply_post_processing(raw_img):
     """
     from src.Image.PostProcessing.Pipeline import ImagePipeline
     from src.Image.PostProcessing.Passes import (
-        Exposure,
+        AutoExposure,
         Bloom,
         ChromaticAberration,
         Vignette,
@@ -49,10 +48,7 @@ def apply_post_processing(raw_img):
     )
     
     pipeline = ImagePipeline()
-    pipeline.add_pass(Exposure(0.5))
-    pipeline.add_pass(Bloom(1.5, 5, 0.25, 0.75))
-    # pipeline.add_pass(ChromaticAberration())
-    # pipeline.add_pass(Vignette(0.15, 0.6))
+    pipeline.add_pass(AutoExposure())
     pipeline.add_pass(ACESFilmicToneMapping())
     pipeline.add_pass(GammaCorrection(2.2))
 
@@ -100,14 +96,14 @@ if __name__ == "__main__":
     parser.add_argument("--quick", action="store_true", help="Quick preview mode (1spp, no post, etc)")
     args = parser.parse_args()
     
-    img_width, img_height = 80, 45
-    args.samples = 4
+    img_width, img_height = 320, 180
+    args.samples = 1
 
     # Quick mode overrides
     if args.quick:
         args.samples = 1
         args.postprocessing = False
-        img_width, img_height = 180, 144
+        img_width, img_height = 160, 90
 
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     IMG_OUT_DIR = os.path.join(PROJECT_ROOT, "images", "benchmarking", "scenes")
@@ -157,21 +153,21 @@ if __name__ == "__main__":
             epsilon=1e-4
         ))
 
-        shading = FlatShading(PhysicalShadingSettings(
-            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.25)),
+        shading = RecursiveLambertShading(PhysicalShadingSettings(
+            ambience_settings=AmbienceSettings(True, getattr(scene, "ambient_color", Color(0.03, 0.03, 0.03)), getattr(scene, "ambient_intensity", 0.75)),
             shadow_settings=ShadowSettings(True, 8, 1e-3),
-            background_settings=BackgroundSettings(True, Color.from_hex("#283848"), getattr(scene, "background_color", None), True, 0.67)
+            background_settings=BackgroundSettings(True, Color.from_hex("#283848"), getattr(scene, "background_color", None), True, 0.25)
         ))
 
         raytracer = RayTracer(RayTracingSettings(
             image_width=img_width,
             image_height=img_height,
             sampling_manager=sampling_manager,
-            max_recursions=4,
+            max_recursions=1,
             intersection_strategy=intersection,
             shading_strategy=shading,
             use_tiling=True,
-            tile_size=16,
+            tile_size=32,
             debug_mode=args.debug,
             verbose_logging=args.verbose
         ))
@@ -205,6 +201,9 @@ if __name__ == "__main__":
                 # Track only overall memory usage during rendering
                 render_process(scene, raytracer)
             
+            raw_img_data = raytracer.settings.film.get_image()
+            Film.save(raw_img_data, raw_image_out_path, args.verbose)
+
             try:
                 with open(stats_report_out_path, "w", encoding="utf-8") as f:
                     f.write(raytracer.stats.format_report())
@@ -224,15 +223,14 @@ if __name__ == "__main__":
                 import traceback
                 traceback.print_exc()
 
-            raw_img_data = raytracer.settings.film.get_image()
-            Film.save(raw_img_data, raw_image_out_path)
-
             # 2. Post-Process (The Pipeline)
             processed_img = raw_img_data
 
             if args.postprocessing:
                 with MemoryProfiler(enable_tracemalloc=args.memory_trace, top=6) as mp:
                     processed_img = apply_post_processing(raw_img_data)
+
+                Film.save(processed_img, processed_image_out_path, args.verbose)
 
                 try:
                     with open(mem_report_out_path, "a", encoding="utf-8") as f:
@@ -244,8 +242,6 @@ if __name__ == "__main__":
                     print(f" / Failed to append to memory report:\n{e}\n")
                     import traceback
                     traceback.print_exc()
-
-                Film.save(processed_img, processed_image_out_path)
 
             # Free large buffers promptly to avoid accumulation between scenes
             try:

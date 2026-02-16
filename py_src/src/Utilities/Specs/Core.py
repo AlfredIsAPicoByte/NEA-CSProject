@@ -206,8 +206,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Setup output directory
-    PROJECT_ROOT = os.path.join(find_project_root(), "py_src")
-    REP_OUT_DIR = os.path.join(PROJECT_ROOT, "reports", "benchmarking", "system")
+    REP_OUT_DIR = os.path.join(find_project_root(), "reports", "benchmarking", "system")
     os.makedirs(REP_OUT_DIR, exist_ok=True)
 
     # Generate report based on selected sections

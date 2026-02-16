@@ -8,6 +8,16 @@ from src.Geometry.SDF import Sphere, Cube
 from src.Material.Factory import MaterialFactory
 
 
+# Define pytest markers
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
+    )
+    config.addinivalue_line(
+        "markers", "fast: marks tests as fast (select with '-m \"fast\"')"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Transform fixtures
 # ---------------------------------------------------------------------------
@@ -129,11 +139,6 @@ def default_camera():
         resolution_width=16, resolution_height=16,
         camera_type=CameraType.PERSPECTIVE
     )
-
-
-# ---------------------------------------------------------------------------
-# Pytest configuration
-# ---------------------------------------------------------------------------
 
 def pytest_configure(config):
     config.addinivalue_line(
