@@ -1,13 +1,5 @@
 #include "PythonManager.h"
 
-// Helper to map pip package names to their Python import names when they differ.
-// Add entries here as needed (e.g. Pillow -> PIL).
-static std::string GetImportNameForPackage(const std::string& pkg) {
-    if (pkg == "Pillow") return "PIL";
-    // Add more mappings if needed
-    return pkg;
-}
-
 PythonManager::PythonManager() { Initialize(); }
 PythonManager::~PythonManager() { Finalize(); }
 
@@ -126,6 +118,10 @@ void PythonManager::Finalize() {
         pythonHome = nullptr;
     }
     pythonInitialized = false;
+
+    const_cast<std::unordered_set<std::string>&>(attemptedInstalls).clear();
+    const_cast<std::unordered_set<std::string>&>(installedPackages).clear();
+    const_cast<std::unordered_set<std::string>&>(missingPackages).clear();
 }
 
 void PythonManager::InstallPackage(const std::string& packageName) {
@@ -200,6 +196,7 @@ void PythonManager::InstallPackage(const std::string& packageName) {
         try {
             std::string importName = GetImportNameForPackage(packageName);
             py::module_::import(importName.c_str());
+            installedPackages.insert(packageName);
             AppendPythonMessage("✓ Verified import: " + importName);
         } catch (const py::error_already_set& e) {
             AppendPythonError("✗ Package installed but import failed: " + std::string(e.what()));
@@ -207,6 +204,7 @@ void PythonManager::InstallPackage(const std::string& packageName) {
         
     } catch (const py::error_already_set& error) {
         AppendPythonError("Failed to install " + packageName + ": " + std::string(error.what()));
+        missingPackages.insert(packageName);
     }
 }
 
@@ -357,6 +355,22 @@ py::object PythonManager::CallFunction(const py::object& module, const std::stri
         AppendPythonError(std::string("Error calling function '") + funcName + "': " + error.what());
         return py::none();
     }
+}
+
+std::string PythonManager::GetImportNameForPackage(const std::string& pkg) {
+    if (pkg == "Pillow") return "PIL";
+    // Add more mappings if needed
+    return pkg;
+}
+
+std::string PythonManager::GetPipInstallCommand(const std::string& packageName) {
+    std::string pythonExe = "python";
+    try {
+        py::module_ sys = py::module_::import("sys");
+        pythonExe = sys.attr("executable").cast<std::string>();
+    } catch(...) {}
+    
+    return pythonExe + " -m pip install " + packageName;
 }
 
 #else

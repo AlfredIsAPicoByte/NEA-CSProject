@@ -328,7 +328,7 @@ bool    ImGui::BeginTableEx(const char* name, ImGuiID id, int columns_count, ImG
 
     // If an outer size is specified ahead we will be able to early out when not visible. Exact clipping criteria may evolve.
     // FIXME: coarse clipping because access to table data causes two issues:
-    // - instance numbers varying/unstable. may not be a direct problem for users, but could make outside access broken or confusing, e.g. TestEngine.
+    // - instance numbers varying/unstable. may not be a direct problem for users, but could make outside access broken or confusing, e.g. TestRenderingEngine.
     // - can't implement support for ImGuiChildFlags_ResizeY as we need to somehow pull the height data from somewhere. this also needs stable instance numbers.
     // The side-effects of accessing table data on coarse clip would be:
     // - always reserving the pooled ImGuiTable data ahead for a fully clipped table (minor IMHO). Also the 'outer_window_is_measuring_size' criteria may already be defeating this in some situations.
@@ -3948,7 +3948,7 @@ void ImGui::TableSettingsAddSettingsHandler()
 // - TableGcCompactSettings() [Internal]
 //-------------------------------------------------------------------------
 
-// Remove Table data (currently only used by TestEngine)
+// Remove Table data (currently only used by TestRenderingEngine)
 void ImGui::TableRemove(ImGuiTable* table)
 {
     //IMGUI_DEBUG_PRINT("TableRemove() id=0x%08X\n", table->ID);
@@ -3982,7 +3982,7 @@ void ImGui::TableGcCompactTransientBuffers(ImGuiTableTempData* temp_data)
     temp_data->LastTimeActive = -1.0f;
 }
 
-// Compact and remove unused settings data (currently only used by TestEngine)
+// Compact and remove unused settings data (currently only used by TestRenderingEngine)
 void ImGui::TableGcCompactSettings()
 {
     ImGuiContext& g = *GImGui;

@@ -195,8 +195,8 @@ int main()
 
 	glfwSetWindowTitle(window, "A level NEA Rendering Engine");
 
-	glfwSetWindowUserPointer(window, &Engine::Instance());
-	glfwSetFramebufferSizeCallback(window, Engine::FramebufferSizeCallback);
+	glfwSetWindowUserPointer(window, &RenderingEngine::Instance());
+	glfwSetFramebufferSizeCallback(window, RenderingEngine::FramebufferSizeCallback);
 
 #if DEBUG_MODE
 	EnableOpenGLDebugger();
@@ -299,7 +299,7 @@ int main()
 	bool resetKeyPressed = false;
 
 	Scene testScene;
-	testScene.Initialize();
+	testScene.Initialize(RenderingEngine::Instance().pyManager);
 
 	testScene.SetCamera(&camera);
 	testScene.SetOpenGLRenderFunction(std::make_shared<std::function<void()>>([&]() {
@@ -341,10 +341,10 @@ int main()
 
 	// Main loop
 	CreateDebugTriangle();
-	Engine::Instance().Start();
-	Engine::Instance().applyClearColor(bgColor);
-	Engine::Instance().setDepthTest(true);
-	Engine::Instance().Update(window,
+	RenderingEngine::Instance().Start();
+	RenderingEngine::Instance().applyClearColor(bgColor);
+	RenderingEngine::Instance().setDepthTest(true);
+	RenderingEngine::Instance().Update(window,
 		// PreProcecing 
 		[&]() {
 			time.update();
@@ -443,7 +443,7 @@ int main()
 				});
 
 				InputManager::Instance(window).doWhenKey(GLFW_KEY_ESCAPE, true, [&]() {
-					Engine::Instance().Exit();
+					RenderingEngine::Instance().Exit();
 				});
 			}
 		},
@@ -561,7 +561,8 @@ int main()
 				if (pause) {
 					ImGui::TextDisabled("Paused");
 				}
-
+				
+				static int selectedIndex = -1;
 				for (size_t i = 0; i < debugLog.size(); ++i) {
 					const auto& msg = debugLog[i];
 
@@ -598,6 +599,7 @@ int main()
 						if (ImGui::Selectable(line.c_str())) {
 							// on click, copy to clipboard
 							ImGui::SetClipboardText(msg.ToString().c_str());
+							selectedIndex = i;
 						}
 					}
 
@@ -612,7 +614,6 @@ int main()
 				ImGui::EndChild();
 
 				// Expanded view for selected message (optional)
-				static int selectedIndex = -1;
 				ImGui::BeginChild("DetailRegion", ImVec2(0, 100), true);
 				if (ImGui::Button("Show Selected")) {
 					if (selectedIndex >= 0 && selectedIndex < static_cast<int>(debugLog.size())) {
@@ -728,8 +729,8 @@ int main()
 	// dount->CleanUp();
 	testScene.CleanUp();
 	
-	Engine::Instance().CleanUp(window);
-	Engine::Instance().Exit();
+	RenderingEngine::Instance().CleanUp(window);
+	RenderingEngine::Instance().Exit();
 
 #ifdef _WIN32
 	if (g_singleInstanceMutex) {

@@ -18,13 +18,14 @@
 #include "Light.hpp"
 #include "Material.hpp"
 #include "InputManager.h"
+#include "PythonManager.h"
 
-class Engine
+class RenderingEngine
 {
 public:
-    static Engine& Instance()
+    static RenderingEngine& Instance()
     {
-        static Engine instance;
+        static RenderingEngine instance;
         return instance;
     }
 
@@ -46,20 +47,22 @@ public:
     void CleanUp(GLFWwindow* window);
     
     static void FramebufferSizeCallback(GLFWwindow* window, int w, int h) {
-        auto* engine = static_cast<Engine*>(glfwGetWindowUserPointer(window));
+        auto* engine = static_cast<RenderingEngine*>(glfwGetWindowUserPointer(window));
         engine->OnFramebufferResize(w, h);
     }
     void OnFramebufferResize(int w, int h) {
         glViewport(0, 0, w, h);
     }
     
-    Engine(const Engine&) = delete;
-    Engine& operator=(const Engine&) = delete;
-    Engine(Engine&&) = delete;
-    Engine& operator=(Engine&&) = delete;
+    RenderingEngine(const RenderingEngine&) = delete;
+    RenderingEngine& operator=(const RenderingEngine&) = delete;
+    RenderingEngine(RenderingEngine&&) = delete;
+    RenderingEngine& operator=(RenderingEngine&&) = delete;
+    
+    PythonManager pyManager;
 private:
-    Engine() = default;
-    ~Engine() = default;
+    RenderingEngine() = default;
+    ~RenderingEngine() = default;
     
     void clearScreen();
 };

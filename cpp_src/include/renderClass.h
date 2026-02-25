@@ -46,7 +46,7 @@ public:
     std::shared_ptr<std::function<void()>> openGLRenderFunction;
     std::shared_ptr<RenderSettings> renderSettings;
 
-    void Initialize();
+    void Initialize(PythonManager& pm);
 
     void Render(std::function<void()> preProcessing = nullptr, std::function<Image()> renderStep = nullptr, std::function<void()> postProcessing = nullptr, std::function<void()> fallBack = nullptr);
     void UpdateScene();

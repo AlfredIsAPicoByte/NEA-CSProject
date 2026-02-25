@@ -12,10 +12,8 @@ Scene::~Scene()
     AppendMessage("Scene destroyed.");
 }
 
-void Scene::Initialize()
+void Scene::Initialize(PythonManager& pm)
 {
-    PythonManager& pm = PythonManager::Instance();
-
     pm.EnsureRequiredPackagesInstalled();
 
     pm.AddModulePath("py_src/src");

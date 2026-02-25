@@ -9550,7 +9550,7 @@ ImGuiTabBar* ImGui::TabBarFindByID(ImGuiID id)
     return g.TabBars.GetByKey(id);
 }
 
-// Remove TabBar data (currently only used by TestEngine)
+// Remove TabBar data (currently only used by TestRenderingEngine)
 void    ImGui::TabBarRemove(ImGuiTabBar* tab_bar)
 {
     ImGuiContext& g = *GImGui;

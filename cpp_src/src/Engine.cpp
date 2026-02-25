@@ -1,6 +1,6 @@
 #include "Engine.h"
 
-void Engine::Start()
+void RenderingEngine::Start()
 {
     state = State::STARTING;
 
@@ -9,9 +9,11 @@ void Engine::Start()
     ImGui::StyleColorsDark();
 
     AppendMessage("Engine Started.");
+
+    pyManager.Initialize();
 }
 
-void Engine::PausePlay()
+void RenderingEngine::PausePlay()
 {
     if (state == State::RUNNING) {
         state = State::PAUSED;
@@ -20,14 +22,14 @@ void Engine::PausePlay()
     }
 }
 
-void Engine::Update(GLFWwindow* window, std::function<void()> preProcessing, std::function<void()> input, std::function<void()> renderStep,  std::function<void()> postProcessing, std::function<void()> gui, std::function<void()> fallBack)
+void RenderingEngine::Update(GLFWwindow* window, std::function<void()> preProcessing, std::function<void()> input, std::function<void()> renderStep,  std::function<void()> postProcessing, std::function<void()> gui, std::function<void()> fallBack)
 {
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
 
     if (state == State::STOPPED) {
-        AppendGraphicsError("Engine is not running. Call Start() before Update().");
+        AppendGraphicsError("RenderingEngine is not running. Call Start() before Update().");
         return;
     }
 
@@ -74,14 +76,15 @@ void Engine::Update(GLFWwindow* window, std::function<void()> preProcessing, std
     }
 }
 
-void Engine::Exit()
+void RenderingEngine::Exit()
 {
     state = State::STOPPED;
 
 	AppendMessage("Engine Stopped.");
+    pyManager.Finalize();
 }
 
-void Engine::CleanUp(GLFWwindow* window)
+void RenderingEngine::CleanUp(GLFWwindow* window)
 {
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -95,11 +98,11 @@ void Engine::CleanUp(GLFWwindow* window)
 	AppendMessage("Destroyed window and terminated GLFW.");
 }
 
-void Engine::applyClearColor(const Color& color) {
+void RenderingEngine::applyClearColor(const Color& color) {
     glClearColor(color.r, color.g, color.b, color.a);
 }
 
-void Engine::setDepthTest(bool enable) {
+void RenderingEngine::setDepthTest(bool enable) {
     if (enable) {
         glEnable(GL_DEPTH_TEST);
         AppendMessage("Depth testing enabled.");
@@ -109,6 +112,6 @@ void Engine::setDepthTest(bool enable) {
     }
 }
 
-void Engine::clearScreen() {
+void RenderingEngine::clearScreen() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
