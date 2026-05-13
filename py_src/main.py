@@ -96,7 +96,7 @@ if __name__ == "__main__":
     parser.add_argument("--quick", action="store_true", help="Quick preview mode (1spp, no post, etc)")
     args = parser.parse_args()
     
-    img_width, img_height = 320, 180
+    img_width, img_height = 32, 18
     args.samples = 1
 
     # Quick mode overrides
